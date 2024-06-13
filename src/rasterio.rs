@@ -7,7 +7,7 @@ use approx::relative_eq;
 use gdal::{errors::GdalError, raster::GdalType};
 use num::NumCast;
 
-use crate::{rect::rectangle_intersection, Error, GeoMetadata, Nodata, RasterNum, RasterSize};
+use crate::{rect, Error, GeoMetadata, Nodata, RasterNum, RasterSize};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RasterType {
@@ -149,7 +149,7 @@ fn intersect_metadata(src_meta: &GeoMetadata, dst_meta: &GeoMetadata) -> Result<
     let src_bbox = src_meta.bounding_box();
     let dst_bbox = dst_meta.bounding_box();
 
-    let intersect = rectangle_intersection(&src_bbox, &dst_bbox);
+    let intersect = rect::intersection(&src_bbox, &dst_bbox);
 
     // Calulate the cell in the source extent that corresponds to the top left cell of the intersect
     //let intersect_top_left_cell = src_meta.point_to_cell(*intersect.top_left() + Point::new(src_cellsize.x() / 2.0, src_cellsize.y() / 2.0));

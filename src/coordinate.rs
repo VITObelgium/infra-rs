@@ -58,17 +58,25 @@ impl Coordinate {
             wrapped
         }
     }
+
+    pub fn distance(&self, other: &Coordinate) -> f64 {
+        let lat = other.latitude - self.latitude;
+        let lon = other.longitude - self.longitude;
+
+        (lat * lat + lon * lon).sqrt()
+    }
 }
 
-pub fn to_point(coord: Coordinate) -> Point<f64> {
-    Point::new(coord.longitude, coord.latitude)
+impl From<Point<f64>> for Coordinate {
+    fn from(point: Point<f64>) -> Self {
+        Coordinate::latlon(point.y(), point.x())
+    }
 }
 
-pub fn distance(lhs: &Coordinate, rhs: &Coordinate) -> f64 {
-    let lat = rhs.latitude - lhs.latitude;
-    let lon = rhs.longitude - lhs.longitude;
-
-    (lat * lat + lon * lon).sqrt()
+impl From<Coordinate> for Point<f64> {
+    fn from(val: Coordinate) -> Self {
+        Point::new(val.longitude, val.latitude)
+    }
 }
 
 impl std::ops::Sub for Coordinate {
@@ -112,11 +120,5 @@ impl RelativeEq for Coordinate {
 
     fn relative_eq(&self, other: &Self, epsilon: <f64 as AbsDiffEq>::Epsilon, max_relative: <f64 as AbsDiffEq>::Epsilon) -> bool {
         f64::relative_eq(&self.latitude, &other.latitude, epsilon, max_relative) && f64::relative_eq(&self.longitude, &other.longitude, epsilon, max_relative)
-    }
-}
-
-impl From<Point<f64>> for Coordinate {
-    fn from(point: Point<f64>) -> Self {
-        Coordinate::latlon(point.y(), point.x())
     }
 }

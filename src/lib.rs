@@ -21,14 +21,14 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
-pub mod cell;
+mod cell;
 pub mod color;
 pub mod colormap;
-pub mod coordinate;
+mod coordinate;
 #[cfg(feature = "gdal")]
 mod coordinatetransformer;
 pub mod crs;
-pub mod denseraster;
+mod denseraster;
 #[cfg(feature = "gdal")]
 pub mod denserasterio;
 pub mod geoconstants;
@@ -56,7 +56,6 @@ pub use coordinate::Coordinate;
 #[cfg(feature = "gdal")]
 pub use coordinatetransformer::CoordinateTransformer;
 pub use denseraster::DenseRaster;
-pub use geo_types::Point;
 pub use geometadata::CellSize;
 pub use geometadata::GeoMetadata;
 pub use geometadata::RasterSize;
@@ -71,6 +70,4 @@ pub use rect::Rect;
 pub use sqliteconnection::SqliteConnection;
 pub use tile::Tile;
 
-pub fn to_coordinate(p: Point<f64>) -> Coordinate {
-    Coordinate::latlon(p.y(), p.x())
-}
+pub type Point<T = f64> = geo_types::Point<T>;

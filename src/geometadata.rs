@@ -1,6 +1,6 @@
 use approx::{AbsDiffEq, RelativeEq};
 
-use crate::{cell::Cell, crs::Epsg, rect::rectangles_intersect, Error, LatLonBounds, Nodata, Point, Rect};
+use crate::{cell::Cell, crs::Epsg, rect, Error, LatLonBounds, Nodata, Point, Rect};
 
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
@@ -349,10 +349,10 @@ pub fn metadata_intersects(meta1: &GeoMetadata, meta2: &GeoMetadata) -> Result<b
         panic!("Extents cellsize is zero");
     }
 
-    Ok(rectangles_intersect(&meta1.bounding_box(), &meta2.bounding_box()))
+    Ok(rect::intersects(&meta1.bounding_box(), &meta2.bounding_box()))
 }
 
-fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
+pub fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
     let diff = (val1 - val2).abs();
     diff % cellsize < 1e-12
 }

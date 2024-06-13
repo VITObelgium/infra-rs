@@ -89,7 +89,7 @@ fn max<T: PartialOrd>(a: T, b: T) -> T {
     }
 }
 
-pub fn rectangles_intersect<T>(lhs: &Rect<T>, rhs: &Rect<T>) -> bool
+pub fn intersects<T>(lhs: &Rect<T>, rhs: &Rect<T>) -> bool
 where
     T: Copy + CoordNum,
 {
@@ -99,11 +99,11 @@ where
         && lhs.bottom_right.y() < rhs.top_left.y()
 }
 
-pub fn rectangle_intersection<T>(lhs: &Rect<T>, rhs: &Rect<T>) -> Rect<T>
+pub fn intersection<T>(lhs: &Rect<T>, rhs: &Rect<T>) -> Rect<T>
 where
     T: CoordNum + PartialOrd,
 {
-    if !rectangles_intersect(lhs, rhs) {
+    if !intersects(lhs, rhs) {
         // Rectangles do not overlap, return an empty rectangle
         return Rect::from_points(Point::new(T::zero(), T::zero()), Point::new(T::zero(), T::zero()));
     }
@@ -123,7 +123,7 @@ mod tests {
         let r1 = Rect::from_points(Point::new(0, 10), Point::new(10, 0));
         let r2 = Rect::from_points(Point::new(4, 4), Point::new(5, 5));
 
-        let intersection = rectangle_intersection(&r1, &r2);
+        let intersection = intersection(&r1, &r2);
 
         assert_eq!(intersection.top_left, Point::new(4, 5));
         assert_eq!(intersection.bottom_right, Point::new(5, 4));
@@ -132,7 +132,7 @@ mod tests {
     #[test]
     fn test_rectangle_self_intersection() {
         let r1 = Rect::from_points(Point::new(0, 10), Point::new(10, 0));
-        let intersection = rectangle_intersection(&r1, &r1);
+        let intersection = intersection(&r1, &r1);
         assert_eq!(intersection.top_left, r1.top_left);
         assert_eq!(intersection.bottom_right, r1.bottom_right);
     }
@@ -143,7 +143,7 @@ mod tests {
             Point::new(-30.000_000_763_788_11, 29.999999619212282),
             Point::new(60.000000763788094, 71.999_998_473_439_09),
         );
-        let intersection = rectangle_intersection(&r1, &r1);
+        let intersection = intersection(&r1, &r1);
         assert_eq!(intersection.top_left, r1.top_left);
         assert_eq!(intersection.bottom_right, r1.bottom_right);
     }
@@ -153,7 +153,7 @@ mod tests {
         let r1 = Rect::from_points(Point::new(22000.0, 245000.0), Point::new(259000.0, 153000.0));
         let r2 = Rect::from_points(Point::new(110000.0, 95900.0), Point::new(110100.0, 95800.0));
 
-        let intersection = rectangle_intersection(&r1, &r2);
+        let intersection = intersection(&r1, &r2);
 
         assert_eq!(intersection.top_left, Point::new(0.0, 0.0));
         assert_eq!(intersection.bottom_right, Point::new(0.0, 0.0));
