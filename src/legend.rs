@@ -70,12 +70,15 @@ pub mod mapper {
     #[derive(Default, Clone)]
     pub struct Linear {
         value_range: Range<f64>,
-        color_map: ColorMap,
+        color_map: Box<ColorMap>,
     }
 
     impl Linear {
         pub fn new(value_range: Range<f64>, color_map: ColorMap) -> Self {
-            Linear { value_range, color_map }
+            Linear {
+                color_map: Box::new(color_map),
+                value_range,
+            }
         }
     }
 
