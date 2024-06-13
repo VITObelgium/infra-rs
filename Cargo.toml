@@ -30,9 +30,7 @@ sqlite3 = ["dep:libsqlite3-sys", "dep:libc"]
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
 rev = "943c5ef"
-dependencies = [
-    "gdal[core,curl,expat,geos,hdf5,iconv,lerc,libspatialite,libxml2,lzma,netcdf,openssl,pcre2,png,postgresql,qhull,sqlite3,zstd]",
-]
+dependencies = ["gdal[core,geos,iconv]"]
 
 [package.metadata.vcpkg.target]
 x86_64-pc-windows-msvc = { triplet = "x64-windows-static" }

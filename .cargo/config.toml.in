@@ -1,0 +1,8 @@
+[env]
+GDAL_STATIC = "1"
+GDAL_HOME = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@", relative = true }
+PKG_CONFIG = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@/tools/pkgconf/pkgconf", relative = true }
+PKG_CONFIG_PATH = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@/lib/pkgconfig", relative = true }
+
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static,+avx2"]
