@@ -15,18 +15,18 @@ approx = "0.5.1"
 log = "0.4.14"
 serde = { version = "1.0", features = ["derive"], optional = true }
 libsqlite3-sys = { version = "0.28.0", optional = true }
+arrow = { version = "52.0", optional = true }
 
 [dev-dependencies]
 test-log = "0.2.16"
 env_logger = "0.11.3"
 
 [features]
-# Gdal support
+arrow = ["dep:arrow"]
 gdal = ["dep:gdal", "dep:gdal-sys", "dep:libc"]
 gdal-static = ["gdal"]
 serde = ["dep:serde"]
 sqlite3 = ["dep:libsqlite3-sys", "dep:libc"]
-
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
 rev = "943c5ef"

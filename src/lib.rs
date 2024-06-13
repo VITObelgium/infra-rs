@@ -21,6 +21,10 @@ pub enum Error {
 
 pub type Result<T> = std::result::Result<T, Error>;
 
+#[cfg(feature = "arrow")]
+mod arrowraster;
+#[cfg(feature = "arrow")]
+mod arrowutil;
 mod cell;
 pub mod color;
 pub mod colormap;
@@ -50,6 +54,8 @@ pub mod spatialreference;
 pub mod sqliteconnection;
 pub mod tile;
 
+#[cfg(feature = "arrow")]
+pub use arrowraster::ArrowRaster;
 pub use cell::Cell;
 pub use color::Color;
 pub use coordinate::Coordinate;

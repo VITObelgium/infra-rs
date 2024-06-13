@@ -4,6 +4,7 @@
     "rust-analyzer.cargo.features": [
         "gdal-static",
         "sqlite3",
-        "serde"
+        "serde",
+        "arrow"
     ]
 }
