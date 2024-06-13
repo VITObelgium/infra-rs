@@ -1,4 +1,4 @@
-/// Represents a point in the raster using r,c coordinates
+/// Represents a point in the raster using row, col coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Cell {
     pub row: i32,
@@ -13,51 +13,51 @@ impl Cell {
     pub const fn is_valid(&self) -> bool {
         self.row >= 0 && self.col >= 0
     }
-}
 
-pub fn left_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row, cell.col - 1)
-}
-
-pub fn right_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row, cell.col + 1)
-}
-
-pub fn top_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row - 1, cell.col)
-}
-
-pub fn bottom_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row + 1, cell.col)
-}
-
-pub fn top_left_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row - 1, cell.col - 1)
-}
-
-pub fn top_right_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row - 1, cell.col + 1)
-}
-
-pub fn bottom_left_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row + 1, cell.col - 1)
-}
-
-pub fn bottom_right_cell(cell: &Cell) -> Cell {
-    Cell::new(cell.row + 1, cell.col + 1)
-}
-
-pub fn increment_cell(cell: &mut Cell, cols: i32) {
-    cell.col += 1;
-    if cell.col >= cols {
-        cell.col = 0;
-        cell.row += 1;
+    pub fn left(&self) -> Cell {
+        Cell::new(self.row, self.col - 1)
     }
-}
 
-pub fn distance(lhs: &Cell, rhs: &Cell) -> f64 {
-    let x = rhs.col - lhs.col;
-    let y = rhs.row - lhs.row;
+    pub fn right(&self) -> Cell {
+        Cell::new(self.row, self.col + 1)
+    }
 
-    ((x * x + y * y) as f64).sqrt()
+    pub fn above(&self) -> Cell {
+        Cell::new(self.row - 1, self.col)
+    }
+
+    pub fn below(&self) -> Cell {
+        Cell::new(self.row + 1, self.col)
+    }
+
+    pub fn above_left(&self) -> Cell {
+        Cell::new(self.row - 1, self.col - 1)
+    }
+
+    pub fn above_right(&self) -> Cell {
+        Cell::new(self.row - 1, self.col + 1)
+    }
+
+    pub fn below_left(&self) -> Cell {
+        Cell::new(self.row + 1, self.col - 1)
+    }
+
+    pub fn below_right(&self) -> Cell {
+        Cell::new(self.row + 1, self.col + 1)
+    }
+
+    pub fn increment(&mut self, cols_in_grid: i32) {
+        self.col += 1;
+        if self.col >= cols_in_grid {
+            self.col = 0;
+            self.row += 1;
+        }
+    }
+
+    pub fn distance(&self, other: &Cell) -> f64 {
+        let x = other.col - self.col;
+        let y = other.row - self.row;
+
+        ((x * x + y * y) as f64).sqrt()
+    }
 }
