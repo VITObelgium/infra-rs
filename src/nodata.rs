@@ -1,0 +1,147 @@
+use num::ToPrimitive;
+
+pub trait Nodata<T: ToPrimitive>: ToPrimitive {
+    fn value() -> T;
+    fn is_nodata(value: T) -> bool;
+    fn is_nan() -> bool;
+}
+
+impl Nodata<u8> for u8 {
+    fn value() -> u8 {
+        u8::max_value()
+    }
+
+    fn is_nodata(value: u8) -> bool {
+        value == u8::max_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<u16> for u16 {
+    fn value() -> u16 {
+        u16::max_value()
+    }
+
+    fn is_nodata(value: u16) -> bool {
+        value == u16::max_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<u32> for u32 {
+    fn value() -> u32 {
+        u32::max_value()
+    }
+
+    fn is_nodata(value: u32) -> bool {
+        value == u32::max_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<u64> for u64 {
+    fn value() -> u64 {
+        u64::max_value()
+    }
+
+    fn is_nodata(value: u64) -> bool {
+        value == u64::max_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<i8> for i8 {
+    fn value() -> i8 {
+        i8::min_value()
+    }
+
+    fn is_nodata(value: i8) -> bool {
+        value == i8::min_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<i16> for i16 {
+    fn value() -> i16 {
+        i16::min_value()
+    }
+
+    fn is_nodata(value: i16) -> bool {
+        value == i16::min_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<i32> for i32 {
+    fn value() -> i32 {
+        i32::min_value()
+    }
+
+    fn is_nodata(value: i32) -> bool {
+        value == i32::min_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<i64> for i64 {
+    fn value() -> i64 {
+        i64::min_value()
+    }
+
+    fn is_nodata(value: i64) -> bool {
+        value == i64::min_value()
+    }
+
+    fn is_nan() -> bool {
+        false
+    }
+}
+
+impl Nodata<f32> for f32 {
+    fn value() -> f32 {
+        f32::NAN
+    }
+
+    fn is_nodata(value: f32) -> bool {
+        value.is_nan()
+    }
+
+    fn is_nan() -> bool {
+        true
+    }
+}
+
+impl Nodata<f64> for f64 {
+    fn value() -> f64 {
+        f64::NAN
+    }
+
+    fn is_nodata(value: f64) -> bool {
+        value.is_nan()
+    }
+
+    fn is_nan() -> bool {
+        true
+    }
+}
