@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use arrow::{
-    array::{downcast_array, PrimitiveArray},
+    array::{downcast_array, ArrowNativeTypeOp, PrimitiveArray},
     compute,
     datatypes::ArrowPrimitiveType,
 };
@@ -9,26 +9,47 @@ use num::NumCast;
 
 use crate::{
     arrowutil::{self, ArrowType},
-    raster::{self, RasterNum},
+    raster::RasterNum,
     GeoMetadata, Raster,
 };
 
-fn result_nodata<T: Clone>(lhs: Option<T>, rhs: Option<T>) -> Option<T> {
-    lhs.or_else(|| rhs.clone())
-}
+pub trait ArrowRasterNum<T: num::ToPrimitive>: RasterNum<T> + ArrowType + ArrowNativeTypeOp {}
 
-pub trait ArrowRasterNum<T: num::ToPrimitive>: RasterNum<T> + ArrowType + ArrowPrimitiveType {}
+impl ArrowRasterNum<i8> for i8 {}
+impl ArrowRasterNum<u8> for u8 {}
+impl ArrowRasterNum<i16> for i16 {}
+impl ArrowRasterNum<u16> for u16 {}
+impl ArrowRasterNum<i32> for i32 {}
+impl ArrowRasterNum<u32> for u32 {}
+impl ArrowRasterNum<i64> for i64 {}
+impl ArrowRasterNum<u64> for u64 {}
+impl ArrowRasterNum<f32> for f32 {}
+impl ArrowRasterNum<f64> for f64 {}
 
-pub struct ArrowRaster<T: ArrowRasterNum<T> + ArrowType> {
+pub struct ArrowRaster<T: ArrowRasterNum<T>> {
     metadata: GeoMetadata,
     data: Arc<PrimitiveArray<T::TArrow>>,
+}
+
+impl<T: ArrowRasterNum<T>> ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    pub fn mask_vec(&self) -> Vec<Option<<<T as arrowutil::ArrowType>::TArrow as arrow::array::ArrowPrimitiveType>::Native>> {
+        let data: Vec<Option<<<T as arrowutil::ArrowType>::TArrow as arrow::array::ArrowPrimitiveType>::Native>> = self.data.iter().collect();
+        data
+    }
+
+    pub fn sum(&self) -> f64 {
+        compute::sum(&*self.data).unwrap_or(T::zero()).to_f64().unwrap_or(0.0)
+    }
 }
 
 impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for ArrowRaster<T> {
     type Output = ArrowRaster<T>;
 
     fn add(self, other: ArrowRaster<T>) -> ArrowRaster<T> {
-        raster::assert_dimensions(&self, &other);
+        //raster::assert_dimensions(&self, &other);
 
         // Create a new ArrowRaster with the same metadata
         let metadata = self.metadata.clone();
@@ -46,104 +67,67 @@ impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for ArrowRa
     }
 }
 
-// impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for ArrowRaster<T> {
-//     type Output = ArrowRaster<T>;
+impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for &ArrowRaster<T> {
+    type Output = ArrowRaster<T>;
 
-//     fn mul(mut self, scalar: T) -> ArrowRaster<T> {
-//         let nod = self.nodata_value();
-//         let is_nodata = |val: T| nod.map_or(false, |nodata| val == nodata);
+    fn add(self, other: &ArrowRaster<T>) -> ArrowRaster<T> {
+        //raster::assert_dimensions(self, other);
 
-//         // let data = self.data_mut();
-//         // for value in data {
-//         //     if is_nodata(*value) {
-//         //         continue;
-//         //     }
-//         //     *value = *value * scalar;
-//         // }
+        match compute::kernels::numeric::add_wrapping(&*self.data, &*other.data) {
+            Ok(data) => {
+                let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
+                ArrowRaster {
+                    metadata: self.metadata.clone(),
+                    data: Arc::new(data),
+                }
+            }
+            Err(e) => panic!("Error adding rasters: {:?}", e),
+        }
+    }
+}
 
-//         self.data
-//             .iter_mut()
-//             .filter(|x| !is_nodata(**x))
-//             .for_each(|raster_val| *raster_val = *raster_val * NumCast::from(scalar).unwrap_or(T::zero()));
+impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    type Output = ArrowRaster<T>;
 
-//         self
-//     }
-// }
+    fn mul(self, scalar: T) -> ArrowRaster<T> {
+        match compute::kernels::numeric::mul_wrapping(&*self.data, &PrimitiveArray::<T::TArrow>::new_scalar(scalar)) {
+            Ok(data) => ArrowRaster {
+                metadata: self.metadata.clone(),
+                data: Arc::new(downcast_array::<PrimitiveArray<T::TArrow>>(&*data)),
+            },
+            Err(e) => panic!("Error adding rasters: {:?}", e),
+        }
+    }
+}
 
-// impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for &ArrowRaster<T> {
-//     type Output = ArrowRaster<T>;
+impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for &ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    type Output = ArrowRaster<T>;
 
-//     fn mul(self, scalar: T) -> ArrowRaster<T> {
-//         let nod = self.nodata_value();
-//         let is_nodata = |val: T| nod.map_or(false, |nodata| val == nodata);
-
-//         // let data = self.data_mut();
-//         // for value in data {
-//         //     if is_nodata(*value) {
-//         //         continue;
-//         //     }
-//         //     *value = *value * scalar;
-//         // }
-
-//         let mut data = Vec::with_capacity(self.data.len());
-
-//         for x in self.data.iter() {
-//             if is_nodata(*x) {
-//                 data.push(nod.unwrap());
-//             } else {
-//                 data.push(*x * scalar);
-//             }
-//         }
-
-//         ArrowRaster {
-//             metadata: self.metadata.clone(),
-//             data,
-//         }
-//     }
-// }
-
-// impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for &ArrowRaster<T> {
-//     type Output = ArrowRaster<T>;
-
-//     fn add(self, other: &ArrowRaster<T>) -> ArrowRaster<T> {
-//         raster::assert_dimensions(self, other);
-
-//         // Create a new ArrowRaster with the same metadata
-//         let metadata = self.metadata.clone();
-//         let mut data = Vec::with_capacity(self.data.len());
-
-//         let nod = result_nodata(self.nodata_value(), other.nodata_value());
-//         let lhs_nodata = |val: T| self.nodata_value().map_or(false, |nodata| val == nodata);
-
-//         // Perform element-wise addition
-//         for (x, y) in self.data.iter().zip(other.data.iter()) {
-//             if lhs_nodata(*x) || other.is_nodata(*y) {
-//                 data.push(nod.unwrap());
-//             } else {
-//                 data.push(*x + *y);
-//             }
-//         }
-
-//         ArrowRaster { metadata, data }
-//     }
-// }
-
-// impl<T: ArrowRasterNum<T> + std::ops::AddAssign> ArrowRaster<T> {
-//     pub fn sum(&self) -> f64 {
-//         self.data
-//             .iter()
-//             .filter(|x| self.nodata_value().map_or(true, |nodata| **x != nodata))
-//             .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
-//     }
-// }
+    fn mul(self, scalar: T) -> ArrowRaster<T> {
+        ArrowRaster {
+            metadata: self.metadata.clone(),
+            data: Arc::new(self.data.unary(|v| v * scalar)),
+        }
+    }
+}
 
 impl<T: ArrowRasterNum<T>> Raster<T> for ArrowRaster<T>
 where
-    arrow::array::PrimitiveArray<<T as arrowutil::ArrowType>::TArrow>: std::convert::From<std::vec::Vec<T>>,
+    T::TArrow: ArrowPrimitiveType<Native = T>,
 {
     fn new(metadata: GeoMetadata, data: Vec<T>) -> Self {
-        let data: Arc<PrimitiveArray<T::TArrow>> = Arc::new(data.into());
-        ArrowRaster { metadata, data }
+        let nod = metadata.nodata();
+        let data: PrimitiveArray<T::TArrow> = data.iter().map(|&v| (v.to_f64() != nod).then_some(v)).collect();
+        ArrowRaster {
+            metadata,
+            data: Arc::new(data),
+        }
     }
 
     fn zeros(meta: GeoMetadata) -> Self {
@@ -167,12 +151,13 @@ where
         self.metadata.rows()
     }
 
-    fn data_mut(&mut self) -> &mut Vec<T> {
-        &mut self.data
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        //self.data.values().inner().as_mut_slice()
+        unimplemented!()
     }
 
-    fn data(&self) -> &Vec<T> {
-        &self.data
+    fn as_slice(&self) -> &[T] {
+        self.data.values().inner().typed_data()
     }
 
     fn nodata_value(&self) -> Option<T> {
@@ -204,13 +189,25 @@ mod tests {
 
         {
             let result = &raster1 + &raster2;
-            assert_eq!(result.data(), &[-9999, 8, -9999, 12]);
+            assert_eq!(result.mask_vec(), [None, Some(8), None, Some(12)]);
         }
 
         {
             let result = raster1 + raster2;
-            assert_eq!(result.data(), &[-9999, 8, -9999, 12]);
+            assert_eq!(result.mask_vec(), [None, Some(8), None, Some(12)]);
         }
+    }
+
+    #[test]
+    fn test_sum() {
+        let metadata = GeoMetadata::new(
+            "EPSG:4326".to_string(),
+            RasterSize { rows: 2, cols: 2 },
+            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+            Some(-9999.0),
+        );
+
+        assert_eq!(ArrowRaster::new(metadata.clone(), vec![1, 2, -9999, 4]).sum(), 7.0);
     }
 
     #[test]
@@ -226,12 +223,12 @@ mod tests {
 
         {
             let result = &raster * 2;
-            assert_eq!(result.data(), &[2, 4, -9999, 8]);
+            assert_eq!(result.mask_vec(), [Some(2), Some(4), None, Some(8)]);
         }
 
         {
             let result = raster * 2;
-            assert_eq!(result.data(), &[2, 4, -9999, 8]);
+            assert_eq!(result.mask_vec(), [Some(2), Some(4), None, Some(8)]);
         }
     }
 }

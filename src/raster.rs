@@ -26,10 +26,10 @@ pub trait Raster<T: RasterNum<T>> {
     fn height(&self) -> usize;
 
     /// Returns a mutable reference to the raster data.
-    fn data_mut(&mut self) -> &mut Vec<T>;
+    fn as_mut_slice(&mut self) -> &mut [T];
 
     /// Returns a reference to the raster data.
-    fn data(&self) -> &Vec<T>;
+    fn as_slice(&self) -> &[T];
 
     /// Returns the optional nodata value that is used in the raster to identify missing data.
     fn nodata_value(&self) -> Option<T>;

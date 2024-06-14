@@ -161,12 +161,12 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
         self.metadata.rows()
     }
 
-    fn data_mut(&mut self) -> &mut Vec<T> {
-        &mut self.data
+    fn as_mut_slice(&mut self) -> &mut [T] {
+        self.data.as_mut_slice()
     }
 
-    fn data(&self) -> &Vec<T> {
-        &self.data
+    fn as_slice(&self) -> &[T] {
+        self.data.as_slice()
     }
 
     fn nodata_value(&self) -> Option<T> {
@@ -198,12 +198,12 @@ mod tests {
 
         {
             let result = &raster1 + &raster2;
-            assert_eq!(result.data(), &[-9999, 8, -9999, 12]);
+            assert_eq!(result.as_slice(), &[-9999, 8, -9999, 12]);
         }
 
         {
             let result = raster1 + raster2;
-            assert_eq!(result.data(), &[-9999, 8, -9999, 12]);
+            assert_eq!(result.as_slice(), &[-9999, 8, -9999, 12]);
         }
     }
 
@@ -220,12 +220,12 @@ mod tests {
 
         {
             let result = &raster * 2;
-            assert_eq!(result.data(), &[2, 4, -9999, 8]);
+            assert_eq!(result.as_slice(), &[2, 4, -9999, 8]);
         }
 
         {
             let result = raster * 2;
-            assert_eq!(result.data(), &[2, 4, -9999, 8]);
+            assert_eq!(result.as_slice(), &[2, 4, -9999, 8]);
         }
     }
 }

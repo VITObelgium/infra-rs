@@ -52,7 +52,7 @@ mod tests {
 
         assert_eq!(ras.width(), 2370);
         assert_eq!(ras.height(), 920);
-        assert_eq!(ras.data().len(), 2370 * 920);
+        assert_eq!(ras.as_slice().len(), 2370 * 920);
         assert_eq!(ras.nodata_value(), Some(255.0));
         assert_eq!(ras.sum(), 163654749.0);
 
