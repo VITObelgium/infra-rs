@@ -7,7 +7,7 @@ use approx::relative_eq;
 use gdal::{errors::GdalError, raster::GdalType};
 use num::NumCast;
 
-use crate::{rect, Error, GeoMetadata, Nodata, RasterNum, RasterSize};
+use crate::{rect, Error, GeoMetadata, Nodata, RasterNum, RasterSize, Result};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RasterType {
@@ -35,12 +35,28 @@ struct CutOut {
     pub cols: i32,
 }
 
+pub fn setup_logging(debug: bool) {
+    if debug && gdal::config::set_config_option("CPL_DEBUG", "ON").is_err() {
+        log::debug!("Failed to set GDAL debug level")
+    }
+
+    gdal::config::set_error_handler(|sev, _ec, msg| {
+        use gdal::errors::CplErrType;
+        match sev {
+            CplErrType::Debug => log::debug!("GDAL: {msg}"),
+            CplErrType::Warning => log::warn!("GDAL: {msg}"),
+            CplErrType::Failure | CplErrType::Fatal => log::error!("GDAL: {msg}"),
+            CplErrType::None => {}
+        }
+    });
+}
+
 fn raw_string_to_string(raw_ptr: *const libc::c_char) -> String {
     let c_str = unsafe { std::ffi::CStr::from_ptr(raw_ptr) };
     c_str.to_string_lossy().into_owned()
 }
 
-pub fn check_gdal_rc(rc: gdal_sys::CPLErr::Type) -> Result<(), GdalError> {
+pub fn check_gdal_rc(rc: gdal_sys::CPLErr::Type) -> std::result::Result<(), GdalError> {
     if rc != 0 {
         let last_err_no = unsafe { gdal_sys::CPLGetLastErrorNo() };
         let last_err_msg = raw_string_to_string(unsafe { gdal_sys::CPLGetLastErrorMsg() });
@@ -86,15 +102,17 @@ fn str_vec<T: AsRef<str>>(options: &[T]) -> Vec<&str> {
     options.iter().map(|s| s.as_ref()).collect()
 }
 
-pub fn open_raster_read_only(path: &Path) -> Result<gdal::Dataset, Error> {
+pub fn open_raster_read_only(path: &Path) -> Result<gdal::Dataset> {
     let ds_opts = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
         ..Default::default()
     };
+
+    log::debug!("Opening raster: {:?}", path);
     Ok(gdal::Dataset::open_ex(path, ds_opts)?)
 }
 
-pub fn open_raster_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset, Error> {
+pub fn open_raster_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset> {
     let ds_opts = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
         open_options: Some(open_options),
@@ -103,15 +121,19 @@ pub fn open_raster_read_only_with_options(path: &Path, open_options: &[&str]) ->
     Ok(gdal::Dataset::open_ex(path, ds_opts)?)
 }
 
-pub fn metadata_from_file(path: &Path) -> Result<GeoMetadata, Error> {
+pub fn detect_raster_data_type(path: &Path, band_index: usize) -> Result<gdal::raster::GdalDataType> {
+    Ok(open_raster_read_only(path)?.rasterband(band_index)?.band_type())
+}
+
+pub fn metadata_from_file(path: &Path) -> Result<GeoMetadata> {
     metadata_from_dataset_band(&open_raster_read_only(path)?, 1)
 }
 
-pub fn metadata_from_file_with_options<T: AsRef<str>>(path: &Path, open_options: &[T]) -> Result<GeoMetadata, Error> {
+pub fn metadata_from_file_with_options<T: AsRef<str>>(path: &Path, open_options: &[T]) -> Result<GeoMetadata> {
     metadata_from_dataset_band(&open_raster_read_only_with_options(path, str_vec(open_options).as_slice())?, 1)
 }
 
-pub fn metadata_from_dataset_band(ds: &gdal::Dataset, band_index: usize) -> Result<GeoMetadata, Error> {
+pub fn metadata_from_dataset_band(ds: &gdal::Dataset, band_index: usize) -> Result<GeoMetadata> {
     let rasterband = ds.rasterband(band_index)?;
 
     let (width, height) = ds.raster_size();
@@ -123,14 +145,14 @@ pub fn metadata_from_dataset_band(ds: &gdal::Dataset, band_index: usize) -> Resu
     ))
 }
 
-fn metadata_to_dataset_band(ds: &mut gdal::Dataset, meta: &GeoMetadata, band_index: usize) -> Result<(), Error> {
+fn metadata_to_dataset_band(ds: &mut gdal::Dataset, meta: &GeoMetadata, band_index: usize) -> Result<()> {
     ds.set_geo_transform(&meta.geo_transform())?;
     ds.set_projection(meta.projection())?;
     ds.rasterband(band_index)?.set_no_data_value(meta.nodata())?;
     Ok(())
 }
 
-fn intersect_metadata(src_meta: &GeoMetadata, dst_meta: &GeoMetadata) -> Result<CutOut, Error> {
+fn intersect_metadata(src_meta: &GeoMetadata, dst_meta: &GeoMetadata) -> Result<CutOut> {
     // src_meta: the metadata of the raster that we are going to read as it ison disk
     // dst_meta: the metadata of the raster that will be returned to the user
 
@@ -179,7 +201,7 @@ pub fn data_from_dataset_with_extent<T: GdalType + RasterNum<T>>(
     extent: &GeoMetadata,
     band_nr: usize,
     dst_data: &mut [T],
-) -> Result<GeoMetadata, Error> {
+) -> Result<GeoMetadata> {
     let meta = metadata_from_dataset_band(dataset, band_nr)?;
     let cut_out = intersect_metadata(&meta, extent)?;
 
@@ -235,7 +257,7 @@ pub fn data_from_dataset_with_extent<T: GdalType + RasterNum<T>>(
 }
 
 /// This version will read the full dataset and is used in cases where there is no geotransform info available
-pub fn data_from_dataset<T: GdalType>(dataset: &gdal::Dataset, band_nr: usize, dst_data: &mut [T]) -> Result<GeoMetadata, Error> {
+pub fn data_from_dataset<T: GdalType>(dataset: &gdal::Dataset, band_nr: usize, dst_data: &mut [T]) -> Result<GeoMetadata> {
     let raster_band = dataset.rasterband(band_nr)?;
     let meta = GeoMetadata::without_spatial_reference(
         RasterSize {
@@ -267,7 +289,7 @@ pub fn data_from_dataset<T: GdalType>(dataset: &gdal::Dataset, band_nr: usize, d
     //}
 }
 
-fn read_raster_data<T: GdalType>(band_nr: usize, cut: &CutOut, ds: &gdal::Dataset, data: &mut [T], data_cols: i32) -> Result<(), Error> {
+fn read_raster_data<T: GdalType>(band_nr: usize, cut: &CutOut, ds: &gdal::Dataset, data: &mut [T], data_cols: i32) -> Result<()> {
     let mut data_ptr = data.as_mut_ptr();
     if cut.dst_row_offset > 0 {
         data_ptr = unsafe { data_ptr.add((cut.dst_row_offset * data_cols) as usize) };
@@ -303,7 +325,7 @@ fn read_raster_data<T: GdalType>(band_nr: usize, cut: &CutOut, ds: &gdal::Datase
     Ok(())
 }
 
-fn add_band<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Result<(), Error> {
+fn add_band<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Result<()> {
     // convert the data pointer to a string
     let ptr: [libc::c_char; 32] = [0; 32];
     unsafe { gdal_sys::CPLPrintPointer(ptr.as_ptr() as *mut libc::c_char, data.as_ptr() as *mut std::ffi::c_void, ptr.len() as i32) };
@@ -320,7 +342,7 @@ fn add_band<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Result<(), Error
 /// Creates an in-memory dataset with the provided metadata
 /// The array passed data will be used as the dataset band
 /// Make sure the data array is the correct size and will live as long as the dataset
-pub fn create_memory_dataset<T: GdalType + Nodata<T>>(meta: &GeoMetadata, data: &mut [T]) -> Result<gdal::Dataset, Error> {
+pub fn create_memory_dataset<T: GdalType + Nodata<T>>(meta: &GeoMetadata, data: &mut [T]) -> Result<gdal::Dataset> {
     let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
     let mut ds = mem_driver.create_with_band_type::<T, _>(&PathBuf::from("in_mem"), meta.columns(), meta.rows(), 0)?;
     add_band(&mut ds, data)?;

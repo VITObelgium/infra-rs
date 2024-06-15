@@ -8,8 +8,7 @@
 				"$rustc"
 			],
 			"args": [
-				"--features",
-				"serde,sqlite3"
+				"--features=serde,sqlite3,gdal-static,arrow,python"
 			],
 			"group": {
 				"kind": "build",

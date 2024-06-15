@@ -3,6 +3,11 @@ name = "rs-infra"
 version = "0.1.0"
 edition = "2021"
 
+[workspace]
+resolver = "2"
+members = [".", "ruster"]
+default-members = ["."]
+
 [dependencies]
 num = "0.4.3"
 phf = { version = "0.11", features = ["macros"] }
@@ -16,6 +21,7 @@ log = "0.4.14"
 serde = { version = "1.0", features = ["derive"], optional = true }
 libsqlite3-sys = { version = "0.28.0", optional = true }
 arrow = { version = "52.0", optional = true }
+pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
 
 [dev-dependencies]
 test-log = "0.2.16"
@@ -27,6 +33,8 @@ gdal = ["dep:gdal", "dep:gdal-sys", "dep:libc"]
 gdal-static = ["gdal"]
 serde = ["dep:serde"]
 sqlite3 = ["dep:libsqlite3-sys", "dep:libc"]
+python = ["dep:pyo3", "arrow/pyarrow"]
+
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
 rev = "943c5ef"

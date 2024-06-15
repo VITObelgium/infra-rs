@@ -1,0 +1,103 @@
+use arrow::{
+    array::{Array, ArrayData, PrimitiveArray},
+    datatypes::ArrowPrimitiveType,
+    pyarrow::PyArrowType,
+};
+use inf::{ArrowRaster, ArrowRasterNum, GeoMetadata, Raster};
+use pyo3::{pyclass, pymethods};
+
+#[derive(Clone)]
+#[pyclass(name = "RasterMetadata")]
+pub struct PyMetadata {
+    // The raw projection string
+    pub projection: String,
+    // The EPSG code of the projection
+    pub epsg: Option<u32>,
+    /// The size of the image in pixels (width, height)
+    pub size: (usize, usize),
+    /// The cell size of the image (xsize, ysize)
+    pub cell_size: (f64, f64),
+    /// The affine transformation.
+    pub geo_transform: [f64; 6],
+    /// The nodata value.
+    pub nodata: Option<f64>,
+}
+
+impl From<&GeoMetadata> for PyMetadata {
+    fn from(meta: &GeoMetadata) -> Self {
+        PyMetadata {
+            projection: meta.projection().to_string(),
+            epsg: meta.projected_epsg().map(|crs| crs.into()),
+            size: (meta.columns(), meta.rows()),
+            cell_size: (meta.cell_size().x(), meta.cell_size().y()),
+            geo_transform: meta.geo_transform(),
+            nodata: meta.nodata(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyMetadata {
+    fn __repr__(&self) -> String {
+        let mut str = format!(
+            "Meta ({}x{}) cell size [x {} y {}]",
+            self.size.0, self.size.1, self.cell_size.0, self.cell_size.1
+        );
+        if self.epsg.is_some() {
+            str += &format!(" EPSG: {}\n", self.epsg.unwrap_or_default());
+        }
+        str
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}
+
+#[pyclass(name = "Raster")]
+pub struct PyRaster {
+    pub meta: PyMetadata,
+    pub data: ArrayData,
+}
+
+impl PyRaster {
+    pub fn new<T: ArrowRasterNum<T>>(arrow_raster: ArrowRaster<T>) -> Self
+    where
+        T::TArrow: ArrowPrimitiveType<Native = T>,
+    {
+        let arr = arrow_raster.arrow_array();
+        let array: &PrimitiveArray<T::TArrow> = (*arr).as_any().downcast_ref().unwrap();
+
+        PyRaster {
+            meta: arrow_raster.geo_metadata().into(),
+            data: array.into_data(),
+        }
+    }
+}
+
+#[pymethods]
+impl PyRaster {
+    // #[new]
+    // fn new(value: i32) -> Self {
+    //     Self(value)
+    // }
+
+    #[getter]
+    fn meta_data(&self) -> PyMetadata {
+        self.meta.clone()
+    }
+
+    #[getter]
+    fn arrow_data(&self) -> PyArrowType<ArrayData> {
+        let data = self.data.clone();
+        PyArrowType(data)
+    }
+
+    fn __repr__(&self) -> String {
+        format!("Raster ({}x{}) ({})", self.meta.size.0, self.meta.size.1, self.data.data_type())
+    }
+
+    fn __str__(&self) -> String {
+        self.__repr__()
+    }
+}

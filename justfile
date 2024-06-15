@@ -21,6 +21,17 @@ bootstrap: cargo-config-gen
   -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
   fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- '-l-framework' '-framework'
 
+pybootstrap:
+  #!/usr/bin/env fish
+  conda create -y -p ./target/conda python=3.12
+  conda init fish
+  conda activate ./target/conda && conda install -y maturin pyarrow
+
+build_py:
+  #!/usr/bin/env fish
+  conda activate ./target/conda
+  cd ruster && maturin develop && python ./test.py
+
 build_debug:
   cargo build
 

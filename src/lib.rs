@@ -5,7 +5,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[cfg(feature = "gdal")]
-    #[error("GDAL error")]
+    #[error("GDAL error: {0}")]
     GdalError(#[from] gdal::errors::GdalError),
     #[error("Raster dimensions do not match ({}x{}) <-> ({}x{})", .size1.0, .size1.1, .size2.0, .size2.1)]
     SizeMismatch { size1: (usize, usize), size2: (usize, usize) },
@@ -23,6 +23,8 @@ pub type Result<T> = std::result::Result<T, Error>;
 
 #[cfg(feature = "arrow")]
 mod arrowraster;
+#[cfg(feature = "arrow")]
+pub mod arrowrasterio;
 #[cfg(feature = "arrow")]
 mod arrowutil;
 mod cell;
@@ -56,6 +58,8 @@ pub mod tile;
 
 #[cfg(feature = "arrow")]
 pub use arrowraster::ArrowRaster;
+#[cfg(feature = "arrow")]
+pub use arrowraster::ArrowRasterNum;
 pub use cell::Cell;
 pub use color::Color;
 pub use coordinate::Coordinate;

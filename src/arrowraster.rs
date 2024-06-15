@@ -9,7 +9,7 @@ use num::NumCast;
 
 use crate::{
     arrowutil::{self, ArrowType},
-    raster::RasterNum,
+    raster::{self, RasterNum},
     GeoMetadata, Raster,
 };
 
@@ -43,13 +43,20 @@ where
     pub fn sum(&self) -> f64 {
         compute::sum(&*self.data).unwrap_or(T::zero()).to_f64().unwrap_or(0.0)
     }
+
+    pub fn arrow_array(&self) -> Arc<PrimitiveArray<T::TArrow>> {
+        self.data.clone()
+    }
 }
 
-impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for ArrowRaster<T> {
+impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
     type Output = ArrowRaster<T>;
 
     fn add(self, other: ArrowRaster<T>) -> ArrowRaster<T> {
-        //raster::assert_dimensions(&self, &other);
+        raster::assert_dimensions(&self, &other);
 
         // Create a new ArrowRaster with the same metadata
         let metadata = self.metadata.clone();
@@ -67,11 +74,14 @@ impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for ArrowRa
     }
 }
 
-impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for &ArrowRaster<T> {
+impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for &ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
     type Output = ArrowRaster<T>;
 
     fn add(self, other: &ArrowRaster<T>) -> ArrowRaster<T> {
-        //raster::assert_dimensions(self, other);
+        raster::assert_dimensions(self, other);
 
         match compute::kernels::numeric::add_wrapping(&*self.data, &*other.data) {
             Ok(data) => {

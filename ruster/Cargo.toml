@@ -1,0 +1,14 @@
+[package]
+name = "ruster"
+version = "0.1.0"
+edition = "2021"
+crate-type = ["cdylib"]
+
+[dependencies]
+inf = { package = "rs-infra", path = "..", features = ["arrow", "gdal"] }
+pyo3 = { version = "0.21" }
+pyo3-log = "0.10"
+arrow = { version = "52.0", features = ["pyarrow"] }
+gdal = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7" } # using version from git to support gdal >= 3.8
+thiserror = "1.0"
+log = "0.4"
