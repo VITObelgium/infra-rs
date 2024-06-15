@@ -1,8 +1,7 @@
 use pyo3::{exceptions::PyRuntimeError, prelude::*};
 use pyo3::{types::PyModule, wrap_pyfunction, Bound, PyResult};
 
-use raster::{PyMetadata, PyRaster};
-use rasterio::read_raster;
+use raster::{PyRaster, PyRasterMetadata};
 use thiserror::Error;
 
 #[derive(Error, Debug)]
@@ -26,10 +25,13 @@ pub type Result<T> = std::result::Result<T, Error>;
 fn my_extension(m: &Bound<'_, PyModule>) -> PyResult<()> {
     pyo3_log::init();
 
-    inf::rasterio::setup_logging(true);
-    m.add_function(wrap_pyfunction!(read_raster, m)?)?;
+    inf::gdalinterop::setup_logging(true);
+    m.add_function(wrap_pyfunction!(rasterio::read_raster, m)?)?;
+    m.add_function(wrap_pyfunction!(rasterio::read_raster_as, m)?)?;
+    m.add_function(wrap_pyfunction!(rasterio::read_raster_region, m)?)?;
+    m.add_function(wrap_pyfunction!(rasterio::read_raster_region_as, m)?)?;
     m.add_class::<PyRaster>()?;
-    m.add_class::<PyMetadata>()?;
+    m.add_class::<PyRasterMetadata>()?;
     Ok(())
 }
 

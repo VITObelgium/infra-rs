@@ -1,25 +1,18 @@
+use gdal::cpl::CslStringList;
 use std::ffi::CString;
 
-use gdal::cpl::CslStringList;
-
-use crate::{rasterio::check_gdal_rc, Error, Result};
-
-fn create_string_list(options: &[&str]) -> Result<CslStringList> {
-    let mut result = CslStringList::new();
-    for opt in options {
-        result.add_string(opt)?;
-    }
-
-    Ok(result)
-}
+use crate::{
+    gdalinterop::{check_gdal_pointer, check_gdal_rc, create_string_list},
+    Error, Result,
+};
 
 struct TranslateOptionsWrapper {
     options: *mut gdal_sys::GDALTranslateOptions,
 }
 
 impl TranslateOptionsWrapper {
-    fn new(opts: Vec<&str>) -> Result<Self> {
-        let option_values = create_string_list(&opts)?;
+    fn new(opts: &[String]) -> Result<Self> {
+        let option_values = create_string_list(opts)?;
 
         unsafe {
             Ok(TranslateOptionsWrapper {
@@ -37,30 +30,35 @@ impl Drop for TranslateOptionsWrapper {
     }
 }
 
-pub fn translate_file(input_path: &std::path::Path, output_path: &std::path::Path, options: Vec<String>) -> Result<gdal::Dataset> {
+pub fn translate_file(
+    input_path: &std::path::Path,
+    output_path: &std::path::Path,
+    options: &[String],
+) -> Result<gdal::Dataset> {
     let ds = gdal::Dataset::open(input_path)?;
     translate(&ds, output_path, options)
 }
 
-pub fn translate(ds: &gdal::Dataset, output_path: &std::path::Path, options: Vec<String>) -> Result<gdal::Dataset> {
-    let opts = TranslateOptionsWrapper::new(options.iter().map(|s| s.as_str()).collect())?;
-
+pub fn translate(ds: &gdal::Dataset, output_path: &std::path::Path, options: &[String]) -> Result<gdal::Dataset> {
+    let opts = TranslateOptionsWrapper::new(options)?;
     let mut user_error: libc::c_int = 0;
-
     let ds = unsafe {
-        gdal_sys::GDALTranslate(
-            output_path.to_str().unwrap().as_ptr() as *const i8,
-            ds.c_dataset(),
-            opts.options,
-            &mut user_error,
-        )
+        gdal::Dataset::from_c_dataset(check_gdal_pointer(
+            gdal_sys::GDALTranslate(
+                output_path.to_str().unwrap().as_ptr() as *const i8,
+                ds.c_dataset(),
+                opts.options,
+                &mut user_error,
+            ),
+            "GDALTranslate",
+        )?)
     };
 
     if user_error != 0 {
         return Err(Error::Runtime("GDAL Translate: invalid arguments".to_string()));
     }
 
-    Ok(unsafe { gdal::Dataset::from_c_dataset(ds) })
+    Ok(ds)
 }
 
 pub struct WarpOptions {
@@ -97,9 +95,13 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
         (*warp_options).hDstDS = dst_ds.c_dataset();
         (*warp_options).hDstDS = dst_ds.c_dataset();
         (*warp_options).nBandCount = 1;
-        (*warp_options).panSrcBands = gdal_sys::CPLMalloc(std::mem::size_of::<libc::c_int>() * (*warp_options).nBandCount as usize) as *mut libc::c_int;
+        (*warp_options).panSrcBands =
+            gdal_sys::CPLMalloc(std::mem::size_of::<libc::c_int>() * (*warp_options).nBandCount as usize)
+                as *mut libc::c_int;
         (*warp_options).panSrcBands.wrapping_add(0).write(1); // warpOptions->panSrcBands[0]   = 1;
-        (*warp_options).panDstBands = gdal_sys::CPLMalloc(std::mem::size_of::<libc::c_int>() * (*warp_options).nBandCount as usize) as *mut libc::c_int;
+        (*warp_options).panDstBands =
+            gdal_sys::CPLMalloc(std::mem::size_of::<libc::c_int>() * (*warp_options).nBandCount as usize)
+                as *mut libc::c_int;
         (*warp_options).panDstBands.wrapping_add(0).write(1); // warpOptions->panDstBands[0]   = 1;
         (*warp_options).pfnTransformer = Some(gdal_sys::GDALGenImgProjTransform);
         (*warp_options).eResampleAlg = options.resample_algo.to_gdal();
@@ -119,14 +121,20 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
             // will get freed by gdal
             (*warp_options).padfSrcNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut libc::c_double;
             // C++ equivalent: padfSrcNoDataReal[0] = src_nodata_value;
-            (*warp_options).padfSrcNoDataReal.wrapping_add(0).write(src_nodata_value);
+            (*warp_options)
+                .padfSrcNoDataReal
+                .wrapping_add(0)
+                .write(src_nodata_value);
         }
 
         if let Some(dst_nodata_value) = dst_ds.rasterband(1)?.no_data_value() {
             // will get freed by gdal
             (*warp_options).padfDstNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut libc::c_double;
             // C++ equivalent: padfDstNoDataReal[0] = dstNodataValue.value();
-            (*warp_options).padfDstNoDataReal.wrapping_add(0).write(dst_nodata_value);
+            (*warp_options)
+                .padfDstNoDataReal
+                .wrapping_add(0)
+                .write(dst_nodata_value);
         }
 
         const FALSE: i32 = 0;
@@ -208,7 +216,12 @@ impl Drop for WarpAppOptionsWrapper {
     }
 }
 
-pub fn warp_cli(src_ds: &gdal::Dataset, dst_ds: &mut gdal::Dataset, options: &[String], key_value_options: &Vec<(String, String)>) -> Result<()> {
+pub fn warp_cli(
+    src_ds: &gdal::Dataset,
+    dst_ds: &mut gdal::Dataset,
+    options: &[String],
+    key_value_options: &Vec<(String, String)>,
+) -> Result<()> {
     let mut warp_options = WarpAppOptionsWrapper::new(options)?;
     warp_options.set_warp_options(key_value_options)?;
 

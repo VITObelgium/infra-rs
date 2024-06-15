@@ -1,22 +1,105 @@
-use crate::{raster::PyRaster, Error, Result};
-use inf::{arrowrasterio::read_arrow_raster, rasterio};
-use pyo3::pyfunction;
+use crate::{
+    raster::{PyRaster, PyRasterMetadata},
+    Error, Result,
+};
+use inf::{raster::RasterIO, rasterio, ArrowRaster, GeoMetadata};
+use pyo3::{pyfunction, PyObject, Python};
+
+fn detect_gdal_type(data_type: PyObject) -> Result<gdal::raster::GdalDataType> {
+    log::info!("Detecting GDAL data type from {:?}", data_type);
+
+    Python::with_gil(|py| {
+        let data_type_str = {
+            if let Ok(dtype) = data_type.extract::<String>(py) {
+                dtype
+            } else {
+                data_type.to_string()
+            }
+        };
+
+        Ok(match data_type_str.as_str() {
+            "u8" | "uint8" => gdal::raster::GdalDataType::UInt8,
+            "i8" | "int8" => gdal::raster::GdalDataType::Int8,
+            "u16" | "uint16" => gdal::raster::GdalDataType::UInt16,
+            "i16" | "int16" => gdal::raster::GdalDataType::Int16,
+            "u32" | "uint32" => gdal::raster::GdalDataType::UInt32,
+            "i32" | "int32" => gdal::raster::GdalDataType::Int32,
+            "u64" | "uint64" => gdal::raster::GdalDataType::UInt64,
+            "i64" | "int64" => gdal::raster::GdalDataType::Int64,
+            "f32" | "float" | "float32" => gdal::raster::GdalDataType::Float32,
+            "f64" | "double" | "float64" => gdal::raster::GdalDataType::Float64,
+            _ => return Err(Error::Runtime(format!("Unknown raster data type: '{}'", data_type_str))),
+        })
+    })
+}
+
+pub fn read_raster_typed(
+    dtype: gdal::raster::GdalDataType,
+    path: &std::path::Path,
+    bounds: Option<GeoMetadata>,
+) -> Result<PyRaster> {
+    use gdal::raster::GdalDataType;
+
+    let band_index = 1;
+    if let Some(region) = bounds.as_ref() {
+        Ok(match dtype {
+            GdalDataType::UInt8 => PyRaster::new(ArrowRaster::<u8>::read_bounds(path, region, band_index)?),
+            GdalDataType::Int8 => PyRaster::new(ArrowRaster::<i8>::read_bounds(path, region, band_index)?),
+            GdalDataType::UInt16 => PyRaster::new(ArrowRaster::<u16>::read_bounds(path, region, band_index)?),
+            GdalDataType::Int16 => PyRaster::new(ArrowRaster::<i16>::read_bounds(path, region, band_index)?),
+            GdalDataType::UInt32 => PyRaster::new(ArrowRaster::<u32>::read_bounds(path, region, band_index)?),
+            GdalDataType::Int32 => PyRaster::new(ArrowRaster::<i32>::read_bounds(path, region, band_index)?),
+            GdalDataType::UInt64 => PyRaster::new(ArrowRaster::<u64>::read_bounds(path, region, band_index)?),
+            GdalDataType::Int64 => PyRaster::new(ArrowRaster::<i64>::read_bounds(path, region, band_index)?),
+            GdalDataType::Float32 => PyRaster::new(ArrowRaster::<f32>::read_bounds(path, region, band_index)?),
+            GdalDataType::Float64 => PyRaster::new(ArrowRaster::<f64>::read_bounds(path, region, band_index)?),
+            GdalDataType::Unknown => return Err(Error::Runtime("Unknown raster data type".to_string())),
+        })
+    } else {
+        Ok(match dtype {
+            GdalDataType::UInt8 => PyRaster::new(ArrowRaster::<u8>::read(path)?),
+            GdalDataType::Int8 => PyRaster::new(ArrowRaster::<i8>::read(path)?),
+            GdalDataType::UInt16 => PyRaster::new(ArrowRaster::<u16>::read(path)?),
+            GdalDataType::Int16 => PyRaster::new(ArrowRaster::<i16>::read(path)?),
+            GdalDataType::UInt32 => PyRaster::new(ArrowRaster::<u32>::read(path)?),
+            GdalDataType::Int32 => PyRaster::new(ArrowRaster::<i32>::read(path)?),
+            GdalDataType::UInt64 => PyRaster::new(ArrowRaster::<u64>::read(path)?),
+            GdalDataType::Int64 => PyRaster::new(ArrowRaster::<i64>::read(path)?),
+            GdalDataType::Float32 => PyRaster::new(ArrowRaster::<f32>::read(path)?),
+            GdalDataType::Float64 => PyRaster::new(ArrowRaster::<f64>::read(path)?),
+            GdalDataType::Unknown => return Err(Error::Runtime("Unknown raster data type".to_string())),
+        })
+    }
+}
 
 #[pyfunction]
 pub fn read_raster(path: std::path::PathBuf) -> Result<PyRaster> {
-    use gdal::raster::GdalDataType;
+    read_raster_typed(
+        rasterio::detect_raster_data_type(path.as_path(), 1)?,
+        path.as_path(),
+        None,
+    )
+}
 
-    Ok(match rasterio::detect_raster_data_type(path.as_path(), 1)? {
-        GdalDataType::UInt8 => PyRaster::new(read_arrow_raster::<u8>(path.as_path())?),
-        GdalDataType::Int8 => PyRaster::new(read_arrow_raster::<i8>(path.as_path())?),
-        GdalDataType::UInt16 => PyRaster::new(read_arrow_raster::<u16>(path.as_path())?),
-        GdalDataType::Int16 => PyRaster::new(read_arrow_raster::<i16>(path.as_path())?),
-        GdalDataType::UInt32 => PyRaster::new(read_arrow_raster::<u32>(path.as_path())?),
-        GdalDataType::Int32 => PyRaster::new(read_arrow_raster::<i32>(path.as_path())?),
-        GdalDataType::UInt64 => PyRaster::new(read_arrow_raster::<u64>(path.as_path())?),
-        GdalDataType::Int64 => PyRaster::new(read_arrow_raster::<i64>(path.as_path())?),
-        GdalDataType::Float32 => PyRaster::new(read_arrow_raster::<f32>(path.as_path())?),
-        GdalDataType::Float64 => PyRaster::new(read_arrow_raster::<f64>(path.as_path())?),
-        GdalDataType::Unknown => return Err(Error::Runtime("Unknown raster data type".to_string())),
-    })
+#[pyfunction]
+pub fn read_raster_as(data_type: PyObject, path: std::path::PathBuf) -> Result<PyRaster> {
+    read_raster_typed(detect_gdal_type(data_type)?, path.as_path(), None)
+}
+
+#[pyfunction]
+pub fn read_raster_region(path: std::path::PathBuf, meta: &PyRasterMetadata) -> Result<PyRaster> {
+    read_raster_typed(
+        rasterio::detect_raster_data_type(path.as_path(), 1)?,
+        path.as_path(),
+        Some(meta.into()),
+    )
+}
+
+#[pyfunction]
+pub fn read_raster_region_as(
+    data_type: PyObject,
+    path: std::path::PathBuf,
+    meta: &PyRasterMetadata,
+) -> Result<PyRaster> {
+    read_raster_typed(detect_gdal_type(data_type)?, path.as_path(), Some(meta.into()))
 }

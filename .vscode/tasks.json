@@ -15,6 +15,21 @@
 				"isDefault": true
 			},
 			"label": "rust: cargo build"
+		},
+		{
+			"type": "cargo",
+			"command": "test",
+			"problemMatcher": [
+				"$rustc"
+			],
+			"args": [
+				"--features=serde,sqlite3,gdal-static,arrow,python"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			},
+			"label": "rust: cargo test"
 		}
 	]
 }

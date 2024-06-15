@@ -1,6 +1,6 @@
 use num::{Bounded, ToPrimitive};
 
-use crate::{Error, GeoMetadata, Nodata};
+use crate::{Error, GeoMetadata, Nodata, Result};
 
 pub trait RasterNum<T: ToPrimitive>: Copy + num::NumCast + num::Zero + PartialEq + Bounded + Nodata<T> {}
 
@@ -39,6 +39,22 @@ pub trait Raster<T: RasterNum<T>> {
     }
 }
 
+/// A trait representing a raster io operations
+pub trait RasterIO<T: RasterNum<T>, TRas: Raster<T>> {
+    /// Reads the full raster from disk
+    /// No processing (cutting, resampling) is done on the raster data, the original data is returned
+    fn read_band(path: &std::path::Path, band_index: usize) -> Result<TRas>;
+    /// Same as read_band_from_disk but reads the first band
+    fn read(path: &std::path::Path) -> Result<TRas>;
+
+    /// Reads a subset of the raster from disk
+    /// The provided extent does not have to be contained within the raster
+    /// Areas outside of the original raster will be filled with the nodata value
+    fn read_bounds(path: &std::path::Path, region: &GeoMetadata, band_index: usize) -> Result<TRas>;
+
+    fn write(&mut self, path: &std::path::Path) -> Result;
+}
+
 impl RasterNum<i8> for i8 {}
 impl RasterNum<u8> for u8 {}
 impl RasterNum<i16> for i16 {}
@@ -50,7 +66,7 @@ impl RasterNum<u64> for u64 {}
 impl RasterNum<f32> for f32 {}
 impl RasterNum<f64> for f64 {}
 
-pub fn check_dimensions<R1, R2, T1, T2>(r1: &R1, r2: &R2) -> Result<(), Error>
+pub fn check_dimensions<R1, R2, T1, T2>(r1: &R1, r2: &R2) -> Result<()>
 where
     R1: Raster<T1>,
     R2: Raster<T2>,

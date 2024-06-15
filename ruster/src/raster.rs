@@ -3,12 +3,12 @@ use arrow::{
     datatypes::ArrowPrimitiveType,
     pyarrow::PyArrowType,
 };
-use inf::{ArrowRaster, ArrowRasterNum, GeoMetadata, Raster};
+use inf::{ArrowRaster, ArrowRasterNum, GeoMetadata, Raster, RasterSize};
 use pyo3::{pyclass, pymethods};
 
 #[derive(Clone)]
 #[pyclass(name = "RasterMetadata")]
-pub struct PyMetadata {
+pub struct PyRasterMetadata {
     // The raw projection string
     pub projection: String,
     // The EPSG code of the projection
@@ -23,9 +23,9 @@ pub struct PyMetadata {
     pub nodata: Option<f64>,
 }
 
-impl From<&GeoMetadata> for PyMetadata {
+impl From<&GeoMetadata> for PyRasterMetadata {
     fn from(meta: &GeoMetadata) -> Self {
-        PyMetadata {
+        PyRasterMetadata {
             projection: meta.projection().to_string(),
             epsg: meta.projected_epsg().map(|crs| crs.into()),
             size: (meta.columns(), meta.rows()),
@@ -36,8 +36,22 @@ impl From<&GeoMetadata> for PyMetadata {
     }
 }
 
+impl From<&PyRasterMetadata> for GeoMetadata {
+    fn from(val: &PyRasterMetadata) -> Self {
+        GeoMetadata::new(
+            val.projection.clone(),
+            RasterSize {
+                rows: val.size.1,
+                cols: val.size.0,
+            },
+            val.geo_transform,
+            val.nodata,
+        )
+    }
+}
+
 #[pymethods]
-impl PyMetadata {
+impl PyRasterMetadata {
     fn __repr__(&self) -> String {
         let mut str = format!(
             "Meta ({}x{}) cell size [x {} y {}]",
@@ -56,7 +70,7 @@ impl PyMetadata {
 
 #[pyclass(name = "Raster")]
 pub struct PyRaster {
-    pub meta: PyMetadata,
+    pub meta: PyRasterMetadata,
     pub data: ArrayData,
 }
 
@@ -83,7 +97,7 @@ impl PyRaster {
     // }
 
     #[getter]
-    fn meta_data(&self) -> PyMetadata {
+    fn meta_data(&self) -> PyRasterMetadata {
         self.meta.clone()
     }
 
@@ -94,7 +108,12 @@ impl PyRaster {
     }
 
     fn __repr__(&self) -> String {
-        format!("Raster ({}x{}) ({})", self.meta.size.0, self.meta.size.1, self.data.data_type())
+        format!(
+            "Raster ({}x{}) ({})",
+            self.meta.size.0,
+            self.meta.size.1,
+            self.data.data_type()
+        )
     }
 
     fn __str__(&self) -> String {
