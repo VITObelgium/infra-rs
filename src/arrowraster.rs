@@ -47,7 +47,7 @@ where
         }
 
         if let Some(nodata) = self.metadata.nodata() {
-            let nodata = NumCast::from(nodata).unwrap_or(T::value());
+            let nodata = NumCast::from(nodata).unwrap_or(T::nodata_value());
             self.metadata.set_nodata(nodata.to_f64());
 
             if let (_dt, data, Some(mask)) = self.data.clone().into_parts() {
@@ -61,18 +61,6 @@ where
                 self.data = PrimitiveArray::<T::TArrow>::new(ScalarBuffer::from(vec_data), Some(mask));
             }
         }
-    }
-
-    pub fn sum(&self) -> f64 {
-        // using the sum from compute uses the same data type as the raster so is not accurate for e.g. f32
-        self.data
-            .iter()
-            .filter_map(|x| x.and_then(|v| v.to_f64()))
-            .fold(0.0, |acc, x| acc + x)
-    }
-
-    pub fn nodata_count(&self) -> usize {
-        self.data.null_count()
     }
 
     pub fn arrow_array(&self) -> &PrimitiveArray<T::TArrow> {
@@ -202,8 +190,24 @@ where
         }
     }
 
+    fn nodata_count(&self) -> usize {
+        self.data.null_count()
+    }
+
     fn index_has_data(&self, index: usize) -> bool {
         self.data.is_valid(index)
+    }
+
+    fn masked_data(&self) -> Vec<Option<T>> {
+        self.data.iter().collect()
+    }
+
+    fn sum(&self) -> f64 {
+        // using the sum from compute uses the same data type as the raster so is not accurate for e.g. f32
+        self.data
+            .iter()
+            .filter_map(|x| x.and_then(|v| v.to_f64()))
+            .fold(0.0, |acc, x| acc + x)
     }
 }
 
@@ -235,18 +239,6 @@ mod tests {
             let result = raster1 + raster2;
             assert_eq!(result.mask_vec(), [None, Some(8), None, Some(12)]);
         }
-    }
-
-    #[test]
-    fn test_sum() {
-        let metadata = GeoMetadata::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 2, cols: 2 },
-            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-            Some(-9999.0),
-        );
-
-        assert_eq!(ArrowRaster::new(metadata.clone(), vec![1, 2, -9999, 4]).sum(), 7.0);
     }
 
     #[test]

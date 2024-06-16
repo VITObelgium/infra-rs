@@ -76,31 +76,3 @@ where
 
     Ok(ArrowRaster::new(metadata, data))
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::Point;
-
-    use super::*;
-
-    #[test]
-    fn test_read_dense_raster_as_float() {
-        let path: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"]
-            .iter()
-            .collect();
-
-        let ras = ArrowRaster::<f32>::read(path.as_path()).unwrap();
-        let meta = ras.geo_metadata();
-
-        assert_eq!(ras.width(), 2370);
-        assert_eq!(ras.height(), 920);
-        assert_eq!(ras.as_slice().len(), 2370 * 920);
-        assert_eq!(ras.nodata_value(), Some(255.0));
-        assert_eq!(ras.sum(), 163654749.0);
-        assert_eq!(ras.nodata_count(), 805630);
-
-        assert_eq!(meta.cell_size_x(), 100.0);
-        assert_eq!(meta.cell_size_y(), -100.0);
-        assert_eq!(meta.bottom_left(), Point::new(22000.0, 153000.0));
-    }
-}

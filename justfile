@@ -42,4 +42,4 @@ doc:
   cargo doc --no-deps --open
 
 test:
-  cargo test --features=gdal-static -- --nocapture
+  cargo test --features=gdal-static,arrow -- --nocapture

@@ -5,13 +5,23 @@ use crate::{
     GeoMetadata, Raster,
 };
 
-fn result_nodata<T: Clone>(lhs: Option<T>, rhs: Option<T>) -> Option<T> {
-    lhs.or_else(|| rhs.clone())
-}
-
 pub struct DenseRaster<T: RasterNum<T>> {
     metadata: GeoMetadata,
     data: Vec<T>,
+}
+
+impl<T: RasterNum<T>> DenseRaster<T> {
+    pub fn flatten_nodata(&mut self) {
+        if self.nodata_value().is_none() {
+            return;
+        }
+
+        self.data.iter_mut().for_each(|x| {
+            if T::is_nodata(*x) {
+                *x = T::nodata_value()
+            }
+        });
+    }
 }
 
 impl<T: RasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for DenseRaster<T> {
@@ -24,17 +34,10 @@ impl<T: RasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for DenseRaster<
         let metadata = self.metadata.clone();
         let mut data = Vec::with_capacity(self.data.len());
 
-        let nod1 = self.nodata_value();
-        let nod2 = other.nodata_value();
-        let nod = if nod1.is_some() { nod1 } else { nod2 };
-
-        let lhs_nodata = |val: T| nod1.map_or(false, |nodata| val == nodata);
-        let rhs_nodata = |val: T| nod2.map_or(false, |nodata| val == nodata);
-
         // Perform element-wise addition
         for (x, y) in self.data.into_iter().zip(other.data.into_iter()) {
-            if lhs_nodata(x) || rhs_nodata(y) {
-                data.push(nod.unwrap());
+            if T::is_nodata(x) || T::is_nodata(y) {
+                data.push(T::nodata_value());
             } else {
                 data.push(x + y);
             }
@@ -48,20 +51,9 @@ impl<T: RasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for DenseRast
     type Output = DenseRaster<T>;
 
     fn mul(mut self, scalar: T) -> DenseRaster<T> {
-        let nod = self.nodata_value();
-        let is_nodata = |val: T| nod.map_or(false, |nodata| val == nodata);
-
-        // let data = self.data_mut();
-        // for value in data {
-        //     if is_nodata(*value) {
-        //         continue;
-        //     }
-        //     *value = *value * scalar;
-        // }
-
         self.data
             .iter_mut()
-            .filter(|x| !is_nodata(**x))
+            .filter(|&&mut x| !T::is_nodata(x))
             .for_each(|raster_val| *raster_val = *raster_val * NumCast::from(scalar).unwrap_or(T::zero()));
 
         self
@@ -72,22 +64,11 @@ impl<T: RasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for &DenseRas
     type Output = DenseRaster<T>;
 
     fn mul(self, scalar: T) -> DenseRaster<T> {
-        let nod = self.nodata_value();
-        let is_nodata = |val: T| nod.map_or(false, |nodata| val == nodata);
-
-        // let data = self.data_mut();
-        // for value in data {
-        //     if is_nodata(*value) {
-        //         continue;
-        //     }
-        //     *value = *value * scalar;
-        // }
-
         let mut data = Vec::with_capacity(self.data.len());
 
         for x in self.data.iter() {
-            if is_nodata(*x) {
-                data.push(nod.unwrap());
+            if T::is_nodata(*x) {
+                data.push(T::nodata_value());
             } else {
                 data.push(*x * scalar);
             }
@@ -110,13 +91,10 @@ impl<T: RasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for &DenseRaster
         let metadata = self.metadata.clone();
         let mut data = Vec::with_capacity(self.data.len());
 
-        let nod = result_nodata(self.nodata_value(), other.nodata_value());
-        let lhs_nodata = |val: T| self.nodata_value().map_or(false, |nodata| val == nodata);
-
         // Perform element-wise addition
         for (x, y) in self.data.iter().zip(other.data.iter()) {
-            if lhs_nodata(*x) || other.is_nodata(*y) {
-                data.push(nod.unwrap());
+            if T::is_nodata(*x) || T::is_nodata(*y) {
+                data.push(T::nodata_value());
             } else {
                 data.push(*x + *y);
             }
@@ -126,24 +104,9 @@ impl<T: RasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for &DenseRaster
     }
 }
 
-impl<T: RasterNum<T> + std::ops::AddAssign> DenseRaster<T> {
-    pub fn sum(&self) -> f64 {
-        self.data
-            .iter()
-            .filter(|x| self.nodata_value().map_or(true, |nodata| **x != nodata))
-            .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
-    }
-
-    pub fn nodata_count(&self) -> usize {
-        self.data
-            .iter()
-            .filter(|x| self.nodata_value().map_or(false, |nodata| **x == nodata))
-            .count()
-    }
-}
-
 impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
-    fn new(metadata: GeoMetadata, data: Vec<T>) -> Self {
+    fn new(metadata: GeoMetadata, mut data: Vec<T>) -> Self {
+        process_nodata(&mut data, metadata.nodata());
         DenseRaster { metadata, data }
     }
 
@@ -183,60 +146,42 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
         }
     }
 
+    fn nodata_count(&self) -> usize {
+        self.data.iter().filter(|&&x| T::is_nodata(x)).count()
+    }
+
     fn index_has_data(&self, index: usize) -> bool {
-        self.data[index] != T::value()
+        self.data[index] != T::nodata_value()
+    }
+
+    fn masked_data(&self) -> Vec<Option<T>> {
+        self.data
+            .iter()
+            .map(|&v| if T::is_nodata(v) { None } else { Some(v) })
+            .collect()
+    }
+
+    fn sum(&self) -> f64 {
+        self.data
+            .iter()
+            .filter(|&&x| !T::is_nodata(x))
+            .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{GeoMetadata, RasterSize};
-
-    #[test]
-    fn test_add_rasters() {
-        let metadata = GeoMetadata::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 2, cols: 2 },
-            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-            Some(-9999.0),
-        );
-
-        let data1 = vec![1, 2, -9999, 4];
-        let data2 = vec![-9999, 6, 7, 8];
-        let raster1 = DenseRaster::new(metadata.clone(), data1);
-        let raster2 = DenseRaster::new(metadata.clone(), data2);
-
-        {
-            let result = &raster1 + &raster2;
-            assert_eq!(result.as_slice(), &[-9999, 8, -9999, 12]);
+fn process_nodata<T: RasterNum<T>>(data: &mut [T], nodata: Option<f64>) {
+    if let Some(nodata) = nodata {
+        if nodata.is_nan() || NumCast::from(nodata) == Some(T::nodata_value()) {
+            // the nodata value for floats is also nan, so no processing required
+            // or the nodata value matches the default nodata value for the type
+            return;
         }
 
-        {
-            let result = raster1 + raster2;
-            assert_eq!(result.as_slice(), &[-9999, 8, -9999, 12]);
-        }
-    }
-
-    #[test]
-    fn test_multiply_scalar() {
-        let metadata = GeoMetadata::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 2, cols: 2 },
-            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-            Some(-9999.0),
-        );
-
-        let raster = DenseRaster::new(metadata.clone(), vec![1, 2, -9999, 4]);
-
-        {
-            let result = &raster * 2;
-            assert_eq!(result.as_slice(), &[2, 4, -9999, 8]);
-        }
-
-        {
-            let result = raster * 2;
-            assert_eq!(result.as_slice(), &[2, 4, -9999, 8]);
-        }
+        let nodata = NumCast::from(nodata).unwrap_or(T::nodata_value());
+        data.iter_mut().for_each(|v| {
+            if *v == nodata {
+                *v = T::nodata_value();
+            }
+        });
     }
 }

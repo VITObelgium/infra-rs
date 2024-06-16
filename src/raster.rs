@@ -31,16 +31,20 @@ pub trait Raster<T: RasterNum<T>> {
     /// Returns a reference to the raster data.
     fn as_slice(&self) -> &[T];
 
+    /// Returns a copy of the data as a vector of optional values where None represents nodata values.
+    fn masked_data(&self) -> Vec<Option<T>>;
+
     /// Returns the optional nodata value that is used in the raster to identify missing data.
     fn nodata_value(&self) -> Option<T>;
 
-    /// Check if the provided value is the nodata value
-    fn is_nodata(&self, value: T) -> bool {
-        self.nodata_value().map_or(false, |nodata| value == nodata)
-    }
+    /// Returns the number of nodata values in the raster
+    fn nodata_count(&self) -> usize;
 
     /// Return true if the cell at the given index contains valid data
     fn index_has_data(&self, index: usize) -> bool;
+
+    /// Return the sum of all the data values
+    fn sum(&self) -> f64;
 }
 
 /// A trait representing a raster io operations

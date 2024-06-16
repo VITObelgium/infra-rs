@@ -1,13 +1,13 @@
 use num::ToPrimitive;
 
 pub trait Nodata<T: ToPrimitive>: ToPrimitive {
-    fn value() -> T;
+    fn nodata_value() -> T;
     fn is_nodata(value: T) -> bool;
     fn is_nan() -> bool;
 }
 
 impl Nodata<u8> for u8 {
-    fn value() -> u8 {
+    fn nodata_value() -> u8 {
         u8::max_value()
     }
 
@@ -21,7 +21,7 @@ impl Nodata<u8> for u8 {
 }
 
 impl Nodata<u16> for u16 {
-    fn value() -> u16 {
+    fn nodata_value() -> u16 {
         u16::max_value()
     }
 
@@ -35,7 +35,7 @@ impl Nodata<u16> for u16 {
 }
 
 impl Nodata<u32> for u32 {
-    fn value() -> u32 {
+    fn nodata_value() -> u32 {
         u32::max_value()
     }
 
@@ -49,7 +49,7 @@ impl Nodata<u32> for u32 {
 }
 
 impl Nodata<u64> for u64 {
-    fn value() -> u64 {
+    fn nodata_value() -> u64 {
         u64::max_value()
     }
 
@@ -63,7 +63,7 @@ impl Nodata<u64> for u64 {
 }
 
 impl Nodata<i8> for i8 {
-    fn value() -> i8 {
+    fn nodata_value() -> i8 {
         i8::min_value()
     }
 
@@ -77,7 +77,7 @@ impl Nodata<i8> for i8 {
 }
 
 impl Nodata<i16> for i16 {
-    fn value() -> i16 {
+    fn nodata_value() -> i16 {
         i16::min_value()
     }
 
@@ -91,7 +91,7 @@ impl Nodata<i16> for i16 {
 }
 
 impl Nodata<i32> for i32 {
-    fn value() -> i32 {
+    fn nodata_value() -> i32 {
         i32::min_value()
     }
 
@@ -105,7 +105,7 @@ impl Nodata<i32> for i32 {
 }
 
 impl Nodata<i64> for i64 {
-    fn value() -> i64 {
+    fn nodata_value() -> i64 {
         i64::min_value()
     }
 
@@ -119,7 +119,7 @@ impl Nodata<i64> for i64 {
 }
 
 impl Nodata<f32> for f32 {
-    fn value() -> f32 {
+    fn nodata_value() -> f32 {
         f32::NAN
     }
 
@@ -133,7 +133,7 @@ impl Nodata<f32> for f32 {
 }
 
 impl Nodata<f64> for f64 {
-    fn value() -> f64 {
+    fn nodata_value() -> f64 {
         f64::NAN
     }
 

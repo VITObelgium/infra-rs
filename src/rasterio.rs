@@ -184,17 +184,11 @@ pub fn data_from_dataset_with_extent<T: GdalType + RasterNum<T>>(
 /// The data buffer should be pre-allocated and have the correct size.
 pub fn read_raster_from_dataset<T: GdalType + num::NumCast>(
     dataset: &gdal::Dataset,
-    band_nr: usize,
+    band_index: usize,
     dst_data: &mut [T],
 ) -> Result<GeoMetadata> {
-    let raster_band = dataset.rasterband(band_nr)?;
-    let meta = GeoMetadata::without_spatial_reference(
-        RasterSize {
-            rows: raster_band.y_size(),
-            cols: raster_band.x_size(),
-        },
-        raster_band.no_data_value(),
-    );
+    let raster_band = dataset.rasterband(band_index)?;
+    let meta = metadata_from_dataset_band(dataset, band_index)?;
 
     check_if_metadata_fits::<T>(meta.nodata(), raster_band.band_type())?;
     if dst_data.len() != meta.rows() * meta.columns() {
@@ -209,7 +203,7 @@ pub fn read_raster_from_dataset<T: GdalType + num::NumCast>(
         ..Default::default()
     };
 
-    read_raster_region_from_dataset(band_nr, &cut_out, dataset, dst_data, meta.columns() as i32)?;
+    read_raster_region_from_dataset(band_index, &cut_out, dataset, dst_data, meta.columns() as i32)?;
     Ok(meta)
 }
 
@@ -276,7 +270,7 @@ where
         // TODO: Investigate VRT driver to create a virtual dataset with different type without creating a copy
         let converted: Vec<TStore> = data
             .iter()
-            .map(|&v| -> TStore { NumCast::from(v).unwrap_or(TStore::value()) })
+            .map(|&v| -> TStore { NumCast::from(v).unwrap_or(TStore::nodata_value()) })
             .collect();
         let mut ds = create_memory_dataset(meta, &converted)?;
         write_dataset_to_disk(&mut ds, path, driver_options, &[])?;

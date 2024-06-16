@@ -56,11 +56,15 @@ pub mod raster;
 pub mod rasteralgo;
 #[cfg(feature = "gdal")]
 pub mod rasterio;
+mod rasteriotests;
+mod rastertests;
 pub mod rect;
 #[cfg(feature = "gdal")]
 pub mod spatialreference;
 #[cfg(feature = "sqlite3")]
 pub mod sqliteconnection;
+#[cfg(test)]
+mod testutils;
 pub mod tile;
 
 #[cfg(feature = "arrow")]
