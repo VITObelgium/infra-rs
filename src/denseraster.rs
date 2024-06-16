@@ -182,6 +182,10 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
             None => None,
         }
     }
+
+    fn index_has_data(&self, index: usize) -> bool {
+        self.data[index] != T::value()
+    }
 }
 
 #[cfg(test)]

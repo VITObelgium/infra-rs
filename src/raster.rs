@@ -34,9 +34,13 @@ pub trait Raster<T: RasterNum<T>> {
     /// Returns the optional nodata value that is used in the raster to identify missing data.
     fn nodata_value(&self) -> Option<T>;
 
+    /// Check if the provided value is the nodata value
     fn is_nodata(&self, value: T) -> bool {
         self.nodata_value().map_or(false, |nodata| value == nodata)
     }
+
+    /// Return true if the cell at the given index contains valid data
+    fn index_has_data(&self, index: usize) -> bool;
 }
 
 /// A trait representing a raster io operations

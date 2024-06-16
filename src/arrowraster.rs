@@ -1,5 +1,6 @@
 use arrow::{
     array::{downcast_array, Array, ArrowNativeTypeOp, PrimitiveArray},
+    buffer::ScalarBuffer,
     compute,
     datatypes::ArrowPrimitiveType,
 };
@@ -57,7 +58,7 @@ where
                     }
                 });
 
-                self.data = PrimitiveArray::<T::TArrow>::new(data, Some(mask));
+                self.data = PrimitiveArray::<T::TArrow>::new(ScalarBuffer::from(vec_data), Some(mask));
             }
         }
     }
@@ -200,6 +201,10 @@ where
             None => None,
         }
     }
+
+    fn index_has_data(&self, index: usize) -> bool {
+        self.data.is_valid(index)
+    }
 }
 
 #[cfg(test)]
@@ -242,6 +247,39 @@ mod tests {
         );
 
         assert_eq!(ArrowRaster::new(metadata.clone(), vec![1, 2, -9999, 4]).sum(), 7.0);
+    }
+
+    #[test]
+    fn test_flatten() {
+        let metadata = GeoMetadata::new(
+            "EPSG:4326".to_string(),
+            RasterSize { rows: 2, cols: 2 },
+            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+            Some(-9999.0),
+        );
+
+        let data1 = vec![1, 2, -9999, 4];
+        let data2 = vec![-9999, 6, 7, 8];
+        let raster1 = ArrowRaster::new(metadata.clone(), data1);
+        let raster2 = ArrowRaster::new(metadata.clone(), data2);
+
+        let mut result = &raster1 + &raster2;
+        // The first element should be nodata
+        assert!(!result.index_has_data(0));
+        assert!(!result.index_has_data(2));
+        // The internal buffer value is undefined, due to the operation will no longer match the nodata value
+        assert!(result.as_slice()[0] != -9999);
+        assert!(result.as_slice()[2] != -9999);
+
+        // Flatten the nodata values
+        result.flatten_nodata();
+
+        // The first element should still be nodata
+        assert!(!result.index_has_data(0));
+        assert!(!result.index_has_data(2));
+        // The internal buffer value should now match the nodata value
+        assert_eq!(result.as_slice()[0], -9999);
+        assert_eq!(result.as_slice()[2], -9999);
     }
 
     #[test]
