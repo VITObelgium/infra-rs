@@ -80,7 +80,7 @@ impl PyRaster {
         T::TArrow: ArrowPrimitiveType<Native = T>,
     {
         let arr = arrow_raster.arrow_array();
-        let array: &PrimitiveArray<T::TArrow> = (*arr).as_any().downcast_ref().unwrap();
+        let array: &PrimitiveArray<T::TArrow> = arr.as_any().downcast_ref().unwrap();
 
         PyRaster {
             meta: arrow_raster.geo_metadata().into(),

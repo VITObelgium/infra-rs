@@ -1,14 +1,13 @@
-use std::sync::Arc;
-
 use arrow::{
-    array::{downcast_array, ArrowNativeTypeOp, PrimitiveArray},
+    array::{downcast_array, Array, ArrowNativeTypeOp, PrimitiveArray},
     compute,
     datatypes::ArrowPrimitiveType,
 };
+
 use num::NumCast;
 
 use crate::{
-    arrowutil::{self, ArrowType},
+    arrowutil::ArrowType,
     raster::{self, RasterNum},
     GeoMetadata, Raster,
 };
@@ -28,24 +27,55 @@ impl ArrowRasterNum<f64> for f64 {}
 
 pub struct ArrowRaster<T: ArrowRasterNum<T>> {
     metadata: GeoMetadata,
-    data: Arc<PrimitiveArray<T::TArrow>>,
+    data: PrimitiveArray<T::TArrow>,
 }
 
 impl<T: ArrowRasterNum<T>> ArrowRaster<T>
 where
     T::TArrow: ArrowPrimitiveType<Native = T>,
 {
-    pub fn mask_vec(&self) -> Vec<Option<<<T as arrowutil::ArrowType>::TArrow as arrow::array::ArrowPrimitiveType>::Native>> {
-        let data: Vec<Option<<<T as arrowutil::ArrowType>::TArrow as arrow::array::ArrowPrimitiveType>::Native>> = self.data.iter().collect();
-        data
+    pub fn mask_vec(&self) -> Vec<Option<T>> {
+        self.data.iter().collect()
+    }
+
+    /// make sure the null entries in the raster contain the nodata value
+    /// Call this function before writing the raster to disk
+    pub fn flatten_nodata(&mut self) {
+        if self.data.null_count() == 0 {
+            return;
+        }
+
+        if let Some(nodata) = self.metadata.nodata() {
+            let nodata = NumCast::from(nodata).unwrap_or(T::value());
+            self.metadata.set_nodata(nodata.to_f64());
+
+            if let (_dt, data, Some(mask)) = self.data.clone().into_parts() {
+                let mut vec_data = data.to_vec();
+                (0..data.len()).for_each(|i| {
+                    if mask.is_null(i) {
+                        vec_data[i] = nodata;
+                    }
+                });
+
+                self.data = PrimitiveArray::<T::TArrow>::new(data, Some(mask));
+            }
+        }
     }
 
     pub fn sum(&self) -> f64 {
-        compute::sum(&*self.data).unwrap_or(T::zero()).to_f64().unwrap_or(0.0)
+        // using the sum from compute uses the same data type as the raster so is not accurate for e.g. f32
+        self.data
+            .iter()
+            .filter_map(|x| x.and_then(|v| v.to_f64()))
+            .fold(0.0, |acc, x| acc + x)
     }
 
-    pub fn arrow_array(&self) -> Arc<PrimitiveArray<T::TArrow>> {
-        self.data.clone()
+    pub fn nodata_count(&self) -> usize {
+        self.data.null_count()
+    }
+
+    pub fn arrow_array(&self) -> &PrimitiveArray<T::TArrow> {
+        &self.data
     }
 }
 
@@ -61,13 +91,10 @@ where
         // Create a new ArrowRaster with the same metadata
         let metadata = self.metadata.clone();
 
-        match compute::kernels::numeric::add_wrapping(&*self.data, &*other.data) {
+        match compute::kernels::numeric::add_wrapping(&self.data, &other.data) {
             Ok(data) => {
                 let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
-                ArrowRaster {
-                    metadata,
-                    data: Arc::new(data),
-                }
+                ArrowRaster { metadata, data }
             }
             Err(e) => panic!("Error adding rasters: {:?}", e),
         }
@@ -83,12 +110,12 @@ where
     fn add(self, other: &ArrowRaster<T>) -> ArrowRaster<T> {
         raster::assert_dimensions(self, other);
 
-        match compute::kernels::numeric::add_wrapping(&*self.data, &*other.data) {
+        match compute::kernels::numeric::add_wrapping(&self.data, &other.data) {
             Ok(data) => {
                 let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
                 ArrowRaster {
                     metadata: self.metadata.clone(),
-                    data: Arc::new(data),
+                    data,
                 }
             }
             Err(e) => panic!("Error adding rasters: {:?}", e),
@@ -103,10 +130,10 @@ where
     type Output = ArrowRaster<T>;
 
     fn mul(self, scalar: T) -> ArrowRaster<T> {
-        match compute::kernels::numeric::mul_wrapping(&*self.data, &PrimitiveArray::<T::TArrow>::new_scalar(scalar)) {
+        match compute::kernels::numeric::mul_wrapping(&self.data, &PrimitiveArray::<T::TArrow>::new_scalar(scalar)) {
             Ok(data) => ArrowRaster {
                 metadata: self.metadata.clone(),
-                data: Arc::new(downcast_array::<PrimitiveArray<T::TArrow>>(&*data)),
+                data: downcast_array::<PrimitiveArray<T::TArrow>>(&data),
             },
             Err(e) => panic!("Error adding rasters: {:?}", e),
         }
@@ -122,7 +149,7 @@ where
     fn mul(self, scalar: T) -> ArrowRaster<T> {
         ArrowRaster {
             metadata: self.metadata.clone(),
-            data: Arc::new(self.data.unary(|v| v * scalar)),
+            data: self.data.unary(|v| v * scalar),
         }
     }
 }
@@ -134,10 +161,7 @@ where
     fn new(metadata: GeoMetadata, data: Vec<T>) -> Self {
         let nod = metadata.nodata();
         let data: PrimitiveArray<T::TArrow> = data.iter().map(|&v| (v.to_f64() != nod).then_some(v)).collect();
-        ArrowRaster {
-            metadata,
-            data: Arc::new(data),
-        }
+        ArrowRaster { metadata, data }
     }
 
     fn zeros(meta: GeoMetadata) -> Self {
@@ -163,7 +187,7 @@ where
 
     fn as_mut_slice(&mut self) -> &mut [T] {
         //self.data.values().inner().as_mut_slice()
-        unimplemented!()
+        unimplemented!();
     }
 
     fn as_slice(&self) -> &[T] {

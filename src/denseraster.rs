@@ -133,6 +133,13 @@ impl<T: RasterNum<T> + std::ops::AddAssign> DenseRaster<T> {
             .filter(|x| self.nodata_value().map_or(true, |nodata| **x != nodata))
             .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
     }
+
+    pub fn nodata_count(&self) -> usize {
+        self.data
+            .iter()
+            .filter(|x| self.nodata_value().map_or(false, |nodata| **x == nodata))
+            .count()
+    }
 }
 
 impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
