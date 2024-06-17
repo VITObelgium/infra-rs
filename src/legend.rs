@@ -5,7 +5,7 @@ use crate::{
     colormap::{cmap, ColorMap},
     Result,
 };
-use std::{collections::HashMap, f64::NAN, ops::Range};
+use std::{collections::HashMap, ops::Range};
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[derive(Default, Clone)]
@@ -131,7 +131,11 @@ pub mod mapper {
 
         pub fn for_value_range(value_range: Range<i64>, color_map: ColorMap) -> Self {
             let category_count = value_range.end - value_range.start + 1;
-            let color_offset = if category_count == 1 { 0.0 } else { 1.0 / (category_count as f64 - 1.0) };
+            let color_offset = if category_count == 1 {
+                0.0
+            } else {
+                1.0 / (category_count as f64 - 1.0)
+            };
             let mut color_pos = 0.0;
 
             let mut categories = HashMap::new();
@@ -154,7 +158,10 @@ pub mod mapper {
     impl ColorMapper for CategoricNumeric {
         fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
             if let Some(cat) = value.to_i64() {
-                return self.categories.get(&cat).map_or(config.unmappable_nodata, |cat| cat.color);
+                return self
+                    .categories
+                    .get(&cat)
+                    .map_or(config.unmappable_nodata, |cat| cat.color);
             }
 
             config.unmappable_nodata
@@ -195,7 +202,9 @@ pub mod mapper {
         }
 
         fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-            self.categories.get(value).map_or(config.unmappable_nodata, |cat| cat.color)
+            self.categories
+                .get(value)
+                .map_or(config.unmappable_nodata, |cat| cat.color)
         }
 
         fn category_count(&self) -> usize {
@@ -217,7 +226,11 @@ pub mod mapper {
         }
 
         pub fn with_equal_bands(band_count: usize, value_range: Range<f64>, color_map: ColorMap) -> Self {
-            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
+            let color_offset = if band_count == 1 {
+                0.0
+            } else {
+                1.0 / (band_count as f64 - 1.0)
+            };
             let band_offset: f64 = (value_range.end - value_range.start) / (band_count as f64 - 1.0);
             let mut color_pos = 0.0;
             let mut band_pos = value_range.start;
@@ -307,7 +320,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     }
 
     pub fn color_for_value<T: Copy + num::NumCast>(&self, value: T, nodata: Option<f64>) -> Color {
-        let value = value.to_f64().unwrap_or(NAN);
+        let value = value.to_f64().unwrap_or(f64::NAN);
         if self.is_unmappable(value, nodata) {
             return self.mapping_config.unmappable_nodata;
         }
@@ -319,8 +332,12 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         self.mapper.color_for_string_value(value, &self.mapping_config)
     }
 
-    pub fn apply_to_data<T: Copy + num::NumCast, TNodata: Copy + num::NumCast>(&self, data: &[T], nodata: Option<TNodata>) -> Vec<Color> {
-        let nodata = nodata.map(|v| v.to_f64().unwrap_or(NAN));
+    pub fn apply_to_data<T: Copy + num::NumCast, TNodata: Copy + num::NumCast>(
+        &self,
+        data: &[T],
+        nodata: Option<TNodata>,
+    ) -> Vec<Color> {
+        let nodata = nodata.map(|v| v.to_f64().unwrap_or(f64::NAN));
 
         data.iter().map(|&value| self.color_for_value(value, nodata)).collect()
     }
@@ -361,14 +378,21 @@ impl Legend {
     }
 
     pub fn categoric_numeric(cmap_name: &str, value_range: Range<i64>) -> Result<Self> {
-        Ok(Legend::CategoricNumeric(create_categoric_numeric(cmap_name, value_range)?))
+        Ok(Legend::CategoricNumeric(create_categoric_numeric(
+            cmap_name,
+            value_range,
+        )?))
     }
 
     pub fn categoric_string(string_map: HashMap<String, mapper::LegendCategory>) -> Result<Self> {
         Ok(Legend::CategoricString(create_categoric_string(string_map)?))
     }
 
-    pub fn apply<T: Copy + NumCast, TNodata: Copy + num::NumCast>(&self, data: &[T], nodata: Option<TNodata>) -> Vec<Color> {
+    pub fn apply<T: Copy + NumCast, TNodata: Copy + num::NumCast>(
+        &self,
+        data: &[T],
+        nodata: Option<TNodata>,
+    ) -> Vec<Color> {
         match self {
             Legend::Linear(legend) => legend.apply_to_data(data, nodata),
             Legend::Banded(legend) => legend.apply_to_data(data, nodata),
