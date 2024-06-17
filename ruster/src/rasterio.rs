@@ -2,7 +2,7 @@ use crate::{
     raster::{PyRaster, PyRasterMetadata},
     Error, Result,
 };
-use inf::{raster::RasterIO, rasterio, ArrowRaster, GeoMetadata};
+use inf::{raster::ArrowRaster, raster::RasterIO, rasterio, GeoMetadata};
 use pyo3::{pyfunction, PyObject, Python};
 
 fn detect_gdal_type(data_type: PyObject) -> Result<gdal::raster::GdalDataType> {

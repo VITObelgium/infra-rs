@@ -7,7 +7,7 @@ mod tests {
     use crate::{DenseRaster, GeoMetadata, Raster, RasterNum, RasterSize};
 
     #[cfg(feature = "arrow")]
-    use crate::ArrowRaster;
+    use crate::raster::ArrowRaster;
 
     #[test]
     fn test_add_rasters<T: RasterNum<T>, R>()

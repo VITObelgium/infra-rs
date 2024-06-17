@@ -1,7 +1,10 @@
 use arrow::datatypes::ArrowPrimitiveType;
 use gdal::raster::GdalType;
 
-use crate::{arrowraster::ArrowRasterNum, raster::RasterIO, rasterio, ArrowRaster, GeoMetadata, Raster, Result};
+use crate::{
+    raster::{ArrowRaster, ArrowRasterNum, RasterIO},
+    rasterio, GeoMetadata, Raster, Result,
+};
 
 impl<T: ArrowRasterNum<T> + GdalType> RasterIO<T, ArrowRaster<T>> for ArrowRaster<T>
 where
@@ -51,28 +54,4 @@ where
         self.flatten_nodata();
         rasterio::write_raster(self.as_slice(), self.geo_metadata(), path, &[])
     }
-}
-
-/// Reads the full raster from disk into a DenseRaster
-/// No processing (cutting, resampling) is done on the raster data, the original data is returned
-pub fn read<T: ArrowRasterNum<T> + GdalType>(path: &std::path::Path) -> Result<ArrowRaster<T>>
-where
-    T::TArrow: ArrowPrimitiveType<Native = T>,
-{
-    let band_index = 1;
-    let ds = rasterio::open_raster_read_only(path)?;
-
-    let metadata = rasterio::metadata_from_dataset_band(&ds, band_index)?;
-    let rasterband = ds.rasterband(band_index)?;
-
-    let mut data: Vec<T> = vec![T::zero(); metadata.rows() * metadata.columns()];
-    rasterband.read_into_slice::<T>(
-        (0, 0),
-        rasterband.size(),
-        (metadata.columns(), metadata.rows()),
-        data.as_mut_slice(),
-        None,
-    )?;
-
-    Ok(ArrowRaster::new(metadata, data))
 }

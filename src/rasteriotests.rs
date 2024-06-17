@@ -10,7 +10,7 @@ mod tests {
     use crate::{DenseRaster, Raster, RasterIO, RasterNum};
 
     #[cfg(feature = "arrow")]
-    use crate::ArrowRaster;
+    use crate::raster::ArrowRaster;
 
     #[test]
     fn test_read_dense_raster<T: RasterNum<T> + fmt::Debug, R: Raster<T> + RasterIO<T, R>>() {

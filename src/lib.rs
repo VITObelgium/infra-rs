@@ -24,12 +24,6 @@ pub enum Error {
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
-#[cfg(feature = "arrow")]
-mod arrowraster;
-#[cfg(feature = "arrow")]
-pub mod arrowrasterio;
-#[cfg(feature = "arrow")]
-mod arrowutil;
 pub mod cast;
 mod cell;
 pub mod color;
@@ -38,9 +32,6 @@ mod coordinate;
 #[cfg(feature = "gdal")]
 mod coordinatetransformer;
 pub mod crs;
-mod denseraster;
-#[cfg(feature = "gdal")]
-pub mod denserasterio;
 pub mod fs;
 #[cfg(feature = "gdal")]
 pub mod gdalinterop;
@@ -56,6 +47,7 @@ pub mod raster;
 pub mod rasteralgo;
 #[cfg(feature = "gdal")]
 pub mod rasterio;
+#[cfg(feature = "gdal")]
 mod rasteriotests;
 mod rastertests;
 pub mod rect;
@@ -66,18 +58,12 @@ pub mod sqliteconnection;
 #[cfg(test)]
 mod testutils;
 pub mod tile;
-
-#[cfg(feature = "arrow")]
-pub use arrowraster::ArrowRaster;
-#[cfg(feature = "arrow")]
-pub use arrowraster::ArrowRasterNum;
 pub use cell::Cell;
 #[doc(inline)]
 pub use color::Color;
 pub use coordinate::Coordinate;
 #[cfg(feature = "gdal")]
 pub use coordinatetransformer::CoordinateTransformer;
-pub use denseraster::DenseRaster;
 #[doc(inline)]
 pub use geometadata::CellSize;
 #[doc(inline)]
@@ -91,6 +77,7 @@ pub use legend::Legend;
 #[doc(inline)]
 pub use legend::MappedLegend;
 pub use nodata::Nodata;
+pub use raster::DenseRaster;
 #[doc(inline)]
 pub use raster::Raster;
 #[doc(inline)]

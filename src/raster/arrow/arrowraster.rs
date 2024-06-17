@@ -1,17 +1,12 @@
 use arrow::{
-    array::{downcast_array, Array, ArrowNativeTypeOp, PrimitiveArray},
+    array::{Array, ArrowNativeTypeOp, PrimitiveArray},
     buffer::ScalarBuffer,
-    compute,
     datatypes::ArrowPrimitiveType,
 };
 
 use num::NumCast;
 
-use crate::{
-    arrowutil::ArrowType,
-    raster::{self, RasterNum},
-    GeoMetadata, Raster,
-};
+use crate::{raster::arrow::arrowutil::ArrowType, raster::RasterNum, GeoMetadata, Raster};
 
 pub trait ArrowRasterNum<T: num::ToPrimitive>: RasterNum<T> + ArrowType + ArrowNativeTypeOp {}
 
@@ -27,8 +22,8 @@ impl ArrowRasterNum<f32> for f32 {}
 impl ArrowRasterNum<f64> for f64 {}
 
 pub struct ArrowRaster<T: ArrowRasterNum<T>> {
-    metadata: GeoMetadata,
-    data: PrimitiveArray<T::TArrow>,
+    pub(super) metadata: GeoMetadata,
+    pub(super) data: PrimitiveArray<T::TArrow>,
 }
 
 impl<T: ArrowRasterNum<T>> ArrowRaster<T>
@@ -65,81 +60,6 @@ where
 
     pub fn arrow_array(&self) -> &PrimitiveArray<T::TArrow> {
         &self.data
-    }
-}
-
-impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for ArrowRaster<T>
-where
-    T::TArrow: ArrowPrimitiveType<Native = T>,
-{
-    type Output = ArrowRaster<T>;
-
-    fn add(self, other: ArrowRaster<T>) -> ArrowRaster<T> {
-        raster::assert_dimensions(&self, &other);
-
-        // Create a new ArrowRaster with the same metadata
-        let metadata = self.metadata.clone();
-
-        match compute::kernels::numeric::add_wrapping(&self.data, &other.data) {
-            Ok(data) => {
-                let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
-                ArrowRaster { metadata, data }
-            }
-            Err(e) => panic!("Error adding rasters: {:?}", e),
-        }
-    }
-}
-
-impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for &ArrowRaster<T>
-where
-    T::TArrow: ArrowPrimitiveType<Native = T>,
-{
-    type Output = ArrowRaster<T>;
-
-    fn add(self, other: &ArrowRaster<T>) -> ArrowRaster<T> {
-        raster::assert_dimensions(self, other);
-
-        match compute::kernels::numeric::add_wrapping(&self.data, &other.data) {
-            Ok(data) => {
-                let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
-                ArrowRaster {
-                    metadata: self.metadata.clone(),
-                    data,
-                }
-            }
-            Err(e) => panic!("Error adding rasters: {:?}", e),
-        }
-    }
-}
-
-impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for ArrowRaster<T>
-where
-    T::TArrow: ArrowPrimitiveType<Native = T>,
-{
-    type Output = ArrowRaster<T>;
-
-    fn mul(self, scalar: T) -> ArrowRaster<T> {
-        match compute::kernels::numeric::mul_wrapping(&self.data, &PrimitiveArray::<T::TArrow>::new_scalar(scalar)) {
-            Ok(data) => ArrowRaster {
-                metadata: self.metadata.clone(),
-                data: downcast_array::<PrimitiveArray<T::TArrow>>(&data),
-            },
-            Err(e) => panic!("Error adding rasters: {:?}", e),
-        }
-    }
-}
-
-impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for &ArrowRaster<T>
-where
-    T::TArrow: ArrowPrimitiveType<Native = T>,
-{
-    type Output = ArrowRaster<T>;
-
-    fn mul(self, scalar: T) -> ArrowRaster<T> {
-        ArrowRaster {
-            metadata: self.metadata.clone(),
-            data: self.data.unary(|v| v * scalar),
-        }
     }
 }
 

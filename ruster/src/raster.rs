@@ -3,7 +3,7 @@ use arrow::{
     datatypes::ArrowPrimitiveType,
     pyarrow::PyArrowType,
 };
-use inf::{ArrowRaster, ArrowRasterNum, GeoMetadata, Raster, RasterSize};
+use inf::{raster::ArrowRaster, raster::ArrowRasterNum, GeoMetadata, Raster, RasterSize};
 use pyo3::{pyclass, pymethods};
 
 #[derive(Clone)]
