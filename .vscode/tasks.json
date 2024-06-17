@@ -27,7 +27,7 @@
 			],
 			"group": {
 				"kind": "test",
-				"isDefault": false
+				"isDefault": true
 			},
 			"label": "rust: cargo test"
 		}
