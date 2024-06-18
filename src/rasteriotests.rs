@@ -12,16 +12,24 @@ mod tests {
     #[cfg(feature = "arrow")]
     use crate::raster::ArrowRaster;
 
-    // #[ctor::ctor]
-    // fn init() {
-    //     let data_dir: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "target", "data"].iter().collect();
-    //     let gdal_config = gdalinterop::Config {
-    //         debug_logging: false,
-    //         proj_db_search_locations: vec![data_dir.to_string_lossy().to_string()],
-    //     };
+    #[ctor::ctor]
+    fn init() {
+        let mut data_dir: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "target", "data"].iter().collect();
+        if !data_dir.exists() {
+            // Infra used a s subcrate, try the parent directory
+            data_dir = [env!("CARGO_MANIFEST_DIR"), "..", "target", "data"].iter().collect();
+            if !data_dir.exists() {
+                panic!("Proj.db data directory not found");
+            }
+        }
 
-    //     gdal_config.apply().expect("Failed to configure GDAL");
-    // }
+        let gdal_config = gdalinterop::Config {
+            debug_logging: false,
+            proj_db_search_location: data_dir,
+        };
+
+        gdal_config.apply().expect("Failed to configure GDAL");
+    }
 
     #[test]
     fn test_read_dense_raster<T: RasterNum<T> + fmt::Debug, R: Raster<T> + RasterIO<T, R>>() {

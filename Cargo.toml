@@ -22,6 +22,7 @@ pyo3 = { version = "0.21", features = ["extension-module"], optional = true }
 test-log = "0.2.16"
 env_logger = "0.11.3"
 generic-tests = "0.1"
+ctor = "0.2"
 
 [features]
 arrow = ["dep:arrow"]
