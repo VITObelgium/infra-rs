@@ -6,11 +6,22 @@ mod tests {
 
     use num::NumCast;
 
-    use crate::{testutils::*, Point};
+    use crate::{gdalinterop, testutils::*, Point};
     use crate::{DenseRaster, Raster, RasterIO, RasterNum};
 
     #[cfg(feature = "arrow")]
     use crate::raster::ArrowRaster;
+
+    // #[ctor::ctor]
+    // fn init() {
+    //     let data_dir: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "target", "data"].iter().collect();
+    //     let gdal_config = gdalinterop::Config {
+    //         debug_logging: false,
+    //         proj_db_search_locations: vec![data_dir.to_string_lossy().to_string()],
+    //     };
+
+    //     gdal_config.apply().expect("Failed to configure GDAL");
+    // }
 
     #[test]
     fn test_read_dense_raster<T: RasterNum<T> + fmt::Debug, R: Raster<T> + RasterIO<T, R>>() {

@@ -11,20 +11,22 @@ impl Config {
         setup_logging(self.debug_logging);
         if !self.proj_db_search_locations.is_empty() {
             let paths = create_string_list(&self.proj_db_search_locations)?;
+            log::debug!("Setting PROJ search paths: {:?}", self.proj_db_search_locations);
             unsafe {
                 gdal_sys::OSRSetPROJSearchPaths(paths.as_ptr() as *const *const libc::c_char);
             }
 
-            // Also set the environment variable
+            // Also set the environment variable unless it is already set by the user
             // e.g. Spatialite library does not use gdal settings
+            if std::env::var_os("PROJ_DATA").is_none() {
+                #[cfg(target_os = "windows")]
+                const ENV_SEP: &str = ";";
+                #[cfg(not(target_os = "windows"))]
+                const ENV_SEP: &str = ":";
 
-            #[cfg(target_os = "windows")]
-            const ENV_SEP: &str = ";";
-            #[cfg(not(target_os = "windows"))]
-            const ENV_SEP: &str = ":";
-
-            let proj_data = self.proj_db_search_locations.join(ENV_SEP);
-            std::env::set_var("PROJ_DATA", proj_data.as_str());
+                let proj_data = self.proj_db_search_locations.join(ENV_SEP);
+                std::env::set_var("PROJ_DATA", proj_data.as_str());
+            }
         }
 
         Ok(())
