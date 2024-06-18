@@ -36,7 +36,7 @@ impl SqliteRow {
         let data = unsafe { libsqlite3_sys::sqlite3_column_text(self.stmt, index) };
         if !data.is_null() {
             let c_str = unsafe { CStr::from_ptr(data as *const c_char) };
-            return Some(c_str.to_str().unwrap());
+            return c_str.to_str().ok();
         }
         None
     }
@@ -90,7 +90,7 @@ impl SqliteStatement {
     }
 
     pub fn bind_text(&self, index: c_int, value: &str) -> Result<()> {
-        let c_str = std::ffi::CString::new(value).unwrap();
+        let c_str = std::ffi::CString::new(value)?;
         self.check_rc(unsafe { libsqlite3_sys::sqlite3_bind_text(self.stmt, index, c_str.as_ptr(), -1, None) })?;
         Ok(())
     }
@@ -162,7 +162,7 @@ pub struct SqliteConnection {
 impl SqliteConnection {
     pub fn new(db_path: &Path, mode: AccessMode) -> Result<Self> {
         let mut db: *mut libsqlite3_sys::sqlite3 = std::ptr::null_mut();
-        let c_path = std::ffi::CString::new(db_path.as_os_str().to_str().unwrap()).unwrap();
+        let c_path = std::ffi::CString::new(db_path.to_string_lossy().to_string())?;
         let flags = access_mode_flags(mode);
         let rc = unsafe { libsqlite3_sys::sqlite3_open_v2(c_path.as_ptr(), &mut db, flags, std::ptr::null()) };
         if rc != libsqlite3_sys::SQLITE_OK {
@@ -177,7 +177,7 @@ impl SqliteConnection {
         let filename = unsafe { libsqlite3_sys::sqlite3_db_filename(self.db, std::ptr::null()) };
         if !filename.is_null() {
             let c_str = unsafe { CStr::from_ptr(filename as *const c_char) };
-            return Some(c_str.to_str().unwrap().to_owned());
+            return Some(c_str.to_string_lossy().to_string());
         }
         None
     }
@@ -194,11 +194,14 @@ impl SqliteConnection {
 
     pub fn prepare_statement(&self, sql: &str) -> Result<SqliteStatement> {
         let mut stmt: *mut libsqlite3_sys::sqlite3_stmt = std::ptr::null_mut();
-        let c_sql = std::ffi::CString::new(sql).unwrap();
-        let mut rc = unsafe { libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
+        let c_sql = std::ffi::CString::new(sql)?;
+        let mut rc =
+            unsafe { libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
         while rc == libsqlite3_sys::SQLITE_BUSY {
             sleep(Duration::from_micros(1));
-            rc = unsafe { libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
+            rc = unsafe {
+                libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut())
+            };
         }
         if rc != libsqlite3_sys::SQLITE_OK {
             return Err(Error::DatabaseError(self.last_error()));
@@ -220,7 +223,8 @@ impl SqliteConnection {
     }
 
     pub fn execute_sql_file(&self, sql_path: &str) -> Result<()> {
-        let sql_contents = std::fs::read_to_string(sql_path).unwrap();
+        let sql_contents =
+            std::fs::read_to_string(sql_path).map_err(|e| Error::Runtime(format!("Failed to open sql file: {}", e)))?;
         self.execute_sql_statements(&sql_contents)
     }
 

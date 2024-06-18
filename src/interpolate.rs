@@ -18,7 +18,7 @@ where
         return TFloat::one();
     }
 
-    let range_width: TFloat = NumCast::from(max - min).unwrap();
+    let range_width: TFloat = NumCast::from(max - min).unwrap_or(TFloat::zero());
     (value.into() - min.into()) / range_width
 }
 

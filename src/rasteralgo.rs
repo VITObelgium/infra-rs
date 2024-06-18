@@ -45,7 +45,7 @@ pub fn translate(ds: &gdal::Dataset, output_path: &std::path::Path, options: &[S
     let ds = unsafe {
         gdal::Dataset::from_c_dataset(check_gdal_pointer(
             gdal_sys::GDALTranslate(
-                output_path.to_str().unwrap().as_ptr() as *const i8,
+                output_path.to_string_lossy().to_string().as_ptr() as *const i8,
                 ds.c_dataset(),
                 opts.options,
                 &mut user_error,

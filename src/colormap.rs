@@ -36,7 +36,9 @@ pub struct ColorMap {
 
 impl Default for ColorMap {
     fn default() -> ColorMap {
-        ColorMap { cmap: [Color::default(); 256] }
+        ColorMap {
+            cmap: [Color::default(); 256],
+        }
     }
 }
 
@@ -242,9 +244,11 @@ impl ColorMap {
             }
         }
 
-        if value == dict.last().unwrap().x {
-            let i = dict.len() - 2;
-            return remap(dict[i].x, dict[i + 1].x, dict[i].y1, dict[i + 1].y0, value);
+        if let Some(entry) = dict.last() {
+            if value == entry.x {
+                let i = dict.len() - 2;
+                return remap(dict[i].x, dict[i + 1].x, dict[i].y1, dict[i + 1].y0, value);
+            }
         }
 
         0
@@ -332,16 +336,28 @@ pub mod cmap {
     pub fn bone() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.746032,
                     y0: 0.652778,
                     y1: 0.652778,
                 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.365079,
                     y0: 0.319444,
@@ -352,37 +368,98 @@ pub mod cmap {
                     y0: 0.777778,
                     y1: 0.777778,
                 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             blue: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.365079,
                     y0: 0.444444,
                     y1: 0.444444,
                 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
         }
     }
 
     pub fn cool() -> ColorDict {
         ColorDict {
-            red: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            green: vec![ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 }, ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 }],
-            blue: vec![ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
+            red: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            green: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+            ],
+            blue: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
         }
     }
 
     pub fn copper() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.809524, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.809524,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 1.0,
                     y0: 0.7812,
@@ -390,7 +467,11 @@ pub mod cmap {
                 },
             ],
             blue: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 1.0,
                     y0: 0.4975,
@@ -402,9 +483,42 @@ pub mod cmap {
 
     pub fn gray() -> ColorDict {
         ColorDict {
-            red: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            green: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            blue: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
+            red: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            green: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            blue: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
         }
     }
 
@@ -416,19 +530,55 @@ pub mod cmap {
                     y0: 0.0416,
                     y1: 0.0416,
                 },
-                ColorDictEntry { x: 0.365079, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.365079,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.365079, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.746032, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.365079,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.746032,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             blue: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.746032, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.746032,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
         }
     }
@@ -436,7 +586,11 @@ pub mod cmap {
     pub fn hsv() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
                 ColorDictEntry {
                     x: 0.158730,
                     y0: 1.000000,
@@ -477,10 +631,18 @@ pub mod cmap {
                     y0: 1.000000,
                     y1: 1.000000,
                 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.158730,
                     y0: 0.937500,
@@ -506,10 +668,18 @@ pub mod cmap {
                     y0: 0.000000,
                     y1: 0.000000,
                 },
-                ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
             ],
             blue: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.333333,
                     y0: 0.000000,
@@ -862,10 +1032,18 @@ pub mod cmap {
                     y0: 0.994695,
                     y1: 0.994695,
                 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.015873,
                     y0: 0.102869,
@@ -1176,10 +1354,18 @@ pub mod cmap {
                     y0: 0.984167,
                     y1: 0.984167,
                 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
             blue: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.015873,
                     y0: 0.102869,
@@ -1490,7 +1676,11 @@ pub mod cmap {
                     y0: 0.984167,
                     y1: 0.984167,
                 },
-                ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
             ],
         }
     }
@@ -1498,68 +1688,276 @@ pub mod cmap {
     pub fn jet() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.35, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.66, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.89, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 1.0, y0: 0.5, y1: 0.5 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.35,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.66,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.89,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.5,
+                    y1: 0.5,
+                },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.125, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.375, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.64, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.91, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.125,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.375,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.64,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.91,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
             ],
             blue: vec![
-                ColorDictEntry { x: 0.0, y0: 0.5, y1: 0.5 },
-                ColorDictEntry { x: 0.11, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.34, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.65, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.5,
+                    y1: 0.5,
+                },
+                ColorDictEntry {
+                    x: 0.11,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.34,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.65,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
             ],
         }
     }
 
     pub fn spring() -> ColorDict {
         ColorDict {
-            red: vec![ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            green: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            blue: vec![ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 }, ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 }],
+            red: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            green: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            blue: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+            ],
         }
     }
 
     pub fn summer() -> ColorDict {
         ColorDict {
-            red: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            green: vec![ColorDictEntry { x: 0.0, y0: 0.5, y1: 0.5 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            blue: vec![ColorDictEntry { x: 0.0, y0: 0.4, y1: 0.4 }, ColorDictEntry { x: 1.0, y0: 0.4, y1: 0.4 }],
+            red: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            green: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.5,
+                    y1: 0.5,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            blue: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.4,
+                    y1: 0.4,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.4,
+                    y1: 0.4,
+                },
+            ],
         }
     }
 
     pub fn autumn() -> ColorDict {
         ColorDict {
-            red: vec![ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            green: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            blue: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 }],
+            red: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            green: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            blue: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+            ],
         }
     }
 
     pub fn winter() -> ColorDict {
         ColorDict {
-            red: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 }],
-            green: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
-            blue: vec![ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 }, ColorDictEntry { x: 1.0, y0: 0.5, y1: 0.5 }],
+            red: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+            ],
+            green: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
+            blue: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.5,
+                    y1: 0.5,
+                },
+            ],
         }
     }
 
     pub fn wistia() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.5, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.75, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.5,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.75,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
                 ColorDictEntry {
                     x: 1.0,
                     y0: 0.9882352941176471,
@@ -1567,7 +1965,11 @@ pub mod cmap {
                 },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
                 ColorDictEntry {
                     x: 0.25,
                     y0: 0.9098039215686274,
@@ -1600,9 +2002,21 @@ pub mod cmap {
                     y0: 0.10196078431372549,
                     y1: 0.10196078431372549,
                 },
-                ColorDictEntry { x: 0.5, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.75, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.5,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.75,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
             ],
         }
     }
@@ -1610,7 +2024,11 @@ pub mod cmap {
     pub fn nipy_spectral() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.05,
                     y0: 0.4667,
@@ -1621,16 +2039,56 @@ pub mod cmap {
                     y0: 0.5333,
                     y1: 0.5333,
                 },
-                ColorDictEntry { x: 0.15, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.20, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.25, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.30, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.35, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.40, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.45, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.50, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.55, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.60, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.15,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.20,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.25,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.30,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.35,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.40,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.45,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.50,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.55,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.60,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.65,
                     y0: 0.7333,
@@ -1641,23 +2099,63 @@ pub mod cmap {
                     y0: 0.9333,
                     y1: 0.9333,
                 },
-                ColorDictEntry { x: 0.75, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.80, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.85, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.75,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.80,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.85,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
                 ColorDictEntry {
                     x: 0.90,
                     y0: 0.8667,
                     y1: 0.8667,
                 },
-                ColorDictEntry { x: 0.95, y0: 0.80, y1: 0.80 },
-                ColorDictEntry { x: 1.0, y0: 0.80, y1: 0.80 },
+                ColorDictEntry {
+                    x: 0.95,
+                    y0: 0.80,
+                    y1: 0.80,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.80,
+                    y1: 0.80,
+                },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.05, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.10, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.15, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.20, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.05,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.10,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.15,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.20,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.25,
                     y0: 0.4667,
@@ -1693,8 +2191,16 @@ pub mod cmap {
                     y0: 0.8667,
                     y1: 0.8667,
                 },
-                ColorDictEntry { x: 0.60, y0: 1.0, y1: 1.0 },
-                ColorDictEntry { x: 0.65, y0: 1.0, y1: 1.0 },
+                ColorDictEntry {
+                    x: 0.60,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+                ColorDictEntry {
+                    x: 0.65,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
                 ColorDictEntry {
                     x: 0.70,
                     y0: 0.9333,
@@ -1710,13 +2216,33 @@ pub mod cmap {
                     y0: 0.6000,
                     y1: 0.6000,
                 },
-                ColorDictEntry { x: 0.85, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.90, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.95, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 1.0, y0: 0.80, y1: 0.80 },
+                ColorDictEntry {
+                    x: 0.85,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.90,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.95,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.80,
+                    y1: 0.80,
+                },
             ],
             blue: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
                 ColorDictEntry {
                     x: 0.05,
                     y0: 0.5333,
@@ -1757,18 +2283,66 @@ pub mod cmap {
                     y0: 0.5333,
                     y1: 0.5333,
                 },
-                ColorDictEntry { x: 0.45, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.50, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.55, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.60, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.65, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.70, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.75, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.80, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.85, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.90, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 0.95, y0: 0.0, y1: 0.0 },
-                ColorDictEntry { x: 1.0, y0: 0.80, y1: 0.80 },
+                ColorDictEntry {
+                    x: 0.45,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.50,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.55,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.60,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.65,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.70,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.75,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.80,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.85,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.90,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 0.95,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 0.80,
+                    y1: 0.80,
+                },
             ],
         }
     }
@@ -1776,7 +2350,11 @@ pub mod cmap {
     pub fn gist_earth() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0000 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0000,
+                },
                 ColorDictEntry {
                     x: 0.2824,
                     y0: 0.1882,
@@ -1809,7 +2387,11 @@ pub mod cmap {
                 },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0000 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0000,
+                },
                 ColorDictEntry {
                     x: 0.0275,
                     y0: 0.0000,
@@ -1979,7 +2561,11 @@ pub mod cmap {
     pub fn gist_ncar() -> ColorDict {
         ColorDict {
             red: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0000 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0000,
+                },
                 ColorDictEntry {
                     x: 0.3098,
                     y0: 0.0000,
@@ -2022,7 +2608,11 @@ pub mod cmap {
                 },
             ],
             green: vec![
-                ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0000 },
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0000,
+                },
                 ColorDictEntry {
                     x: 0.0510,
                     y0: 0.3722,
@@ -2238,7 +2828,18 @@ pub mod cmap {
                     y1: 1.000,
                 },
             ],
-            green: vec![ColorDictEntry { x: 0.0, y0: 0.0, y1: 0.0 }, ColorDictEntry { x: 1.0, y0: 1.0, y1: 1.0 }],
+            green: vec![
+                ColorDictEntry {
+                    x: 0.0,
+                    y0: 0.0,
+                    y1: 0.0,
+                },
+                ColorDictEntry {
+                    x: 1.0,
+                    y0: 1.0,
+                    y1: 1.0,
+                },
+            ],
             blue: vec![
                 ColorDictEntry {
                     x: 0.000,

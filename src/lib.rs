@@ -1,3 +1,4 @@
+#![warn(clippy::unwrap_used)]
 extern crate approx;
 
 use thiserror::Error;

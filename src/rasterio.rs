@@ -3,7 +3,7 @@
 //! For general use, the [crate::Raster] and [crate::RasterIO] traits should be used.
 
 use std::{
-    ffi::{CStr, CString},
+    ffi::CString,
     path::{Path, PathBuf},
 };
 
@@ -457,18 +457,10 @@ fn create_output_directory_if_needed(p: &Path) -> Result {
 
 fn add_band_from_data_ptr<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Result<()> {
     // convert the data pointer to a string
-    let ptr: [libc::c_char; 32] = [0; 32];
-    unsafe {
-        gdal_sys::CPLPrintPointer(
-            ptr.as_ptr() as *mut libc::c_char,
-            data.as_ptr() as *mut std::ffi::c_void,
-            ptr.len() as i32,
-        )
-    };
-    let c_str: &CStr = unsafe { CStr::from_ptr(ptr.as_ptr()) };
+    let data_ptr = format!("DATAPOINTER={:p}", data.as_ptr());
 
     let mut str_options = gdal::cpl::CslStringList::new();
-    str_options.add_string(format!("DATAPOINTER={}", c_str.to_str().unwrap()).as_str())?;
+    str_options.add_string(data_ptr.as_str())?;
     let rc = unsafe { gdal_sys::GDALAddBand(ds.c_dataset(), T::gdal_ordinal(), str_options.as_ptr()) };
     check_gdal_rc(rc)?;
 
