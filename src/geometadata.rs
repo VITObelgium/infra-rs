@@ -1,4 +1,5 @@
 use approx::{AbsDiffEq, RelativeEq};
+use num::ToPrimitive;
 
 use crate::{cell::Cell, crs::Epsg, rect, Error, LatLonBounds, Nodata, Point, Rect};
 
@@ -34,8 +35,14 @@ impl RelativeEq for CellSize {
         f64::default_max_relative()
     }
 
-    fn relative_eq(&self, other: &Self, epsilon: <f64 as AbsDiffEq>::Epsilon, max_relative: <f64 as AbsDiffEq>::Epsilon) -> bool {
-        f64::relative_eq(&self.x, &other.x, epsilon, max_relative) && f64::relative_eq(&self.y, &other.y, epsilon, max_relative)
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: <f64 as AbsDiffEq>::Epsilon,
+        max_relative: <f64 as AbsDiffEq>::Epsilon,
+    ) -> bool {
+        f64::relative_eq(&self.x, &other.x, epsilon, max_relative)
+            && f64::relative_eq(&self.y, &other.y, epsilon, max_relative)
     }
 }
 
@@ -145,6 +152,15 @@ impl GeoMetadata {
             0.0,
             cell_size.y(),
         ];
+    }
+
+    pub fn copy_with_nodata<T: ToPrimitive>(&self, nodata: Option<T>) -> Self {
+        GeoMetadata {
+            projection: self.projection.clone(),
+            size: self.size,
+            geo_transform: self.geo_transform,
+            nodata: nodata.and_then(|x| x.to_f64()),
+        }
     }
 
     /// The verical cell size of the image.
@@ -327,14 +343,18 @@ impl GeoMetadata {
 
         #[cfg(not(feature = "gdal"))]
         {
-            Err(Error::Runtime("GDAL feature needs to be enabled for projection API".to_string()))
+            Err(Error::Runtime(
+                "GDAL feature needs to be enabled for projection API".to_string(),
+            ))
         }
     }
 }
 
 pub fn metadata_intersects(meta1: &GeoMetadata, meta2: &GeoMetadata) -> Result<bool, Error> {
     if meta1.projection != meta2.projection {
-        return Err(Error::InvalidArgument("Cannot intersect metadata with different projections".to_string()));
+        return Err(Error::InvalidArgument(
+            "Cannot intersect metadata with different projections".to_string(),
+        ));
     }
 
     if meta1.cell_size() != meta2.cell_size() && !metadata_is_aligned(meta1, meta2) {
@@ -389,7 +409,11 @@ pub fn metadata_is_aligned(meta1: &GeoMetadata, meta2: &GeoMetadata) -> bool {
     }
 
     is_aligned(meta1.geo_transform[0], meta2.geo_transform[0], meta1.cell_size_x())
-        && is_aligned(meta1.geo_transform[3], meta2.geo_transform[3], meta1.cell_size_y().abs())
+        && is_aligned(
+            meta1.geo_transform[3],
+            meta2.geo_transform[3],
+            meta1.cell_size_y().abs(),
+        )
 }
 
 #[cfg(test)]
@@ -435,7 +459,12 @@ mod tests {
     fn bounding_box_epsg_4326() {
         const TRANS: [f64; 6] = [-30.0, 0.100, 0.0, 30.0, 0.0, -0.05];
 
-        let meta = GeoMetadata::new("EPSG:4326".to_string(), RasterSize { rows: 840, cols: 900 }, TRANS, None);
+        let meta = GeoMetadata::new(
+            "EPSG:4326".to_string(),
+            RasterSize { rows: 840, cols: 900 },
+            TRANS,
+            None,
+        );
         let bbox = meta.bounding_box();
 
         assert_eq!(meta.top_left(), Point::new(-30.0, 30.0));
@@ -522,8 +551,15 @@ mod tests {
 
     #[test]
     fn test_metadata_intersects() {
-        let meta_with_origin =
-            |orig| GeoMetadata::with_origin(String::new(), RasterSize { rows: 3, cols: 3 }, orig, CellSize::square(5.0), Option::<f64>::None);
+        let meta_with_origin = |orig| {
+            GeoMetadata::with_origin(
+                String::new(),
+                RasterSize { rows: 3, cols: 3 },
+                orig,
+                CellSize::square(5.0),
+                Option::<f64>::None,
+            )
+        };
 
         let meta = meta_with_origin(Point::new(0.0, 0.0));
 

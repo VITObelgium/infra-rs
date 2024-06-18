@@ -44,4 +44,4 @@ doc:
   cargo doc --no-deps --open
 
 test:
-  cargo test --all-features -- --nocapture
+  cargo pretty-test --all-features -- --nocapture

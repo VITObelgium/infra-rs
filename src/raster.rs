@@ -1,3 +1,4 @@
+use num::NumCast;
 use num::{Bounded, ToPrimitive};
 
 use crate::{Error, GeoMetadata, Nodata, Result};
@@ -8,22 +9,43 @@ pub trait RasterNum<T: ToPrimitive>: Copy + num::NumCast + num::Zero + PartialEq
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Raster<T: RasterNum<T>> {
     /// Create a new raster with the given metadata and data buffer.
-    fn new(metadata: GeoMetadata, data: Vec<T>) -> Self;
+    fn new(metadata: GeoMetadata, data: Vec<T>) -> Self
+    where
+        Self: Sized;
+
+    fn from_iter<Iter>(metadata: GeoMetadata, iter: Iter) -> Self
+    where
+        Self: Sized,
+        Iter: Iterator<Item = Option<T>>;
 
     /// Create a new raster with the given metadata and filled with zeros.
-    fn zeros(metadata: GeoMetadata) -> Self;
+    fn zeros(metadata: GeoMetadata) -> Self
+    where
+        Self: Sized;
 
-    /// Create a new raster with the given metadata and filled with zeros.
-    fn filled_with(val: T, metadata: GeoMetadata) -> Self;
+    /// Create a new raster with the given metadata and filled with the provided value.
+    fn filled_with(val: T, metadata: GeoMetadata) -> Self
+    where
+        Self: Sized;
 
     /// Returns a reference to the geographic metadata associated with the raster.
-    fn geo_metadata(&self) -> &GeoMetadata;
+    fn geo_metadata(&self) -> &GeoMetadata
+    where
+        Self: Sized;
 
     /// Returns the width of the raster.
     fn width(&self) -> usize;
 
     /// Returns the height of the raster.
     fn height(&self) -> usize;
+
+    fn len(&self) -> usize {
+        self.width() * self.height()
+    }
+
+    fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
 
     /// Returns a mutable reference to the raster data.
     fn as_mut_slice(&mut self) -> &mut [T];
@@ -43,8 +65,23 @@ pub trait Raster<T: RasterNum<T>> {
     /// Return true if the cell at the given index contains valid data
     fn index_has_data(&self, index: usize) -> bool;
 
+    /// Return the value at the given index or None if the index contains nodata
+    fn value(&self, index: usize) -> Option<T>;
+
     /// Return the sum of all the data values
     fn sum(&self) -> f64;
+}
+
+pub fn cast<TDest: RasterNum<TDest>, TSrc: RasterNum<TSrc>, RDest, RSrc>(src: &RSrc) -> RDest
+where
+    RDest: Raster<TDest>,
+    RSrc: Raster<TSrc>,
+    for<'a> &'a RSrc: IntoIterator<Item = Option<TSrc>>,
+{
+    RDest::from_iter(
+        src.geo_metadata().copy_with_nodata(Some(TDest::nodata_value())),
+        src.into_iter().map(|x| x.and_then(|x| NumCast::from(x))),
+    )
 }
 
 /// A trait representing a raster io operations
@@ -60,6 +97,7 @@ pub trait RasterIO<T: RasterNum<T>, TRas: Raster<T>> {
     /// Areas outside of the original raster will be filled with the nodata value
     fn read_bounds(path: &std::path::Path, region: &GeoMetadata, band_index: usize) -> Result<TRas>;
 
+    /// Write the full raster to disk
     fn write(&mut self, path: &std::path::Path) -> Result;
 }
 

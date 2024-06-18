@@ -28,6 +28,19 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
         DenseRaster { metadata, data }
     }
 
+    fn from_iter<Iter>(metadata: GeoMetadata, iter: Iter) -> Self
+    where
+        Self: Sized,
+        Iter: Iterator<Item = Option<T>>,
+    {
+        let mut data = Vec::with_capacity(metadata.rows() * metadata.columns());
+        for val in iter {
+            data.push(val.unwrap_or(T::nodata_value()));
+        }
+
+        DenseRaster { metadata, data }
+    }
+
     fn zeros(meta: GeoMetadata) -> Self {
         DenseRaster::filled_with(T::zero(), meta)
     }
@@ -47,6 +60,10 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
 
     fn height(&self) -> usize {
         self.metadata.rows()
+    }
+
+    fn len(&self) -> usize {
+        self.data.len()
     }
 
     fn as_mut_slice(&mut self) -> &mut [T] {
@@ -72,6 +89,17 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
         self.data.iter().filter(|&&x| T::is_nodata(x)).count()
     }
 
+    fn value(&self, index: usize) -> Option<T> {
+        assert!(index < self.len());
+
+        let val = self.data[index];
+        if T::is_nodata(val) {
+            None
+        } else {
+            Some(val)
+        }
+    }
+
     fn index_has_data(&self, index: usize) -> bool {
         self.data[index] != T::nodata_value()
     }
@@ -91,6 +119,43 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
     }
 }
 
+impl<'a, T: RasterNum<T>> IntoIterator for &'a DenseRaster<T> {
+    type Item = Option<T>;
+    type IntoIter = DenserRasterIterator<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        DenserRasterIterator::new(self)
+    }
+}
+
+pub struct DenserRasterIterator<'a, T: RasterNum<T>> {
+    index: usize,
+    raster: &'a DenseRaster<T>,
+}
+
+impl<'a, T: RasterNum<T>> DenserRasterIterator<'a, T> {
+    fn new(raster: &'a DenseRaster<T>) -> Self {
+        DenserRasterIterator { index: 0, raster }
+    }
+}
+
+impl<'a, T> Iterator for DenserRasterIterator<'a, T>
+where
+    T: RasterNum<T>,
+{
+    type Item = Option<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.raster.len() {
+            let result = self.raster.value(self.index);
+            self.index += 1;
+            Some(result)
+        } else {
+            None
+        }
+    }
+}
+
 fn process_nodata<T: RasterNum<T>>(data: &mut [T], nodata: Option<f64>) {
     if let Some(nodata) = nodata {
         if nodata.is_nan() || NumCast::from(nodata) == Some(T::nodata_value()) {
@@ -105,5 +170,26 @@ fn process_nodata<T: RasterNum<T>>(data: &mut [T], nodata: Option<f64>) {
                 *v = T::nodata_value();
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        raster,
+        testutils::{compare_fp_vectors, test_metadata_2x2},
+        Nodata,
+    };
+
+    #[test]
+    fn cast_dense_raster() {
+        let ras = DenseRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
+
+        let f64_ras = raster::cast::<f64, _, DenseRaster<f64>, _>(&ras);
+        compare_fp_vectors(
+            f64_ras.as_slice(),
+            &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0],
+        );
     }
 }

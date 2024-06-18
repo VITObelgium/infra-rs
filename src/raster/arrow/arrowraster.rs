@@ -1,5 +1,5 @@
 use arrow::{
-    array::{Array, ArrowNativeTypeOp, PrimitiveArray},
+    array::{Array, ArrowNativeTypeOp, PrimitiveArray, PrimitiveIter},
     buffer::ScalarBuffer,
     datatypes::ArrowPrimitiveType,
 };
@@ -73,6 +73,17 @@ where
         ArrowRaster { metadata, data }
     }
 
+    fn from_iter<Iter>(metadata: GeoMetadata, iter: Iter) -> Self
+    where
+        Self: Sized,
+        Iter: Iterator<Item = Option<T>>,
+    {
+        ArrowRaster {
+            metadata,
+            data: iter.collect(),
+        }
+    }
+
     fn zeros(meta: GeoMetadata) -> Self {
         ArrowRaster::filled_with(T::zero(), meta)
     }
@@ -122,6 +133,14 @@ where
         self.data.iter().collect()
     }
 
+    fn value(&self, index: usize) -> Option<T> {
+        if self.index_has_data(index) {
+            Some(self.data.value(index))
+        } else {
+            None
+        }
+    }
+
     fn sum(&self) -> f64 {
         // using the sum from compute uses the same data type as the raster so is not accurate for e.g. f32
         self.data
@@ -131,34 +150,32 @@ where
     }
 }
 
+impl<'a, T: ArrowRasterNum<T>> IntoIterator for &'a ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    type Item = Option<T>;
+    type IntoIter = PrimitiveIter<'a, T::TArrow>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.data.into_iter()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{GeoMetadata, RasterSize};
+    use crate::{raster, testutils::*, GeoMetadata, Nodata, RasterSize};
 
     #[test]
-    fn test_add_rasters() {
-        let metadata = GeoMetadata::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 2, cols: 2 },
-            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-            Some(-9999.0),
+    fn cast_arrow_raster() {
+        let ras = ArrowRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
+
+        let f64_ras = raster::cast::<f64, _, ArrowRaster<f64>, _>(&ras);
+        compare_fp_vectors(
+            f64_ras.as_slice(),
+            &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0],
         );
-
-        let data1 = vec![1, 2, -9999, 4];
-        let data2 = vec![-9999, 6, 7, 8];
-        let raster1 = ArrowRaster::new(metadata.clone(), data1);
-        let raster2 = ArrowRaster::new(metadata.clone(), data2);
-
-        {
-            let result = &raster1 + &raster2;
-            assert_eq!(result.mask_vec(), [None, Some(8), None, Some(12)]);
-        }
-
-        {
-            let result = raster1 + raster2;
-            assert_eq!(result.mask_vec(), [None, Some(8), None, Some(12)]);
-        }
     }
 
     #[test]
@@ -192,27 +209,5 @@ mod tests {
         // The internal buffer value should now match the nodata value
         assert_eq!(result.as_slice()[0], -9999);
         assert_eq!(result.as_slice()[2], -9999);
-    }
-
-    #[test]
-    fn test_multiply_scalar() {
-        let metadata = GeoMetadata::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 2, cols: 2 },
-            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-            Some(-9999.0),
-        );
-
-        let raster = ArrowRaster::new(metadata.clone(), vec![1, 2, -9999, 4]);
-
-        {
-            let result = &raster * 2;
-            assert_eq!(result.mask_vec(), [Some(2), Some(4), None, Some(8)]);
-        }
-
-        {
-            let result = raster * 2;
-            assert_eq!(result.mask_vec(), [Some(2), Some(4), None, Some(8)]);
-        }
     }
 }

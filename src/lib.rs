@@ -77,6 +77,7 @@ pub use legend::Legend;
 #[doc(inline)]
 pub use legend::MappedLegend;
 pub use nodata::Nodata;
+#[doc(inline)]
 pub use raster::DenseRaster;
 #[doc(inline)]
 pub use raster::Raster;
