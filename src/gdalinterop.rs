@@ -1,6 +1,36 @@
 use crate::Result;
 use gdal::{cpl::CslStringList, errors::GdalError};
 
+pub struct Config {
+    pub debug_logging: bool,
+    pub proj_db_search_locations: Vec<String>,
+}
+
+impl Config {
+    pub fn apply(&self) -> Result<()> {
+        setup_logging(self.debug_logging);
+        if !self.proj_db_search_locations.is_empty() {
+            let paths = create_string_list(&self.proj_db_search_locations)?;
+            unsafe {
+                gdal_sys::OSRSetPROJSearchPaths(paths.as_ptr() as *const *const libc::c_char);
+            }
+
+            // Also set the environment variable
+            // e.g. Spatialite library does not use gdal settings
+
+            #[cfg(target_os = "windows")]
+            const ENV_SEP: &str = ";";
+            #[cfg(not(target_os = "windows"))]
+            const ENV_SEP: &str = ":";
+
+            let proj_data = self.proj_db_search_locations.join(ENV_SEP);
+            std::env::set_var("PROJ_DATA", proj_data.as_str());
+        }
+
+        Ok(())
+    }
+}
+
 pub fn setup_logging(debug: bool) {
     if debug && gdal::config::set_config_option("CPL_DEBUG", "ON").is_err() {
         log::debug!("Failed to set GDAL debug level")
