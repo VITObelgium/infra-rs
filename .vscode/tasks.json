@@ -3,11 +3,12 @@
 	"tasks": [
 		{
 			"type": "cargo",
-			"command": "build",
+			"command": "cargo",
 			"problemMatcher": [
 				"$rustc"
 			],
 			"args": [
+				"build",
 				"--features=serde,sqlite3,gdal-static,arrow,python"
 			],
 			"group": {
@@ -18,11 +19,12 @@
 		},
 		{
 			"type": "cargo",
-			"command": "test",
+			"command": "cargo",
 			"problemMatcher": [
 				"$rustc"
 			],
 			"args": [
+				"test",
 				"--features=serde,sqlite3,gdal-static,arrow,python"
 			],
 			"group": {
