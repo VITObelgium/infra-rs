@@ -5,7 +5,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-inf = { package = "rs-infra", path = "..", features = ["arrow", "gdal"] }
+inf = { package = "inf", path = "../inf", features = ["arrow", "gdal"] }
 pyo3 = { version = "0.21" }
 pyo3-log = "0.10"
 arrow = { version = "52.0", features = ["pyarrow"] }

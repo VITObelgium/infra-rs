@@ -20,6 +20,10 @@ bootstrap: cargo-config-gen
   cargo vcpkg -v build
   -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
   fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- '-l-framework' '-framework'
+  -mkdir -p target/data && mkdir -p target/debug && mkdir -p target/release
+  fd -g proj.db ./target/vcpkg/installed --exec cp "{}" ./target/data/
+  cp ./target/data/proj.db ./target/debug/
+  cp ./target/data/proj.db ./target/release/
 
 # last line: copy the python library to the debug folder for rust-analyzer to work
 pybootstrap:
@@ -44,4 +48,4 @@ doc:
   cargo doc --no-deps --open
 
 test:
-  cargo pretty-test --all-features -- --nocapture
+  cargo pretty-test --workspace --all-features -- --nocapture
