@@ -1,8 +1,9 @@
 use approx::{AbsDiffEq, RelativeEq};
 use geo_types::Point;
+use serde::Deserialize;
 
 /// Represents a wgs84 point in the raster (lat, lon)
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Deserialize)]
 pub struct Coordinate {
     pub latitude: f64,
     pub longitude: f64,
@@ -10,7 +11,10 @@ pub struct Coordinate {
 
 impl Coordinate {
     pub fn latlon(lat: f64, lon: f64) -> Self {
-        Coordinate { latitude: lat, longitude: lon }
+        Coordinate {
+            latitude: lat,
+            longitude: lon,
+        }
     }
 
     pub fn is_valid(&self) -> bool {
@@ -109,7 +113,8 @@ impl AbsDiffEq for Coordinate {
     }
 
     fn abs_diff_eq(&self, other: &Self, epsilon: <f64 as AbsDiffEq>::Epsilon) -> bool {
-        f64::abs_diff_eq(&self.latitude, &other.latitude, epsilon) && f64::abs_diff_eq(&self.longitude, &other.longitude, epsilon)
+        f64::abs_diff_eq(&self.latitude, &other.latitude, epsilon)
+            && f64::abs_diff_eq(&self.longitude, &other.longitude, epsilon)
     }
 }
 
@@ -118,7 +123,13 @@ impl RelativeEq for Coordinate {
         f64::default_max_relative()
     }
 
-    fn relative_eq(&self, other: &Self, epsilon: <f64 as AbsDiffEq>::Epsilon, max_relative: <f64 as AbsDiffEq>::Epsilon) -> bool {
-        f64::relative_eq(&self.latitude, &other.latitude, epsilon, max_relative) && f64::relative_eq(&self.longitude, &other.longitude, epsilon, max_relative)
+    fn relative_eq(
+        &self,
+        other: &Self,
+        epsilon: <f64 as AbsDiffEq>::Epsilon,
+        max_relative: <f64 as AbsDiffEq>::Epsilon,
+    ) -> bool {
+        f64::relative_eq(&self.latitude, &other.latitude, epsilon, max_relative)
+            && f64::relative_eq(&self.longitude, &other.longitude, epsilon, max_relative)
     }
 }

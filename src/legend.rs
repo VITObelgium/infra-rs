@@ -1,4 +1,5 @@
 use num::NumCast;
+use serde::Serialize;
 
 use crate::{
     color::Color,
@@ -8,7 +9,8 @@ use crate::{
 use std::{collections::HashMap, ops::Range};
 
 /// Options for mapping values that can not be mapped by the legend mapper
-#[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Default, Clone, Debug)]
 pub struct MappingConfig {
     /// The color of the nodata pixels
     pub unmappable_nodata: Color,
@@ -43,7 +45,8 @@ pub mod mapper {
     use super::*;
     use std::ops::Range;
 
-    #[derive(Clone)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Clone, Debug)]
     pub struct LegendBand {
         range: Range<f64>,
         color: Color,
@@ -67,16 +70,17 @@ pub mod mapper {
 
     /// Linear color mapper
     /// each value gets its color based on the position in the configured value range
-    #[derive(Default, Clone)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Default, Clone, Debug)]
     pub struct Linear {
         value_range: Range<f64>,
-        color_map: Box<ColorMap>,
+        color_map: ColorMap,
     }
 
     impl Linear {
         pub fn new(value_range: Range<f64>, color_map: ColorMap) -> Self {
             Linear {
-                color_map: Box::new(color_map),
+                color_map: color_map,
                 value_range,
             }
         }
@@ -110,7 +114,8 @@ pub mod mapper {
         }
     }
 
-    #[derive(Default, Clone)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Default, Clone, Debug)]
     pub struct LegendCategory {
         pub color: Color,
         pub name: String,
@@ -119,7 +124,8 @@ pub mod mapper {
     /// Categoric numeric color mapper (single numeric value → color)
     /// Contains a number of categories that map to a color
     /// each value gets its color based on the exact category match
-    #[derive(Default, Clone)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Default, Clone, Debug)]
     pub struct CategoricNumeric {
         categories: HashMap<i64, LegendCategory>,
     }
@@ -184,7 +190,8 @@ pub mod mapper {
     /// Categoric string color mapper (single string value → color)
     /// Contains a number of categories that map to a color
     /// each value gets its color based on the exact category match
-    #[derive(Default, Clone)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Default, Clone, Debug)]
     pub struct CategoricString {
         categories: HashMap<String, LegendCategory>,
     }
@@ -215,7 +222,8 @@ pub mod mapper {
     /// Banded color mapper (value range -> color)
     /// Contains a number of configured bands with a value range and a color
     /// each value gets its color based on the band it belongs to
-    #[derive(Default, Clone)]
+    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+    #[derive(Default, Clone, Debug)]
     pub struct Banded {
         bands: Vec<LegendBand>,
     }
@@ -296,7 +304,8 @@ pub mod mapper {
     }
 }
 
-#[derive(Default, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Default, Clone, Debug)]
 pub struct MappedLegend<TMapper: ColorMapper> {
     pub title: String,
     pub color_map_name: String,
@@ -350,7 +359,8 @@ pub type CategoricStringLegend = MappedLegend<mapper::CategoricString>;
 
 /// Legend for mapping values to colors, can be linear, banded or categoric
 /// Use this when you need to store a legend that can be of any mapping type
-#[derive(Clone)]
+#[derive(Clone, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Legend {
     Linear(LinearLegend),
     Banded(BandedLegend),
@@ -416,6 +426,15 @@ impl Legend {
             Legend::Banded(legend) => legend.color_for_string_value(value),
             Legend::CategoricNumeric(legend) => legend.color_for_string_value(value),
             Legend::CategoricString(legend) => legend.color_for_string_value(value),
+        }
+    }
+
+    pub fn title(&self) -> &str {
+        match self {
+            Legend::Linear(legend) => legend.title.as_str(),
+            Legend::Banded(legend) => legend.title.as_str(),
+            Legend::CategoricNumeric(legend) => legend.title.as_str(),
+            Legend::CategoricString(legend) => legend.title.as_str(),
         }
     }
 }

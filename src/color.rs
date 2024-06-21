@@ -1,5 +1,6 @@
 use crate::Error;
 
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(packed)]
 pub struct Color {
@@ -77,16 +78,36 @@ impl Color {
     }
 }
 
-pub const BLACK: Color = Color { r: 0, g: 0, b: 0, a: 255 };
+pub const BLACK: Color = Color {
+    r: 0,
+    g: 0,
+    b: 0,
+    a: 255,
+};
 pub const WHITE: Color = Color {
     r: 255,
     g: 255,
     b: 255,
     a: 255,
 };
-pub const BLUE: Color = Color { r: 0, g: 0, b: 255, a: 255 };
-pub const GREEN: Color = Color { r: 0, g: 255, b: 0, a: 255 };
-pub const RED: Color = Color { r: 255, g: 0, b: 0, a: 255 };
+pub const BLUE: Color = Color {
+    r: 0,
+    g: 0,
+    b: 255,
+    a: 255,
+};
+pub const GREEN: Color = Color {
+    r: 0,
+    g: 255,
+    b: 0,
+    a: 255,
+};
+pub const RED: Color = Color {
+    r: 255,
+    g: 0,
+    b: 0,
+    a: 255,
+};
 pub const TRANSPARENT: Color = Color { r: 0, g: 0, b: 0, a: 0 };
 pub const DARK_GREY: Color = Color {
     r: 107,
@@ -108,35 +129,71 @@ mod tests {
     #[test]
     fn from_hex_rgb() {
         assert_eq!(Color::from_hex_string("#000000").unwrap(), Color::rgba(0, 0, 0, 255));
-        assert_eq!(Color::from_hex_string("#FFFFFF").unwrap(), Color::rgba(255, 255, 255, 255));
+        assert_eq!(
+            Color::from_hex_string("#FFFFFF").unwrap(),
+            Color::rgba(255, 255, 255, 255)
+        );
         assert_eq!(Color::from_hex_string("#FF0000").unwrap(), Color::rgba(255, 0, 0, 255));
         assert_eq!(Color::from_hex_string("#00FF00").unwrap(), Color::rgba(0, 255, 0, 255));
         assert_eq!(Color::from_hex_string("#0000FF").unwrap(), Color::rgba(0, 0, 255, 255));
 
         assert_eq!(Color::from_hex_string("#000000").unwrap(), Color::rgba(0, 0, 0, 255));
-        assert_eq!(Color::from_hex_string("#fffFFF").unwrap(), Color::rgba(255, 255, 255, 255));
+        assert_eq!(
+            Color::from_hex_string("#fffFFF").unwrap(),
+            Color::rgba(255, 255, 255, 255)
+        );
         assert_eq!(Color::from_hex_string("#ff0000").unwrap(), Color::rgba(255, 0, 0, 255));
         assert_eq!(Color::from_hex_string("#00fF00").unwrap(), Color::rgba(0, 255, 0, 255));
         assert_eq!(Color::from_hex_string("#0000FF").unwrap(), Color::rgba(0, 0, 255, 255));
 
-        assert_eq!(Color::from_hex_string("#19E624").unwrap(), Color::rgba(25, 230, 36, 255));
+        assert_eq!(
+            Color::from_hex_string("#19E624").unwrap(),
+            Color::rgba(25, 230, 36, 255)
+        );
     }
 
     #[test]
     fn from_hex_argb() {
         assert_eq!(Color::from_hex_string("#ff000000").unwrap(), Color::rgba(0, 0, 0, 255));
-        assert_eq!(Color::from_hex_string("#ffffFFFF").unwrap(), Color::rgba(255, 255, 255, 255));
-        assert_eq!(Color::from_hex_string("#ffff0000").unwrap(), Color::rgba(255, 0, 0, 255));
-        assert_eq!(Color::from_hex_string("#ff00FF00").unwrap(), Color::rgba(0, 255, 0, 255));
-        assert_eq!(Color::from_hex_string("#ff0000FF").unwrap(), Color::rgba(0, 0, 255, 255));
+        assert_eq!(
+            Color::from_hex_string("#ffffFFFF").unwrap(),
+            Color::rgba(255, 255, 255, 255)
+        );
+        assert_eq!(
+            Color::from_hex_string("#ffff0000").unwrap(),
+            Color::rgba(255, 0, 0, 255)
+        );
+        assert_eq!(
+            Color::from_hex_string("#ff00FF00").unwrap(),
+            Color::rgba(0, 255, 0, 255)
+        );
+        assert_eq!(
+            Color::from_hex_string("#ff0000FF").unwrap(),
+            Color::rgba(0, 0, 255, 255)
+        );
 
         assert_eq!(Color::from_hex_string("#00000000").unwrap(), Color::rgba(0, 0, 0, 0));
-        assert_eq!(Color::from_hex_string("#64ffFFFF").unwrap(), Color::rgba(255, 255, 255, 100));
-        assert_eq!(Color::from_hex_string("#96ff0000").unwrap(), Color::rgba(255, 0, 0, 150));
-        assert_eq!(Color::from_hex_string("#c800FF00").unwrap(), Color::rgba(0, 255, 0, 200));
-        assert_eq!(Color::from_hex_string("#ff0000FF").unwrap(), Color::rgba(0, 0, 255, 255));
+        assert_eq!(
+            Color::from_hex_string("#64ffFFFF").unwrap(),
+            Color::rgba(255, 255, 255, 100)
+        );
+        assert_eq!(
+            Color::from_hex_string("#96ff0000").unwrap(),
+            Color::rgba(255, 0, 0, 150)
+        );
+        assert_eq!(
+            Color::from_hex_string("#c800FF00").unwrap(),
+            Color::rgba(0, 255, 0, 200)
+        );
+        assert_eq!(
+            Color::from_hex_string("#ff0000FF").unwrap(),
+            Color::rgba(0, 0, 255, 255)
+        );
 
-        assert_eq!(Color::from_hex_string("#FF19E624").unwrap(), Color::rgba(25, 230, 36, 255));
+        assert_eq!(
+            Color::from_hex_string("#FF19E624").unwrap(),
+            Color::rgba(25, 230, 36, 255)
+        );
     }
 
     #[test]

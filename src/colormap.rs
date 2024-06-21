@@ -29,17 +29,38 @@ impl ColorInfo {
     }
 }
 
-#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
 pub struct ColorMap {
-    cmap: [Color; 256],
+    cmap: Vec<Color>,
 }
 
 impl Default for ColorMap {
     fn default() -> ColorMap {
         ColorMap {
-            cmap: [Color::default(); 256],
+            cmap: vec![Color::default(); 256],
         }
     }
+}
+
+enum ColorMapPreset {
+    Bone,
+    Cool,
+    Copper,
+    Gray,
+    Hot,
+    Hsv,
+    Pink,
+    Jet,
+    Spring,
+    Summer,
+    Autumn,
+    Winter,
+    Wistia,
+    NipySpectral,
+    GistEarth,
+    GistNcar,
+    GistStern,
 }
 
 impl ColorMap {
@@ -53,7 +74,7 @@ impl ColorMap {
             )
         };
 
-        let mut cmap = [Color::default(); 256];
+        let mut cmap = vec![Color::default(); 256];
         let mut index = 0;
         if reverse {
             for iter in cmap.iter_mut().rev() {
@@ -80,7 +101,7 @@ impl ColorMap {
         ColorMap::new(&cdict, reverse)
     }
 
-    pub fn from_color_array(mut cmap: [Color; 256], reverse: bool) -> ColorMap {
+    pub fn from_color_array(mut cmap: Vec<Color>, reverse: bool) -> ColorMap {
         if reverse {
             cmap.reverse();
         }
@@ -89,7 +110,7 @@ impl ColorMap {
     }
 
     pub fn from_color_mapper(cmap: &ColorMapper, reverse: bool) -> ColorMap {
-        let mut cmap_values = [Color::default(); 256];
+        let mut cmap_values = vec![Color::default(); 256];
         for (i, cmap_value) in cmap_values.iter_mut().enumerate() {
             let map_val = i as f64 / 255.0;
             *cmap_value = Color::rgb((cmap.red)(map_val), (cmap.green)(map_val), (cmap.blue)(map_val));
@@ -103,7 +124,7 @@ impl ColorMap {
     }
 
     pub fn qualitative(clist: &[Color]) -> ColorMap {
-        let mut cmap = [Color::default(); 256];
+        let mut cmap = vec![Color::default(); 256];
         for (i, color) in cmap.iter_mut().enumerate() {
             let index = (i as f64 / 255.0 * (clist.len() - 1) as f64) as usize;
             *color = clist[index];
