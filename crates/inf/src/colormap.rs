@@ -43,7 +43,7 @@ impl Default for ColorMap {
     }
 }
 
-enum ColorMapPreset {
+pub enum ColorMapPreset {
     Bone,
     Cool,
     Copper,

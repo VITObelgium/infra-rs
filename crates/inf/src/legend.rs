@@ -1,5 +1,4 @@
 use num::NumCast;
-use serde::Serialize;
 
 use crate::{
     color::Color,
@@ -79,10 +78,7 @@ pub mod mapper {
 
     impl Linear {
         pub fn new(value_range: Range<f64>, color_map: ColorMap) -> Self {
-            Linear {
-                color_map: color_map,
-                value_range,
-            }
+            Linear { color_map, value_range }
         }
     }
 
