@@ -89,7 +89,6 @@ pub fn open_raster_read_only(path: &Path) -> Result<gdal::Dataset> {
         ..Default::default()
     };
 
-    log::debug!("Opening raster: {:?}", path);
     Ok(gdal::Dataset::open_ex(path, ds_opts)?)
 }
 
