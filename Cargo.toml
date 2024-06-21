@@ -1,22 +1,24 @@
 [package]
-name = "rs-infra"
+name    = "rs-infra"
 version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["inf", "ruster"]
+members = ["crates/inf", "crates/ruster", "crates/tiler"]
 
 [dependencies]
-inf = { path = "./crates/inf" }
+inf    = { path = "./crates/inf" }
 ruster = { path = "./crates/ruster", optional = true }
+tiler  = { path = "./crates/tiler", optional = true }
 
 [features]
-python = ["dep:ruster"]
-arrow = ["inf/arrow"]
-sqlite3 = ["inf/sqlite3"]
-gdal = ["inf/gdal"]
+tiler       = ["dep:tiler"]
+python      = ["dep:ruster"]
+arrow       = ["inf/arrow"]
+sqlite3     = ["inf/sqlite3"]
+gdal        = ["inf/gdal"]
 gdal-static = ["inf/gdal-static"]
-serde = ["inf/serde"]
+serde       = ["inf/serde"]
 
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"

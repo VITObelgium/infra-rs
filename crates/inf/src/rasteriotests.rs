@@ -14,14 +14,16 @@ mod tests {
 
     #[ctor::ctor]
     fn init() {
-        let mut data_dir: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "target", "data"].iter().collect();
-        if !data_dir.exists() {
-            // Infra used a s subcrate, try the parent directory
-            data_dir = [env!("CARGO_MANIFEST_DIR"), "..", "target", "data"].iter().collect();
-            if !data_dir.exists() {
-                panic!("Proj.db data directory not found");
-            }
-        }
+        let data_dir = [env!("CARGO_MANIFEST_DIR"), "..", "..", "target", "data"]
+            .iter()
+            .collect();
+        // if !data_dir.exists() {
+        //     // Infra used a s subcrate, try the parent directory
+
+        //     if !data_dir.exists() {
+        //         panic!("Proj.db data directory not found");
+        //     }
+        // }
 
         let gdal_config = gdalinterop::Config {
             debug_logging: false,
