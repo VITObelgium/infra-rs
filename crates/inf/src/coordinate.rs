@@ -1,9 +1,9 @@
 use approx::{AbsDiffEq, RelativeEq};
 use geo_types::Point;
-use serde::Deserialize;
 
 /// Represents a wgs84 point in the raster (lat, lon)
-#[derive(Debug, PartialEq, Clone, Copy, Deserialize)]
+#[derive(Debug, PartialEq, Clone, Copy)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Coordinate {
     pub latitude: f64,
     pub longitude: f64,
