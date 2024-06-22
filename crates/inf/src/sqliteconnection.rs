@@ -167,7 +167,7 @@ impl SqliteConnection {
         let rc = unsafe { libsqlite3_sys::sqlite3_open_v2(c_path.as_ptr(), &mut db, flags, std::ptr::null()) };
         if rc != libsqlite3_sys::SQLITE_OK {
             let error_message = SqliteConnection::last_sqlite_error(db);
-            unsafe { libsqlite3_sys::sqlite3_close_v2(db) };
+            unsafe { libsqlite3_sys::sqlite3_close(db) };
             return Err(Error::DatabaseError(error_message));
         }
         Ok(Self { db })
@@ -241,7 +241,7 @@ impl SqliteConnection {
 
 impl Drop for SqliteConnection {
     fn drop(&mut self) {
-        unsafe { libsqlite3_sys::sqlite3_close_v2(self.db) };
+        unsafe { libsqlite3_sys::sqlite3_close(self.db) };
     }
 }
 
