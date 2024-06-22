@@ -325,7 +325,7 @@ impl WarpingTileProvider {
 
     fn check_layer_id(&self, id: LayerId) -> Result<()> {
         if id != self.meta.id {
-            return Err(Error::InvalidLayer(id));
+            return Err(Error::InvalidArgument(format!("Invalid layer id: {}", id)));
         }
 
         Ok(())

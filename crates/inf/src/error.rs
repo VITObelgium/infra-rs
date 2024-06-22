@@ -18,4 +18,8 @@ pub enum Error {
     DatabaseError(String),
     #[error("Invalid string: {0}")]
     InvalidString(#[from] std::ffi::NulError),
+    #[error("System time error")]
+    TimeError(#[from] std::time::SystemTimeError),
+    #[error("IO error: {0}")]
+    IOError(#[from] std::io::Error),
 }

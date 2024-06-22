@@ -25,7 +25,9 @@ impl DirectoryTileProvider {
     }
 
     fn layer_data(&self, id: LayerId) -> Result<&LayerMetadata> {
-        self.layers.get(&id).ok_or(Error::InvalidLayer(id))
+        self.layers
+            .get(&id)
+            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
     }
 
     fn build_metadata_list(input_dir: &std::path::Path) -> Result<HashMap<LayerId, LayerMetadata>> {
