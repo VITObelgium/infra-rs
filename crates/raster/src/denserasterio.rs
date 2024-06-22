@@ -1,7 +1,7 @@
 use gdal::raster::GdalType;
 use inf::GeoMetadata;
 
-use crate::{io, raster::RasterNum, DenseRaster, Raster, RasterIO, Result};
+use crate::{io, DenseRaster, Raster, RasterIO, RasterNum, Result};
 
 impl<T: RasterNum<T> + GdalType> RasterIO<T, DenseRaster<T>> for DenseRaster<T> {
     fn read(path: &std::path::Path) -> Result<Self> {

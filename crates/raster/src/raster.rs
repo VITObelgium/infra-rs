@@ -1,10 +1,7 @@
 use inf::GeoMetadata;
 use num::NumCast;
-use num::{Bounded, ToPrimitive};
 
-use crate::{Error, Nodata, Result};
-
-pub trait RasterNum<T: ToPrimitive>: Copy + num::NumCast + num::Zero + PartialEq + Bounded + Nodata<T> {}
+use crate::{RasterNum, Result};
 
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
@@ -113,22 +110,22 @@ impl RasterNum<u64> for u64 {}
 impl RasterNum<f32> for f32 {}
 impl RasterNum<f64> for f64 {}
 
-pub fn check_dimensions<R1, R2, T1, T2>(r1: &R1, r2: &R2) -> Result<()>
-where
-    R1: Raster<T1>,
-    R2: Raster<T2>,
-    T1: RasterNum<T1>,
-    T2: RasterNum<T2>,
-{
-    if r1.width() != r2.width() || r1.height() != r2.height() {
-        return Err(Error::SizeMismatch {
-            size1: (r1.width(), r1.height()),
-            size2: (r2.width(), r2.height()),
-        });
-    }
+// pub fn check_dimensions<R1, R2, T1, T2>(r1: &R1, r2: &R2) -> Result<()>
+// where
+//     R1: Raster<T1>,
+//     R2: Raster<T2>,
+//     T1: RasterNum<T1>,
+//     T2: RasterNum<T2>,
+// {
+//     if r1.width() != r2.width() || r1.height() != r2.height() {
+//         return Err(Error::SizeMismatch {
+//             size1: (r1.width(), r1.height()),
+//             size2: (r2.width(), r2.height()),
+//         });
+//     }
 
-    Ok(())
-}
+//     Ok(())
+// }
 
 pub fn assert_dimensions<R1, R2, T1, T2>(r1: &R1, r2: &R2)
 where

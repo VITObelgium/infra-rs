@@ -3,7 +3,7 @@
 //! For general use, the [crate::Raster] and [crate::RasterIO] traits should be used.
 
 use std::{
-    ffi::CString,
+    ffi::{c_void, CString},
     path::{Path, PathBuf},
 };
 
@@ -228,7 +228,7 @@ fn read_region_from_dataset<T: GdalType>(
             window.1,
             window_size.0,
             window_size.1,
-            data_ptr as *mut libc::c_void,
+            data_ptr as *mut c_void,
             size.0,
             size.1,
             T::gdal_ordinal(),
@@ -541,7 +541,6 @@ mod tests {
             .collect();
         let meta = metadata_from_file(path.as_path()).unwrap();
         assert!(!meta.projection().is_empty());
-        log::info!("{}", meta.projection());
         assert!(meta.projected_epsg().is_some());
         assert_eq!(meta.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
         assert_eq!(meta.geographic_epsg(), Some(crs::epsg::BELGE72_GEO));

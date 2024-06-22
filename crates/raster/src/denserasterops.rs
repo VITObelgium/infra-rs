@@ -1,9 +1,6 @@
 use num::NumCast;
 
-use crate::{
-    raster::{self, RasterNum},
-    DenseRaster, Raster,
-};
+use crate::{raster, DenseRaster, Raster, RasterNum};
 
 impl<T> std::ops::Add for DenseRaster<T>
 where

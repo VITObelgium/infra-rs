@@ -1,6 +1,8 @@
+//! Algorithms for raster data processing (translate, warp, ...).
+
 use gdal::cpl::CslStringList;
 use inf::gdalinterop::*;
-use std::ffi::CString;
+use std::ffi::{c_double, c_int, CString};
 
 use crate::{Error, Result};
 
@@ -39,7 +41,7 @@ pub fn translate_file(
 
 pub fn translate(ds: &gdal::Dataset, output_path: &std::path::Path, options: &[String]) -> Result<gdal::Dataset> {
     let opts = TranslateOptionsWrapper::new(options)?;
-    let mut user_error: libc::c_int = 0;
+    let mut user_error: c_int = 0;
     let ds = unsafe {
         gdal::Dataset::from_c_dataset(check_gdal_pointer(
             gdal_sys::GDALTranslate(
@@ -94,12 +96,10 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
         (*warp_options).hDstDS = dst_ds.c_dataset();
         (*warp_options).nBandCount = 1;
         (*warp_options).panSrcBands =
-            gdal_sys::CPLMalloc(std::mem::size_of::<libc::c_int>() * (*warp_options).nBandCount as usize)
-                as *mut libc::c_int;
+            gdal_sys::CPLMalloc(std::mem::size_of::<c_int>() * (*warp_options).nBandCount as usize) as *mut c_int;
         (*warp_options).panSrcBands.wrapping_add(0).write(1); // warpOptions->panSrcBands[0]   = 1;
         (*warp_options).panDstBands =
-            gdal_sys::CPLMalloc(std::mem::size_of::<libc::c_int>() * (*warp_options).nBandCount as usize)
-                as *mut libc::c_int;
+            gdal_sys::CPLMalloc(std::mem::size_of::<c_int>() * (*warp_options).nBandCount as usize) as *mut c_int;
         (*warp_options).panDstBands.wrapping_add(0).write(1); // warpOptions->panDstBands[0]   = 1;
         (*warp_options).pfnTransformer = Some(gdal_sys::GDALGenImgProjTransform);
         (*warp_options).eResampleAlg = options.resample_algo.to_gdal();
@@ -114,10 +114,10 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
 
         let dst_band = src_ds.rasterband(1)?;
 
-        let band_size = (*warp_options).nBandCount as usize * std::mem::size_of::<libc::c_double>();
+        let band_size = (*warp_options).nBandCount as usize * std::mem::size_of::<c_double>();
         if let Some(src_nodata_value) = dst_band.no_data_value() {
             // will get freed by gdal
-            (*warp_options).padfSrcNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut libc::c_double;
+            (*warp_options).padfSrcNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut c_double;
             // C++ equivalent: padfSrcNoDataReal[0] = src_nodata_value;
             (*warp_options)
                 .padfSrcNoDataReal
@@ -127,7 +127,7 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
 
         if let Some(dst_nodata_value) = dst_ds.rasterband(1)?.no_data_value() {
             // will get freed by gdal
-            (*warp_options).padfDstNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut libc::c_double;
+            (*warp_options).padfDstNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut c_double;
             // C++ equivalent: padfDstNoDataReal[0] = dstNodataValue.value();
             (*warp_options)
                 .padfDstNoDataReal
@@ -224,7 +224,7 @@ pub fn warp_cli(
     warp_options.set_warp_options(key_value_options)?;
 
     unsafe {
-        let mut user_error: libc::c_int = 0;
+        let mut user_error: c_int = 0;
         gdal_sys::GDALWarp(
             std::ptr::null(),
             dst_ds.c_dataset(),

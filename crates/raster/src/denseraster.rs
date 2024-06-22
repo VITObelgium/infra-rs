@@ -1,8 +1,11 @@
 use inf::GeoMetadata;
 use num::NumCast;
 
-use crate::{raster::RasterNum, Raster};
+use crate::{Raster, RasterNum};
 
+/// Raster implementation using a dense data structure.
+/// The nodata values are stored as the [crate::Nodata::nodata_value] for the type T in the same array data structure
+/// and does not allocate additional data for tracking nodata cells.
 pub struct DenseRaster<T: RasterNum<T>> {
     pub(super) metadata: GeoMetadata,
     pub(super) data: Vec<T>,

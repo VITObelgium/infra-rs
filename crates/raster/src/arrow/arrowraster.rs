@@ -7,7 +7,7 @@ use arrow::{
 use inf::GeoMetadata;
 use num::NumCast;
 
-use crate::{raster::RasterNum, Raster};
+use crate::{Raster, RasterNum};
 
 use super::arrowutil::ArrowType;
 

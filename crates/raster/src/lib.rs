@@ -3,6 +3,10 @@ extern crate approx;
 
 pub type Error = inf::Error;
 pub type Result<T = ()> = std::result::Result<T, Error>;
+pub trait RasterNum<T: num::ToPrimitive>:
+    Copy + PartialEq + num::NumCast + num::Zero + num::Bounded + Nodata<T>
+{
+}
 
 pub mod algo;
 mod denseraster;
@@ -10,7 +14,7 @@ mod denserasterio;
 mod denserasterops;
 pub mod io;
 mod nodata;
-pub mod raster;
+mod raster;
 mod rasteriotests;
 mod rastertests;
 #[cfg(test)]
@@ -31,9 +35,8 @@ pub use arrow::arrowraster::ArrowRasterNum;
 #[doc(inline)]
 pub use denseraster::DenseRaster;
 pub use nodata::Nodata;
+pub use raster::cast;
 #[doc(inline)]
 pub use raster::Raster;
 #[doc(inline)]
 pub use raster::RasterIO;
-#[doc(inline)]
-pub use raster::RasterNum;

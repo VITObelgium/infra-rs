@@ -45,7 +45,7 @@ build_release:
   cargo build --release
 
 doc:
-  cargo doc --no-deps --open
+  cargo doc --workspace --exclude='rs-infra' --no-deps --open
 
 test:
   cargo pretty-test --workspace --all-features -- --nocapture
