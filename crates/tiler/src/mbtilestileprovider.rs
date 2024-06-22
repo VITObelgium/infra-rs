@@ -45,7 +45,9 @@ impl MbtilesTileProvider {
             min_zoom: meta_map.remove("minzoom").unwrap_or_default().parse().unwrap_or(0),
             max_zoom: meta_map.remove("maxzoom").unwrap_or_default().parse().unwrap_or(20),
             tile_format: TileFormat::from(meta_map.remove("format").unwrap_or_default().as_str()),
-            name: meta_map.remove("name").unwrap_or(meta_map.remove("basename").unwrap_or_default()),
+            name: meta_map
+                .remove("name")
+                .unwrap_or(meta_map.remove("basename").unwrap_or_default()),
             description: meta_map.remove("description").unwrap_or_default(),
             epsg: crs::epsg::WGS84_WEB_MERCATOR,
             bounds: parse_bounds(meta_map.remove("bounds").unwrap_or_default().as_str())?,
@@ -81,19 +83,29 @@ impl MbtilesTileProvider {
         Ok(TileData::new(meta.tile_format, db.get_tile_data(&tile)?))
     }
 
-    pub fn value_range_for_extent(_meta: &LayerMetadata, _extent: LatLonBounds, _zoom: Option<i32>) -> Result<std::ops::Range<f64>> {
-        Err(Error::Runtime("Extent value range not supported for vector tiles".to_string()))
+    pub fn value_range_for_extent(
+        _meta: &LayerMetadata,
+        _extent: LatLonBounds,
+        _zoom: Option<i32>,
+    ) -> Result<std::ops::Range<f64>> {
+        Err(Error::Runtime(
+            "Extent value range not supported for vector tiles".to_string(),
+        ))
     }
 
     pub fn raster_pixel(_meta: &LayerMetadata, _coord: inf::Coordinate) -> Result<Option<f32>> {
-        Err(Error::Runtime("Raster pixel not supported for vector tiles".to_string()))
+        Err(Error::Runtime(
+            "Raster pixel not supported for vector tiles".to_string(),
+        ))
     }
 }
 
 impl TileProvider for MbtilesTileProvider {
     fn extent_value_range(&self, _layer_id: LayerId, _extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
         if self.meta.tile_format == TileFormat::Protobuf {
-            Err(Error::Runtime("Extent value range not supported for vector tiles".to_string()))
+            Err(Error::Runtime(
+                "Extent value range not supported for vector tiles".to_string(),
+            ))
         } else {
             unimplemented!("Extent value range not implemented for raster tiles");
         }
@@ -128,22 +140,19 @@ impl TileProvider for MbtilesTileProvider {
 }
 
 mod mbtilesdb {
-    use inf::{
-        sqliteconnection::{AccessMode, SqliteStatement},
-        SqliteConnection, Tile,
-    };
+    use inf::Tile;
     use std::{collections::HashMap, path::Path};
 
     use crate::{Error, Result};
 
     pub struct MbtilesDb {
-        conn: SqliteConnection,
-        tile_query: SqliteStatement,
+        conn: sqlite::Connection,
+        tile_query: sqlite::Statement,
     }
 
     impl MbtilesDb {
         pub fn new(db_path: &Path) -> Result<Self> {
-            let conn = SqliteConnection::new(db_path, AccessMode::ReadOnly)?;
+            let conn = sqlite::Connection::new(db_path, sqlite::AccessMode::ReadOnly)?;
             let tile_query = conn.prepare_statement(
                 "SELECT tile_data
                 FROM tiles 
@@ -159,8 +168,14 @@ mod mbtilesdb {
             let meta = stmt
                 .into_iter()
                 .map(|row| {
-                    let key = String::from(row.column_string(0).ok_or(Error::Runtime("Metadata key error".to_string()))?);
-                    let value = String::from(row.column_string(1).ok_or(Error::Runtime("Metadata value error".to_string()))?);
+                    let key = String::from(
+                        row.column_string(0)
+                            .ok_or(Error::Runtime("Metadata key error".to_string()))?,
+                    );
+                    let value = String::from(
+                        row.column_string(1)
+                            .ok_or(Error::Runtime("Metadata value error".to_string()))?,
+                    );
                     Ok((key, value))
                 })
                 .filter_map(Result::ok)
@@ -177,7 +192,9 @@ mod mbtilesdb {
             self.tile_query.bind(3, tile.y())?;
 
             if let Some(row) = self.tile_query.next() {
-                let blob = row.column_blob(0).ok_or(Error::Runtime("Tile blob error".to_string()))?;
+                let blob = row
+                    .column_blob(0)
+                    .ok_or(Error::Runtime("Tile blob error".to_string()))?;
                 return Ok(Vec::from(blob));
             }
 
@@ -193,7 +210,9 @@ mod tests {
     use crate::{layermetadata::LayerId, tileprovider::TileProvider};
 
     fn test_tiles() -> std::path::PathBuf {
-        [env!("CARGO_MANIFEST_DIR"), "test", "data", "gem_limburg.mbtiles"].iter().collect()
+        [env!("CARGO_MANIFEST_DIR"), "test", "data", "gem_limburg.mbtiles"]
+            .iter()
+            .collect()
     }
 
     #[test]
@@ -208,7 +227,12 @@ mod tests {
         assert_eq!(layer.tile_format, TileFormat::Png);
         assert_eq!(
             layer.bounds,
-            [4.793_288_340_591_671, 50.677_197_732_274_95, 5.948_226_084_732_296, 51.378_950_006_005_1]
+            [
+                4.793_288_340_591_671,
+                50.677_197_732_274_95,
+                5.948_226_084_732_296,
+                51.378_950_006_005_1
+            ]
         );
     }
 }

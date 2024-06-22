@@ -25,8 +25,6 @@ pub mod legendscaletype;
 pub mod rect;
 #[cfg(feature = "gdal")]
 pub mod spatialreference;
-#[cfg(feature = "sqlite3")]
-pub mod sqliteconnection;
 pub mod tile;
 pub use cell::Cell;
 #[doc(inline)]

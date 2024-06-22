@@ -4,19 +4,18 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-num            = "0.4"
-phf            = { version = "0.11", features = ["macros"] }
-geo-types      = { version = "0.7", features = ["approx"] }
-thiserror      = "1.0"
-gdal           = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7", optional = true } # using version from git to support gdal >= 3.8
-gdal-sys       = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7", optional = true }
-libc           = { version = "0.2", optional = true }
-approx         = "0.5"
-log            = "0.4"
-serde          = { version = "1.0", features = ["derive"], optional = true }
-libsqlite3-sys = { version = "0.29", optional = true }
-arrow          = { version = "52.0", optional = true }
-pyo3           = { version = "0.21", features = ["extension-module"], optional = true }
+num       = "0.4"
+phf       = { version = "0.11", features = ["macros"] }
+geo-types = { version = "0.7", features = ["approx"] }
+thiserror = "1.0"
+gdal      = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7", optional = true } # using version from git to support gdal >= 3.8
+gdal-sys  = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7", optional = true }
+libc      = { version = "0.2", optional = true }
+approx    = "0.5"
+log       = "0.4"
+serde     = { version = "1.0", features = ["derive"], optional = true }
+arrow     = { version = "52.0", optional = true }
+pyo3      = { version = "0.21", features = ["extension-module"], optional = true }
 
 [dev-dependencies]
 test-log      = "0.2"
@@ -29,7 +28,6 @@ arrow       = ["dep:arrow"]
 gdal        = ["dep:gdal", "dep:gdal-sys", "dep:libc"]
 gdal-static = ["gdal"]
 serde       = ["dep:serde"]
-sqlite3     = ["dep:libc", "dep:libsqlite3-sys"]
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,iconv]", "proj[core]", "tiff[core,lzma,zip]"]

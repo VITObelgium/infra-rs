@@ -4,8 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-inf        = { path = "../inf", features = ["gdal", "sqlite3"] }
+inf        = { path = "../inf", features = ["gdal"] }
 raster     = { path = "../raster" }
+sqlite     = { path = "../sqlite" }
 thiserror  = "1.0"
 gdal       = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7" } # using version from git to support gdal >= 3.8
 log        = "0.4"
