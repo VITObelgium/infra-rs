@@ -15,6 +15,7 @@ mod warpingtileprovider;
 pub use directorytileprovider::DirectoryTileProvider;
 #[cfg(feature = "rest")]
 use layermetadata::layer_metadata_to_tile_json;
+pub use layermetadata::LayerId;
 pub use layermetadata::LayerMetadata;
 pub use layermetadata::TileJson;
 pub use tiledata::TileData;
