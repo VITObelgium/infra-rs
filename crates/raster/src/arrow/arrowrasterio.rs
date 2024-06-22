@@ -1,10 +1,8 @@
 use arrow::datatypes::ArrowPrimitiveType;
 use gdal::raster::GdalType;
+use inf::GeoMetadata;
 
-use crate::{
-    raster::{ArrowRaster, ArrowRasterNum, RasterIO},
-    rasterio, GeoMetadata, Raster, Result,
-};
+use crate::{io, ArrowRaster, ArrowRasterNum, Raster, RasterIO, Result};
 
 impl<T: ArrowRasterNum<T> + GdalType> RasterIO<T, ArrowRaster<T>> for ArrowRaster<T>
 where
@@ -15,9 +13,9 @@ where
     }
 
     fn read_band(path: &std::path::Path, band_index: usize) -> Result<ArrowRaster<T>> {
-        let ds = rasterio::open_raster_read_only(path)?;
+        let ds = io::open_read_only(path)?;
 
-        let metadata = rasterio::metadata_from_dataset_band(&ds, band_index)?;
+        let metadata = io::metadata_from_dataset_band(&ds, band_index)?;
         let rasterband = ds.rasterband(band_index)?;
 
         let mut data: Vec<T> = vec![T::zero(); metadata.rows() * metadata.columns()];
@@ -40,9 +38,9 @@ where
         T::TArrow: ArrowPrimitiveType<Native = T>,
     {
         let ds = gdal::Dataset::open(path)?;
-        let src_meta = rasterio::metadata_from_dataset_band(&ds, band_index)?;
+        let src_meta = io::metadata_from_dataset_band(&ds, band_index)?;
         let mut data: Vec<T> = vec![T::zero(); src_meta.rows() * src_meta.columns()];
-        let dst_meta = rasterio::data_from_dataset_with_extent(&ds, bounds, band_index, &mut data)?;
+        let dst_meta = io::data_from_dataset_with_extent(&ds, bounds, band_index, &mut data)?;
 
         Ok(ArrowRaster::new(dst_meta, data))
     }
@@ -52,6 +50,6 @@ where
         T::TArrow: ArrowPrimitiveType<Native = T>,
     {
         self.flatten_nodata();
-        rasterio::write_raster(self.as_slice(), self.geo_metadata(), path, &[])
+        io::write(self.as_slice(), self.geo_metadata(), path, &[])
     }
 }

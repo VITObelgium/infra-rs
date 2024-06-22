@@ -1,0 +1,31 @@
+[package]
+name    = "raster"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+inf = { path = "../inf" }
+
+num      = "0.4"
+gdal     = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7" } # using version from git to support gdal >= 3.8
+gdal-sys = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7" }
+approx   = "0.5"
+log      = "0.4"
+arrow    = { version = "52.0", optional = true }
+pyo3     = { version = "0.21", features = ["extension-module"], optional = true }
+libc     = "0.2"
+
+[dev-dependencies]
+test-log      = "0.2"
+env_logger    = "0.11"
+generic-tests = "0.1"
+ctor          = "0.2"
+
+[features]
+arrow = ["dep:arrow"]
+
+[package.metadata.vcpkg]
+dependencies = ["gdal[core,iconv]"]
+
+[package.metadata.vcpkg.target]
+x86_64-pc-windows-msvc = { triplet = "x64-windows-static" }

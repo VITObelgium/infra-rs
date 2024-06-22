@@ -4,9 +4,12 @@ use arrow::{
     datatypes::ArrowPrimitiveType,
 };
 
+use inf::GeoMetadata;
 use num::NumCast;
 
-use crate::{raster::arrow::arrowutil::ArrowType, raster::RasterNum, GeoMetadata, Raster};
+use crate::{raster::RasterNum, Raster};
+
+use super::arrowutil::ArrowType;
 
 pub trait ArrowRasterNum<T: num::ToPrimitive>: RasterNum<T> + ArrowType + ArrowNativeTypeOp {}
 
@@ -164,8 +167,10 @@ where
 
 #[cfg(test)]
 mod tests {
+    use inf::RasterSize;
+
     use super::*;
-    use crate::{raster, testutils::*, GeoMetadata, Nodata, RasterSize};
+    use crate::{raster, testutils::*, Nodata};
 
     #[test]
     fn cast_arrow_raster() {

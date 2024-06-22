@@ -1,5 +1,5 @@
-use inf::rasterio::RasterFormat;
-use inf::{rasterio, Coordinate, LatLonBounds, Legend, Tile};
+use inf::{Coordinate, LatLonBounds, Legend, Tile};
+use raster::io::RasterFormat;
 
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;
@@ -32,11 +32,16 @@ impl DirectoryTileProvider {
         let mut layers = HashMap::new();
 
         for file_entry in std::fs::read_dir(input_dir)?.flatten() {
-            if !file_entry.file_type()?.is_file() || rasterio::guess_raster_format_from_filename(file_entry.path().as_path()) == RasterFormat::Unknown {
+            if !file_entry.file_type()?.is_file()
+                || raster::io::guess_raster_format_from_filename(file_entry.path().as_path()) == RasterFormat::Unknown
+            {
                 continue;
             }
 
-            match create_single_file_tile_provider(file_entry.path().as_path(), TileProviderOptions { calculate_stats: true }) {
+            match create_single_file_tile_provider(
+                file_entry.path().as_path(),
+                TileProviderOptions { calculate_stats: true },
+            ) {
                 Ok(provider) => {
                     let meta = provider
                         .layers()
@@ -79,7 +84,9 @@ impl TileProvider for DirectoryTileProvider {
     fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
         let layer = self.layer_data(id)?;
         match layer.source_format {
-            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii => WarpingTileProvider::raster_pixel(layer, coord),
+            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii => {
+                WarpingTileProvider::raster_pixel(layer, coord)
+            }
             LayerSourceType::Mbtiles => MbtilesTileProvider::raster_pixel(layer, coord),
             _ => Err(Error::Runtime("Unsupported source format".to_string())),
         }

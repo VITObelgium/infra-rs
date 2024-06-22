@@ -1,8 +1,7 @@
-use serde::Serialize;
-
 use crate::tileformat::TileFormat;
 
-#[derive(Default, Serialize)]
+#[derive(Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct TileData {
     pub format: TileFormat,
     pub data: Vec<u8>,

@@ -1,10 +1,8 @@
 use gdal::cpl::CslStringList;
+use inf::gdalinterop::*;
 use std::ffi::CString;
 
-use crate::{
-    gdalinterop::{check_gdal_pointer, check_gdal_rc, create_string_list},
-    Error, Result,
-};
+use crate::{Error, Result};
 
 struct TranslateOptionsWrapper {
     options: *mut gdal_sys::GDALTranslateOptions,

@@ -7,19 +7,15 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use crate::{Error, Nodata, RasterNum, Result};
 use approx::relative_eq;
 use gdal::{
     cpl::CslStringList,
     raster::{GdalDataType, GdalType},
     Metadata,
 };
+use inf::{fs, gdalinterop::*, rect, GeoMetadata, RasterSize};
 use num::NumCast;
-
-use crate::{
-    cast, fs,
-    gdalinterop::{check_gdal_pointer, check_gdal_rc},
-    rect, Error, GeoMetadata, Nodata, RasterNum, RasterSize, Result,
-};
 
 const FALSE: i32 = 0;
 
@@ -83,7 +79,7 @@ fn str_vec<T: AsRef<str>>(options: &[T]) -> Vec<&str> {
 }
 
 /// Open a GDAL raster dataset for reading
-pub fn open_raster_read_only(path: &Path) -> Result<gdal::Dataset> {
+pub fn open_read_only(path: &Path) -> Result<gdal::Dataset> {
     let ds_opts = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
         ..Default::default()
@@ -93,7 +89,7 @@ pub fn open_raster_read_only(path: &Path) -> Result<gdal::Dataset> {
 }
 
 /// Open a GDAL raster dataset for reading with driver open options
-pub fn open_raster_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset> {
+pub fn open_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset> {
     let ds_opts = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
         open_options: Some(open_options),
@@ -104,20 +100,17 @@ pub fn open_raster_read_only_with_options(path: &Path, open_options: &[&str]) ->
 
 /// Opens the raster dataset to detect the data type of the raster band
 pub fn detect_raster_data_type(path: &Path, band_index: usize) -> Result<gdal::raster::GdalDataType> {
-    Ok(open_raster_read_only(path)?.rasterband(band_index)?.band_type())
+    Ok(open_read_only(path)?.rasterband(band_index)?.band_type())
 }
 
 /// Opens the raster dataset to read the spatial metadata
 pub fn metadata_from_file(path: &Path) -> Result<GeoMetadata> {
-    metadata_from_dataset_band(&open_raster_read_only(path)?, 1)
+    metadata_from_dataset_band(&open_read_only(path)?, 1)
 }
 
 /// Opens the raster dataset to read the spatial metadata with driver open options
 pub fn metadata_from_file_with_options<T: AsRef<str>>(path: &Path, open_options: &[T]) -> Result<GeoMetadata> {
-    metadata_from_dataset_band(
-        &open_raster_read_only_with_options(path, str_vec(open_options).as_slice())?,
-        1,
-    )
+    metadata_from_dataset_band(&open_read_only_with_options(path, str_vec(open_options).as_slice())?, 1)
 }
 
 /// Read the spatial metadata from an existing dataset
@@ -173,7 +166,7 @@ pub fn data_from_dataset_with_extent<T: GdalType + RasterNum<T>>(
     }
 
     if cut_out.cols * cut_out.rows > 0 {
-        read_raster_region_from_dataset(band_nr, &cut_out, dataset, dst_data, dst_meta.columns() as i32)?;
+        read_region_from_dataset(band_nr, &cut_out, dataset, dst_data, dst_meta.columns() as i32)?;
     }
 
     Ok(dst_meta)
@@ -181,7 +174,7 @@ pub fn data_from_dataset_with_extent<T: GdalType + RasterNum<T>>(
 
 /// Read the full band from the dataset into the provided data buffer.
 /// The data buffer should be pre-allocated and have the correct size.
-pub fn read_raster_from_dataset<T: GdalType + num::NumCast>(
+pub fn read_from_dataset<T: GdalType + num::NumCast>(
     dataset: &gdal::Dataset,
     band_index: usize,
     dst_data: &mut [T],
@@ -202,11 +195,11 @@ pub fn read_raster_from_dataset<T: GdalType + num::NumCast>(
         ..Default::default()
     };
 
-    read_raster_region_from_dataset(band_index, &cut_out, dataset, dst_data, meta.columns() as i32)?;
+    read_region_from_dataset(band_index, &cut_out, dataset, dst_data, meta.columns() as i32)?;
     Ok(meta)
 }
 
-fn read_raster_region_from_dataset<T: GdalType>(
+fn read_region_from_dataset<T: GdalType>(
     band_nr: usize,
     cut: &CutOut,
     ds: &gdal::Dataset,
@@ -251,7 +244,7 @@ fn read_raster_region_from_dataset<T: GdalType>(
 /// Write raster to disk using a different data type then present in the data buffer
 /// Driver options (as documented in the GDAL drivers) can be provided
 /// If no driver options are provided, some sane defaults will be used for GeoTIFF files
-pub fn write_raster_as<TStore, T>(data: &[T], meta: &GeoMetadata, path: &Path, driver_options: &[String]) -> Result<()>
+pub fn write_as<TStore, T>(data: &[T], meta: &GeoMetadata, path: &Path, driver_options: &[String]) -> Result<()>
 where
     T: GdalType + Nodata<T> + num::NumCast + Copy,
     TStore: GdalType + Nodata<TStore> + num::NumCast,
@@ -281,7 +274,7 @@ where
 /// Write the raster to disk.
 /// Driver options (as documented in the GDAL drivers) can be provided.
 /// If no driver options are provided, some sane defaults will be used for GeoTIFF files (compression, tiling).
-pub fn write_raster<T>(data: &[T], meta: &GeoMetadata, path: &Path, driver_options: &[String]) -> Result
+pub fn write<T>(data: &[T], meta: &GeoMetadata, path: &Path, driver_options: &[String]) -> Result
 where
     T: GdalType + Nodata<T> + num::NumCast + Copy,
 {
@@ -299,7 +292,7 @@ where
         _ => {}
     }
 
-    write_raster_as::<T, _>(data, meta, path, driver_options)
+    write_as::<T, _>(data, meta, path, driver_options)
 }
 
 // Write dataset to disk using the Drivers CreateCopy method
@@ -434,7 +427,7 @@ fn create_raster_driver_for_path(path: &Path) -> Result<gdal::Driver> {
 }
 
 fn check_if_metadata_fits<T: num::NumCast + GdalType>(nodata: Option<f64>, source_type: GdalDataType) -> Result {
-    if nodata.is_some_and(|nod| !cast::fits_in_type::<T>(nod)) {
+    if nodata.is_some_and(|nod| !inf::cast::fits_in_type::<T>(nod)) {
         return Err(Error::InvalidArgument(format!(
             "Trying to read a raster with data type {} into a buffer with data type {}, but the rasters nodata value {} does not fit",
             source_type,
@@ -469,11 +462,8 @@ fn add_band_from_data_ptr<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Re
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::crs;
-    use crate::Cell;
-    use crate::CellSize;
-    use crate::Point;
     use approx::assert_relative_eq;
+    use inf::{crs, Cell, CellSize, Point};
 
     #[test]
     fn test_intersect_metadata() {

@@ -5,16 +5,20 @@ edition = "2021"
 
 [dependencies]
 inf        = { path = "../inf", features = ["gdal", "sqlite3"] }
+raster     = { path = "../raster" }
 thiserror  = "1.0"
 gdal       = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7" } # using version from git to support gdal >= 3.8
 log        = "0.4"
 num        = "0.4"
 png        = "0.17"
-serde_json = { version = "1.0" }
-serde      = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1.0", optional = true }
+serde      = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
 approx   = "0.5"
 test-log = "0.2"
 image    = { version = "0.25", default-features = false, features = ["png"] }
 ctor     = "0.2"
+
+[features]
+serde = ["dep:serde", "dep:serde_json"]

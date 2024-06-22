@@ -2,10 +2,10 @@ use crate::tileformat::TileFormat;
 use gdal::raster::GdalDataType;
 use inf::{crs::Epsg, Coordinate, LatLonBounds};
 use num::NumCast;
-use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LayerId(u64);
 
 impl std::fmt::Display for LayerId {
@@ -26,7 +26,8 @@ impl From<u64> for LayerId {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum RasterDataType {
     Byte,
     Int32,
@@ -34,8 +35,9 @@ pub enum RasterDataType {
     Float,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum LayerSourceType {
     GeoPackage,
     Mbtiles,
@@ -44,7 +46,8 @@ pub enum LayerSourceType {
     Unknown,
 }
 
-#[derive(Clone, Serialize)]
+#[derive(Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct LayerMetadata {
     pub id: LayerId,
     pub name: String,
@@ -64,7 +67,7 @@ pub struct LayerMetadata {
     pub supports_dpi_ratio: bool,
     pub source_format: LayerSourceType,
     pub scheme: String,
-    #[serde(skip)]
+    #[cfg_attr(feature = "serde", serde(skip))]
     pub additional_data: HashMap<String, String>,
 }
 
@@ -139,7 +142,7 @@ pub fn to_raster_data_type(type_info: GdalDataType) -> RasterDataType {
     }
 }
 
-#[derive(Serialize)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct TileJson {
     tilejson: String,
     scheme: String,
@@ -152,6 +155,6 @@ pub struct TileJson {
     minvalue: f64,
     maxvalue: f64,
     tiles: Vec<String>,
-    #[serde(flatten)]
+    #[cfg_attr(feature = "serde", serde(flatten))]
     additional_data: HashMap<String, String>,
 }

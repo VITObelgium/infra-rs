@@ -1,9 +1,8 @@
 use core::fmt;
 
-use serde::Serialize;
-
-#[derive(Debug, Clone, Copy, PartialEq, Default, Serialize)]
-#[serde(rename_all = "lowercase")]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
 pub enum TileFormat {
     #[default]
     Unknown,

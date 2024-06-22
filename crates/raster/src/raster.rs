@@ -1,7 +1,8 @@
+use inf::GeoMetadata;
 use num::NumCast;
 use num::{Bounded, ToPrimitive};
 
-use crate::{Error, GeoMetadata, Nodata, Result};
+use crate::{Error, Nodata, Result};
 
 pub trait RasterNum<T: ToPrimitive>: Copy + num::NumCast + num::Zero + PartialEq + Bounded + Nodata<T> {}
 
@@ -139,24 +140,3 @@ where
     assert_eq!(r1.width(), r2.width(), "Raster widths do not match");
     assert_eq!(r1.height(), r2.height(), "Raster heights do not match");
 }
-
-// Submodule configuration
-mod denseraster;
-#[cfg(feature = "gdal")]
-pub mod denserasterio;
-mod denserasterops;
-
-#[cfg(feature = "arrow")]
-pub mod arrow {
-    pub(super) mod arrowraster;
-    #[cfg(feature = "gdal")]
-    mod arrowrasterio;
-    mod arrowrasterops;
-    mod arrowutil;
-}
-
-#[cfg(feature = "arrow")]
-pub use arrow::arrowraster::ArrowRaster;
-#[cfg(feature = "arrow")]
-pub use arrow::arrowraster::ArrowRasterNum;
-pub use denseraster::DenseRaster;

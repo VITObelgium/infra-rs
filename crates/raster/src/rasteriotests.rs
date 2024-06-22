@@ -4,13 +4,14 @@ mod tests {
 
     use core::fmt;
 
+    use inf::{gdalinterop, Point};
     use num::NumCast;
 
-    use crate::{gdalinterop, testutils::*, Point};
+    use crate::testutils::*;
     use crate::{DenseRaster, Raster, RasterIO, RasterNum};
 
     #[cfg(feature = "arrow")]
-    use crate::raster::ArrowRaster;
+    use crate::ArrowRaster;
 
     #[ctor::ctor]
     fn init() {

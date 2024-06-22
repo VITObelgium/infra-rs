@@ -1,4 +1,4 @@
-use inf::rasterio::{guess_raster_format_from_filename, RasterFormat};
+use raster::io::{guess_raster_format_from_filename, RasterFormat};
 
 use crate::Result;
 use std::path::Path;
@@ -13,7 +13,10 @@ pub struct TileProviderOptions {
 }
 
 /// Create a tile provider for hosting a single file
-pub fn create_single_file_tile_provider(path: &Path, opts: TileProviderOptions) -> Result<Box<dyn TileProvider + Send>> {
+pub fn create_single_file_tile_provider(
+    path: &Path,
+    opts: TileProviderOptions,
+) -> Result<Box<dyn TileProvider + Send>> {
     let raster_type = guess_raster_format_from_filename(path);
 
     // if raster_type == RasterType::GeoPackage {
@@ -24,7 +27,10 @@ pub fn create_single_file_tile_provider(path: &Path, opts: TileProviderOptions) 
     } else if WarpingTileProvider::supports_raster_type(raster_type) {
         Ok(Box::new(WarpingTileProvider::new(path, &opts)?))
     } else {
-        Err(Error::Runtime(format!("No raster provider available for: {}", path.to_string_lossy())))
+        Err(Error::Runtime(format!(
+            "No raster provider available for: {}",
+            path.to_string_lossy()
+        )))
     }
 }
 
@@ -37,10 +43,16 @@ pub fn create_tile_provider(path: &Path) -> Result<Box<dyn TileProvider + Send>>
             return Ok(provider);
         }
 
-        return Err(Error::Runtime(format!("Not a supported file: {}", path.to_string_lossy())));
+        return Err(Error::Runtime(format!(
+            "Not a supported file: {}",
+            path.to_string_lossy()
+        )));
     } else if path.is_dir() {
         return Ok(Box::new(DirectoryTileProvider::new(path)?));
     }
 
-    Err(Error::Runtime(format!("Invalid location provided: {}", path.to_string_lossy())))
+    Err(Error::Runtime(format!(
+        "Invalid location provided: {}",
+        path.to_string_lossy()
+    )))
 }

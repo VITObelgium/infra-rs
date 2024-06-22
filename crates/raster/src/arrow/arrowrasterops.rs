@@ -4,7 +4,7 @@ use arrow::{
     datatypes::ArrowPrimitiveType,
 };
 
-use crate::raster::{self, ArrowRaster, ArrowRasterNum};
+use crate::{raster, ArrowRaster, ArrowRasterNum};
 
 impl<T: ArrowRasterNum<T> + std::ops::Add<Output = T>> std::ops::Add for ArrowRaster<T>
 where

@@ -1,7 +1,7 @@
 use approx::{AbsDiffEq, RelativeEq};
-use num::ToPrimitive;
+use num::{NumCast, ToPrimitive};
 
-use crate::{cell::Cell, crs::Epsg, rect, Error, LatLonBounds, Nodata, Point, Rect};
+use crate::{cell::Cell, crs::Epsg, rect, Error, LatLonBounds, Point, Rect};
 
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
@@ -113,7 +113,7 @@ impl GeoMetadata {
         }
     }
 
-    pub fn with_origin<S: Into<String>, T: Nodata<T>>(
+    pub fn with_origin<S: Into<String>, T: NumCast>(
         projection: S,
         size: RasterSize,
         lower_left_coordintate: Point,

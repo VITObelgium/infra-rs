@@ -1,28 +1,7 @@
 #![warn(clippy::unwrap_used)]
 extern crate approx;
 
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-pub enum Error {
-    #[cfg(feature = "gdal")]
-    #[error("GDAL error: {0}")]
-    GdalError(#[from] gdal::errors::GdalError),
-    #[error("Raster dimensions do not match ({}x{}) <-> ({}x{})", .size1.0, .size1.1, .size2.0, .size2.1)]
-    SizeMismatch {
-        size1: (usize, usize),
-        size2: (usize, usize),
-    },
-    #[error("Invalid argument: {0}")]
-    InvalidArgument(String),
-    #[error("Runtime error: {0}")]
-    Runtime(String),
-    #[error("Database error: {0}")]
-    DatabaseError(String),
-    #[error("Invalid string: {0}")]
-    InvalidString(#[from] std::ffi::NulError),
-}
-
+pub use error::Error;
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
 pub mod cast;
@@ -33,6 +12,7 @@ mod coordinate;
 #[cfg(feature = "gdal")]
 mod coordinatetransformer;
 pub mod crs;
+mod error;
 pub mod fs;
 #[cfg(feature = "gdal")]
 pub mod gdalinterop;
@@ -42,22 +22,11 @@ pub mod interpolate;
 pub mod latlonbounds;
 pub mod legend;
 pub mod legendscaletype;
-mod nodata;
-pub mod raster;
-#[cfg(feature = "gdal")]
-pub mod rasteralgo;
-#[cfg(feature = "gdal")]
-pub mod rasterio;
-#[cfg(feature = "gdal")]
-mod rasteriotests;
-mod rastertests;
 pub mod rect;
 #[cfg(feature = "gdal")]
 pub mod spatialreference;
 #[cfg(feature = "sqlite3")]
 pub mod sqliteconnection;
-#[cfg(test)]
-mod testutils;
 pub mod tile;
 pub use cell::Cell;
 #[doc(inline)]
@@ -77,15 +46,6 @@ pub use latlonbounds::LatLonBounds;
 pub use legend::Legend;
 #[doc(inline)]
 pub use legend::MappedLegend;
-pub use nodata::Nodata;
-#[doc(inline)]
-pub use raster::DenseRaster;
-#[doc(inline)]
-pub use raster::Raster;
-#[doc(inline)]
-pub use raster::RasterIO;
-#[doc(inline)]
-pub use raster::RasterNum;
 #[doc(inline)]
 pub use rect::Rect;
 #[cfg(feature = "sqlite3")]

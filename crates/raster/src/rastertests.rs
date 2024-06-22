@@ -1,13 +1,14 @@
 #[cfg(test)]
 #[generic_tests::define]
 mod tests {
+    use inf::{GeoMetadata, RasterSize};
     use num::NumCast;
 
     use crate::testutils::{NOD, *};
-    use crate::{DenseRaster, GeoMetadata, Raster, RasterNum, RasterSize};
+    use crate::{DenseRaster, Raster, RasterNum};
 
     #[cfg(feature = "arrow")]
-    use crate::raster::ArrowRaster;
+    use crate::ArrowRaster;
 
     #[test]
     fn test_add_rasters<T: RasterNum<T>, R>()

@@ -1,6 +1,7 @@
+use inf::GeoMetadata;
 use num::NumCast;
 
-use crate::{raster::RasterNum, GeoMetadata, Raster};
+use crate::{raster::RasterNum, Raster};
 
 pub struct DenseRaster<T: RasterNum<T>> {
     pub(super) metadata: GeoMetadata,

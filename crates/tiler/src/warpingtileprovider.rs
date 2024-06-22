@@ -8,13 +8,12 @@ use gdal::{
 use inf::{
     crs,
     legend::Legend,
-    rasteralgo,
-    rasterio::{self, RasterFormat},
     spatialreference::SpatialReference,
     tile::{self, TILE_SIZE},
-    CellSize, Coordinate, GeoMetadata, LatLonBounds, Nodata, RasterNum, RasterSize, Tile,
+    CellSize, Coordinate, GeoMetadata, LatLonBounds, RasterSize, Tile,
 };
 use num::Num;
+use raster::{io::RasterFormat, RasterNum};
 
 use crate::{
     imageprocessing::raw_tile_to_png,
@@ -58,14 +57,19 @@ fn detect_raster_range(raster_path: &std::path::Path, bbox: LatLonBounds) -> Res
         "EPSG:4326".to_string(),
     ];
 
-    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
+    let timestamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
     let output_path = PathBuf::from(format!(
         "/vsimem/range_{}_{}.mem",
-        raster_path.file_stem().ok_or(Error::Runtime("No filename".to_string()))?.to_string_lossy(),
+        raster_path
+            .file_stem()
+            .ok_or(Error::Runtime("No filename".to_string()))?
+            .to_string_lossy(),
         timestamp
     ));
 
-    if let Ok(ds) = rasteralgo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
+    if let Ok(ds) = raster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
         if let Ok(Some(stats)) = ds.rasterband(1)?.get_statistics(true, true) {
             log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
             return Ok(Range {
@@ -82,7 +86,11 @@ fn detect_raster_range(raster_path: &std::path::Path, bbox: LatLonBounds) -> Res
     )))
 }
 
-fn read_raster_tile<T: RasterNum<T> + GdalType>(raster_path: &std::path::Path, tile: Tile, dpi_ratio: u8) -> Result<Vec<T>> {
+fn read_raster_tile<T: RasterNum<T> + GdalType>(
+    raster_path: &std::path::Path,
+    tile: Tile,
+    dpi_ratio: u8,
+) -> Result<Vec<T>> {
     let bounds = tile.web_mercator_bounds();
     let scaled_size = TILE_SIZE * dpi_ratio as u16;
 
@@ -103,12 +111,16 @@ fn read_raster_tile<T: RasterNum<T> + GdalType>(raster_path: &std::path::Path, t
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
     let mut data = vec![T::zero(); scaled_size as usize * scaled_size as usize];
-    let ds = rasteralgo::translate_file(raster_path, &output_path, &options)?;
-    rasterio::read_raster_from_dataset(&ds, 1, &mut data)?;
+    let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
+    raster::io::read_from_dataset(&ds, 1, &mut data)?;
     Ok(data)
 }
 
-fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(raster_path: &std::path::Path, tile: Tile, dpi_ratio: u8) -> Result<Vec<T>> {
+fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
+    raster_path: &std::path::Path,
+    tile: Tile,
+    dpi_ratio: u8,
+) -> Result<Vec<T>> {
     let bounds = tile.web_mercator_bounds();
     let scaled_size = (TILE_SIZE * dpi_ratio as u16) as usize;
 
@@ -127,19 +139,24 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(raster_path: &std::path::
     let src_ds = gdal::Dataset::open(raster_path)?;
 
     let mut data = vec![T::nodata_value(); scaled_size * scaled_size];
-    let mut dest_ds = rasterio::create_memory_dataset::<T>(&dest_extent, data.as_mut_slice())?;
+    let mut dest_ds = raster::io::create_memory_dataset::<T>(&dest_extent, data.as_mut_slice())?;
 
-    let options = vec!["-ovr".to_string(), "AUTO".to_string(), "-r".to_string(), "near".to_string()];
+    let options = vec![
+        "-ovr".to_string(),
+        "AUTO".to_string(),
+        "-r".to_string(),
+        "near".to_string(),
+    ];
     let key_value_options: Vec<(String, String)> = vec![
         ("INIT_DEST".to_string(), "NO_DATA".to_string()),
         ("SKIP_NOSOURCE".to_string(), "YES".to_string()),
         ("NUM_THREADS".to_string(), "ALL_CPUS".to_string()),
     ];
 
-    rasteralgo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
+    raster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
 
     // Avoid returning tiles containing only nodata values
-    if data.iter().all(|&val| <T as Nodata<T>>::is_nodata(val)) {
+    if data.iter().all(|&val| T::is_nodata(val)) {
         return Ok(vec![]);
     }
 
@@ -158,10 +175,10 @@ impl WarpingTileProvider {
     }
 
     fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<LayerMetadata> {
-        let ds = rasterio::open_raster_read_only(path)?;
+        let ds = raster::io::open_read_only(path)?;
 
         // We assume to be working with a single raster band
-        let meta = rasterio::metadata_from_dataset_band(&ds, 1)?;
+        let meta = raster::io::metadata_from_dataset_band(&ds, 1)?;
         let raster_band = ds.rasterband(1)?;
         let over_view_count = raster_band.overview_count()?;
 
@@ -179,7 +196,11 @@ impl WarpingTileProvider {
                 .to_string_lossy()
                 .to_string(),
             max_zoom: zoom_level,
-            min_zoom: if over_view_count > 0 { zoom_level - over_view_count } else { 6 },
+            min_zoom: if over_view_count > 0 {
+                zoom_level - over_view_count
+            } else {
+                6
+            },
             nodata: meta.nodata(),
             supports_dpi_ratio: true,
             tile_format: TileFormat::Png,
@@ -213,7 +234,12 @@ impl WarpingTileProvider {
         matches!(raster_type, RasterFormat::GeoTiff | RasterFormat::Vrt)
     }
 
-    fn read_tile<T: RasterNum<T> + Num + GdalType>(meta: &LayerMetadata, tile: Tile, dpi_ratio: u8, legend: &Legend) -> Result<TileData> {
+    fn read_tile<T: RasterNum<T> + Num + GdalType>(
+        meta: &LayerMetadata,
+        tile: Tile,
+        dpi_ratio: u8,
+        legend: &Legend,
+    ) -> Result<TileData> {
         let raw_tile_data: Vec<T>;
         let start = std::time::Instant::now();
 
@@ -233,7 +259,11 @@ impl WarpingTileProvider {
             tile.x(),
             tile.y(),
             dpi_ratio,
-            if meta.source_is_web_mercator { "Translate" } else { "Warp" },
+            if meta.source_is_web_mercator {
+                "Translate"
+            } else {
+                "Warp"
+            },
             start.elapsed().as_millis(),
             type_string::<T>(),
             std::thread::current().id(),
@@ -256,9 +286,17 @@ impl WarpingTileProvider {
         )
     }
 
-    pub fn tile_with_legend(layer_meta: &LayerMetadata, tile: Tile, dpi_ratio: u8, legend: &Legend) -> Result<TileData> {
+    pub fn tile_with_legend(
+        layer_meta: &LayerMetadata,
+        tile: Tile,
+        dpi_ratio: u8,
+        legend: &Legend,
+    ) -> Result<TileData> {
         if !(Range { start: 1, end: 10 }).contains(&dpi_ratio) {
-            return Err(crate::Error::InvalidArgument(format!("Invalid dpi ratio {}", dpi_ratio)));
+            return Err(crate::Error::InvalidArgument(format!(
+                "Invalid dpi ratio {}",
+                dpi_ratio
+            )));
         }
 
         if tile.z() < layer_meta.min_zoom || tile.z() > layer_meta.max_zoom {
@@ -277,7 +315,11 @@ impl WarpingTileProvider {
         raster_pixel(layer_meta.path.as_path(), coord, None)
     }
 
-    pub fn value_range_for_extent(layer_meta: &LayerMetadata, extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
+    pub fn value_range_for_extent(
+        layer_meta: &LayerMetadata,
+        extent: LatLonBounds,
+        _zoom: Option<i32>,
+    ) -> Result<Range<f64>> {
         detect_raster_range(&layer_meta.path, extent)
     }
 
@@ -326,15 +368,20 @@ mod tests {
     use approx::assert_relative_eq;
     use inf::Tile;
 
-    use crate::{tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider, Error, TileProvider};
+    use crate::{
+        tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider, Error, TileProvider,
+    };
 
     fn test_raster() -> std::path::PathBuf {
-        [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"].iter().collect()
+        [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"]
+            .iter()
+            .collect()
     }
 
     #[test]
     fn test_layer_metadata() -> Result<(), Error> {
-        let provider = WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions { calculate_stats: false })?;
+        let provider =
+            WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions { calculate_stats: false })?;
         let layer_id = provider.layers().first().unwrap().id;
 
         let meta = provider.layer(layer_id)?;
@@ -349,7 +396,8 @@ mod tests {
 
     #[test]
     fn test_nodata_outside_of_raster() -> Result<(), Error> {
-        let provider = WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions { calculate_stats: false })?;
+        let provider =
+            WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions { calculate_stats: false })?;
         let layer_id = provider.layers().first().unwrap().id;
 
         assert_eq!(provider.meta.nodata::<u8>(), Some(255));
@@ -357,7 +405,9 @@ mod tests {
         let tile_data = provider.get_tile(layer_id, Tile { x: 264, y: 171, z: 9 }, 1)?;
 
         // decode the png data to raw data
-        let raw_data = image::load_from_memory(&tile_data.data).expect("Invalid image").to_rgba8();
+        let raw_data = image::load_from_memory(&tile_data.data)
+            .expect("Invalid image")
+            .to_rgba8();
         // count the number of transparent pixels
         let transparent_count = raw_data.pixels().filter(|p| p[3] == 0).count();
         // The transparent pixel count should be more than 80% of the total pixel count, otherwise there is an issue with the nodata handling

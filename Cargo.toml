@@ -4,16 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["crates/inf", "crates/ruster", "crates/tiler"]
+members = ["crates/inf", "crates/raster", "crates/tiler"]
 
 [dependencies]
 inf    = { path = "./crates/inf" }
-ruster = { path = "./crates/ruster", optional = true }
+raster = { path = "./crates/raster" }
 tiler  = { path = "./crates/tiler", optional = true }
 
 [features]
-tiler       = ["dep:tiler"]
-python      = ["dep:ruster"]
+tiler = ["dep:tiler"]
+#python      = ["dep:ruster"]
 arrow       = ["inf/arrow"]
 sqlite3     = ["inf/sqlite3"]
 gdal        = ["inf/gdal"]

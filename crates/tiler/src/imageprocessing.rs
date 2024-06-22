@@ -1,5 +1,6 @@
 use crate::{tiledata::TileData, tileformat::TileFormat, Error, Result};
-use inf::{Color, Legend, RasterNum};
+use inf::{Color, Legend};
+use raster::RasterNum;
 use std::io::BufWriter;
 
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
@@ -28,13 +29,21 @@ fn encode_png(colors: &[Color], width: u32, height: u32) -> Result<Vec<u8>> {
         writer
             .write_image_data(unsafe { vec_as_u8_slice(colors) })
             .map_err(|e| Error::Runtime(format!("Failed to write Png data: {}", e)))?;
-        writer.finish().map_err(|e| Error::Runtime(format!("Failed to finish Png writer: {}", e)))?;
+        writer
+            .finish()
+            .map_err(|e| Error::Runtime(format!("Failed to finish Png writer: {}", e)))?;
     }
 
     Ok(data)
 }
 
-pub fn raw_tile_to_png<T: RasterNum<T>>(raw_data: &[T], width: usize, height: usize, nodata: Option<T>, legend: &Legend) -> Result<TileData> {
+pub fn raw_tile_to_png<T: RasterNum<T>>(
+    raw_data: &[T],
+    width: usize,
+    height: usize,
+    nodata: Option<T>,
+    legend: &Legend,
+) -> Result<TileData> {
     Ok(TileData::new(
         TileFormat::Png,
         encode_png(&legend.apply(raw_data, nodata), width as u32, height as u32)?,
@@ -48,7 +57,9 @@ mod tests {
     use inf::colormap::{cmap, ColorMap};
 
     fn reference_image() -> std::path::PathBuf {
-        [env!("CARGO_MANIFEST_DIR"), "test", "data", "ref_encoded.png"].iter().collect()
+        [env!("CARGO_MANIFEST_DIR"), "test", "data", "ref_encoded.png"]
+            .iter()
+            .collect()
     }
 
     #[test_log::test]
