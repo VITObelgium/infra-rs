@@ -31,14 +31,16 @@ impl CoordinateTransformer {
     pub fn transform_point(&self, point: Point) -> Result<Point, Error> {
         let mut result_x = [point.x()];
         let mut result_y = [point.y()];
-        self.transformer.transform_coords(&mut result_x, &mut result_y, &mut [])?;
+        self.transformer
+            .transform_coords(&mut result_x, &mut result_y, &mut [])?;
         Ok(Point::new(result_x[0], result_y[0]))
     }
 
     pub fn transform_point_in_place(&self, point: &mut Point) -> Result<(), Error> {
         let mut result_x = [point.x()];
         let mut result_y = [point.y()];
-        self.transformer.transform_coords(&mut result_x, &mut result_y, &mut [])?;
+        self.transformer
+            .transform_coords(&mut result_x, &mut result_y, &mut [])?;
 
         point.set_x(result_x[0]);
         point.set_y(result_y[0]);
@@ -66,21 +68,53 @@ impl CoordinateTransformer {
 
 #[cfg(test)]
 mod tests {
+    use std::path::PathBuf;
+
     use approx::assert_relative_eq;
 
-    use crate::{crs, Coordinate, CoordinateTransformer, Point};
+    use crate::{crs, gdalinterop, Coordinate, CoordinateTransformer, Point};
+
+    #[ctor::ctor]
+    fn init() {
+        let data_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "..", "..", "target", "data"]
+            .iter()
+            .collect();
+        if !data_dir.exists() {
+            panic!("Proj.db data directory not found");
+
+            //     // Infra used a s subcrate, try the parent directory
+            //     if !data_dir.exists() {
+            //         panic!("Proj.db data directory not found");
+            //     }
+        }
+
+        let gdal_config = gdalinterop::Config {
+            debug_logging: false,
+            proj_db_search_location: data_dir,
+        };
+
+        gdal_config.apply().expect("Failed to configure GDAL");
+    }
 
     #[test]
     fn test_projection_point() {
         let trans = CoordinateTransformer::from_epsg(crs::epsg::WGS84, crs::epsg::BELGIAN_LAMBERT72).unwrap();
-        let p = trans.transform_point(Coordinate::latlon(51.04223683846715, 3.5713882022278653).into()).unwrap();
+        let p = trans
+            .transform_point(Coordinate::latlon(51.04223683846715, 3.5713882022278653).into())
+            .unwrap();
         assert_relative_eq!(p, Point::new(94079.44534873398, 192751.6060780408), epsilon = 1e-1);
     }
 
     #[test]
     fn test_projection_coord() {
         let trans = CoordinateTransformer::from_epsg(crs::epsg::WGS84, crs::epsg::BELGIAN_LAMBERT72).unwrap();
-        let p = trans.transform_coordinate(Coordinate::latlon(51.04223683846715, 3.5713882022278653)).unwrap();
-        assert_relative_eq!(Into::<Point>::into(p), Point::new(94079.44534873398, 192751.6060780408), epsilon = 1e-1);
+        let p = trans
+            .transform_coordinate(Coordinate::latlon(51.04223683846715, 3.5713882022278653))
+            .unwrap();
+        assert_relative_eq!(
+            Into::<Point>::into(p),
+            Point::new(94079.44534873398, 192751.6060780408),
+            epsilon = 1e-1
+        );
     }
 }
