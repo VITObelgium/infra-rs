@@ -2,7 +2,7 @@
 extern crate approx;
 
 pub type Error = inf::Error;
-pub type Result<T = ()> = std::result::Result<T, Error>;
+pub type Result<T = ()> = inf::Result<T>;
 pub trait RasterNum<T: num::ToPrimitive>:
     Copy + PartialEq + num::NumCast + num::Zero + num::Bounded + Nodata<T>
 {
@@ -40,3 +40,8 @@ pub use raster::cast;
 pub use raster::Raster;
 #[doc(inline)]
 pub use raster::RasterIO;
+
+#[cfg(all(feature = "python", feature = "arrow"))]
+mod python;
+#[cfg(all(feature = "python", feature = "arrow"))]
+pub use python::pyraster::PyRaster;

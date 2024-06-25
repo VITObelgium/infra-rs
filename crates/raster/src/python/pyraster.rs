@@ -3,8 +3,10 @@ use arrow::{
     datatypes::ArrowPrimitiveType,
     pyarrow::PyArrowType,
 };
-use inf::{raster::ArrowRaster, raster::ArrowRasterNum, GeoMetadata, Raster, RasterSize};
+use inf::{GeoMetadata, RasterSize};
 use pyo3::{pyclass, pymethods};
+
+use crate::{ArrowRaster, ArrowRasterNum, Raster};
 
 #[derive(Clone)]
 #[pyclass(name = "RasterMetadata")]
@@ -80,7 +82,7 @@ impl PyRaster {
         T::TArrow: ArrowPrimitiveType<Native = T>,
     {
         let arr = arrow_raster.arrow_array();
-        let array: &PrimitiveArray<T::TArrow> = arr.as_any().downcast_ref().unwrap();
+        let array: &PrimitiveArray<T::TArrow> = arr.as_any().downcast_ref().expect("Failed to downcast arrow array");
 
         PyRaster {
             meta: arrow_raster.geo_metadata().into(),
@@ -91,11 +93,6 @@ impl PyRaster {
 
 #[pymethods]
 impl PyRaster {
-    // #[new]
-    // fn new(value: i32) -> Self {
-    //     Self(value)
-    // }
-
     #[getter]
     fn meta_data(&self) -> PyRasterMetadata {
         self.meta.clone()
