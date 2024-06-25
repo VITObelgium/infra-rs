@@ -15,6 +15,7 @@ approx    = "0.5"
 log       = "0.4"
 serde     = { version = "1.0", features = ["derive"], optional = true }
 arrow     = { version = "52.0", optional = true }
+pyo3      = { version = "0.21", optional = true }
 
 [dev-dependencies]
 test-log      = "0.2"
@@ -27,6 +28,7 @@ arrow       = ["dep:arrow"]
 gdal        = ["dep:gdal", "dep:gdal-sys", "dep:libc"]
 gdal-static = ["gdal"]
 serde       = ["dep:serde"]
+python      = ["dep:pyo3"]
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,iconv]", "proj[core]", "tiff[core,lzma,zip]"]
