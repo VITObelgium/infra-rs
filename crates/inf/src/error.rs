@@ -7,7 +7,9 @@ pub enum Error {
         size1: (usize, usize),
         size2: (usize, usize),
     },
-    #[error("Invalid argument: {0}")]
+    #[error("Invalid path: {0}")]
+    InvalidPath(std::path::PathBuf),
+    #[error("Runtime error: {0}")]
     InvalidArgument(String),
     #[error("Runtime error: {0}")]
     Runtime(String),

@@ -11,6 +11,7 @@ use crate::{Error, Nodata, RasterNum, Result};
 use approx::relative_eq;
 use gdal::{
     cpl::CslStringList,
+    errors::GdalError::{self},
     raster::{GdalDataType, GdalType},
     Metadata,
 };
@@ -78,24 +79,37 @@ fn str_vec<T: AsRef<str>>(options: &[T]) -> Vec<&str> {
     options.iter().map(|s| s.as_ref()).collect()
 }
 
+fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
+    gdal::Dataset::open_ex(path, options).map_err(|err| match err {
+        // Match on the error to give a cleaner error message when the file does not exist
+        GdalError::NullPointer { method_name: _, msg: _ } => Error::InvalidPath(PathBuf::from(path)),
+        _ => Error::Runtime(format!(
+            "Failed to open raster dataset: {} ({})",
+            path.to_string_lossy(),
+            err
+        )),
+    })
+}
+
 /// Open a GDAL raster dataset for reading
 pub fn open_read_only(path: &Path) -> Result<gdal::Dataset> {
-    let ds_opts = gdal::DatasetOptions {
+    let options = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
         ..Default::default()
     };
 
-    Ok(gdal::Dataset::open_ex(path, ds_opts)?)
+    open_with_options(path, options)
 }
 
 /// Open a GDAL raster dataset for reading with driver open options
 pub fn open_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset> {
-    let ds_opts = gdal::DatasetOptions {
+    let options = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
         open_options: Some(open_options),
         ..Default::default()
     };
-    Ok(gdal::Dataset::open_ex(path, ds_opts)?)
+
+    open_with_options(path, options)
 }
 
 /// Opens the raster dataset to detect the data type of the raster band
@@ -558,5 +572,13 @@ mod tests {
         assert_eq!(meta.projected_epsg().unwrap(), crs::epsg::WGS84_WEB_MERCATOR);
         assert_eq!(meta.geographic_epsg().unwrap(), crs::epsg::WGS84);
         assert_eq!(meta.projection_frienly_name(), "EPSG:3857");
+    }
+
+    #[test]
+    fn open_read_only_invalid_path() {
+        let path = PathBuf::from("/this/does/not/exist.tif");
+        let res = open_read_only(path.as_path());
+        assert!(res.is_err());
+        assert!(matches!(res.err().unwrap(), Error::InvalidPath(p) if p == path));
     }
 }
