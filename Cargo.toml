@@ -4,7 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [workspace]
-members = ["crates/inf", "crates/raster", "crates/sqlite", "crates/tiler"]
+members = [
+    "crates/inf",
+    "crates/raster",
+    "crates/sqlite",
+    "crates/tiler",
+    "crates/vector",
+]
 
 [dependencies]
 inf    = { path = "./crates/inf" }
