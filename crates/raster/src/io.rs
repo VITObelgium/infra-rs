@@ -52,24 +52,22 @@ pub fn guess_raster_format_from_filename(file_path: &Path) -> RasterFormat {
 
     if let Some(ext) = ext {
         match ext.as_ref() {
-            "asc" => RasterFormat::ArcAscii,
-            "tiff" | "tif" => RasterFormat::GeoTiff,
-            "gif" => RasterFormat::Gif,
-            "png" => RasterFormat::Png,
-            "map" => RasterFormat::PcRaster,
-            "nc" => RasterFormat::Netcdf,
-            "mbtiles" => RasterFormat::MBTiles,
-            "gpkg" => RasterFormat::GeoPackage,
-            "grib" => RasterFormat::Grib,
-            _ => {
-                let path = file_path.to_string_lossy();
-                if path.starts_with("postgresql://") || path.starts_with("pg:") {
-                    RasterFormat::Postgis
-                } else {
-                    RasterFormat::Unknown
-                }
-            }
+            "asc" => return RasterFormat::ArcAscii,
+            "tiff" | "tif" => return RasterFormat::GeoTiff,
+            "gif" => return RasterFormat::Gif,
+            "png" => return RasterFormat::Png,
+            "map" => return RasterFormat::PcRaster,
+            "nc" => return RasterFormat::Netcdf,
+            "mbtiles" => return RasterFormat::MBTiles,
+            "gpkg" => return RasterFormat::GeoPackage,
+            "grib" => return RasterFormat::Grib,
+            _ => {}
         }
+    }
+
+    let path = file_path.to_string_lossy();
+    if path.starts_with("postgresql://") || path.starts_with("pg:") {
+        RasterFormat::Postgis
     } else {
         RasterFormat::Unknown
     }
