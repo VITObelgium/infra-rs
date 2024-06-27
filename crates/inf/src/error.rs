@@ -17,6 +17,8 @@ pub enum Error {
     DatabaseError(String),
     #[error("Invalid string: {0}")]
     InvalidString(#[from] std::ffi::NulError),
+    #[error("Invalid : {0}")]
+    InvalidNumber(String),
     #[error("System time error")]
     TimeError(#[from] std::time::SystemTimeError),
     #[error("IO error: {0}")]
@@ -39,5 +41,17 @@ impl std::convert::From<Error> for pyo3::PyErr {
             Error::IOError(_) => pyo3::PyErr::new::<pyo3::exceptions::PyIOError, _>(err.to_string()),
             _ => pyo3::exceptions::PyRuntimeError::new_err(err.to_string()),
         }
+    }
+}
+
+impl From<std::num::ParseIntError> for Error {
+    fn from(err: std::num::ParseIntError) -> Self {
+        Error::InvalidNumber(err.to_string())
+    }
+}
+
+impl From<std::num::ParseFloatError> for Error {
+    fn from(err: std::num::ParseFloatError) -> Self {
+        Error::InvalidNumber(err.to_string())
     }
 }

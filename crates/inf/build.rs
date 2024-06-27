@@ -9,6 +9,8 @@ fn main() {
             println!("cargo:rustc-link-lib=Crypt32");
             println!("cargo:rustc-link-lib=Wldap32");
             println!("cargo:rustc-link-lib=Secur32");
+            println!("cargo:rustc-link-lib=Ole32");
+            println!("cargo:rustc-link-lib=Shell32");
         }
     }
 }

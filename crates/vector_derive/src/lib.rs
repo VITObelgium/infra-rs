@@ -1,0 +1,115 @@
+extern crate proc_macro;
+use inf::Result;
+use proc_macro::TokenStream;
+use punctuated::Punctuated;
+use quote::quote;
+
+use syn::*;
+
+fn named_fields(ast: &syn::DeriveInput) -> &FieldsNamed {
+    match &ast.data {
+        Data::Struct(DataStruct {
+            fields: Fields::Named(it),
+            ..
+        }) => it,
+        _ => panic!("Expected a struct with named fields"),
+    }
+}
+
+/// Check if the field has a `#[vector(column = "name")]` attribute and return the value of the name
+fn check_col_attr(field: &Field) -> Option<String> {
+    for attr in &field.attrs {
+        if attr.path().is_ident("vector") {
+            let nested = attr
+                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+                .unwrap();
+            for meta in nested {
+                if let Meta::NameValue(name_value) = meta {
+                    if name_value.path.is_ident("column") {
+                        match name_value.value {
+                            Expr::Lit(s) => match s.lit {
+                                Lit::Str(ref s) => return Some(s.value()),
+                                _ => {
+                                    panic!("Expected a string literal as column name");
+                                }
+                            },
+                            _ => {
+                                panic!("Expected a string literal as column name");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+fn field_names(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenStream>> {
+    let fields = named_fields(ast);
+    let name_list: Vec<_> = fields
+        .named
+        .iter()
+        .map(|item| {
+            let attr_name = check_col_attr(item);
+            let name = item.ident.as_ref().unwrap().to_string();
+            let name_str = attr_name.unwrap_or(name.to_string());
+            quote! {#name_str}
+        })
+        .collect();
+
+    Ok(name_list)
+}
+
+fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenStream>> {
+    let fields = named_fields(ast);
+
+    let struct_attrs: Vec<_> = fields
+        .named
+        .iter()
+        .map(|item| {
+            let attr_name = check_col_attr(item);
+            let name = item.ident.as_ref().unwrap();
+            let name_str = attr_name.unwrap_or(name.to_string());
+            let tp: &Type = &item.ty;
+            quote! { #name: read_feature_val::<#tp>(&feature, #name_str)?.unwrap()}
+        })
+        .collect();
+
+    Ok(struct_attrs)
+}
+
+fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
+    let name = &ast.ident;
+
+    let field_names = field_names(ast)?;
+    let field_initializers = field_initializers(ast)?;
+
+    assert!(field_initializers.len() == field_names.len());
+
+    let gen = quote! {
+        impl DataRow for #name {
+            fn field_names() -> Vec<&'static str> {
+                vec![#(#field_names),*]
+            }
+
+            fn from_feature(feature: gdal::vector::Feature) -> Result<Self> {
+                Ok(#name {
+                    #(#field_initializers),*
+                })
+            }
+        }
+    };
+
+    Ok(gen.into())
+}
+
+#[proc_macro_derive(DataRow, attributes(vector))]
+pub fn data_row_derive(input: proc_macro::TokenStream) -> TokenStream {
+    // Construct a representation of Rust code as a syntax tree
+    // that we can manipulate
+    let ast = syn::parse(input).unwrap();
+
+    // Build the trait implementation
+    impl_data_row(&ast).expect("Failed to generate DataRow implementation")
+}
