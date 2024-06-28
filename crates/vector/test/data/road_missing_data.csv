@@ -1,0 +1,5 @@
+Pollutant,Sector,value
+NO2,A_PublicTransport,10.0
+PM10,A_PublicTransport,
+,B_RoadTransport,11.0
+PM10,A_PublicTransport,13.0

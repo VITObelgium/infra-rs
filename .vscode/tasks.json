@@ -9,7 +9,7 @@
 			],
 			"args": [
 				"--workspace",
-				"--features=serde,sqlite,gdal-static,arrow"
+				"--features=serde,sqlite,gdal-static,arrow,derive"
 			],
 			"group": {
 				"kind": "build",
@@ -25,7 +25,7 @@
 			],
 			"args": [
 				"test",
-				"--features=serde,sqlite,gdal-static,arrow"
+				"--features=serde,sqlite,gdal-static,arrow,derive"
 			],
 			"group": {
 				"kind": "test",

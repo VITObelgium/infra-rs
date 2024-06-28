@@ -9,7 +9,8 @@ members = [
     "crates/raster",
     "crates/sqlite",
     "crates/tiler",
-    "crates/vector", "crates/vector_derive",
+    "crates/vector",
+    "crates/vector/vector_derive",
 ]
 
 [dependencies]

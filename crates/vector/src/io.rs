@@ -1,12 +1,14 @@
 //! Contains functions to read and write vector data using the GDAL library.
 
-use std::path::{Path, PathBuf};
+use std::{
+    ffi::CString,
+    path::{Path, PathBuf},
+};
 
 use gdal::{
     errors::GdalError,
-    vector::{Feature, FieldValue, LayerAccess},
+    vector::{FieldValue, LayerAccess},
 };
-use vector_derive::DataRow;
 
 use crate::{Error, Result};
 
@@ -23,43 +25,6 @@ pub enum VectorFormat {
     Wfs,
     Vrt,
     Unknown,
-}
-
-trait VectorFieldType<T> {
-    fn read_from_field(field: &FieldValue) -> Result<Option<T>>;
-}
-
-impl VectorFieldType<f64> for f64 {
-    fn read_from_field(field: &FieldValue) -> Result<Option<f64>> {
-        match field {
-            FieldValue::RealValue(val) => Ok(Some(*val)),
-            FieldValue::IntegerValue(val) => Ok(Some(*val as f64)),
-            FieldValue::StringValue(val) => Ok(Some(val.parse()?)),
-            _ => Ok(None),
-        }
-    }
-}
-
-impl VectorFieldType<i32> for i32 {
-    fn read_from_field(field: &FieldValue) -> Result<Option<i32>> {
-        match field {
-            FieldValue::IntegerValue(val) => Ok(Some(*val)),
-            FieldValue::RealValue(val) => Ok(Some(*val as i32)),
-            FieldValue::StringValue(val) => Ok(Some(val.parse()?)),
-            _ => Ok(None),
-        }
-    }
-}
-
-impl VectorFieldType<String> for String {
-    fn read_from_field(field: &FieldValue) -> Result<Option<String>> {
-        match field {
-            FieldValue::StringValue(val) => Ok(Some(val.to_string())),
-            FieldValue::RealValue(val) => Ok(Some(val.to_string())),
-            FieldValue::IntegerValue(val) => Ok(Some(val.to_string())),
-            _ => Ok(None),
-        }
-    }
 }
 
 /// Given a file path, guess the raster type based on the file extension
@@ -101,13 +66,6 @@ fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal:
     })
 }
 
-fn read_feature_val<T: VectorFieldType<T>>(feature: &gdal::vector::Feature, field_name: &str) -> Result<Option<T>> {
-    match feature.field(field_name)? {
-        Some(field) => T::read_from_field(&field),
-        None => Ok(None),
-    }
-}
-
 /// Open a GDAL raster dataset for reading
 pub fn open_read_only(path: &Path) -> Result<gdal::Dataset> {
     let options = gdal::DatasetOptions {
@@ -127,6 +85,19 @@ pub fn open_read_only_with_options(path: &Path, open_options: &[&str]) -> Result
     };
 
     open_with_options(path, options)
+}
+
+pub fn field_index_from_name<S: AsRef<str>>(feature: &gdal::vector::Feature, field_name: S) -> Result<i32> {
+    let field_name_c_str = CString::new(field_name.as_ref())?;
+    let field_index = unsafe { gdal_sys::OGR_F_GetFieldIndex(feature.c_feature(), field_name_c_str.as_ptr()) };
+    if field_index == -1 {
+        return Err(Error::InvalidArgument(format!(
+            "Field not found: {}",
+            field_name.as_ref()
+        )));
+    }
+
+    Ok(field_index)
 }
 
 pub fn read_dataframe(path: &Path, layer: Option<&str>, columns: &[String]) -> Result<Vec<Vec<Option<FieldValue>>>> {
@@ -152,67 +123,9 @@ pub fn read_dataframe(path: &Path, layer: Option<&str>, columns: &[String]) -> R
     Ok(data)
 }
 
-trait DataRow {
-    fn field_names() -> Vec<&'static str>;
-    fn from_feature(feature: gdal::vector::Feature) -> Result<Self>
-    where
-        Self: Sized;
-}
-
-struct VectorDataframeIterator<TRow: DataRow> {
-    ds_layer: gdal::vector::OwnedLayer,
-    phantom: std::marker::PhantomData<TRow>,
-}
-
-impl<TRow: DataRow> VectorDataframeIterator<TRow> {
-    fn new(path: &Path) -> Result<Self> {
-        let ds_layer = open_read_only(path)?.into_layer(0)?;
-
-        // let field_names = TRow::field_names();
-        // let mut field_indices = Vec::with_capacity(field_names.len());
-        // for &field_name in TRow::field_names() {
-        //     let col = unsafe {
-        //         let cdef = ds_layer.defn().c_defn();
-        //         gdal_sys::OGR_FD_GetFieldIndex(cdef, CString::new(field_name)?.as_ptr())
-        //     };
-
-        //     field_indices.push(col);
-        // }
-
-        Ok(Self {
-            ds_layer,
-            phantom: std::marker::PhantomData,
-        })
-    }
-}
-
-impl<TRow: DataRow> Iterator for VectorDataframeIterator<TRow> {
-    type Item = Result<TRow>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.ds_layer.features().next().map(TRow::from_feature)
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use vector_derive::DataRow;
-
     use super::*;
-
-    #[derive(DataRow, Default)]
-    struct PollutantData {
-        #[vector(column = "Pollutant")]
-        pollutant: String,
-        #[vector(column = "Sector")]
-        sector: String,
-        value: f64,
-    }
-
-    #[test]
-    fn test_iterate_features() {
-        assert_eq!(PollutantData::field_names(), vec!["Pollutant", "Sector", "value"]);
-    }
 
     #[test]
     fn test_guess_format_from_filename() {
@@ -247,19 +160,5 @@ mod tests {
         assert_eq!(guess_format_from_filename(Path::new("pg:")), VectorFormat::PostgreSQL);
         assert_eq!(guess_format_from_filename(Path::new("wfs:")), VectorFormat::Wfs);
         assert_eq!(guess_format_from_filename(Path::new("test")), VectorFormat::Unknown);
-    }
-
-    #[test]
-    fn test_row_data_derive() {
-        let path: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "test", "data", "road.csv"]
-            .iter()
-            .collect();
-
-        let mut iter = VectorDataframeIterator::<PollutantData>::new(path.as_path()).unwrap();
-
-        let row = iter.next().unwrap().unwrap();
-        assert_eq!(row.pollutant, "NO2");
-        assert_eq!(row.sector, "A_PublicTransport");
-        assert_eq!(row.value, 10.0);
     }
 }
