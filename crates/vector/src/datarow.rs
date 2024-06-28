@@ -1,6 +1,12 @@
 use std::path::Path;
 
-use crate::{fieldtype::VectorFieldType, io::open_read_only, Result};
+use gdal::vector::FieldValue;
+
+use crate::{
+    fieldtype::VectorFieldType,
+    io::{self, open_read_only},
+    Result,
+};
 
 pub trait DataRow {
     fn field_names() -> Vec<&'static str>;
@@ -45,8 +51,27 @@ impl<TRow: DataRow> Iterator for VectorDataframeIterator<TRow> {
 }
 
 fn read_feature_val<T: VectorFieldType<T>>(feature: &gdal::vector::Feature, field_name: &str) -> Result<Option<T>> {
+    let index = io::field_index_from_name(feature, field_name)?;
+
+    let field_is_valid = unsafe { gdal_sys::OGR_F_IsFieldSetAndNotNull(feature.c_feature(), index) == 1 };
+
+    if !field_is_valid {
+        return Ok(None);
+    }
+
     match feature.field(field_name)? {
-        Some(field) => T::read_from_field(&field),
+        Some(field) => {
+            if !T::empty_value_is_valid() {
+                if let FieldValue::StringValue(val) = &field {
+                    // Don't try to parse empty strings (empty strings are not considered as null values by GDAL for csv files)
+                    if val.is_empty() {
+                        return Ok(None);
+                    }
+                }
+            }
+
+            T::read_from_field(&field)
+        }
         None => Ok(None),
     }
 }
@@ -68,14 +93,14 @@ mod tests {
         value: f64,
     }
 
-    // #[derive(DataRow)]
-    // struct PollutantOptionalData {
-    //     #[vector(column = "Pollutant")]
-    //     pollutant: String,
-    //     #[vector(column = "Sector")]
-    //     sector: String,
-    //     value: Option<f64>,
-    // }
+    #[derive(DataRow)]
+    struct PollutantOptionalData {
+        #[vector(column = "Pollutant")]
+        pollutant: String,
+        #[vector(column = "Sector")]
+        sector: String,
+        value: Option<f64>,
+    }
 
     #[test]
     fn test_iterate_features() {
@@ -121,14 +146,23 @@ mod tests {
         assert!(iter.next().is_none());
     }
 
-    // #[test]
-    // fn test_row_data_derive_missing_optionals() {
-    //     let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
-    //     let mut iter = VectorDataframeIterator::<PollutantOptionalData>::new(&path).unwrap();
-    //     let second = iter.nth(1).unwrap().unwrap();
+    #[test]
+    fn test_row_data_derive_missing_optionals() {
+        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
+        let mut iter = VectorDataframeIterator::<PollutantOptionalData>::new(&path).unwrap();
 
-    //     assert_eq!(row.pollutant, "PM10");
-    //     assert_eq!(row.sector, "B_RoadTransport");
-    //     assert_eq!(row.value, 13.0);
-    // }
+        {
+            let row = iter.next().unwrap().unwrap();
+            assert_eq!(row.pollutant, "NO2");
+            assert_eq!(row.sector, "A_PublicTransport");
+            assert_eq!(row.value, Some(10.0));
+        }
+
+        {
+            let row = iter.next().unwrap().unwrap();
+            assert_eq!(row.pollutant, "PM10");
+            assert_eq!(row.sector, "A_PublicTransport");
+            assert_eq!(row.value, None);
+        }
+    }
 }

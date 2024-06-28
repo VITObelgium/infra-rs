@@ -61,6 +61,25 @@ fn field_names(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenStream>> 
     Ok(name_list)
 }
 
+fn is_option_type(tp: &Type) -> Option<&Type> {
+    let Type::Path(p) = tp else {
+        return None;
+    };
+
+    let final_segment = p.path.segments.iter().last()?;
+
+    if final_segment.ident == "Option" {
+        // This is an Option type, now obtain the inner type
+        if let PathArguments::AngleBracketed(args) = &final_segment.arguments {
+            if let Some(GenericArgument::Type(ty)) = args.args.first() {
+                return Some(ty);
+            }
+        }
+    }
+
+    None
+}
+
 fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenStream>> {
     let fields = named_fields(ast);
 
@@ -72,7 +91,14 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
             let name = item.ident.as_ref().unwrap();
             let name_str = attr_name.unwrap_or(name.to_string());
             let tp: &Type = &item.ty;
-            quote! { #name: read_feature_val::<#tp>(&feature, #name_str)?.unwrap()}
+
+            if let Some(inner_type) = is_option_type(tp) {
+                quote! { #name: read_feature_val::<#inner_type>(&feature, #name_str)? }
+            } else {
+                quote! { #name: read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
+                    inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str)))?
+                }
+            }
         })
         .collect();
 

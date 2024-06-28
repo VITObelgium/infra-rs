@@ -2,6 +2,10 @@ use crate::Result;
 use gdal::vector::FieldValue;
 
 pub trait VectorFieldType<T> {
+    fn empty_value_is_valid() -> bool {
+        false
+    }
+
     fn read_from_field(field: &FieldValue) -> Result<Option<T>>;
 }
 
@@ -39,6 +43,10 @@ impl VectorFieldType<i64> for i64 {
 }
 
 impl VectorFieldType<String> for String {
+    fn empty_value_is_valid() -> bool {
+        true
+    }
+
     fn read_from_field(field: &FieldValue) -> Result<Option<String>> {
         match field {
             FieldValue::StringValue(val) => Ok(Some(val.to_string())),
