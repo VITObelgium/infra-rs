@@ -408,12 +408,10 @@ pub fn metadata_is_aligned(meta1: &GeoMetadata, meta2: &GeoMetadata) -> bool {
         }
     }
 
-    is_aligned(meta1.geo_transform[0], meta2.geo_transform[0], meta1.cell_size_x())
-        && is_aligned(
-            meta1.geo_transform[3],
-            meta2.geo_transform[3],
-            meta1.cell_size_y().abs(),
-        )
+    let x_aligned = is_aligned(meta1.geo_transform[0], meta2.geo_transform[0], meta1.cell_size_x());
+    let y_aligned = is_aligned(meta1.geo_transform[3], meta2.geo_transform[3], meta1.cell_size_y());
+
+    x_aligned && y_aligned
 }
 
 #[cfg(test)]
@@ -660,7 +658,10 @@ mod tests {
                 Option::<f64>::None
             )
         )
-        .is_err_and(|e| e.to_string() == "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"));
+        .is_err_and(|e| {
+            assert_eq!(e.to_string(), "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }");
+            true
+        }));
 
         assert!(metadata_intersects(
             &meta1,
@@ -672,7 +673,10 @@ mod tests {
                 Option::<f64>::None
             )
         )
-        .is_err_and(|e| e.to_string() == "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"));
+        .is_err_and(|e| {
+            assert_eq!(e.to_string(), "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }");
+            true
+        }));
 
         assert!(metadata_intersects(
             &GeoMetadata::with_origin(

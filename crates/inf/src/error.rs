@@ -9,7 +9,7 @@ pub enum Error {
     },
     #[error("Invalid path: {0}")]
     InvalidPath(std::path::PathBuf),
-    #[error("Runtime error: {0}")]
+    #[error("Invalid argument: {0}")]
     InvalidArgument(String),
     #[error("Runtime error: {0}")]
     Runtime(String),
