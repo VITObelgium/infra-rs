@@ -46,8 +46,6 @@ pub use legend::Legend;
 pub use legend::MappedLegend;
 #[doc(inline)]
 pub use rect::Rect;
-#[cfg(feature = "sqlite3")]
-pub use sqliteconnection::SqliteConnection;
 #[doc(inline)]
 pub use tile::Tile;
 

@@ -8,8 +8,8 @@ num       = "0.4"
 phf       = { version = "0.11", features = ["macros"] }
 geo-types = { version = "0.7", features = ["approx"] }
 thiserror = "1.0"
-gdal      = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7", optional = true } # using version from git to support gdal >= 3.8
-gdal-sys  = { git = "https://github.com/georust/gdal.git", rev = "f59ca68ba27b3390ef1b3d28e878d821367dd6a7", optional = true }
+gdal      = { version = "0.17", optional = true }
+gdal-sys  = { version = "0.10", optional = true }
 libc      = { version = "0.2", optional = true }
 approx    = "0.5"
 log       = "0.4"

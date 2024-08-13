@@ -3,12 +3,11 @@
 	"tasks": [
 		{
 			"type": "cargo",
-			"command": "cargo",
+			"command": "build",
 			"problemMatcher": [
 				"$rustc"
 			],
 			"args": [
-				"build",
 				"--workspace",
 				"--features=serde,sqlite,gdal-static,arrow"
 			],

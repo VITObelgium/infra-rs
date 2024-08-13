@@ -13,8 +13,7 @@ tiler  = { path = "./crates/tiler", optional = true }
 sqlite = { path = "./crates/sqlite", optional = true }
 
 [features]
-tiler = ["dep:tiler"]
-#python      = ["dep:ruster"]
+tiler       = ["dep:tiler"]
 arrow       = ["inf/arrow"]
 sqlite      = ["dep:sqlite"]
 gdal        = ["inf/gdal"]
