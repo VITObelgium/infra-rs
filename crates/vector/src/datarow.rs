@@ -21,19 +21,13 @@ pub struct VectorDataframeIterator<TRow: DataRow> {
 }
 
 impl<TRow: DataRow> VectorDataframeIterator<TRow> {
-    pub fn new<P: AsRef<Path>>(path: &P) -> Result<Self> {
-        let ds_layer = open_read_only(path.as_ref())?.into_layer(0)?;
-
-        // let field_names = TRow::field_names();
-        // let mut field_indices = Vec::with_capacity(field_names.len());
-        // for &field_name in TRow::field_names() {
-        //     let col = unsafe {
-        //         let cdef = ds_layer.defn().c_defn();
-        //         gdal_sys::OGR_FD_GetFieldIndex(cdef, CString::new(field_name)?.as_ptr())
-        //     };
-
-        //     field_indices.push(col);
-        // }
+    pub fn new<P: AsRef<Path>>(path: &P, layer: Option<&str>) -> Result<Self> {
+        let ds = open_read_only(path.as_ref())?;
+        let ds_layer = if let Some(layer_name) = layer {
+            ds.into_layer_by_name(layer_name)?
+        } else {
+            ds.into_layer(0)?
+        };
 
         Ok(Self {
             features: ds_layer.owned_features(),
@@ -110,7 +104,7 @@ mod tests {
     #[test]
     fn test_row_data_derive() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road.csv");
-        let mut iter = VectorDataframeIterator::<PollutantData>::new(&path).unwrap();
+        let mut iter = VectorDataframeIterator::<PollutantData>::new(&path, None).unwrap();
 
         {
             let row = iter.next().unwrap().unwrap();
@@ -139,7 +133,7 @@ mod tests {
     #[test]
     fn test_row_data_derive_missing() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
-        let mut iter = VectorDataframeIterator::<PollutantData>::new(&path).unwrap();
+        let mut iter = VectorDataframeIterator::<PollutantData>::new(&path, None).unwrap();
         assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
         assert!(iter.next().unwrap().is_ok());
         assert!(iter.next().unwrap().is_ok());
@@ -149,7 +143,7 @@ mod tests {
     #[test]
     fn test_row_data_derive_missing_optionals() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
-        let mut iter = VectorDataframeIterator::<PollutantOptionalData>::new(&path).unwrap();
+        let mut iter = VectorDataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
 
         {
             let row = iter.next().unwrap().unwrap();

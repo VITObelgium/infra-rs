@@ -10,7 +10,7 @@ use gdal::{
     vector::{FieldValue, LayerAccess},
 };
 
-use crate::{Error, Result};
+use crate::{datarow::VectorDataframeIterator, DataRow, Error, Result};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VectorFormat {
@@ -121,6 +121,10 @@ pub fn read_dataframe(path: &Path, layer: Option<&str>, columns: &[String]) -> R
     }
 
     Ok(data)
+}
+
+pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result<Vec<T>> {
+    VectorDataframeIterator::<T>::new(&path, layer)?.collect()
 }
 
 #[cfg(test)]
