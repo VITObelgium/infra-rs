@@ -10,7 +10,7 @@ use gdal::{
     vector::{FieldValue, LayerAccess},
 };
 
-use crate::{datarow::VectorDataframeIterator, DataRow, Error, Result};
+use crate::{DataRow, Error, Result};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VectorFormat {
@@ -124,11 +124,41 @@ pub fn read_dataframe(path: &Path, layer: Option<&str>, columns: &[String]) -> R
 }
 
 pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result<Vec<T>> {
-    VectorDataframeIterator::<T>::new(&path, layer)?.collect()
+    DataframeIterator::<T>::new(&path, layer)?.collect()
+}
+
+pub struct DataframeIterator<TRow: DataRow> {
+    features: gdal::vector::OwnedFeatureIterator,
+    phantom: std::marker::PhantomData<TRow>,
+}
+
+impl<TRow: DataRow> DataframeIterator<TRow> {
+    pub fn new<P: AsRef<Path>>(path: &P, layer: Option<&str>) -> Result<Self> {
+        let ds = open_read_only(path.as_ref())?;
+        let ds_layer = if let Some(layer_name) = layer {
+            ds.into_layer_by_name(layer_name)?
+        } else {
+            ds.into_layer(0)?
+        };
+
+        Ok(Self {
+            features: ds_layer.owned_features(),
+            phantom: std::marker::PhantomData,
+        })
+    }
+}
+
+impl<TRow: DataRow> Iterator for DataframeIterator<TRow> {
+    type Item = Result<TRow>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.features.into_iter().next().map(TRow::from_feature)
+    }
 }
 
 #[cfg(test)]
 mod tests {
+
     use super::*;
 
     #[test]
@@ -164,5 +194,95 @@ mod tests {
         assert_eq!(guess_format_from_filename(Path::new("pg:")), VectorFormat::PostgreSQL);
         assert_eq!(guess_format_from_filename(Path::new("wfs:")), VectorFormat::Wfs);
         assert_eq!(guess_format_from_filename(Path::new("test")), VectorFormat::Unknown);
+    }
+
+    #[cfg(feature = "derive")]
+    mod derive {
+        use vector_derive::DataRow;
+
+        use super::*;
+        use path_macro::path;
+
+        #[derive(DataRow)]
+        struct PollutantData {
+            #[vector(column = "Pollutant")]
+            pollutant: String,
+            #[vector(column = "Sector")]
+            sector: String,
+            value: f64,
+        }
+
+        #[derive(DataRow)]
+        struct PollutantOptionalData {
+            #[vector(column = "Pollutant")]
+            pollutant: String,
+            #[vector(column = "Sector")]
+            sector: String,
+            value: Option<f64>,
+        }
+
+        #[test]
+        fn test_row_data_derive() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road.csv");
+            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.sector, "A_PublicTransport");
+                assert_eq!(row.value, 10.0);
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.sector, "B_RoadTransport");
+                assert_eq!(row.value, 11.5);
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "PM10");
+                assert_eq!(row.sector, "B_RoadTransport");
+                assert_eq!(row.value, 13.0);
+            }
+
+            assert!(iter.next().is_none());
+        }
+
+        #[test]
+        fn test_row_data_derive_missing() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
+            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
+            assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
+            assert!(iter.next().unwrap().is_ok());
+            assert!(iter.next().unwrap().is_ok());
+            assert!(iter.next().is_none());
+        }
+
+        #[test]
+        fn test_row_data_derive_missing_optionals() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
+            let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.sector, "A_PublicTransport");
+                assert_eq!(row.value, Some(10.0));
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "PM10");
+                assert_eq!(row.sector, "A_PublicTransport");
+                assert_eq!(row.value, None);
+            }
+        }
+
+        #[test]
+        fn test_iterate_features() {
+            assert_eq!(PollutantData::field_names(), vec!["Pollutant", "Sector", "value"]);
+        }
     }
 }
