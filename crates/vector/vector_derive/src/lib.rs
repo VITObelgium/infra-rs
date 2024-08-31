@@ -93,9 +93,9 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
             let tp: &Type = &item.ty;
 
             if let Some(inner_type) = is_option_type(tp) {
-                quote! { #name: read_feature_val::<#inner_type>(&feature, #name_str)? }
+                quote! { #name: crate::datarow::read_feature_val::<#inner_type>(&feature, #name_str)? }
             } else {
-                quote! { #name: read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
+                quote! { #name: crate::datarow::read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
                     inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str)))?
                 }
             }
