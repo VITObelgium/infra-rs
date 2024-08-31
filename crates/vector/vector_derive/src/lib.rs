@@ -16,6 +16,25 @@ fn named_fields(ast: &syn::DeriveInput) -> &FieldsNamed {
     }
 }
 
+/// Check if the field has a `#[vector(skip)]` attribute
+fn needs_to_be_skipped(field: &Field) -> bool {
+    for attr in &field.attrs {
+        if attr.path().is_ident("vector") {
+            let nested = attr
+                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
+                .unwrap();
+            for meta in nested {
+                if let Meta::Path(path) = meta {
+                    if path.is_ident("skip") {
+                        return true;
+                    }
+                }
+            }
+        }
+    }
+    false
+}
+
 /// Check if the field has a `#[vector(column = "name")]` attribute and return the value of the name
 fn check_col_attr(field: &Field) -> Option<String> {
     for attr in &field.attrs {
@@ -50,11 +69,15 @@ fn field_names(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenStream>> 
     let name_list: Vec<_> = fields
         .named
         .iter()
-        .map(|item| {
+        .filter_map(|item| {
+            if needs_to_be_skipped(item) {
+                return None;
+            }
+
             let attr_name = check_col_attr(item);
             let name = item.ident.as_ref().unwrap().to_string();
             let name_str = attr_name.unwrap_or(name.to_string());
-            quote! {#name_str}
+            Some(quote! {#name_str})
         })
         .collect();
 
@@ -92,10 +115,12 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
             let name_str = attr_name.unwrap_or(name.to_string());
             let tp: &Type = &item.ty;
 
-            if let Some(inner_type) = is_option_type(tp) {
-                quote! { #name: crate::datarow::read_feature_val::<#inner_type>(&feature, #name_str)? }
+            if needs_to_be_skipped(item) {
+                quote! { #name: Default::default() }
+            } else if let Some(inner_type) = is_option_type(tp) {
+                quote! { #name: vector::datarow::read_feature_val::<#inner_type>(&feature, #name_str)? }
             } else {
-                quote! { #name: crate::datarow::read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
+                quote! { #name: vector::datarow::read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
                     inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str)))?
                 }
             }
@@ -111,15 +136,13 @@ fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
     let field_names = field_names(ast)?;
     let field_initializers = field_initializers(ast)?;
 
-    assert!(field_initializers.len() == field_names.len());
-
     let gen = quote! {
-        impl DataRow for #name {
+        impl vector::DataRow for #name {
             fn field_names() -> Vec<&'static str> {
                 vec![#(#field_names),*]
             }
 
-            fn from_feature(feature: gdal::vector::Feature) -> Result<Self> {
+            fn from_feature(feature: gdal::vector::Feature) -> vector::Result<Self> {
                 Ok(#name {
                     #(#field_initializers),*
                 })

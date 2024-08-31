@@ -14,10 +14,7 @@ pub trait DataRow {
 }
 
 #[allow(dead_code)] // Used in the derive macro
-pub(crate) fn read_feature_val<T: VectorFieldType<T>>(
-    feature: &gdal::vector::Feature,
-    field_name: &str,
-) -> Result<Option<T>> {
+pub fn read_feature_val<T: VectorFieldType<T>>(feature: &gdal::vector::Feature, field_name: &str) -> Result<Option<T>> {
     let index = io::field_index_from_name(feature, field_name)?;
 
     let field_is_valid = unsafe { gdal_sys::OGR_F_IsFieldSetAndNotNull(feature.c_feature(), index) == 1 };

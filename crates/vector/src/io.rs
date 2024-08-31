@@ -127,6 +127,8 @@ pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result
     DataframeIterator::<T>::new(&path, layer)?.collect()
 }
 
+/// Iterator over the rows of a vector dataset that returns a `DataRow` object
+/// A `DataRow` object is a struct that implements the `DataRow` trait
 pub struct DataframeIterator<TRow: DataRow> {
     features: gdal::vector::OwnedFeatureIterator,
     phantom: std::marker::PhantomData<TRow>,
@@ -198,7 +200,7 @@ mod tests {
 
     #[cfg(feature = "derive")]
     mod derive {
-        use vector_derive::DataRow;
+        use DataRow;
 
         use super::*;
         use path_macro::path;
@@ -210,6 +212,8 @@ mod tests {
             #[vector(column = "Sector")]
             sector: String,
             value: f64,
+            #[vector(skip)]
+            not_in_csv: String,
         }
 
         #[derive(DataRow)]
@@ -231,6 +235,7 @@ mod tests {
                 assert_eq!(row.pollutant, "NO2");
                 assert_eq!(row.sector, "A_PublicTransport");
                 assert_eq!(row.value, 10.0);
+                assert_eq!(row.not_in_csv, String::default());
             }
 
             {
@@ -238,6 +243,7 @@ mod tests {
                 assert_eq!(row.pollutant, "NO2");
                 assert_eq!(row.sector, "B_RoadTransport");
                 assert_eq!(row.value, 11.5);
+                assert_eq!(row.not_in_csv, String::default());
             }
 
             {
@@ -245,6 +251,7 @@ mod tests {
                 assert_eq!(row.pollutant, "PM10");
                 assert_eq!(row.sector, "B_RoadTransport");
                 assert_eq!(row.value, 13.0);
+                assert_eq!(row.not_in_csv, String::default());
             }
 
             assert!(iter.next().is_none());

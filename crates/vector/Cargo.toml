@@ -16,7 +16,8 @@ inf        = { path = "../inf", features = ["gdal-static"] }
 path_macro = "1.0"
 
 [features]
-derive = ["dep:vector_derive"]
+default = ["derive"]
+derive  = ["dep:vector_derive"]
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,iconv]"]
