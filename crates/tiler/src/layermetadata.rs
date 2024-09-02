@@ -144,17 +144,17 @@ pub fn to_raster_data_type(type_info: GdalDataType) -> RasterDataType {
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct TileJson {
-    tilejson: String,
-    scheme: String,
-    r#type: String,
-    name: String,
-    description: String,
-    minzoom: i32,
-    maxzoom: i32,
-    bounds: [f64; 4],
-    minvalue: f64,
-    maxvalue: f64,
-    tiles: Vec<String>,
+    pub tilejson: String,
+    pub scheme: String,
+    pub r#type: String,
+    pub name: String,
+    pub description: String,
+    pub minzoom: i32,
+    pub maxzoom: i32,
+    pub bounds: [f64; 4],
+    pub minvalue: f64,
+    pub maxvalue: f64,
+    pub tiles: Vec<String>,
     #[cfg_attr(feature = "serde", serde(flatten))]
-    additional_data: HashMap<String, String>,
+    pub additional_data: HashMap<String, String>,
 }
