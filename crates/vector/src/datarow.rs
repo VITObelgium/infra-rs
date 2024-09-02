@@ -13,29 +13,37 @@ pub trait DataRow {
         Self: Sized;
 }
 
-#[allow(dead_code)] // Used in the derive macro
-pub fn read_feature_val<T: VectorFieldType<T>>(feature: &gdal::vector::Feature, field_name: &str) -> Result<Option<T>> {
-    let index = io::field_index_from_name(feature, field_name)?;
+#[doc(hidden)]
+pub mod __private {
+    use super::*;
 
-    let field_is_valid = unsafe { gdal_sys::OGR_F_IsFieldSetAndNotNull(feature.c_feature(), index) == 1 };
+    // Helper function for the DataRow derive macro
+    pub fn read_feature_val<T: VectorFieldType<T>>(
+        feature: &gdal::vector::Feature,
+        field_name: &str,
+    ) -> Result<Option<T>> {
+        let index = io::field_index_from_name(feature, field_name)?;
 
-    if !field_is_valid {
-        return Ok(None);
-    }
+        let field_is_valid = unsafe { gdal_sys::OGR_F_IsFieldSetAndNotNull(feature.c_feature(), index) == 1 };
 
-    match feature.field(field_name)? {
-        Some(field) => {
-            if !T::empty_value_is_valid() {
-                if let FieldValue::StringValue(val) = &field {
-                    // Don't try to parse empty strings (empty strings are not considered as null values by GDAL for csv files)
-                    if val.is_empty() {
-                        return Ok(None);
+        if !field_is_valid {
+            return Ok(None);
+        }
+
+        match feature.field(field_name)? {
+            Some(field) => {
+                if !T::empty_value_is_valid() {
+                    if let FieldValue::StringValue(val) = &field {
+                        // Don't try to parse empty strings (empty strings are not considered as null values by GDAL for csv files)
+                        if val.is_empty() {
+                            return Ok(None);
+                        }
                     }
                 }
-            }
 
-            T::read_from_field(&field)
+                T::read_from_field(&field)
+            }
+            None => Ok(None),
         }
-        None => Ok(None),
     }
 }

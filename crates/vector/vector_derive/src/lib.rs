@@ -118,9 +118,9 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
             if needs_to_be_skipped(item) {
                 quote! { #name: Default::default() }
             } else if let Some(inner_type) = is_option_type(tp) {
-                quote! { #name: vector::datarow::read_feature_val::<#inner_type>(&feature, #name_str)? }
+                quote! { #name: ::vector::datarow::__private::read_feature_val::<#inner_type>(&feature, #name_str)? }
             } else {
-                quote! { #name: vector::datarow::read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
+                quote! { #name: ::vector::datarow::__private::read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
                     inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str)))?
                 }
             }
@@ -137,12 +137,12 @@ fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
     let field_initializers = field_initializers(ast)?;
 
     let gen = quote! {
-        impl vector::DataRow for #name {
+        impl ::vector::DataRow for #name {
             fn field_names() -> Vec<&'static str> {
                 vec![#(#field_names),*]
             }
 
-            fn from_feature(feature: gdal::vector::Feature) -> vector::Result<Self> {
+            fn from_feature(feature: gdal::vector::Feature) -> ::vector::Result<Self> {
                 Ok(#name {
                     #(#field_initializers),*
                 })

@@ -10,8 +10,6 @@ pub mod io;
 #[doc(inline)]
 pub use datarow::DataRow;
 
-extern crate vector_derive;
-
 /// The `DataRow` trait is implemented using the `DataRow` derive macro
 /// This allows to read vector data in a more type-safe way directly into a struct
 /// # DataframeIterator iterator example using the `DataRow` derive macro
@@ -34,4 +32,5 @@ extern crate vector_derive;
 /// }
 /// let iter = DataframeIterator::<PollutantData>::new(&PathBuf::from("pol.csv"), None);
 /// ```
+#[doc(inline)]
 pub use vector_derive::DataRow;

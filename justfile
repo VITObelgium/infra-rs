@@ -39,10 +39,10 @@ build_py:
   cd ruster && maturin develop && python ./test.py
 
 build_debug:
-  cargo build
+  cargo build --workspace
 
 build_release:
-  cargo build --release
+  cargo build --workspace --release
 
 doc:
   cargo doc --workspace --exclude='rs-infra' --no-deps --all-features --open
