@@ -36,6 +36,52 @@ pub enum RasterFormat {
     Unknown,
 }
 
+impl RasterFormat {
+    pub fn gdal_driver_name(&self) -> &str {
+        match self {
+            RasterFormat::ArcAscii => "AAIGrid",
+            RasterFormat::GeoTiff => "GTiff",
+            RasterFormat::Gif => "GIF",
+            RasterFormat::Png => "PNG",
+            RasterFormat::PcRaster => "PCRaster",
+            RasterFormat::Netcdf => "NetCDF",
+            RasterFormat::MBTiles => "MBTiles",
+            RasterFormat::GeoPackage => "GPKG",
+            RasterFormat::Grib => "GRIB",
+            RasterFormat::Postgis => "PostgreSQL",
+            RasterFormat::Vrt => "VRT",
+            RasterFormat::Unknown => "Unknown",
+        }
+    }
+
+    /// Given a file path, guess the raster type based on the file extension
+    pub fn guess_from_path(file_path: &Path) -> RasterFormat {
+        let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
+
+        if let Some(ext) = ext {
+            match ext.as_ref() {
+                "asc" => return RasterFormat::ArcAscii,
+                "tiff" | "tif" => return RasterFormat::GeoTiff,
+                "gif" => return RasterFormat::Gif,
+                "png" => return RasterFormat::Png,
+                "map" => return RasterFormat::PcRaster,
+                "nc" => return RasterFormat::Netcdf,
+                "mbtiles" => return RasterFormat::MBTiles,
+                "gpkg" => return RasterFormat::GeoPackage,
+                "grib" => return RasterFormat::Grib,
+                _ => {}
+            }
+        }
+
+        let path = file_path.to_string_lossy();
+        if path.starts_with("postgresql://") || path.starts_with("pg:") {
+            RasterFormat::Postgis
+        } else {
+            RasterFormat::Unknown
+        }
+    }
+}
+
 #[derive(Default)]
 struct CutOut {
     pub src_col_offset: i32,
@@ -46,33 +92,6 @@ struct CutOut {
     pub cols: i32,
 }
 
-/// Given a file path, guess the raster type based on the file extension
-pub fn guess_raster_format_from_filename(file_path: &Path) -> RasterFormat {
-    let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
-
-    if let Some(ext) = ext {
-        match ext.as_ref() {
-            "asc" => return RasterFormat::ArcAscii,
-            "tiff" | "tif" => return RasterFormat::GeoTiff,
-            "gif" => return RasterFormat::Gif,
-            "png" => return RasterFormat::Png,
-            "map" => return RasterFormat::PcRaster,
-            "nc" => return RasterFormat::Netcdf,
-            "mbtiles" => return RasterFormat::MBTiles,
-            "gpkg" => return RasterFormat::GeoPackage,
-            "grib" => return RasterFormat::Grib,
-            _ => {}
-        }
-    }
-
-    let path = file_path.to_string_lossy();
-    if path.starts_with("postgresql://") || path.starts_with("pg:") {
-        RasterFormat::Postgis
-    } else {
-        RasterFormat::Unknown
-    }
-}
-
 fn str_vec<T: AsRef<str>>(options: &[T]) -> Vec<&str> {
     options.iter().map(|s| s.as_ref()).collect()
 }
@@ -80,7 +99,16 @@ fn str_vec<T: AsRef<str>>(options: &[T]) -> Vec<&str> {
 fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
     gdal::Dataset::open_ex(path, options).map_err(|err| match err {
         // Match on the error to give a cleaner error message when the file does not exist
-        GdalError::NullPointer { method_name: _, msg: _ } => Error::InvalidPath(PathBuf::from(path)),
+        GdalError::NullPointer { method_name: _, msg: _ } => {
+            let ras_type = RasterFormat::guess_from_path(path);
+            if ras_type != RasterFormat::Unknown
+                && gdal::DriverManager::get_driver_by_name(ras_type.gdal_driver_name()).is_err()
+            {
+                return Error::Runtime(format!("Gdal driver not supported: {}", ras_type.gdal_driver_name()));
+            }
+
+            Error::InvalidPath(PathBuf::from(path))
+        }
         _ => Error::Runtime(format!(
             "Failed to open raster dataset: {} ({})",
             path.to_string_lossy(),
@@ -400,7 +428,7 @@ fn intersect_metadata(src_meta: &GeoMetadata, dst_meta: &GeoMetadata) -> Result<
 
     // Calulate the cell in the source extent that corresponds to the top left cell of the intersect
     //let intersect_top_left_cell = src_meta.point_to_cell(*intersect.top_left() + Point::new(src_cellsize.x() / 2.0, src_cellsize.y() / 2.0));
-    let intersect_top_left_cell = src_meta.point_to_cell(*intersect.top_left());
+    let intersect_top_left_cell = src_meta.point_to_cell(intersect.top_left());
 
     let result = CutOut {
         src_col_offset: intersect_top_left_cell.col,
@@ -415,27 +443,17 @@ fn intersect_metadata(src_meta: &GeoMetadata, dst_meta: &GeoMetadata) -> Result<
 }
 
 fn create_raster_driver_for_path(path: &Path) -> Result<gdal::Driver> {
-    let driver_name = match guess_raster_format_from_filename(path) {
-        RasterFormat::GeoTiff => "GTiff",
-        RasterFormat::ArcAscii => "AAIGrid",
-        RasterFormat::Gif => "GIF",
-        RasterFormat::Png => "PNG",
-        RasterFormat::PcRaster => "PCRaster",
-        RasterFormat::Netcdf => "NetCDF",
-        RasterFormat::MBTiles => "MBTiles",
-        RasterFormat::GeoPackage => "GPKG",
-        RasterFormat::Grib => "GRIB",
-        RasterFormat::Postgis => "PostgreSQL",
-        RasterFormat::Vrt => "VRT",
-        RasterFormat::Unknown => {
-            return Err(Error::Runtime(format!(
-                "Could not detect raster type from filename: {}",
-                path.to_string_lossy()
-            )))
-        }
-    };
+    let raster_format = RasterFormat::guess_from_path(path);
+    if raster_format == RasterFormat::Unknown {
+        return Err(Error::Runtime(format!(
+            "Could not detect raster type from filename: {}",
+            path.to_string_lossy()
+        )));
+    }
 
-    Ok(gdal::DriverManager::get_driver_by_name(driver_name)?)
+    Ok(gdal::DriverManager::get_driver_by_name(
+        raster_format.gdal_driver_name(),
+    )?)
 }
 
 fn check_if_metadata_fits<T: num::NumCast + GdalType>(nodata: Option<f64>, source_type: GdalDataType) -> Result {
