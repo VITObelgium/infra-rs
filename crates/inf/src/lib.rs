@@ -48,6 +48,9 @@ pub use legend::Legend;
 pub use legend::MappedLegend;
 #[doc(inline)]
 pub use rect::Rect;
+#[cfg(feature = "gdal")]
+#[doc(inline)]
+pub use spatialreference::SpatialReference;
 #[doc(inline)]
 pub use tile::Tile;
 

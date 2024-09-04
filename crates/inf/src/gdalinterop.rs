@@ -3,6 +3,9 @@ use std::path::PathBuf;
 use crate::Result;
 use gdal::{cpl::CslStringList, errors::GdalError};
 
+pub const FALSE: libc::c_int = 0;
+pub const TRUE: libc::c_int = 0;
+
 pub struct Config {
     pub debug_logging: bool,
     pub proj_db_search_location: PathBuf,
@@ -51,7 +54,7 @@ pub fn create_string_list(options: &[String]) -> Result<CslStringList> {
     Ok(result)
 }
 
-pub fn check_gdal_rc(rc: gdal_sys::CPLErr::Type) -> std::result::Result<(), GdalError> {
+pub fn check_rc(rc: gdal_sys::CPLErr::Type) -> std::result::Result<(), GdalError> {
     if rc != 0 {
         let msg = last_error_message();
         let last_err_no = unsafe { gdal_sys::CPLGetLastErrorNo() };
@@ -65,7 +68,7 @@ pub fn check_gdal_rc(rc: gdal_sys::CPLErr::Type) -> std::result::Result<(), Gdal
     }
 }
 
-pub fn check_gdal_pointer(
+pub fn check_pointer(
     ptr: *mut libc::c_void,
     method_name: &'static str,
 ) -> std::result::Result<*mut libc::c_void, GdalError> {

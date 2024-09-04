@@ -351,11 +351,7 @@ impl GeoMetadata {
         }
 
         #[cfg(not(feature = "gdal"))]
-        {
-            Err(Error::Runtime(
-                "GDAL feature needs to be enabled for projection API".to_string(),
-            ))
-        }
+        Err(no_gdal_support_error())
     }
 
     pub fn intersects(&self, other: &GeoMetadata) -> Result<bool> {
@@ -379,6 +375,84 @@ impl GeoMetadata {
 
         Ok(rect::intersects(&self.bounding_box(), &other.bounding_box()))
     }
+
+    pub fn warped_to_epsg(&self, epsg: Epsg) -> Result<Self> {
+        #[cfg(feature = "gdal")]
+        {
+            if self.projection.is_empty() {
+                return Err(Error::InvalidArgument(
+                    "Cannot warp metadata without projection information".to_string(),
+                ));
+            }
+
+            let target_srs = crate::SpatialReference::from_epsg(epsg)?;
+            let target_projection = target_srs.to_wkt()?;
+
+            let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
+            let mut src_ds = mem_driver.create("in-mem", self.rows(), self.columns(), 0)?;
+            src_ds.set_geo_transform(&self.geo_transform)?;
+
+            // Create a transformer that maps from source pixel/line coordinates
+            // to destination georeferenced coordinates (not destination pixel line).
+            // We do that by omitting the destination dataset handle (setting it to nullptr).
+            unsafe {
+                use crate::gdalinterop;
+
+                let target_srs = std::ffi::CString::new(target_projection.clone())?;
+                let transformer_arg = gdalinterop::check_pointer(
+                    gdal_sys::GDALCreateGenImgProjTransformer(
+                        src_ds.c_dataset(),
+                        std::ptr::null_mut(),
+                        std::ptr::null_mut(),
+                        target_srs.as_ptr(),
+                        gdalinterop::FALSE,
+                        0.0,
+                        0,
+                    ),
+                    "Failed to create projection transformer",
+                )?;
+
+                let mut target_transform: gdal::GeoTransform = [0.0; 6];
+                let rows: libc::c_int = 0;
+                let cols: libc::c_int = 0;
+
+                let warp_rc = gdal_sys::GDALSuggestedWarpOutput(
+                    src_ds.c_dataset(),
+                    Some(gdal_sys::GDALGenImgProjTransform),
+                    transformer_arg,
+                    target_transform.as_mut_ptr(),
+                    cols as *mut libc::c_int,
+                    rows as *mut libc::c_int,
+                );
+
+                gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
+
+                match crate::gdalinterop::check_rc(warp_rc) {
+                    Ok(_) => Ok(GeoMetadata::new(
+                        target_projection,
+                        RasterSize {
+                            rows: rows as usize,
+                            cols: cols as usize,
+                        },
+                        target_transform,
+                        self.nodata,
+                    )),
+                    Err(e) => {
+                        gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
+                        Err(e.into())
+                    }
+                }
+            }
+        }
+
+        #[cfg(not(feature = "gdal"))]
+        Err(no_gdal_support_error())
+    }
+}
+
+#[cfg(not(feature = "gdal"))]
+fn no_gdal_support_error() -> Error {
+    Error::Runtime("GDAL feature needs to be enabled for projection API".to_string())
 }
 
 pub fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {

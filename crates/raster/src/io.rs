@@ -261,7 +261,7 @@ fn read_region_from_dataset<T: GdalType>(
     let size = window_size;
 
     unsafe {
-        check_gdal_rc(gdal_sys::GDALRasterIOEx(
+        check_rc(gdal_sys::GDALRasterIOEx(
             raster_band.c_rasterband(),
             gdal_sys::GDALRWFlag::GF_Read,
             window.0,
@@ -363,7 +363,7 @@ fn write_dataset_to_disk(
     let path_str = path.to_string_lossy();
     let path_str = CString::new(path_str.as_ref())?;
 
-    let _ = check_gdal_pointer(
+    let _ = check_pointer(
         unsafe {
             gdal_sys::GDALCreateCopy(
                 driver.c_driver(),
@@ -484,7 +484,7 @@ fn add_band_from_data_ptr<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Re
     let mut str_options = gdal::cpl::CslStringList::new();
     str_options.add_string(data_ptr.as_str())?;
     let rc = unsafe { gdal_sys::GDALAddBand(ds.c_dataset(), T::gdal_ordinal(), str_options.as_ptr()) };
-    check_gdal_rc(rc)?;
+    check_rc(rc)?;
 
     Ok(())
 }

@@ -36,6 +36,10 @@ impl SpatialReference {
         Ok(self.srs.to_wkt()?)
     }
 
+    pub fn to_proj(&self) -> Result<String> {
+        Ok(self.srs.to_proj4()?)
+    }
+
     pub fn is_projected(&self) -> bool {
         self.srs.is_projected()
     }
@@ -81,13 +85,13 @@ pub fn projection_from_epsg(epsg: Epsg) -> Result<String> {
 
 /// Single shot version of `SpatialReference::epsg_geog_cs`
 pub fn projection_to_geo_epsg(projection: &str) -> Option<Epsg> {
-    let spatial_ref = SpatialReference::from_proj(projection).ok()?;
+    let spatial_ref = SpatialReference::from_definition(projection).ok()?;
     spatial_ref.epsg_geog_cs()
 }
 
 /// Single shot version of `SpatialReference::epsg_cs`
 pub fn projection_to_epsg(projection: &str) -> Option<Epsg> {
-    let mut spatial_ref = SpatialReference::from_proj(projection).ok()?;
+    let mut spatial_ref = SpatialReference::from_definition(projection).ok()?;
     spatial_ref.epsg_cs()
 }
 
@@ -107,5 +111,26 @@ impl CoordinateWarpTransformer {
         let mut z = [0.0; 1];
         self.transformer.transform_coords(&mut x, &mut y, &mut z)?;
         Ok((x[0], y[0]).into())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::spatialreference::SpatialReference;
+
+    #[test]
+    fn epsg_import() {
+        let srs = SpatialReference::from_epsg(31370.into()).unwrap();
+        assert!(srs.is_projected());
+        assert!(!srs.is_geographic());
+        assert_eq!(srs.epsg_geog_cs(), Some(4313.into()));
+
+        // let mut srs = SpatialReference::from_definition(&srs.to_proj().unwrap()).unwrap();
+        // assert!(srs.is_projected());
+        // assert_eq!(srs.epsg_cs(), Some(31370.into()));
+
+        let mut srs = SpatialReference::from_definition(&srs.to_wkt().unwrap()).unwrap();
+        assert!(srs.is_projected());
+        assert_eq!(srs.epsg_cs(), Some(31370.into()));
     }
 }

@@ -43,7 +43,7 @@ pub fn translate(ds: &gdal::Dataset, output_path: &std::path::Path, options: &[S
     let opts = TranslateOptionsWrapper::new(options)?;
     let mut user_error: c_int = 0;
     let ds = unsafe {
-        gdal::Dataset::from_c_dataset(check_gdal_pointer(
+        gdal::Dataset::from_c_dataset(check_pointer(
             gdal_sys::GDALTranslate(
                 output_path.to_string_lossy().to_string().as_ptr() as *const i8,
                 ds.c_dataset(),
@@ -156,7 +156,7 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
             return Err(Error::Runtime("Failed to create warp operation".to_string()));
         }
 
-        check_gdal_rc(gdal_sys::GDALChunkAndWarpImage(
+        check_rc(gdal_sys::GDALChunkAndWarpImage(
             operation,
             0,
             0,
