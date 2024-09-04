@@ -32,6 +32,12 @@ pub enum Error {
     #[cfg(all(feature = "python", feature = "arrow"))]
     #[error("PyArrow: {0}")]
     PyArrowError(#[from] arrow::pyarrow::ArrowException),
+    #[cfg(feature = "geozero")]
+    #[error("Geozero error: {0}")]
+    GeoError(#[from] geozero::error::GeozeroError),
+    #[cfg(feature = "geos")]
+    #[error("Geos error: {0}")]
+    GeosError(#[from] geos::Error),
 }
 
 #[cfg(feature = "python")]

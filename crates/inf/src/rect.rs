@@ -56,8 +56,8 @@ where
         self.width() == T::zero() || self.height() == T::zero()
     }
 
-    pub fn top_left(&self) -> &Point<T> {
-        &self.top_left
+    pub fn top_left(&self) -> Point<T> {
+        self.top_left
     }
 
     pub fn top_right(&self) -> Point<T> {
@@ -68,8 +68,8 @@ where
         Point::new(self.top_left.x(), self.bottom_right.y())
     }
 
-    pub fn bottom_right(&self) -> &Point<T> {
-        &self.bottom_right
+    pub fn bottom_right(&self) -> Point<T> {
+        self.bottom_right
     }
 }
 
@@ -108,8 +108,14 @@ where
         return Rect::from_points(Point::new(T::zero(), T::zero()), Point::new(T::zero(), T::zero()));
     }
 
-    let top_left = Point::new(max(lhs.top_left.x(), rhs.top_left.x()), min(lhs.top_left.y(), rhs.top_left.y()));
-    let bottom_right = Point::new(min(lhs.bottom_right.x(), rhs.bottom_right.x()), max(lhs.bottom_right.y(), rhs.bottom_right.y()));
+    let top_left = Point::new(
+        max(lhs.top_left.x(), rhs.top_left.x()),
+        min(lhs.top_left.y(), rhs.top_left.y()),
+    );
+    let bottom_right = Point::new(
+        min(lhs.bottom_right.x(), rhs.bottom_right.x()),
+        max(lhs.bottom_right.y(), rhs.bottom_right.y()),
+    );
 
     Rect::from_ne_sw(top_left, bottom_right)
 }

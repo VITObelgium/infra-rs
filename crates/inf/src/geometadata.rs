@@ -1,7 +1,7 @@
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
 
-use crate::{cell::Cell, crs::Epsg, rect, Error, LatLonBounds, Point, Rect};
+use crate::{cell::Cell, crs::Epsg, rect, Error, LatLonBounds, Point, Rect, Result};
 
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
@@ -220,6 +220,15 @@ impl GeoMetadata {
         self.coordinate_for_cell_fraction(cell.col as f64 + 0.5, cell.row as f64 + 0.5)
     }
 
+    pub fn cell_bounding_box(&self, cell: Cell) -> Rect<f64> {
+        let ll = self.cell_lower_left(cell);
+
+        Rect::from_ne_sw(
+            Point::new(ll.x(), ll.y() - self.cell_size_y()),
+            Point::new(ll.x() + self.cell_size_x(), ll.y()),
+        )
+    }
+
     pub fn center(&self) -> Point<f64> {
         self.coordinate_for_cell_fraction(self.columns() as f64 / 2.0, self.rows() as f64 / 2.0)
     }
@@ -334,7 +343,7 @@ impl GeoMetadata {
         }
     }
 
-    pub fn set_projection_from_epsg(&mut self, #[allow(unused)] epsg: Epsg) -> Result<(), Error> {
+    pub fn set_projection_from_epsg(&mut self, #[allow(unused)] epsg: Epsg) -> Result<()> {
         #[cfg(feature = "gdal")]
         {
             self.projection = projection_from_epsg(epsg)?;
@@ -348,28 +357,28 @@ impl GeoMetadata {
             ))
         }
     }
-}
 
-pub fn metadata_intersects(meta1: &GeoMetadata, meta2: &GeoMetadata) -> Result<bool, Error> {
-    if meta1.projection != meta2.projection {
-        return Err(Error::InvalidArgument(
-            "Cannot intersect metadata with different projections".to_string(),
-        ));
+    pub fn intersects(&self, other: &GeoMetadata) -> Result<bool> {
+        if self.projection != other.projection {
+            return Err(Error::InvalidArgument(
+                "Cannot intersect metadata with different projections".to_string(),
+            ));
+        }
+
+        if self.cell_size() != other.cell_size() && !metadata_is_aligned(self, other) {
+            return Err(Error::InvalidArgument(format!(
+                "Extents cellsize does not match {:?} <-> {:?}",
+                self.cell_size(),
+                other.cell_size()
+            )));
+        }
+
+        if self.cell_size().x == 0.0 {
+            panic!("Extents cellsize is zero");
+        }
+
+        Ok(rect::intersects(&self.bounding_box(), &other.bounding_box()))
     }
-
-    if meta1.cell_size() != meta2.cell_size() && !metadata_is_aligned(meta1, meta2) {
-        return Err(Error::InvalidArgument(format!(
-            "Extents cellsize does not match {:?} <-> {:?}",
-            meta1.cell_size(),
-            meta2.cell_size()
-        )));
-    }
-
-    if meta1.cell_size().x == 0.0 {
-        panic!("Extents cellsize is zero");
-    }
-
-    Ok(rect::intersects(&meta1.bounding_box(), &meta2.bounding_box()))
 }
 
 pub fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
@@ -434,8 +443,8 @@ mod tests {
         );
 
         let bbox = meta.bounding_box();
-        assert_eq!(*bbox.top_left(), Point::new(0.0, 50.0));
-        assert_eq!(*bbox.bottom_right(), Point::new(25.0, 0.0));
+        assert_eq!(bbox.top_left(), Point::new(0.0, 50.0));
+        assert_eq!(bbox.bottom_right(), Point::new(25.0, 0.0));
     }
 
     #[test]
@@ -449,8 +458,8 @@ mod tests {
         );
 
         let bbox = meta.bounding_box();
-        assert_eq!(*bbox.top_left(), Point::new(9.0, -2.0));
-        assert_eq!(*bbox.bottom_right(), Point::new(17.0, -10.0));
+        assert_eq!(bbox.top_left(), Point::new(9.0, -2.0));
+        assert_eq!(bbox.bottom_right(), Point::new(17.0, -10.0));
     }
 
     #[test]
@@ -468,8 +477,8 @@ mod tests {
         assert_eq!(meta.top_left(), Point::new(-30.0, 30.0));
         assert_eq!(meta.bottom_right(), Point::new(60.0, -12.0));
 
-        assert_eq!(*bbox.top_left(), meta.top_left());
-        assert_eq!(*bbox.bottom_right(), meta.bottom_right());
+        assert_eq!(bbox.top_left(), meta.top_left());
+        assert_eq!(bbox.bottom_right(), meta.bottom_right());
     }
 
     #[test]
@@ -561,15 +570,15 @@ mod tests {
 
         let meta = meta_with_origin(Point::new(0.0, 0.0));
 
-        assert!(metadata_intersects(&meta, &meta_with_origin(Point::new(10.0, 10.0))).unwrap());
-        assert!(metadata_intersects(&meta, &meta_with_origin(Point::new(-10.0, -10.0))).unwrap());
-        assert!(metadata_intersects(&meta, &meta_with_origin(Point::new(-10.0, 10.0))).unwrap());
-        assert!(metadata_intersects(&meta, &meta_with_origin(Point::new(10.0, -10.0))).unwrap());
+        assert!(meta.intersects(&meta_with_origin(Point::new(10.0, 10.0))).unwrap());
+        assert!(meta.intersects(&meta_with_origin(Point::new(-10.0, -10.0))).unwrap());
+        assert!(meta.intersects(&meta_with_origin(Point::new(-10.0, 10.0))).unwrap());
+        assert!(meta.intersects(&meta_with_origin(Point::new(10.0, -10.0))).unwrap());
 
-        assert!(!metadata_intersects(&meta, &meta_with_origin(Point::new(15.0, 15.0))).unwrap());
-        assert!(!metadata_intersects(&meta, &meta_with_origin(Point::new(0.0, 15.0))).unwrap());
-        assert!(!metadata_intersects(&meta, &meta_with_origin(Point::new(15.0, 0.0))).unwrap());
-        assert!(!metadata_intersects(&meta, &meta_with_origin(Point::new(0.0, -15.0))).unwrap());
+        assert!(!meta.intersects(&meta_with_origin(Point::new(15.0, 15.0))).unwrap());
+        assert!(!meta.intersects(&meta_with_origin(Point::new(0.0, 15.0))).unwrap());
+        assert!(!meta.intersects(&meta_with_origin(Point::new(15.0, 0.0))).unwrap());
+        assert!(!meta.intersects(&meta_with_origin(Point::new(0.0, -15.0))).unwrap());
     }
 
     #[test]
@@ -590,7 +599,7 @@ mod tests {
             Option::<f64>::None,
         );
 
-        assert!(!metadata_intersects(&meta1, &meta2).unwrap());
+        assert!(!meta1.intersects(&meta2).unwrap());
     }
 
     #[test]
@@ -611,7 +620,7 @@ mod tests {
             Option::<f64>::None,
         );
 
-        assert!(!metadata_intersects(&meta1, &meta2).unwrap());
+        assert!(!meta1.intersects(&meta2).unwrap());
     }
 
     #[test]
@@ -624,33 +633,27 @@ mod tests {
             Option::<f64>::None,
         );
 
-        assert!(metadata_intersects(
-            &meta1,
-            &GeoMetadata::with_origin(
+        assert!(meta1
+            .intersects(&GeoMetadata::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(10.0, 10.0),
                 CellSize::square(5.0),
                 Option::<f64>::None,
-            )
-        )
-        .unwrap());
+            ))
+            .unwrap());
 
-        assert!(!metadata_intersects(
-            &meta1,
-            &GeoMetadata::with_origin(
+        assert!(!&meta1
+            .intersects(&GeoMetadata::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(30.0, 30.0),
                 CellSize::square(5.0),
                 Option::<f64>::None
-            )
-        )
-        .unwrap());
+            ))
+            .unwrap());
 
-        assert!(metadata_intersects(
-            &meta1,
-            &GeoMetadata::with_origin(
+        assert!(meta1.intersects(&GeoMetadata::with_origin(
                 String::new(),
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(11.0, 10.0),
@@ -663,9 +666,7 @@ mod tests {
             true
         }));
 
-        assert!(metadata_intersects(
-            &meta1,
-            &GeoMetadata::with_origin(
+        assert!(meta1.intersects(&GeoMetadata::with_origin(
                 String::new(),
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(10.0, 11.0),
@@ -678,28 +679,22 @@ mod tests {
             true
         }));
 
-        assert!(metadata_intersects(
-            &GeoMetadata::with_origin(
+        assert!(GeoMetadata::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(11.0, 10.0),
                 CellSize::square(5.0),
                 Option::<f64>::None
-            ),
-            &meta1,
-        )
+            ).intersects(&meta1)
         .is_err_and(|e| e.to_string() == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
 
-        assert!(metadata_intersects(
-            &GeoMetadata::with_origin(
+        assert!(GeoMetadata::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(10.0, 11.0),
                 CellSize::square(5.0),
                 Option::<f64>::None
-            ),
-            &meta1,
-        )
+            ).intersects(&meta1)
         .is_err_and(|e| e.to_string() == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
     }
 

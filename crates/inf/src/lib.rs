@@ -12,6 +12,7 @@ mod coordinate;
 #[cfg(feature = "gdal")]
 mod coordinatetransformer;
 pub mod crs;
+pub mod duration;
 mod error;
 pub mod fs;
 #[cfg(feature = "gdal")]

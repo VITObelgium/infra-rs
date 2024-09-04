@@ -1,31 +1,38 @@
+//use gdal::spatial_ref::AxisMappingStrategy;
+
 use gdal::spatial_ref::AxisMappingStrategy;
 
-use crate::{crs::Epsg, Error};
+use crate::{crs::Epsg, Point, Result};
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct SpatialReference {
     srs: gdal::spatial_ref::SpatialRef,
 }
 
 impl SpatialReference {
-    pub fn from_proj(projection: &str) -> Result<Self, Error> {
+    pub fn new(srs: gdal::spatial_ref::SpatialRef) -> Self {
+        SpatialReference { srs }
+    }
+
+    pub fn from_proj(projection: &str) -> Result<Self> {
         let mut srs = gdal::spatial_ref::SpatialRef::from_proj4(projection)?;
         srs.set_axis_mapping_strategy(AxisMappingStrategy::TraditionalGisOrder);
         Ok(SpatialReference { srs })
     }
 
-    pub fn from_epsg(epsg: Epsg) -> Result<Self, Error> {
+    pub fn from_epsg(epsg: Epsg) -> Result<Self> {
         let mut srs = gdal::spatial_ref::SpatialRef::from_epsg(epsg.into())?;
         srs.set_axis_mapping_strategy(AxisMappingStrategy::TraditionalGisOrder);
         Ok(SpatialReference { srs })
     }
 
-    pub fn from_definition(def: &str) -> Result<Self, Error> {
+    pub fn from_definition(def: &str) -> Result<Self> {
         let mut srs = gdal::spatial_ref::SpatialRef::from_definition(def)?;
         srs.set_axis_mapping_strategy(AxisMappingStrategy::TraditionalGisOrder);
         Ok(SpatialReference { srs })
     }
 
-    pub fn to_wkt(&self) -> Result<String, Error> {
+    pub fn to_wkt(&self) -> Result<String> {
         Ok(self.srs.to_wkt()?)
     }
 
@@ -63,7 +70,7 @@ impl SpatialReference {
 }
 
 /// Single shot version of `SpatialReference::to_wkt`
-pub fn projection_from_epsg(epsg: Epsg) -> Result<String, Error> {
+pub fn projection_from_epsg(epsg: Epsg) -> Result<String> {
     if let Err(e) = SpatialReference::from_epsg(epsg) {
         log::error!("Error creating spatial reference: {}", e);
     }
@@ -82,4 +89,23 @@ pub fn projection_to_geo_epsg(projection: &str) -> Option<Epsg> {
 pub fn projection_to_epsg(projection: &str) -> Option<Epsg> {
     let mut spatial_ref = SpatialReference::from_proj(projection).ok()?;
     spatial_ref.epsg_cs()
+}
+
+pub struct CoordinateWarpTransformer {
+    transformer: gdal::spatial_ref::CoordTransform,
+}
+
+impl CoordinateWarpTransformer {
+    pub fn new(src: &SpatialReference, dst: &SpatialReference) -> Result<Self> {
+        let transformer = gdal::spatial_ref::CoordTransform::new(&src.srs, &dst.srs)?;
+        Ok(CoordinateWarpTransformer { transformer })
+    }
+
+    pub fn transform_point(&self, point: Point) -> Result<Point> {
+        let mut x = [point.x(); 1];
+        let mut y = [point.y(); 1];
+        let mut z = [0.0; 1];
+        self.transformer.transform_coords(&mut x, &mut y, &mut z)?;
+        Ok((x[0], y[0]).into())
+    }
 }
