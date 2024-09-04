@@ -27,6 +27,7 @@ pub mod rect;
 pub mod spatialreference;
 pub mod tile;
 pub use cell::Cell;
+pub use cell::CellIterator;
 #[doc(inline)]
 pub use color::Color;
 pub use coordinate::Coordinate;

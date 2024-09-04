@@ -1,12 +1,15 @@
+type Row = i32;
+type Col = i32;
+
 /// Represents a point in the raster using row, col coordinates
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Cell {
-    pub row: i32,
-    pub col: i32,
+    pub row: Row,
+    pub col: Col,
 }
 
 impl Cell {
-    pub const fn new(row: i32, col: i32) -> Self {
+    pub const fn new(row: Row, col: Col) -> Self {
         Cell { row, col }
     }
 
@@ -59,5 +62,55 @@ impl Cell {
         let y = other.row - self.row;
 
         ((x * x + y * y) as f64).sqrt()
+    }
+}
+
+impl PartialOrd for Cell {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for Cell {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.row.cmp(&other.row).then(self.col.cmp(&other.col))
+    }
+}
+
+pub struct CellIterator {
+    rows: i32,
+    cols: i32,
+    current: Cell,
+}
+
+impl CellIterator {
+    pub fn for_rows_cols(cols: i32, rows: i32) -> Self {
+        CellIterator {
+            cols,
+            rows,
+            current: Cell::new(0, 0),
+        }
+    }
+
+    pub fn for_raster_with_size(size: crate::RasterSize) -> Self {
+        CellIterator {
+            cols: size.cols as i32,
+            rows: size.rows as i32,
+            current: Cell::new(0, 0),
+        }
+    }
+}
+
+impl Iterator for CellIterator {
+    type Item = Cell;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current.row >= self.rows {
+            return None;
+        }
+
+        let current = self.current;
+        self.current.increment(self.cols);
+        Some(current)
     }
 }
