@@ -4,12 +4,22 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-inf           = { path = "../inf", features = ["gdal"] }
+inf           = { path = "../inf", features = ["gdal", "geos", "geozero"] }
 vector_derive = { path = "vector_derive", optional = true }
-
-gdal     = "0.17"
-gdal-sys = "0.10"
-approx   = "0.5"
+geos          = { version = "9.0", features = ["geo", "v3_11_0"] }
+geozero       = { version = "0.13", features = ["with-gdal", "with-geos"] }
+# use a more recent version from git avoid multiple versions of geos
+# geozero = { git = "https://github.com/georust/geozero.git", rev = "73902ddb244353baea3e38afd4bcaec472b167c1", features = [
+#     "with-gdal",
+#     "with-geos",
+# ] }
+geo-types = { version = "0.7" }
+gdal      = { version = "0.17" }
+gdal-sys  = "0.10"
+approx    = "0.5"
+rayon     = "1.10"
+log       = "0.4"
+thiserror = "1.0"
 
 [dev-dependencies]
 inf        = { path = "../inf", features = ["gdal-static"] }
@@ -20,7 +30,7 @@ default = ["derive"]
 derive  = ["dep:vector_derive"]
 
 [package.metadata.vcpkg]
-dependencies = ["gdal[core,iconv]"]
+dependencies = ["gdal[core,iconv,geos,sqlite3,libspatialite,tools]"]
 
 [package.metadata.vcpkg.target]
 x86_64-pc-windows-msvc = { triplet = "x64-windows-static" }

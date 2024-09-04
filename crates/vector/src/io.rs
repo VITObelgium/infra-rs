@@ -24,40 +24,72 @@ pub enum VectorFormat {
     PostgreSQL,
     Wfs,
     Vrt,
+    Parquet,
+    Arrow,
     Unknown,
 }
 
-/// Given a file path, guess the raster type based on the file extension
-pub fn guess_format_from_filename(file_path: &Path) -> VectorFormat {
-    let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
-
-    if let Some(ext) = ext {
-        match ext.as_ref() {
-            "csv" => return VectorFormat::Csv,
-            "tab" => return VectorFormat::Tab,
-            "shp" | "dbf" => return VectorFormat::ShapeFile,
-            "xlsx" => return VectorFormat::Xlsx,
-            "json" | "geojson" => return VectorFormat::GeoJson,
-            "gpkg" => return VectorFormat::GeoPackage,
-            "vrt" => return VectorFormat::Vrt,
-            _ => {}
+impl VectorFormat {
+    pub fn gdal_driver_name(&self) -> &str {
+        match self {
+            VectorFormat::Memory => "Memory",
+            VectorFormat::Csv | VectorFormat::Tab => "CSV",
+            VectorFormat::ShapeFile => "ESRI Shapefile",
+            VectorFormat::Xlsx => "XLSX",
+            VectorFormat::GeoJson => "GeoJSON",
+            VectorFormat::GeoPackage => "GPKG",
+            VectorFormat::PostgreSQL => "PostgreSQL",
+            VectorFormat::Wfs => "WFS",
+            VectorFormat::Vrt => "VRT",
+            VectorFormat::Parquet => "Parquet",
+            VectorFormat::Arrow => "Arrow",
+            VectorFormat::Unknown => "Unknown",
         }
     }
 
-    let path = file_path.to_string_lossy();
-    if path.starts_with("postgresql://") || path.starts_with("pg:") {
-        VectorFormat::PostgreSQL
-    } else if path.starts_with("wfs:") {
-        VectorFormat::Wfs
-    } else {
-        VectorFormat::Unknown
+    /// Given a file path, guess the raster type based on the file extension
+    pub fn guess_from_path(file_path: &Path) -> VectorFormat {
+        let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
+
+        if let Some(ext) = ext {
+            match ext.as_ref() {
+                "csv" => return VectorFormat::Csv,
+                "tab" => return VectorFormat::Tab,
+                "shp" | "dbf" => return VectorFormat::ShapeFile,
+                "xlsx" => return VectorFormat::Xlsx,
+                "json" | "geojson" => return VectorFormat::GeoJson,
+                "gpkg" => return VectorFormat::GeoPackage,
+                "vrt" => return VectorFormat::Vrt,
+                "parquet" => return VectorFormat::Parquet,
+                "arrow" | "arrows" => return VectorFormat::Arrow,
+                _ => {}
+            }
+        }
+
+        let path = file_path.to_string_lossy();
+        if path.starts_with("postgresql://") || path.starts_with("pg:") {
+            VectorFormat::PostgreSQL
+        } else if path.starts_with("wfs:") {
+            VectorFormat::Wfs
+        } else {
+            VectorFormat::Unknown
+        }
     }
 }
 
 fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
     gdal::Dataset::open_ex(path, options).map_err(|err| match err {
         // Match on the error to give a cleaner error message when the file does not exist
-        GdalError::NullPointer { method_name: _, msg: _ } => Error::InvalidPath(PathBuf::from(path)),
+        GdalError::NullPointer { method_name: _, msg: _ } => {
+            let vec_type = VectorFormat::guess_from_path(path);
+            if vec_type != VectorFormat::Unknown
+                && gdal::DriverManager::get_driver_by_name(vec_type.gdal_driver_name()).is_err()
+            {
+                return Error::Runtime(format!("Gdal driver not supported: {}", vec_type.gdal_driver_name()));
+            }
+
+            Error::InvalidPath(PathBuf::from(path))
+        }
         _ => Error::Runtime(format!(
             "Failed to open raster dataset: {} ({})",
             path.to_string_lossy(),
@@ -67,13 +99,13 @@ fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal:
 }
 
 /// Open a GDAL raster dataset for reading
-pub fn open_read_only(path: &Path) -> Result<gdal::Dataset> {
+pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<gdal::Dataset> {
     let options = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_VECTOR,
         ..Default::default()
     };
 
-    open_with_options(path, options)
+    open_with_options(path.as_ref(), options)
 }
 
 /// Open a GDAL raster dataset for reading with driver open options
@@ -164,37 +196,43 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_guess_format_from_filename() {
-        assert_eq!(guess_format_from_filename(Path::new("test.csv")), VectorFormat::Csv);
-        assert_eq!(guess_format_from_filename(Path::new("test.tab")), VectorFormat::Tab);
+    fn vectorformat_guess_from_path() {
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.csv")), VectorFormat::Csv);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.tab")), VectorFormat::Tab);
         assert_eq!(
-            guess_format_from_filename(Path::new("test.shp")),
+            VectorFormat::guess_from_path(Path::new("test.shp")),
             VectorFormat::ShapeFile
         );
         assert_eq!(
-            guess_format_from_filename(Path::new("test.dbf")),
+            VectorFormat::guess_from_path(Path::new("test.dbf")),
             VectorFormat::ShapeFile
         );
-        assert_eq!(guess_format_from_filename(Path::new("test.xlsx")), VectorFormat::Xlsx);
         assert_eq!(
-            guess_format_from_filename(Path::new("test.json")),
+            VectorFormat::guess_from_path(Path::new("test.xlsx")),
+            VectorFormat::Xlsx
+        );
+        assert_eq!(
+            VectorFormat::guess_from_path(Path::new("test.json")),
             VectorFormat::GeoJson
         );
         assert_eq!(
-            guess_format_from_filename(Path::new("test.geojson")),
+            VectorFormat::guess_from_path(Path::new("test.geojson")),
             VectorFormat::GeoJson
         );
         assert_eq!(
-            guess_format_from_filename(Path::new("test.gpkg")),
+            VectorFormat::guess_from_path(Path::new("test.gpkg")),
             VectorFormat::GeoPackage
         );
-        assert_eq!(guess_format_from_filename(Path::new("test.vrt")), VectorFormat::Vrt);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.vrt")), VectorFormat::Vrt);
         assert_eq!(
-            guess_format_from_filename(Path::new("postgresql://")),
+            VectorFormat::guess_from_path(Path::new("postgresql://")),
             VectorFormat::PostgreSQL
         );
-        assert_eq!(guess_format_from_filename(Path::new("pg:")), VectorFormat::PostgreSQL);
-        assert_eq!(guess_format_from_filename(Path::new("wfs:")), VectorFormat::Wfs);
-        assert_eq!(guess_format_from_filename(Path::new("test")), VectorFormat::Unknown);
+        assert_eq!(
+            VectorFormat::guess_from_path(Path::new("pg:")),
+            VectorFormat::PostgreSQL
+        );
+        assert_eq!(VectorFormat::guess_from_path(Path::new("wfs:")), VectorFormat::Wfs);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test")), VectorFormat::Unknown);
     }
 }

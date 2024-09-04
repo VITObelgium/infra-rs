@@ -6,6 +6,7 @@ pub type Result<T = ()> = inf::Result<T>;
 pub mod datarow;
 pub mod fieldtype;
 pub mod io;
+pub mod polygoncoverage;
 
 #[doc(inline)]
 pub use datarow::DataRow;

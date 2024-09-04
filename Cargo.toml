@@ -30,3 +30,7 @@ serde       = ["inf/serde"]
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
 rev = "943c5ef"
+
+[patch.crates-io]
+geos    = { git = "https://github.com/georust/geos.git", rev = "bac564a845893cb9be799b2373ff496f5e8859cf" }
+geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "ac37045d213d78fb300488f899519248d523e086" }

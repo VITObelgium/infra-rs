@@ -1,7 +1,12 @@
 #[cfg(feature = "derive")]
 mod derive {
+    use inf::{CellSize, GeoMetadata, RasterSize};
     use path_macro::path;
-    use vector::{io::DataframeIterator, DataRow};
+    use vector::{
+        io::DataframeIterator,
+        polygoncoverage::{BurnValue, CoverageConfiguration},
+        DataRow,
+    };
 
     #[derive(vector_derive::DataRow)]
     struct PollutantData {
@@ -88,5 +93,41 @@ mod derive {
     #[test]
     fn test_iterate_features() {
         assert_eq!(PollutantData::field_names(), vec!["Pollutant", "Sector", "value"]);
+    }
+
+    #[test]
+    fn test_polygon_coverage() {
+        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "boundaries.gpkg");
+
+        let config = CoverageConfiguration {
+            name_field: Some("Code3".to_string()),
+            burn_value: BurnValue::Value(4.0),
+            ..Default::default()
+        };
+
+        gdal::DriverManager::register_all();
+
+        for i in 0..gdal::DriverManager::count() {
+            println!(
+                "Driver {}: {}",
+                i,
+                gdal::DriverManager::get_driver(i).unwrap().short_name()
+            );
+        }
+
+        //{GridDefinition::Vlops5km, "Vlops 5km", GeoMetadata(120, 144, -219000, -100000, {5000.0, -5000.0}, nan, s_belgianLambert72)},
+        //{GridDefinition::Vlops1km, "Vlops 1km", GeoMetadata(120, 260, 11000.0, 140000.0, {1000.0, -1000.0}, nan, s_belgianLambert72)},
+
+        let ds = vector::io::open_read_only(&path).unwrap();
+        let output_extent = GeoMetadata::with_origin(
+            "EPSG:31370",
+            RasterSize { rows: 120, cols: 260 },
+            (11000.0, 140000.0).into(),
+            CellSize::square(1000.0),
+            None::<f64>,
+        );
+        let coverages = vector::polygoncoverage::create_polygon_coverages(&ds, &output_extent, config).unwrap();
+
+        assert_eq!(coverages.len(), 3); // 3 polygons in the dataset
     }
 }
