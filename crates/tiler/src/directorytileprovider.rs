@@ -35,7 +35,7 @@ impl DirectoryTileProvider {
 
         for file_entry in std::fs::read_dir(input_dir)?.flatten() {
             if !file_entry.file_type()?.is_file()
-                || raster::io::guess_raster_format_from_filename(file_entry.path().as_path()) == RasterFormat::Unknown
+                || RasterFormat::guess_from_path(&file_entry.path()) == RasterFormat::Unknown
             {
                 continue;
             }

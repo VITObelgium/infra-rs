@@ -22,4 +22,4 @@ image    = { version = "0.25", default-features = false, features = ["png"] }
 ctor     = "0.2"
 
 [features]
-serde = ["dep:serde", "dep:serde_json"]
+serde = ["dep:serde", "dep:serde_json", "inf/serde"]

@@ -1,4 +1,4 @@
-use raster::io::{guess_raster_format_from_filename, RasterFormat};
+use raster::io::RasterFormat;
 
 use crate::Result;
 use std::path::Path;
@@ -17,7 +17,7 @@ pub fn create_single_file_tile_provider(
     path: &Path,
     opts: TileProviderOptions,
 ) -> Result<Box<dyn TileProvider + Send>> {
-    let raster_type = guess_raster_format_from_filename(path);
+    let raster_type = RasterFormat::guess_from_path(path);
 
     // if raster_type == RasterType::GeoPackage {
     //     Ok(Box::new(GpkgTileProvider::new(path)))

@@ -1,4 +1,4 @@
-use raster::io::{guess_raster_format_from_filename, RasterFormat};
+use raster::io::RasterFormat;
 use std::path::Path;
 
 use inf::{
@@ -78,7 +78,7 @@ pub fn metadata_bounds_wgs84(meta: GeoMetadata) -> Result<LatLonBounds> {
 }
 
 pub fn source_type_for_path(path: &std::path::Path) -> LayerSourceType {
-    match guess_raster_format_from_filename(path) {
+    match RasterFormat::guess_from_path(path) {
         RasterFormat::ArcAscii => LayerSourceType::ArcAscii,
         RasterFormat::GeoTiff => LayerSourceType::GeoTiff,
         RasterFormat::MBTiles => LayerSourceType::Mbtiles,
