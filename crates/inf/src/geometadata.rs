@@ -413,16 +413,16 @@ impl GeoMetadata {
                 )?;
 
                 let mut target_transform: gdal::GeoTransform = [0.0; 6];
-                let rows: libc::c_int = 0;
-                let cols: libc::c_int = 0;
+                let mut rows: libc::c_int = 0;
+                let mut cols: libc::c_int = 0;
 
                 let warp_rc = gdal_sys::GDALSuggestedWarpOutput(
                     src_ds.c_dataset(),
                     Some(gdal_sys::GDALGenImgProjTransform),
                     transformer_arg,
                     target_transform.as_mut_ptr(),
-                    cols as *mut libc::c_int,
-                    rows as *mut libc::c_int,
+                    &mut cols,
+                    &mut rows,
                 );
 
                 gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);

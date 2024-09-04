@@ -101,7 +101,9 @@ fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal:
 /// Open a GDAL raster dataset for reading
 pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<gdal::Dataset> {
     let options = gdal::DatasetOptions {
-        open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_VECTOR,
+        open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY
+            | gdal::GdalOpenFlags::GDAL_OF_VECTOR
+            | gdal::GdalOpenFlags::GDAL_OF_VERBOSE_ERROR,
         ..Default::default()
     };
 
