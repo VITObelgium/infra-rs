@@ -389,8 +389,9 @@ impl GeoMetadata {
             let target_projection = target_srs.to_wkt()?;
 
             let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
-            let mut src_ds = mem_driver.create("in-mem", self.rows(), self.columns(), 0)?;
+            let mut src_ds = mem_driver.create("in-mem", self.columns(), self.rows(), 0)?;
             src_ds.set_geo_transform(&self.geo_transform)?;
+            src_ds.set_projection(&self.projection)?;
 
             // Create a transformer that maps from source pixel/line coordinates
             // to destination georeferenced coordinates (not destination pixel line).
@@ -803,7 +804,7 @@ mod tests {
         let warped = meta.warped_to_epsg(4326.into()).unwrap();
 
         assert_eq!(warped.projected_epsg(), Some(4326.into()));
-        assert_eq!(warped.raster_size(), RasterSize { rows: 144, cols: 120 });
-        assert_eq!(warped.cell_size(), CellSize::square(5000.0));
+        assert_eq!(warped.raster_size(), RasterSize { rows: 89, cols: 176 });
+        assert_eq!(warped.cell_size(), CellSize::square(0.062023851850733745));
     }
 }

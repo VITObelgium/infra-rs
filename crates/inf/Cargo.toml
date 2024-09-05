@@ -9,7 +9,7 @@ chrono = { version = "^0.4" }
 phf = { version = "0.11", features = ["macros"] }
 geo-types = { version = "0.7", features = ["approx"] }
 thiserror = "1.0"
-gdal = { version = "^0.17", features = ["bindgen"], optional = true }
+gdal = { version = "^0.17", optional = true }
 gdal-sys = { version = "^0.10", optional = true }
 geozero = { version = "0.13", features = [
     "with-gdal",
