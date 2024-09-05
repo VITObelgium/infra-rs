@@ -1,6 +1,7 @@
 use gdal::vector::{LayerAccess, ToGdal};
 use geos::Geom;
 use geozero::ToGeos;
+use inf::progressinfo::AsyncProgressNotification;
 use inf::spatialreference::{CoordinateWarpTransformer, SpatialReference};
 use inf::{duration, Cell, CellIterator, GeoMetadata, Point, RasterSize, Rect};
 use rayon::prelude::*;
@@ -338,12 +339,11 @@ impl CoverageData {
     }
 }
 
-pub fn create_polygon_coverages(
+pub fn create_geometries(
     vector_ds: &gdal::Dataset,
     output_extent: &GeoMetadata,
-    config: CoverageConfiguration,
-    //progress_cb: ProgressInfo::Callback,
-) -> Result<CoverageData> {
+    config: &CoverageConfiguration,
+) -> Result<Vec<(u64, f64, String, geos::Geometry)>> {
     let mut geometries: Vec<(u64, f64, String, geos::Geometry)> = Vec::new();
 
     for i in 0..vector_ds.layer_count() {
@@ -416,49 +416,59 @@ pub fn create_polygon_coverages(
         }
     }
 
-    {
-        log::debug!("Create cell coverages");
-        let rec = duration::Recorder::new();
+    Ok(geometries)
+}
 
-        // sort on geometry complexity, so we always start processing the most complex geometries
-        // this avoids processing the most complext geometry in the end on a single core
-        geometries.sort_by(|lhs, rhs| rhs.3.get_num_points().cmp(&lhs.3.get_num_points()));
+pub fn create_polygon_coverages(
+    vector_ds: &gdal::Dataset,
+    output_extent: &GeoMetadata,
+    config: CoverageConfiguration,
+    progress_cb: impl AsyncProgressNotification,
+) -> Result<CoverageData> {
+    let mut geometries = create_geometries(vector_ds, output_extent, &config)?;
 
-        // export to string and import in every loop instance, accessing the spatial reference
-        // from multiple threads is not thread safe
-        let projection = output_extent.projection().to_string();
+    log::debug!("Create cell coverages");
+    let rec = duration::Recorder::new();
 
-        //let mut progress = ProgressInfo::new(geometries.len(), progress_cb);
-        let mut result: Vec<PolygonCellCoverage> = geometries
-            .into_par_iter()
-            .flat_map(|id_geom| -> Result<PolygonCellCoverage> {
-                let mut cov = create_polygon_coverage(
-                    id_geom.0,
-                    id_geom.3,
-                    SpatialReference::from_proj(&projection)?,
-                    output_extent,
-                )?;
-                cov.value = id_geom.1;
-                cov.name = id_geom.2.clone();
-                //progress.tick();
+    // sort on geometry complexity, so we always start processing the most complex geometries
+    // this avoids processing the most complext geometry in the end on a single core
+    geometries.sort_by(|lhs, rhs| rhs.3.get_num_points().cmp(&lhs.3.get_num_points()));
 
-                Ok(cov)
-            })
-            .collect();
+    // export to string and import in every loop instance, accessing the spatial reference
+    // from multiple threads is not thread safe
+    let projection = output_extent.projection().to_string();
 
-        log::debug!("Create cell coverages took: {}", rec.elapsed_time_string());
-        if config.border_handling == BorderHandling::AdjustCoverage {
-            let rec = duration::Recorder::new();
-            // Update the coverages on the polygon borders to get appropriate coverage values at the edges
-            // E.g. a cell on the border that is only covered by 1 polygon for 50% should be modified to 100%
-            // Because the data is only for inside the region
-            result = process_region_borders(result)?;
-            log::debug!("Processing polygon borders took: {}", rec.elapsed_time_string());
-        }
+    progress_cb.reset(geometries.len() as u64);
 
-        Ok(CoverageData {
-            polygons: result,
-            extent: output_extent.clone(),
+    let mut result: Vec<PolygonCellCoverage> = geometries
+        .into_par_iter()
+        .flat_map(|id_geom| -> Result<PolygonCellCoverage> {
+            let mut cov = create_polygon_coverage(
+                id_geom.0,
+                id_geom.3,
+                SpatialReference::from_proj(&projection)?,
+                output_extent,
+            )?;
+            cov.value = id_geom.1;
+            cov.name = id_geom.2.clone();
+            progress_cb.tick()?;
+
+            Ok(cov)
         })
+        .collect();
+
+    log::debug!("Create cell coverages took: {}", rec.elapsed_time_string());
+    if config.border_handling == BorderHandling::AdjustCoverage {
+        let rec = duration::Recorder::new();
+        // Update the coverages on the polygon borders to get appropriate coverage values at the edges
+        // E.g. a cell on the border that is only covered by 1 polygon for 50% should be modified to 100%
+        // Because the data is only for inside the region
+        result = process_region_borders(result)?;
+        log::debug!("Processing polygon borders took: {}", rec.elapsed_time_string());
     }
+
+    Ok(CoverageData {
+        polygons: result,
+        extent: output_extent.clone(),
+    })
 }

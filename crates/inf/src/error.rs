@@ -7,6 +7,8 @@ pub enum Error {
         size1: (usize, usize),
         size2: (usize, usize),
     },
+    #[error("The operation has been cancelled")]
+    Cancelled,
     #[error("Invalid path: {0}")]
     InvalidPath(std::path::PathBuf),
     #[error("Invalid argument: {0}")]

@@ -1,7 +1,10 @@
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use inf::{crs::Epsg, spatialreference::SpatialReference, Cell, CellSize, GeoMetadata, RasterSize};
+    use inf::{
+        crs::Epsg, progressinfo::DummyProgress, spatialreference::SpatialReference, Cell, CellSize, GeoMetadata,
+        RasterSize,
+    };
     use path_macro::path;
     use vector::polygoncoverage::{BurnValue, CoverageConfiguration};
 
@@ -9,7 +12,6 @@ mod tests {
     mod derive {
 
         use super::*;
-        use inf::gdalinterop;
         use vector::{io::DataframeIterator, DataRow};
 
         #[derive(vector_derive::DataRow)]
@@ -30,21 +32,6 @@ mod tests {
             #[vector(column = "Sector")]
             sector: String,
             value: Option<f64>,
-        }
-
-        #[ctor::ctor]
-        fn init() {
-            let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
-            if !data_dir.exists() {
-                panic!("Proj.db data directory not found");
-            }
-
-            let gdal_config = gdalinterop::Config {
-                debug_logging: true,
-                proj_db_search_location: data_dir,
-            };
-
-            gdal_config.apply().expect("Failed to configure GDAL");
         }
 
         #[test]
@@ -139,7 +126,8 @@ mod tests {
         .warped_to_epsg(Epsg::from(4326))
         .unwrap();
         log::debug!("Output extent: {:?}", output_extent.projection());
-        let coverages = vector::polygoncoverage::create_polygon_coverages(&ds, &output_extent, config).unwrap();
+        let coverages =
+            vector::polygoncoverage::create_polygon_coverages(&ds, &output_extent, config, DummyProgress).unwrap();
 
         // A cell on the border of the BEB and BEF polygon
         let cell_to_check = Cell::from_row_col(55, 147);

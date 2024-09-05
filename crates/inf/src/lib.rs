@@ -23,6 +23,7 @@ pub mod interpolate;
 pub mod latlonbounds;
 pub mod legend;
 pub mod legendscaletype;
+pub mod progressinfo;
 pub mod rect;
 #[cfg(feature = "gdal")]
 pub mod spatialreference;
