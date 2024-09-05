@@ -51,4 +51,4 @@ docdeps:
   cargo doc --workspace --exclude='rs-infra' --all-features --open
 
 test:
-  cargo pretty-test --workspace --all-features -- --nocapture
+  cargo nextest run --workspace --release --all-features
