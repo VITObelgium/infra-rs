@@ -10,8 +10,8 @@ use inf::{
 use crate::{layermetadata::LayerSourceType, Result};
 
 fn read_pixel_from_file(raster_path: &Path, coord: Point<f64>) -> Result<Option<f32>> {
-    let ds = raster::io::open_read_only(raster_path)?;
-    let mut meta = raster::io::metadata_from_dataset_band(&ds, 1)?;
+    let ds = raster::io::dataset::open_read_only(raster_path)?;
+    let mut meta = raster::io::dataset::read_band_metadata(&ds, 1)?;
     let cell = meta.point_to_cell(coord);
     if !meta.is_cell_on_map(cell) {
         return Ok(None);
@@ -22,7 +22,7 @@ fn read_pixel_from_file(raster_path: &Path, coord: Point<f64>) -> Result<Option<
     meta.set_extent(ll, RasterSize { rows: 1, cols: 1 }, meta.cell_size());
     let mut data = [0.0];
 
-    raster::io::data_from_dataset_with_extent(&ds, &meta, 1, &mut data)?;
+    raster::io::dataset::read_band_region(&ds, 1, &meta, &mut data)?;
     if Some(f64::from(data[0])) == meta.nodata() {
         return Ok(None);
     }
@@ -36,7 +36,7 @@ pub fn raster_pixel(raster_path: &Path, mut coord: Coordinate, layer_name: Optio
         open_opt.push(format!("TABLE={}", layer_name));
     }
 
-    let meta = raster::io::metadata_from_file_with_options(raster_path, &open_opt)?;
+    let meta = raster::io::dataset::read_file_metadata_with_options(raster_path, &open_opt)?;
     let srs = SpatialReference::from_proj(meta.projection())?;
     if !srs.is_geographic() || srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
         let transformer = CoordinateTransformer::new(

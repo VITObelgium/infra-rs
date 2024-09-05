@@ -125,7 +125,7 @@ mod tests {
             ..Default::default()
         };
 
-        let ds = vector::io::open_read_only(&path).unwrap();
+        let ds = vector::io::dataset::open_read_only(&path).unwrap();
         let output_extent = GeoMetadata::with_origin(
             SpatialReference::from_epsg(Epsg::from(31370))
                 .unwrap()

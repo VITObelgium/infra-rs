@@ -3,6 +3,7 @@ use inf::gdalinterop;
 use inf::Cell;
 
 use crate::io;
+use crate::io::LayerAccessExtension;
 use crate::Error;
 use crate::Result;
 
@@ -12,7 +13,7 @@ pub struct VectorBuilder {
 
 impl VectorBuilder {
     pub fn with_layer(name: &str, projection: &str) -> Result<Self> {
-        let mut ds = io::create_in_memory()?;
+        let mut ds = io::dataset::create_in_memory()?;
         let srs = gdal::spatial_ref::SpatialRef::from_definition(projection)?;
         ds.create_layer(gdal::vector::LayerOptions {
             name,
@@ -29,7 +30,8 @@ impl VectorBuilder {
     /// Add a field to the layer and return the index of the field
     pub fn add_field(&mut self, name: &str, field_type: gdal::vector::OGRFieldType::Type) -> Result<i32> {
         self.layer.create_defn_fields(&[(name, field_type)])?;
-        io::layer_field_index(&self.layer, name)
+        self.layer.field_index_with_name(name)
+        //io::layer_field_index(&self.layer, name)
     }
 
     // pub fn add_cell_geometry(&mut self, cell: Cell, geom: gdal::vector::Geometry) -> Result<()> {
@@ -92,15 +94,15 @@ impl VectorBuilder {
 
     pub fn store(self, path: &std::path::Path) -> Result<()> {
         let ds = self.layer.into_dataset();
-        io::translate_to_disk(&ds, path, &[])?;
+        io::dataset::translate_to_disk(&ds, path, &[])?;
         Ok(())
     }
 
-    pub fn to_geojson(self) -> Result<String> {
+    pub fn into_geojson(self) -> Result<String> {
         let ds = self.layer.into_dataset();
         let mem_file = gdalinterop::MemoryFile::empty(std::path::Path::new("/vsimem/json_serialization.geojson"))?;
 
-        io::translate_to_disk(&ds, mem_file.path(), &[])?;
+        io::dataset::translate_to_disk(&ds, mem_file.path(), &[])?;
 
         match std::str::from_utf8(mem_file.as_slice()?) {
             Ok(json_data) => Ok(json_data.to_string()),

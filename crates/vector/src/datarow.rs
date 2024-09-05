@@ -15,6 +15,8 @@ pub trait DataRow {
 
 #[doc(hidden)]
 pub mod __private {
+    use io::FeatureExtension;
+
     use super::*;
 
     // Helper function for the DataRow derive macro
@@ -22,11 +24,8 @@ pub mod __private {
         feature: &gdal::vector::Feature,
         field_name: &str,
     ) -> Result<Option<T>> {
-        let index = io::field_index_from_name(feature, field_name)?;
-
-        let field_is_valid = unsafe { gdal_sys::OGR_F_IsFieldSetAndNotNull(feature.c_feature(), index) == 1 };
-
-        if !field_is_valid {
+        let index = feature.field_index_from_name(field_name)?;
+        if !feature.field_is_valid(index) {
             return Ok(None);
         }
 

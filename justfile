@@ -45,10 +45,10 @@ build_release:
   cargo build --workspace --release
 
 doc:
-  cargo doc --workspace --exclude='rs-infra' --no-deps --all-features --open
+  cargo doc --workspace --exclude='rs-infra' --exclude='vector_derive' --no-deps --all-features --open
 
 docdeps:
-  cargo doc --workspace --exclude='rs-infra' --all-features --open
+  cargo doc --workspace --exclude='rs-infra' --exclude='vector_derive' --all-features --open
 
 test:
   cargo nextest run --workspace --release --all-features

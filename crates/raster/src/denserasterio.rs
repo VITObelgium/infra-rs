@@ -9,11 +9,11 @@ impl<T: RasterNum<T> + GdalType> RasterIO<T, DenseRaster<T>> for DenseRaster<T> 
     }
 
     fn read_band(path: &std::path::Path, band_index: usize) -> Result<DenseRaster<T>> {
-        let ds = io::open_read_only(path)?;
+        let ds = io::dataset::open_read_only(path)?;
         let (cols, rows) = ds.raster_size();
 
         let mut data: Vec<T> = vec![T::zero(); cols * rows];
-        let metadata = io::read_from_dataset(&ds, band_index, data.as_mut_slice())?;
+        let metadata = io::dataset::read_band(&ds, band_index, data.as_mut_slice())?;
         Ok(DenseRaster::new(metadata, data))
     }
 
@@ -24,12 +24,12 @@ impl<T: RasterNum<T> + GdalType> RasterIO<T, DenseRaster<T>> for DenseRaster<T> 
         let ds = gdal::Dataset::open(path)?;
         let (cols, rows) = ds.raster_size();
         let mut data: Vec<T> = vec![T::zero(); rows * cols];
-        let dst_meta = io::data_from_dataset_with_extent(&ds, bounds, band_index, &mut data)?;
+        let dst_meta = io::dataset::read_band_region(&ds, band_index, bounds, &mut data)?;
         Ok(DenseRaster::new(dst_meta, data))
     }
 
     fn write(&mut self, path: &std::path::Path) -> Result {
         self.flatten_nodata();
-        io::write(self.as_slice(), self.geo_metadata(), path, &[])
+        io::dataset::write(self.as_slice(), self.geo_metadata(), path, &[])
     }
 }

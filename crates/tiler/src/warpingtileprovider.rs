@@ -112,7 +112,7 @@ fn read_raster_tile<T: RasterNum<T> + GdalType>(
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
     let mut data = vec![T::zero(); scaled_size as usize * scaled_size as usize];
     let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
-    raster::io::read_from_dataset(&ds, 1, &mut data)?;
+    raster::io::dataset::read_band(&ds, 1, &mut data)?;
     Ok(data)
 }
 
@@ -139,7 +139,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     let src_ds = gdal::Dataset::open(raster_path)?;
 
     let mut data = vec![T::nodata_value(); scaled_size * scaled_size];
-    let mut dest_ds = raster::io::create_memory_dataset::<T>(&dest_extent, data.as_mut_slice())?;
+    let mut dest_ds = raster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
 
     let options = vec![
         "-ovr".to_string(),
@@ -175,10 +175,10 @@ impl WarpingTileProvider {
     }
 
     fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<LayerMetadata> {
-        let ds = raster::io::open_read_only(path)?;
+        let ds = raster::io::dataset::open_read_only(path)?;
 
         // We assume to be working with a single raster band
-        let meta = raster::io::metadata_from_dataset_band(&ds, 1)?;
+        let meta = raster::io::dataset::read_band_metadata(&ds, 1)?;
         let raster_band = ds.rasterband(1)?;
         let over_view_count = raster_band.overview_count()?;
 

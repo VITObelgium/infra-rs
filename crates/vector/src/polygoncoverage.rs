@@ -329,7 +329,7 @@ impl CoverageData {
     }
 
     pub fn to_geojson(&self) -> Result<String> {
-        self.build_vector()?.to_geojson()
+        self.build_vector()?.into_geojson()
     }
 
     pub fn store(&self, path: &Path) -> Result<()> {
