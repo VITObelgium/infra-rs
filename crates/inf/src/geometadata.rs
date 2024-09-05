@@ -270,7 +270,7 @@ impl GeoMetadata {
     }
 
     pub fn point_to_cell(&self, p: Point<f64>) -> Cell {
-        Cell::new(self.y_to_row(p.y()), self.x_to_col(p.x()))
+        Cell::from_row_col(self.y_to_row(p.y()), self.x_to_col(p.x()))
     }
 
     pub fn is_point_on_map(&self, p: Point<f64>) -> bool {
@@ -343,15 +343,10 @@ impl GeoMetadata {
         }
     }
 
+    #[cfg(feature = "gdal")]
     pub fn set_projection_from_epsg(&mut self, #[allow(unused)] epsg: Epsg) -> Result<()> {
-        #[cfg(feature = "gdal")]
-        {
-            self.projection = projection_from_epsg(epsg)?;
-            Ok(())
-        }
-
-        #[cfg(not(feature = "gdal"))]
-        Err(no_gdal_support_error())
+        self.projection = projection_from_epsg(epsg)?;
+        Ok(())
     }
 
     pub fn intersects(&self, other: &GeoMetadata) -> Result<bool> {
@@ -376,84 +371,78 @@ impl GeoMetadata {
         Ok(rect::intersects(&self.bounding_box(), &other.bounding_box()))
     }
 
-    pub fn warped_to_epsg(&self, epsg: Epsg) -> Result<Self> {
-        #[cfg(feature = "gdal")]
-        {
-            if self.projection.is_empty() {
-                return Err(Error::InvalidArgument(
-                    "Cannot warp metadata without projection information".to_string(),
-                ));
-            }
+    #[cfg(feature = "gdal")]
+    pub fn warped(&self, target_srs: &crate::SpatialReference) -> Result<Self> {
+        if self.projection.is_empty() {
+            return Err(Error::InvalidArgument(
+                "Cannot warp metadata without projection information".to_string(),
+            ));
+        }
 
-            let target_srs = crate::SpatialReference::from_epsg(epsg)?;
-            let target_projection = target_srs.to_wkt()?;
+        let target_projection = target_srs.to_wkt()?;
 
-            let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
-            let mut src_ds = mem_driver.create("in-mem", self.columns(), self.rows(), 0)?;
-            src_ds.set_geo_transform(&self.geo_transform)?;
-            src_ds.set_projection(&self.projection)?;
+        let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
+        let mut src_ds = mem_driver.create("in-mem", self.columns(), self.rows(), 0)?;
+        src_ds.set_geo_transform(&self.geo_transform)?;
+        src_ds.set_projection(&self.projection)?;
 
-            // Create a transformer that maps from source pixel/line coordinates
-            // to destination georeferenced coordinates (not destination pixel line).
-            // We do that by omitting the destination dataset handle (setting it to nullptr).
-            unsafe {
-                use crate::gdalinterop;
+        // Create a transformer that maps from source pixel/line coordinates
+        // to destination georeferenced coordinates (not destination pixel line).
+        // We do that by omitting the destination dataset handle (setting it to nullptr).
+        unsafe {
+            use crate::gdalinterop;
 
-                let target_srs = std::ffi::CString::new(target_projection.clone())?;
-                let transformer_arg = gdalinterop::check_pointer(
-                    gdal_sys::GDALCreateGenImgProjTransformer(
-                        src_ds.c_dataset(),
-                        std::ptr::null_mut(),
-                        std::ptr::null_mut(),
-                        target_srs.as_ptr(),
-                        gdalinterop::FALSE,
-                        0.0,
-                        0,
-                    ),
-                    "Failed to create projection transformer",
-                )?;
-
-                let mut target_transform: gdal::GeoTransform = [0.0; 6];
-                let mut rows: libc::c_int = 0;
-                let mut cols: libc::c_int = 0;
-
-                let warp_rc = gdal_sys::GDALSuggestedWarpOutput(
+            let target_srs = std::ffi::CString::new(target_projection.clone())?;
+            let transformer_arg = gdalinterop::check_pointer(
+                gdal_sys::GDALCreateGenImgProjTransformer(
                     src_ds.c_dataset(),
-                    Some(gdal_sys::GDALGenImgProjTransform),
-                    transformer_arg,
-                    target_transform.as_mut_ptr(),
-                    &mut cols,
-                    &mut rows,
-                );
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    target_srs.as_ptr(),
+                    gdalinterop::FALSE,
+                    0.0,
+                    0,
+                ),
+                "Failed to create projection transformer",
+            )?;
 
-                gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
+            let mut target_transform: gdal::GeoTransform = [0.0; 6];
+            let mut rows: libc::c_int = 0;
+            let mut cols: libc::c_int = 0;
 
-                match crate::gdalinterop::check_rc(warp_rc) {
-                    Ok(_) => Ok(GeoMetadata::new(
-                        target_projection,
-                        RasterSize {
-                            rows: rows as usize,
-                            cols: cols as usize,
-                        },
-                        target_transform,
-                        self.nodata,
-                    )),
-                    Err(e) => {
-                        gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
-                        Err(e.into())
-                    }
+            let warp_rc = gdal_sys::GDALSuggestedWarpOutput(
+                src_ds.c_dataset(),
+                Some(gdal_sys::GDALGenImgProjTransform),
+                transformer_arg,
+                target_transform.as_mut_ptr(),
+                &mut cols,
+                &mut rows,
+            );
+
+            gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
+
+            match crate::gdalinterop::check_rc(warp_rc) {
+                Ok(_) => Ok(GeoMetadata::new(
+                    target_projection,
+                    RasterSize {
+                        rows: rows as usize,
+                        cols: cols as usize,
+                    },
+                    target_transform,
+                    self.nodata,
+                )),
+                Err(e) => {
+                    gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
+                    Err(e.into())
                 }
             }
         }
-
-        #[cfg(not(feature = "gdal"))]
-        Err(no_gdal_support_error())
     }
-}
 
-#[cfg(not(feature = "gdal"))]
-fn no_gdal_support_error() -> Error {
-    Error::Runtime("GDAL feature needs to be enabled for projection API".to_string())
+    #[cfg(feature = "gdal")]
+    pub fn warped_to_epsg(&self, epsg: Epsg) -> Result<Self> {
+        self.warped(&crate::SpatialReference::from_epsg(epsg)?)
+    }
 }
 
 pub fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
@@ -566,11 +555,11 @@ mod tests {
             Option::<f64>::None,
         );
 
-        assert_eq!(meta.cell_center(Cell::new(0, 0)), Point::new(0.5, 1.5));
-        assert_eq!(meta.cell_center(Cell::new(1, 1)), Point::new(1.5, 0.5));
+        assert_eq!(meta.cell_center(Cell::from_row_col(0, 0)), Point::new(0.5, 1.5));
+        assert_eq!(meta.cell_center(Cell::from_row_col(1, 1)), Point::new(1.5, 0.5));
 
-        assert_eq!(meta.cell_lower_left(Cell::new(0, 0)), Point::new(0.0, 1.0));
-        assert_eq!(meta.cell_lower_left(Cell::new(2, 2)), Point::new(2.0, -1.0));
+        assert_eq!(meta.cell_lower_left(Cell::from_row_col(0, 0)), Point::new(0.0, 1.0));
+        assert_eq!(meta.cell_lower_left(Cell::from_row_col(2, 2)), Point::new(2.0, -1.0));
 
         assert_eq!(meta.top_left(), Point::new(0.0, 2.0));
         assert_eq!(meta.center(), Point::new(1.0, 1.0));
@@ -597,11 +586,11 @@ mod tests {
             Option::<f64>::None,
         );
 
-        assert_eq!(meta.cell_center(Cell::new(0, 0)), Point::new(-0.5, 0.5));
-        assert_eq!(meta.cell_center(Cell::new(1, 1)), Point::new(0.5, -0.5));
+        assert_eq!(meta.cell_center(Cell::from_row_col(0, 0)), Point::new(-0.5, 0.5));
+        assert_eq!(meta.cell_center(Cell::from_row_col(1, 1)), Point::new(0.5, -0.5));
 
-        assert_eq!(meta.cell_lower_left(Cell::new(0, 0)), Point::new(-1.0, 0.0));
-        assert_eq!(meta.cell_lower_left(Cell::new(2, 2)), Point::new(1.0, -2.0));
+        assert_eq!(meta.cell_lower_left(Cell::from_row_col(0, 0)), Point::new(-1.0, 0.0));
+        assert_eq!(meta.cell_lower_left(Cell::from_row_col(2, 2)), Point::new(1.0, -2.0));
 
         assert_eq!(meta.top_left(), Point::new(-1.0, 1.0));
         assert_eq!(meta.center(), Point::new(0.0, 0.0));
@@ -623,8 +612,8 @@ mod tests {
             Option::<f64>::None,
         );
 
-        assert_eq!(meta.cell_center(Cell::new(0, 0)), Point::new(1.5, 2.5));
-        assert_eq!(meta.cell_center(Cell::new(1, 1)), Point::new(2.5, 1.5));
+        assert_eq!(meta.cell_center(Cell::from_row_col(0, 0)), Point::new(1.5, 2.5));
+        assert_eq!(meta.cell_center(Cell::from_row_col(1, 1)), Point::new(2.5, 1.5));
 
         assert_eq!(meta.top_left(), Point::new(1.0, 3.0));
         assert_eq!(meta.center(), Point::new(2.0, 2.0));

@@ -1,12 +1,14 @@
-use gdal::vector::LayerAccess;
+use gdal::vector::{LayerAccess, ToGdal};
 use geos::Geom;
 use geozero::ToGeos;
 use inf::spatialreference::{CoordinateWarpTransformer, SpatialReference};
-use inf::{duration, Cell, CellIterator, GeoMetadata, Point, RasterSize, Rect, Result};
+use inf::{duration, Cell, CellIterator, GeoMetadata, Point, RasterSize, Rect};
 use rayon::prelude::*;
 use std::ffi::CString;
+use std::path::Path;
 
-use crate::Error;
+use crate::coveragetools::VectorBuilder;
+use crate::{Error, Result};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct CellInfo {
@@ -291,12 +293,57 @@ pub struct CoverageConfiguration {
     pub name_field: Option<String>,
 }
 
+pub struct CoverageData {
+    pub extent: GeoMetadata,
+    pub polygons: Vec<PolygonCellCoverage>,
+}
+
+impl CoverageData {
+    fn build_vector(&self) -> Result<VectorBuilder> {
+        let mut builder = VectorBuilder::with_layer("cell coverages", self.extent.projection())?;
+        builder.add_field("row", gdal::vector::OGRFieldType::OFTInteger)?;
+        builder.add_field("col", gdal::vector::OGRFieldType::OFTInteger)?;
+        builder.add_field("coverage", gdal::vector::OGRFieldType::OFTReal)?;
+        builder.add_field("cellcoverage", gdal::vector::OGRFieldType::OFTReal)?;
+        builder.add_field("name", gdal::vector::OGRFieldType::OFTString)?;
+
+        for polygon in &self.polygons {
+            for cell_info in &polygon.cells {
+                let cell_bbox = polygon
+                    .output_subgrid_extent
+                    .cell_bounding_box(cell_info.polygon_grid_cell);
+
+                let cell_polygon = geo_types::Polygon::from(cell_bbox);
+
+                builder.add_named_cell_geometry_with_coverage(
+                    cell_info.compute_grid_cell,
+                    cell_info.coverage,
+                    cell_info.cell_coverage,
+                    &polygon.name,
+                    cell_polygon.to_gdal()?,
+                )?;
+            }
+        }
+
+        Ok(builder)
+    }
+
+    pub fn to_geojson(&self) -> Result<String> {
+        self.build_vector()?.to_geojson()
+    }
+
+    pub fn store(&self, path: &Path) -> Result<()> {
+        self.build_vector()?.store(path)?;
+        Ok(())
+    }
+}
+
 pub fn create_polygon_coverages(
     vector_ds: &gdal::Dataset,
     output_extent: &GeoMetadata,
     config: CoverageConfiguration,
     //progress_cb: ProgressInfo::Callback,
-) -> Result<Vec<PolygonCellCoverage>> {
+) -> Result<CoverageData> {
     let mut geometries: Vec<(u64, f64, String, geos::Geometry)> = Vec::new();
 
     for i in 0..vector_ds.layer_count() {
@@ -409,6 +456,9 @@ pub fn create_polygon_coverages(
             log::debug!("Processing polygon borders took: {}", rec.elapsed_time_string());
         }
 
-        Ok(result)
+        Ok(CoverageData {
+            polygons: result,
+            extent: output_extent.clone(),
+        })
     }
 }

@@ -1,15 +1,12 @@
-type Row = i32;
-type Col = i32;
-
 /// Represents a point in the raster using row, col coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Cell {
-    pub row: Row,
-    pub col: Col,
+    pub row: i32,
+    pub col: i32,
 }
 
 impl Cell {
-    pub const fn new(row: Row, col: Col) -> Self {
+    pub const fn from_row_col(row: i32, col: i32) -> Self {
         Cell { row, col }
     }
 
@@ -18,35 +15,35 @@ impl Cell {
     }
 
     pub fn left(&self) -> Cell {
-        Cell::new(self.row, self.col - 1)
+        Cell::from_row_col(self.row, self.col - 1)
     }
 
     pub fn right(&self) -> Cell {
-        Cell::new(self.row, self.col + 1)
+        Cell::from_row_col(self.row, self.col + 1)
     }
 
     pub fn above(&self) -> Cell {
-        Cell::new(self.row - 1, self.col)
+        Cell::from_row_col(self.row - 1, self.col)
     }
 
     pub fn below(&self) -> Cell {
-        Cell::new(self.row + 1, self.col)
+        Cell::from_row_col(self.row + 1, self.col)
     }
 
     pub fn above_left(&self) -> Cell {
-        Cell::new(self.row - 1, self.col - 1)
+        Cell::from_row_col(self.row - 1, self.col - 1)
     }
 
     pub fn above_right(&self) -> Cell {
-        Cell::new(self.row - 1, self.col + 1)
+        Cell::from_row_col(self.row - 1, self.col + 1)
     }
 
     pub fn below_left(&self) -> Cell {
-        Cell::new(self.row + 1, self.col - 1)
+        Cell::from_row_col(self.row + 1, self.col - 1)
     }
 
     pub fn below_right(&self) -> Cell {
-        Cell::new(self.row + 1, self.col + 1)
+        Cell::from_row_col(self.row + 1, self.col + 1)
     }
 
     pub fn increment(&mut self, cols_in_grid: i32) {
@@ -88,7 +85,7 @@ impl CellIterator {
         CellIterator {
             cols,
             rows,
-            current: Cell::new(0, 0),
+            current: Cell::from_row_col(0, 0),
         }
     }
 
@@ -96,7 +93,7 @@ impl CellIterator {
         CellIterator {
             cols: size.cols as i32,
             rows: size.rows as i32,
-            current: Cell::new(0, 0),
+            current: Cell::from_row_col(0, 0),
         }
     }
 }

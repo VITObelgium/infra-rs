@@ -15,13 +15,14 @@ use gdal::{
     raster::{GdalDataType, GdalType},
     Metadata,
 };
-use inf::{fs, gdalinterop::*, rect, GeoMetadata, RasterSize};
+use inf::{gdalinterop::*, rect, GeoMetadata, RasterSize};
 use num::NumCast;
 
 const FALSE: i32 = 0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RasterFormat {
+    Memory,
     ArcAscii,
     GeoTiff,
     Gif,
@@ -39,16 +40,17 @@ pub enum RasterFormat {
 impl RasterFormat {
     pub fn gdal_driver_name(&self) -> &str {
         match self {
+            RasterFormat::Memory => "MEM",
             RasterFormat::ArcAscii => "AAIGrid",
             RasterFormat::GeoTiff => "GTiff",
             RasterFormat::Gif => "GIF",
             RasterFormat::Png => "PNG",
             RasterFormat::PcRaster => "PCRaster",
-            RasterFormat::Netcdf => "NetCDF",
+            RasterFormat::Netcdf => "netCDF",
             RasterFormat::MBTiles => "MBTiles",
             RasterFormat::GeoPackage => "GPKG",
             RasterFormat::Grib => "GRIB",
-            RasterFormat::Postgis => "PostgreSQL",
+            RasterFormat::Postgis => "PostGISRaster",
             RasterFormat::Vrt => "VRT",
             RasterFormat::Unknown => "Unknown",
         }
@@ -468,15 +470,6 @@ fn check_if_metadata_fits<T: num::NumCast + GdalType>(nodata: Option<f64>, sourc
     Ok(())
 }
 
-fn create_output_directory_if_needed(p: &Path) -> Result {
-    if p.starts_with("/vsi") {
-        // this is a gdal virtual filesystem path
-        return Ok(());
-    }
-
-    fs::create_directory_for_file(p)
-}
-
 fn add_band_from_data_ptr<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Result<()> {
     // convert the data pointer to a string
     let data_ptr = format!("DATAPOINTER={:p}", data.as_ptr());
@@ -512,8 +505,8 @@ mod tests {
             Some(-6.0),
         );
 
-        assert_eq!(meta2.cell_center(Cell::new(0, 0)), Point::new(-1.0, 4.0));
-        assert_eq!(meta1.point_to_cell(Point::new(0.0, 4.0)), Cell::new(-1, -1));
+        assert_eq!(meta2.cell_center(Cell::from_row_col(0, 0)), Point::new(-1.0, 4.0));
+        assert_eq!(meta1.point_to_cell(Point::new(0.0, 4.0)), Cell::from_row_col(-1, -1));
 
         let cutout = intersect_metadata(&meta1, &meta2).unwrap();
 
@@ -543,15 +536,15 @@ mod tests {
             None,
         );
         assert_relative_eq!(
-            meta.cell_center(Cell::new(0, 0)),
+            meta.cell_center(Cell::from_row_col(0, 0)),
             Point::new(TRANS[0] + (TRANS[1] / 2.0), TRANS[3] + (TRANS[5] / 2.0)),
             epsilon = 1e-6
         );
 
         // Cell to point and back
-        let cell = Cell::new(0, 0);
+        let cell = Cell::from_row_col(0, 0);
         assert_eq!(meta.point_to_cell(meta.cell_center(cell)), cell);
-        assert_eq!(meta.point_to_cell(meta.top_left()), Cell::new(0, 0));
+        assert_eq!(meta.point_to_cell(meta.top_left()), Cell::from_row_col(0, 0));
 
         let cutout = intersect_metadata(&meta, &meta).unwrap();
         assert_eq!(cutout.cols, 900);

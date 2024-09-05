@@ -120,6 +120,21 @@ where
     Rect::from_ne_sw(top_left, bottom_right)
 }
 
+impl From<Rect<f64>> for geo_types::Polygon<f64> {
+    fn from(rect: Rect<f64>) -> geo_types::Polygon<f64> {
+        geo_types::Polygon::new(
+            geo_types::LineString::from(vec![
+                rect.top_left(),
+                rect.top_right(),
+                rect.bottom_right,
+                rect.bottom_left(),
+                rect.top_left(),
+            ]),
+            Vec::default(),
+        )
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

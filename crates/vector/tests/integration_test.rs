@@ -1,114 +1,118 @@
-#[cfg(feature = "derive")]
-mod derive {
-
-    use inf::{crs::Epsg, gdalinterop, spatialreference::SpatialReference, CellSize, GeoMetadata, RasterSize};
+#[cfg(test)]
+mod tests {
+    use approx::assert_relative_eq;
+    use inf::{crs::Epsg, spatialreference::SpatialReference, Cell, CellSize, GeoMetadata, RasterSize};
     use path_macro::path;
-    use vector::{
-        io::DataframeIterator,
-        polygoncoverage::{BurnValue, CoverageConfiguration},
-        DataRow,
-    };
+    use vector::polygoncoverage::{BurnValue, CoverageConfiguration};
 
-    #[derive(vector_derive::DataRow)]
-    struct PollutantData {
-        #[vector(column = "Pollutant")]
-        pollutant: String,
-        #[vector(column = "Sector")]
-        sector: String,
-        value: f64,
-        #[vector(skip)]
-        not_in_csv: String,
-    }
+    #[cfg(feature = "derive")]
+    mod derive {
 
-    #[derive(vector_derive::DataRow)]
-    struct PollutantOptionalData {
-        #[vector(column = "Pollutant")]
-        pollutant: String,
-        #[vector(column = "Sector")]
-        sector: String,
-        value: Option<f64>,
-    }
+        use super::*;
+        use inf::gdalinterop;
+        use vector::{io::DataframeIterator, DataRow};
 
-    #[ctor::ctor]
-    fn init() {
-        let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
-        if !data_dir.exists() {
-            panic!("Proj.db data directory not found");
+        #[derive(vector_derive::DataRow)]
+        struct PollutantData {
+            #[vector(column = "Pollutant")]
+            pollutant: String,
+            #[vector(column = "Sector")]
+            sector: String,
+            value: f64,
+            #[vector(skip)]
+            not_in_csv: String,
         }
 
-        let gdal_config = gdalinterop::Config {
-            debug_logging: true,
-            proj_db_search_location: data_dir,
-        };
-
-        gdal_config.apply().expect("Failed to configure GDAL");
-    }
-
-    #[test]
-    fn test_row_data_derive() {
-        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road.csv");
-        let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
-
-        {
-            let row = iter.next().unwrap().unwrap();
-            assert_eq!(row.pollutant, "NO2");
-            assert_eq!(row.sector, "A_PublicTransport");
-            assert_eq!(row.value, 10.0);
-            assert_eq!(row.not_in_csv, String::default());
+        #[derive(vector_derive::DataRow)]
+        struct PollutantOptionalData {
+            #[vector(column = "Pollutant")]
+            pollutant: String,
+            #[vector(column = "Sector")]
+            sector: String,
+            value: Option<f64>,
         }
 
-        {
-            let row = iter.next().unwrap().unwrap();
-            assert_eq!(row.pollutant, "NO2");
-            assert_eq!(row.sector, "B_RoadTransport");
-            assert_eq!(row.value, 11.5);
-            assert_eq!(row.not_in_csv, String::default());
+        #[ctor::ctor]
+        fn init() {
+            let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
+            if !data_dir.exists() {
+                panic!("Proj.db data directory not found");
+            }
+
+            let gdal_config = gdalinterop::Config {
+                debug_logging: true,
+                proj_db_search_location: data_dir,
+            };
+
+            gdal_config.apply().expect("Failed to configure GDAL");
         }
 
-        {
-            let row = iter.next().unwrap().unwrap();
-            assert_eq!(row.pollutant, "PM10");
-            assert_eq!(row.sector, "B_RoadTransport");
-            assert_eq!(row.value, 13.0);
-            assert_eq!(row.not_in_csv, String::default());
+        #[test]
+        fn test_row_data_derive() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road.csv");
+            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.sector, "A_PublicTransport");
+                assert_eq!(row.value, 10.0);
+                assert_eq!(row.not_in_csv, String::default());
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.sector, "B_RoadTransport");
+                assert_eq!(row.value, 11.5);
+                assert_eq!(row.not_in_csv, String::default());
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "PM10");
+                assert_eq!(row.sector, "B_RoadTransport");
+                assert_eq!(row.value, 13.0);
+                assert_eq!(row.not_in_csv, String::default());
+            }
+
+            assert!(iter.next().is_none());
         }
 
-        assert!(iter.next().is_none());
-    }
-
-    #[test]
-    fn test_row_data_derive_missing() {
-        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
-        let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
-        assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
-        assert!(iter.next().unwrap().is_ok());
-        assert!(iter.next().unwrap().is_ok());
-        assert!(iter.next().is_none());
-    }
-
-    #[test]
-    fn test_row_data_derive_missing_optionals() {
-        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
-        let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
-
-        {
-            let row = iter.next().unwrap().unwrap();
-            assert_eq!(row.pollutant, "NO2");
-            assert_eq!(row.sector, "A_PublicTransport");
-            assert_eq!(row.value, Some(10.0));
+        #[test]
+        fn test_row_data_derive_missing() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
+            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
+            assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
+            assert!(iter.next().unwrap().is_ok());
+            assert!(iter.next().unwrap().is_ok());
+            assert!(iter.next().is_none());
         }
 
-        {
-            let row = iter.next().unwrap().unwrap();
-            assert_eq!(row.pollutant, "PM10");
-            assert_eq!(row.sector, "A_PublicTransport");
-            assert_eq!(row.value, None);
-        }
-    }
+        #[test]
+        fn test_row_data_derive_missing_optionals() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
+            let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
 
-    #[test]
-    fn test_iterate_features() {
-        assert_eq!(PollutantData::field_names(), vec!["Pollutant", "Sector", "value"]);
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.sector, "A_PublicTransport");
+                assert_eq!(row.value, Some(10.0));
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "PM10");
+                assert_eq!(row.sector, "A_PublicTransport");
+                assert_eq!(row.value, None);
+            }
+        }
+
+        #[test]
+        fn test_iterate_features() {
+            assert_eq!(PollutantData::field_names(), vec!["Pollutant", "Sector", "value"]);
+        }
     }
 
     #[test_log::test]
@@ -120,11 +124,6 @@ mod derive {
             burn_value: BurnValue::Value(4.0),
             ..Default::default()
         };
-
-        assert!(gdal::DriverManager::get_driver_by_name("GPKG").is_ok());
-
-        //{GridDefinition::Vlops5km, "Vlops 5km", GeoMetadata(120, 144, -219000, -100000, {5000.0, -5000.0}, nan, s_belgianLambert72)},
-        //{GridDefinition::Vlops1km, "Vlops 1km", GeoMetadata(120, 260, 11000.0, 140000.0, {1000.0, -1000.0}, nan, s_belgianLambert72)},
 
         let ds = vector::io::open_read_only(&path).unwrap();
         let output_extent = GeoMetadata::with_origin(
@@ -142,6 +141,32 @@ mod derive {
         log::debug!("Output extent: {:?}", output_extent.projection());
         let coverages = vector::polygoncoverage::create_polygon_coverages(&ds, &output_extent, config).unwrap();
 
-        assert_eq!(coverages.len(), 3); // 3 polygons in the dataset
+        // A cell on the border of the BEB and BEF polygon
+        let cell_to_check = Cell::from_row_col(55, 147);
+
+        assert_eq!(coverages.polygons.len(), 3); // 3 polygons in the dataset
+        for p in coverages.polygons.iter() {
+            match p.name.as_str() {
+                "BEB" => {
+                    assert_eq!(p.cells.len(), 145);
+                    let cell = p.cells.iter().find(|c| c.compute_grid_cell == cell_to_check).unwrap();
+                    assert_relative_eq!(cell.cell_coverage, 0.6037847694229548);
+                }
+                "BEF" => {
+                    assert_eq!(p.cells.len(), 10053);
+                    let cell = p.cells.iter().find(|c| c.compute_grid_cell == cell_to_check).unwrap();
+                    assert_relative_eq!(cell.cell_coverage, 0.3962152305751532);
+                }
+                "NL" => {
+                    assert_eq!(p.cells.len(), 28072);
+                    assert!(!p.cells.iter().any(|c| c.compute_grid_cell == cell_to_check));
+                }
+                _ => {
+                    panic!("Unexpected polygon name: {}", p.name);
+                }
+            }
+
+            assert_relative_eq!(p.cells.iter().map(|c| c.coverage).sum::<f64>(), 1.0, epsilon = 1e-10);
+        }
     }
 }

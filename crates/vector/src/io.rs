@@ -9,6 +9,7 @@ use gdal::{
     errors::GdalError,
     vector::{FieldValue, LayerAccess},
 };
+use inf::gdalinterop;
 
 use crate::{DataRow, Error, Result};
 
@@ -40,7 +41,7 @@ impl VectorFormat {
             VectorFormat::GeoPackage => "GPKG",
             VectorFormat::PostgreSQL => "PostgreSQL",
             VectorFormat::Wfs => "WFS",
-            VectorFormat::Vrt => "VRT",
+            VectorFormat::Vrt => "OGR_VRT",
             VectorFormat::Parquet => "Parquet",
             VectorFormat::Arrow => "Arrow",
             VectorFormat::Unknown => "Unknown",
@@ -77,6 +78,13 @@ impl VectorFormat {
     }
 }
 
+/// Create a new in-memory vector dataset
+/// Useful for working with vector data in memory before actually writing it to disk
+pub fn create_in_memory() -> Result<gdal::Dataset> {
+    let mem_driver = gdal::DriverManager::get_driver_by_name(VectorFormat::Memory.gdal_driver_name())?;
+    Ok(mem_driver.create_vector_only("in-mem")?)
+}
+
 fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
     gdal::Dataset::open_ex(path, options).map_err(|err| match err {
         // Match on the error to give a cleaner error message when the file does not exist
@@ -98,19 +106,81 @@ fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal:
     })
 }
 
-/// Open a GDAL raster dataset for reading
-pub fn open_read_only<P: AsRef<Path>>(path: P) -> Result<gdal::Dataset> {
+struct VectorTranslateOptions {
+    options: *mut gdal_sys::GDALVectorTranslateOptions,
+}
+
+impl VectorTranslateOptions {
+    fn new(opts: &[String]) -> Result<Self> {
+        let mut c_opts = gdal::cpl::CslStringList::new();
+        for opt in opts {
+            c_opts.add_string(opt)?;
+        }
+
+        let options = unsafe { gdal_sys::GDALVectorTranslateOptionsNew(c_opts.as_ptr(), std::ptr::null_mut()) };
+        if options.is_null() {
+            return Err(Error::InvalidArgument(
+                "Failed to create vector translate options".to_string(),
+            ));
+        }
+
+        Ok(Self { options })
+    }
+
+    fn c_options(&mut self) -> *mut gdal_sys::GDALVectorTranslateOptions {
+        self.options
+    }
+}
+
+impl Drop for VectorTranslateOptions {
+    fn drop(&mut self) {
+        unsafe { gdal_sys::GDALVectorTranslateOptionsFree(self.c_options()) };
+    }
+}
+
+/// Translate a GDAL vector dataset to disk using the provided translate options
+/// The options are passed as a list of strings in the form `["-option1", "value1", "-option2", "value2"]`
+/// and match the options of the gdal ogr2ogr command line tool
+/// The dataset is returned in case the user wants to continue working with it but can also be ignored
+pub fn translate_to_disk(ds: &gdal::Dataset, path: &Path, options: &[String]) -> Result<gdal::Dataset> {
+    gdalinterop::create_output_directory_if_needed(path)?;
+    let path_str = CString::new(path.to_string_lossy().as_ref())?;
+    let mut opts = VectorTranslateOptions::new(options)?;
+    let mut usage_error: std::ffi::c_int = 0;
+
+    let handle = unsafe {
+        gdal_sys::GDALVectorTranslate(
+            path_str.as_ptr(),
+            std::ptr::null_mut(),
+            1,
+            &mut ds.c_dataset(),
+            opts.c_options(),
+            &mut usage_error,
+        )
+    };
+
+    if usage_error == gdalinterop::TRUE {
+        return Err(Error::InvalidArgument(
+            "Vector translate: invalid arguments".to_string(),
+        ));
+    }
+
+    gdalinterop::check_pointer(handle, "GDALVectorTranslate")?;
+
+    Ok(unsafe { gdal::Dataset::from_c_dataset(handle) })
+}
+
+/// Open a GDAL vector dataset for reading
+pub fn open_read_only(path: &Path) -> Result<gdal::Dataset> {
     let options = gdal::DatasetOptions {
-        open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY
-            | gdal::GdalOpenFlags::GDAL_OF_VECTOR
-            | gdal::GdalOpenFlags::GDAL_OF_VERBOSE_ERROR,
+        open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_VECTOR,
         ..Default::default()
     };
 
-    open_with_options(path.as_ref(), options)
+    open_with_options(path, options)
 }
 
-/// Open a GDAL raster dataset for reading with driver open options
+/// Open a GDAL vector dataset for reading with driver open options
 pub fn open_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset> {
     let options = gdal::DatasetOptions {
         open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_VECTOR,
@@ -119,6 +189,21 @@ pub fn open_read_only_with_options(path: &Path, open_options: &[&str]) -> Result
     };
 
     open_with_options(path, options)
+}
+
+pub fn layer_field_index<L: gdal::vector::LayerAccess, S: AsRef<str>>(layer: &L, field_name: S) -> Result<i32> {
+    let field_name_c_str = CString::new(field_name.as_ref())?;
+    let field_index =
+        unsafe { gdal_sys::OGR_L_FindFieldIndex(layer.c_layer(), field_name_c_str.as_ptr(), gdalinterop::TRUE) };
+
+    if field_index == -1 {
+        return Err(Error::InvalidArgument(format!(
+            "Field not found: {}",
+            field_name.as_ref()
+        )));
+    }
+
+    Ok(field_index)
 }
 
 pub fn field_index_from_name<S: AsRef<str>>(feature: &gdal::vector::Feature, field_name: S) -> Result<i32> {
