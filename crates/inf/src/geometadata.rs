@@ -788,4 +788,22 @@ mod tests {
 
         assert_eq!(meta.bottom_left(), coord);
     }
+
+    #[test]
+    #[cfg(feature = "gdal")]
+    fn warp_metadata() {
+        let meta = GeoMetadata::with_origin(
+            "EPSG:31370",
+            RasterSize { rows: 120, cols: 144 },
+            Point::new(-219000.0, -100000.0),
+            CellSize::square(5000.0),
+            Option::<f64>::None,
+        );
+
+        let warped = meta.warped_to_epsg(4326.into()).unwrap();
+
+        assert_eq!(warped.projected_epsg(), Some(4326.into()));
+        assert_eq!(warped.raster_size(), RasterSize { rows: 144, cols: 120 });
+        assert_eq!(warped.cell_size(), CellSize::square(5000.0));
+    }
 }
