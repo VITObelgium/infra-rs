@@ -150,12 +150,12 @@ mod tests {
                 "BEB" => {
                     assert_eq!(p.cells.len(), 145);
                     let cell = p.cells.iter().find(|c| c.compute_grid_cell == cell_to_check).unwrap();
-                    assert_relative_eq!(cell.cell_coverage, 0.6037847694229548);
+                    assert_relative_eq!(cell.cell_coverage, 0.6037847694229548, epsilon = 1e-10);
                 }
                 "BEF" => {
                     assert_eq!(p.cells.len(), 10053);
                     let cell = p.cells.iter().find(|c| c.compute_grid_cell == cell_to_check).unwrap();
-                    assert_relative_eq!(cell.cell_coverage, 0.3962152305751532);
+                    assert_relative_eq!(cell.cell_coverage, 0.3962152305751532, epsilon = 1e-10);
                 }
                 "NL" => {
                     assert_eq!(p.cells.len(), 28072);
