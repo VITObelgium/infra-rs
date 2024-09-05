@@ -40,6 +40,3 @@ geozero     = ["dep:geozero"]
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,iconv]", "proj[core]", "tiff[core,lzma,zip]"]
-
-[package.metadata.vcpkg.target]
-x86_64-pc-windows-msvc = { triplet = "x64-windows-static" }
