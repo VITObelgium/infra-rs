@@ -2,6 +2,7 @@ use gdal::vector::LayerAccess;
 use inf::gdalinterop;
 use inf::Cell;
 
+use crate::algo;
 use crate::io;
 use crate::io::LayerAccessExtension;
 use crate::Error;
@@ -94,7 +95,7 @@ impl VectorBuilder {
 
     pub fn store(self, path: &std::path::Path) -> Result<()> {
         let ds = self.layer.into_dataset();
-        io::dataset::translate_to_disk(&ds, path, &[])?;
+        algo::translate_ds_to_disk(&ds, path, &[])?;
         Ok(())
     }
 
@@ -102,7 +103,7 @@ impl VectorBuilder {
         let ds = self.layer.into_dataset();
         let mem_file = gdalinterop::MemoryFile::empty(std::path::Path::new("/vsimem/json_serialization.geojson"))?;
 
-        io::dataset::translate_to_disk(&ds, mem_file.path(), &[])?;
+        algo::translate_ds_to_disk(&ds, mem_file.path(), &[])?;
 
         match std::str::from_utf8(mem_file.as_slice()?) {
             Ok(json_data) => Ok(json_data.to_string()),

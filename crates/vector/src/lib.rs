@@ -3,6 +3,7 @@
 pub type Error = inf::Error;
 pub type Result<T = ()> = inf::Result<T>;
 
+pub mod algo;
 mod coveragetools;
 pub mod datarow;
 pub mod fieldtype;
