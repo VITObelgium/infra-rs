@@ -1,6 +1,6 @@
 This repo contains the shared crates for building geo applications
 
-##jcond Project integration
+## Project integration
 Add this repository as a git submodule into your project
 
 In your main Cargo.toml specify the vcpkg version you wish to use 
