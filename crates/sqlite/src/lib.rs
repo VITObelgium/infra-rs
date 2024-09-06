@@ -1,6 +1,6 @@
 //! This module contains a lightweight sqlite wrapper on top of the libsqlite3-sys crate.
-//! This is only intended for very simple queries or sql file execution or obtains blobs with minimal overhead.
-//! For serious database work, use rusqlite or sqlx
+//! This is only intended for very simple queries or sql file execution or obtaining blobs with minimal overhead.
+//! For more serious database work, use rusqlite or sqlx or an orm
 
 mod connection;
 mod row;
