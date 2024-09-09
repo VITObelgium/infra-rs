@@ -22,6 +22,7 @@ log = "0.4"
 serde = { version = "1.0", features = ["derive"], optional = true }
 arrow = { version = "52.*", optional = true }
 pyo3 = { version = "0.*", optional = true }
+proj4rs = { version = "0", optional = true }
 
 [dev-dependencies]
 test-log      = "0.2"
@@ -37,6 +38,7 @@ serde       = ["dep:serde"]
 python      = ["arrow/pyarrow", "dep:pyo3"]
 geos        = ["dep:geos"]
 geozero     = ["dep:geozero"]
+proj4rs     = ["dep:proj4rs"]
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,iconv]", "proj[core]", "tiff[core,lzma,zip]"]

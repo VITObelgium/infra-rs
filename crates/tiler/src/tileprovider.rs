@@ -1,6 +1,6 @@
+use geo::{Coordinate, LatLonBounds, Tile};
+use inf::Legend;
 use std::{ops::Range, sync::atomic::AtomicU64};
-
-use inf::{Coordinate, LatLonBounds, Legend, Tile};
 
 use crate::{
     layermetadata::{LayerId, LayerMetadata},

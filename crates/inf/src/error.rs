@@ -40,6 +40,9 @@ pub enum Error {
     #[cfg(feature = "geos")]
     #[error("Geos error: {0}")]
     GeosError(#[from] geos::Error),
+    #[cfg(feature = "proj4rs")]
+    #[error("Proj error: {0}")]
+    ProjError(#[from] proj4rs::errors::Error),
 }
 
 #[cfg(feature = "python")]

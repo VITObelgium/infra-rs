@@ -5,15 +5,11 @@ use gdal::{
     Dataset,
 };
 
-use inf::{
-    crs,
-    legend::Legend,
-    spatialreference::SpatialReference,
-    tile::{self, TILE_SIZE},
-    CellSize, Coordinate, GeoMetadata, LatLonBounds, RasterSize, Tile,
-};
+use inf::legend::Legend;
+
+use geo::raster::{io::RasterFormat, RasterNum};
+use geo::{crs, raster, CellSize, Coordinate, GeoMetadata, LatLonBounds, RasterSize, SpatialReference, Tile};
 use num::Num;
-use raster::{io::RasterFormat, RasterNum};
 
 use crate::{
     imageprocessing::raw_tile_to_png,
@@ -92,7 +88,7 @@ fn read_raster_tile<T: RasterNum<T> + GdalType>(
     dpi_ratio: u8,
 ) -> Result<Vec<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = TILE_SIZE * dpi_ratio as u16;
+    let scaled_size = Tile::TILE_SIZE * dpi_ratio as u16;
 
     let options: Vec<String> = vec![
         "-ot".to_string(),
@@ -122,7 +118,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     dpi_ratio: u8,
 ) -> Result<Vec<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = (TILE_SIZE * dpi_ratio as u16) as usize;
+    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
 
     let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
     let dest_extent = GeoMetadata::with_origin(
@@ -183,7 +179,7 @@ impl WarpingTileProvider {
         let over_view_count = raster_band.overview_count()?;
 
         let mut srs = SpatialReference::from_proj(meta.projection())?;
-        let zoom_level = tile::zoom_level_for_pixel_size(meta.cell_size_x(), true);
+        let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), true);
 
         let mut layer_meta = LayerMetadata {
             id: tileprovider::unique_layer_id(),
@@ -279,8 +275,8 @@ impl WarpingTileProvider {
 
         raw_tile_to_png::<T>(
             raw_tile_data.as_slice(),
-            (TILE_SIZE * dpi_ratio as u16) as usize,
-            (TILE_SIZE * dpi_ratio as u16) as usize,
+            (Tile::TILE_SIZE * dpi_ratio as u16) as usize,
+            (Tile::TILE_SIZE * dpi_ratio as u16) as usize,
             Some(nodata),
             legend,
         )
@@ -346,7 +342,7 @@ impl TileProvider for WarpingTileProvider {
         WarpingTileProvider::value_range_for_extent(&self.meta, extent, zoom)
     }
 
-    fn get_raster_value(&self, id: LayerId, coord: inf::Coordinate) -> Result<Option<f32>> {
+    fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
         self.check_layer_id(id)?;
         WarpingTileProvider::raster_pixel(&self.meta, coord)
     }
@@ -366,7 +362,7 @@ impl TileProvider for WarpingTileProvider {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use inf::Tile;
+    use geo::Tile;
 
     use crate::{
         tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider, Error, TileProvider,

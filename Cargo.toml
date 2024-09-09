@@ -5,17 +5,16 @@ edition = "2021"
 
 [workspace]
 members = [
+    "crates/geo",
+    "crates/geo/vector_derive",
     "crates/inf",
-    "crates/raster",
     "crates/sqlite",
     "crates/tiler",
-    "crates/vector",
-    "crates/vector/vector_derive",
 ]
 
 [dependencies]
 inf    = { path = "./crates/inf" }
-raster = { path = "./crates/raster" }
+geo    = { path = "./crates/geo" }
 tiler  = { path = "./crates/tiler", optional = true }
 sqlite = { path = "./crates/sqlite", optional = true }
 

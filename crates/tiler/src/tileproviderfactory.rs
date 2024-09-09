@@ -1,4 +1,4 @@
-use raster::io::RasterFormat;
+use geo::raster::io::RasterFormat;
 
 use crate::Result;
 use std::path::Path;

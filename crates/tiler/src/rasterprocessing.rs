@@ -1,10 +1,10 @@
-use raster::io::RasterFormat;
+use geo::raster;
+use geo::raster::io::RasterFormat;
 use std::path::Path;
 
-use inf::{
+use geo::{
     crs::{self, web_mercator_to_lat_lon},
-    spatialreference::SpatialReference,
-    Coordinate, CoordinateTransformer, GeoMetadata, LatLonBounds, Point, RasterSize,
+    Coordinate, CoordinateTransformer, GeoMetadata, LatLonBounds, Point, RasterSize, SpatialReference,
 };
 
 use crate::{layermetadata::LayerSourceType, Result};
@@ -90,7 +90,8 @@ pub fn source_type_for_path(path: &std::path::Path) -> LayerSourceType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use inf::{gdalinterop, CellSize};
+    use geo::{CellSize, RuntimeConfiguration};
+    use path_macro::path;
 
     fn test_raster() -> std::path::PathBuf {
         [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"]
@@ -100,16 +101,10 @@ mod tests {
 
     #[ctor::ctor]
     fn init() {
-        let data_dir = [env!("CARGO_MANIFEST_DIR"), "..", "..", "target", "data"]
-            .iter()
-            .collect();
+        let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
 
-        let gdal_config = gdalinterop::Config {
-            debug_logging: false,
-            proj_db_search_location: data_dir,
-        };
-
-        gdal_config.apply().expect("Failed to configure GDAL");
+        let config = RuntimeConfiguration::new(&data_dir);
+        config.apply().expect("Failed to configure runtime");
     }
 
     #[test]

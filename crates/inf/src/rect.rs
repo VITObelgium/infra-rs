@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use crate::Point;
+pub type Point<T = f64> = geo_types::Point<T>;
 use geo_types::CoordNum;
 use num::{abs, Signed, Zero};
 

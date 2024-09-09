@@ -1,5 +1,6 @@
-use inf::{Coordinate, LatLonBounds, Legend, Tile};
-use raster::io::RasterFormat;
+use geo::raster::io::RasterFormat;
+use geo::{Coordinate, LatLonBounds, Tile};
+use inf::Legend;
 
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;

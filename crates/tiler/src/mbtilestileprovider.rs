@@ -4,7 +4,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use inf::{crs, Coordinate, LatLonBounds, Legend, Tile};
+use geo::{crs, Coordinate, LatLonBounds, Tile};
+use inf::Legend;
 use mbtilesdb::MbtilesDb;
 
 use crate::{
@@ -93,7 +94,7 @@ impl MbtilesTileProvider {
         ))
     }
 
-    pub fn raster_pixel(_meta: &LayerMetadata, _coord: inf::Coordinate) -> Result<Option<f32>> {
+    pub fn raster_pixel(_meta: &LayerMetadata, _coord: Coordinate) -> Result<Option<f32>> {
         Err(Error::Runtime(
             "Raster pixel not supported for vector tiles".to_string(),
         ))
@@ -140,7 +141,7 @@ impl TileProvider for MbtilesTileProvider {
 }
 
 mod mbtilesdb {
-    use inf::Tile;
+    use geo::Tile;
     use std::{collections::HashMap, path::Path};
 
     use crate::{Error, Result};

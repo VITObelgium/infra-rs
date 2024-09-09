@@ -1,0 +1,44 @@
+[package]
+name    = "geo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+inf = { path = "../inf", features = ["gdal", "geos", "geozero"] }
+vector_derive = { path = "vector_derive", optional = true }
+geos = { version = "9.0", features = ["geo", "v3_11_0"] }
+geozero = { version = "0.13", features = [
+    "with-gdal",
+    "with-geos",
+], optional = true }
+geo-types = { version = "0.7" }
+gdal = { version = "0.17", optional = true }
+gdal-sys = { version = "0.10", optional = true }
+approx = "0.5"
+rayon = "1.10"
+log = "0.4"
+thiserror = "1.0"
+num = "0.4"
+proj4rs = { version = "0.1" }
+arrow = { version = "52.2", optional = true }
+pyo3 = { version = "0.21", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+
+[dev-dependencies]
+inf           = { path = "../inf", features = ["gdal-static"] }
+path_macro    = "1.0"
+ctor          = "0.2"
+test-log      = "0.2"
+env_logger    = "0.11"
+generic-tests = "0.1"
+
+[features]
+default = ["derive"]
+derive  = ["dep:vector_derive"]
+gdal    = ["dep:gdal", "dep:gdal-sys"]
+arrow   = ["dep:arrow", "inf/arrow"]
+python  = ["arrow", "arrow/pyarrow", "dep:pyo3", "inf/python"]
+serde   = ["dep:serde"]
+
+[package.metadata.vcpkg]
+dependencies = ["gdal[core,iconv,geos,sqlite3]"]

@@ -1,6 +1,6 @@
 use crate::{tiledata::TileData, tileformat::TileFormat, Error, Result};
+use geo::raster::RasterNum;
 use inf::{Color, Legend};
-use raster::RasterNum;
 use std::io::BufWriter;
 
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]

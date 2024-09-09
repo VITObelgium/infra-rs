@@ -1,6 +1,6 @@
 use crate::tileformat::TileFormat;
 use gdal::raster::GdalDataType;
-use inf::{crs::Epsg, Coordinate, LatLonBounds};
+use geo::{crs::Epsg, Coordinate, LatLonBounds};
 use num::NumCast;
 use std::{collections::HashMap, path::PathBuf};
 

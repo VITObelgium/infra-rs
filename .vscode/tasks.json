@@ -9,7 +9,7 @@
 			],
 			"args": [
 				"--workspace",
-				"--features=serde,sqlite,gdal-static,arrow,derive"
+				"--all-features"
 			],
 			"group": {
 				"kind": "build",

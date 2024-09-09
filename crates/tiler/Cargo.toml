@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 inf        = { path = "../inf", features = ["gdal"] }
-raster     = { path = "../raster" }
+geo        = { path = "../geo", features = ["gdal"] }
 sqlite     = { path = "../sqlite" }
 thiserror  = "1.0"
 gdal       = "0.17"
@@ -16,10 +16,11 @@ serde_json = { version = "1.0", optional = true }
 serde      = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
-approx   = "0.5"
-test-log = "0.2"
-image    = { version = "0.25", default-features = false, features = ["png"] }
-ctor     = "0.2"
+approx     = "0.5"
+test-log   = "0.2"
+image      = { version = "0.25", default-features = false, features = ["png"] }
+ctor       = "0.2"
+path_macro = "1.0"
 
 [features]
 serde = ["dep:serde", "dep:serde_json", "inf/serde"]
