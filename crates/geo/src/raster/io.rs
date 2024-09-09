@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{gdalinterop::*, GeoMetadata, RasterSize};
+use crate::{gdalinterop::*, GeoReference, RasterSize};
 use crate::{Error, Result};
 use approx::relative_eq;
 use gdal::{
@@ -151,22 +151,22 @@ pub mod dataset {
     }
 
     /// Reads the [`inf::GeoMetadata`] from the first band of a raster file
-    pub fn read_file_metadata(path: &Path) -> Result<GeoMetadata> {
+    pub fn read_file_metadata(path: &Path) -> Result<GeoReference> {
         read_band_metadata(&open_read_only(path)?, 1)
     }
 
     /// Opens the raster dataset to read the spatial metadata with driver open options
-    pub fn read_file_metadata_with_options<T: AsRef<str>>(path: &Path, open_options: &[T]) -> Result<GeoMetadata> {
+    pub fn read_file_metadata_with_options<T: AsRef<str>>(path: &Path, open_options: &[T]) -> Result<GeoReference> {
         read_band_metadata(&open_read_only_with_options(path, str_vec(open_options).as_slice())?, 1)
     }
 
     /// Reads the [`inf::GeoMetadata`] from the provided band of a raster file
     /// The band index is 1-based
-    pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoMetadata> {
+    pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoReference> {
         let rasterband = ds.rasterband(band_index)?;
 
         let (width, height) = ds.raster_size();
-        Ok(GeoMetadata::new(
+        Ok(GeoReference::new(
             ds.projection(),
             RasterSize {
                 rows: height,
@@ -182,9 +182,9 @@ pub mod dataset {
     pub fn read_band_region<T: GdalType + RasterNum<T>>(
         dataset: &gdal::Dataset,
         band_nr: usize,
-        extent: &GeoMetadata,
+        extent: &GeoReference,
         dst_data: &mut [T],
-    ) -> Result<GeoMetadata> {
+    ) -> Result<GeoReference> {
         let meta = read_band_metadata(dataset, band_nr)?;
         let cut_out = intersect_metadata(&meta, extent)?;
 
@@ -227,7 +227,7 @@ pub mod dataset {
         dataset: &gdal::Dataset,
         band_index: usize,
         dst_data: &mut [T],
-    ) -> Result<GeoMetadata> {
+    ) -> Result<GeoReference> {
         let raster_band = dataset.rasterband(band_index)?;
         let meta = read_band_metadata(dataset, band_index)?;
 
@@ -293,7 +293,7 @@ pub mod dataset {
     /// Write raster to disk using a different data type then present in the data buffer
     /// Driver options (as documented in the GDAL drivers) can be provided
     /// If no driver options are provided, some sane defaults will be used for GeoTIFF files
-    pub fn write_as<TStore, T>(data: &[T], meta: &GeoMetadata, path: &Path, driver_options: &[String]) -> Result<()>
+    pub fn write_as<TStore, T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result<()>
     where
         T: GdalType + Nodata<T> + num::NumCast + Copy,
         TStore: GdalType + Nodata<TStore> + num::NumCast,
@@ -323,7 +323,7 @@ pub mod dataset {
     /// Write the raster to disk.
     /// Driver options (as documented in the GDAL drivers) can be provided.
     /// If no driver options are provided, some sane defaults will be used for GeoTIFF files (compression, tiling).
-    pub fn write<T>(data: &[T], meta: &GeoMetadata, path: &Path, driver_options: &[String]) -> Result
+    pub fn write<T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result
     where
         T: GdalType + Nodata<T> + num::NumCast + Copy,
     {
@@ -392,7 +392,7 @@ pub mod dataset {
     }
 
     /// Creates an in-memory dataset without any bands
-    pub fn create_in_memory(meta: &GeoMetadata) -> Result<gdal::Dataset> {
+    pub fn create_in_memory(meta: &GeoReference) -> Result<gdal::Dataset> {
         let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
         Ok(mem_driver.create(PathBuf::from("in_mem"), meta.columns(), meta.rows(), 0)?)
     }
@@ -401,7 +401,7 @@ pub mod dataset {
     /// The array passed data will be used as the dataset band.
     /// Make sure the data array is the correct size and will live as long as the dataset.
     pub fn create_in_memory_with_data<T: GdalType + Nodata<T>>(
-        meta: &GeoMetadata,
+        meta: &GeoReference,
         data: &[T],
     ) -> Result<gdal::Dataset> {
         let mut ds = create_in_memory(meta)?;
@@ -412,7 +412,7 @@ pub mod dataset {
 
     pub(crate) fn metadata_to_dataset_band(
         ds: &mut gdal::Dataset,
-        meta: &GeoMetadata,
+        meta: &GeoReference,
         band_index: usize,
     ) -> Result<()> {
         ds.set_geo_transform(&meta.geo_transform())?;
@@ -421,7 +421,7 @@ pub mod dataset {
         Ok(())
     }
 
-    fn intersect_metadata(src_meta: &GeoMetadata, dst_meta: &GeoMetadata) -> Result<CutOut> {
+    fn intersect_metadata(src_meta: &GeoReference, dst_meta: &GeoReference) -> Result<CutOut> {
         // src_meta: the metadata of the raster that we are going to read as it ison disk
         // dst_meta: the metadata of the raster that will be returned to the user
 
@@ -505,14 +505,14 @@ pub mod dataset {
 
         #[test]
         fn test_intersect_metadata() {
-            let meta1 = GeoMetadata::with_origin(
+            let meta1 = GeoReference::with_origin(
                 String::default(),
                 RasterSize { rows: 3, cols: 5 },
                 Point::new(1.0, -10.0),
                 CellSize::square(4.0),
                 Some(-10.0),
             );
-            let meta2 = GeoMetadata::with_origin(
+            let meta2 = GeoReference::with_origin(
                 String::default(),
                 RasterSize { rows: 3, cols: 4 },
                 Point::new(-3.0, -6.0),
@@ -544,7 +544,7 @@ pub mod dataset {
                 -0.049_999_998_635_984_29,
             ];
 
-            let meta = GeoMetadata::new(
+            let meta = GeoReference::new(
                 "EPSG:4326".to_string(),
                 RasterSize { rows: 840, cols: 900 },
                 TRANS,

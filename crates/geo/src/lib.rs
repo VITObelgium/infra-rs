@@ -24,7 +24,7 @@ pub use latlonbounds::LatLonBounds;
 #[doc(inline)]
 pub use metadata::CellSize;
 #[doc(inline)]
-pub use metadata::GeoMetadata;
+pub use metadata::GeoReference;
 #[doc(inline)]
 pub use metadata::RasterSize;
 pub use runtimeconfiguration::RuntimeConfiguration;

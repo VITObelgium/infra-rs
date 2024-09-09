@@ -1,4 +1,4 @@
-use crate::{GeoMetadata, RasterSize};
+use crate::{GeoReference, RasterSize};
 use approx::relative_eq;
 
 pub const NOD: f64 = 255.0;
@@ -25,8 +25,8 @@ pub fn compare_fp_vectors(a: &[f64], b: &[f64]) -> bool {
     })
 }
 
-pub fn test_metadata_2x2() -> GeoMetadata {
-    GeoMetadata::new(
+pub fn test_metadata_2x2() -> GeoReference {
+    GeoReference::new(
         "EPSG:4326".to_string(),
         RasterSize { rows: 2, cols: 2 },
         [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],

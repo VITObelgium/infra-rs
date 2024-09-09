@@ -9,7 +9,7 @@ use std::path::Path;
 
 use crate::raster::{Cell, CellIterator};
 use crate::spatialreference::CoordinateWarpTransformer;
-use crate::{Error, GeoMetadata, Point, RasterSize, Result, SpatialReference};
+use crate::{Error, GeoReference, Point, RasterSize, Result, SpatialReference};
 
 use super::coveragetools::VectorBuilder;
 
@@ -26,7 +26,7 @@ pub struct PolygonCellCoverage {
     pub id: u64,
     pub name: String,
     pub value: f64,
-    pub output_subgrid_extent: GeoMetadata, // This polygon subgrid within the output grid
+    pub output_subgrid_extent: GeoReference, // This polygon subgrid within the output grid
     pub cells: Vec<CellInfo>,
 }
 
@@ -73,7 +73,7 @@ fn create_polygon_from_rect_as<TGeom: TryFrom<geo_types::Polygon>>(rect: Rect<f6
     }
 }
 
-fn create_geometry_extent(geom: &geos::Geometry, grid_extent: &GeoMetadata) -> Result<GeoMetadata> {
+fn create_geometry_extent(geom: &geos::Geometry, grid_extent: &GeoReference) -> Result<GeoReference> {
     let mut geometry_extent = grid_extent.clone();
 
     let env = geom.envelope()?;
@@ -107,9 +107,9 @@ fn create_geometry_extent(geom: &geos::Geometry, grid_extent: &GeoMetadata) -> R
 
 fn create_geometry_extent_for_srs(
     geom: &geos::Geometry,
-    grid_extent: &GeoMetadata,
+    grid_extent: &GeoReference,
     mut source_projection: SpatialReference,
-) -> Result<GeoMetadata> {
+) -> Result<GeoReference> {
     let mut dest_proj = SpatialReference::from_proj(grid_extent.projection())?;
 
     if source_projection.epsg_cs() != dest_proj.epsg_cs() {
@@ -121,8 +121,8 @@ fn create_geometry_extent_for_srs(
 }
 
 fn create_cell_coverages(
-    extent: &GeoMetadata,
-    polygon_extent: &GeoMetadata,
+    extent: &GeoReference,
+    polygon_extent: &GeoReference,
     geom: &geos::Geometry,
 ) -> Result<Vec<CellInfo>> {
     let mut result: Vec<CellInfo> = Vec::new();
@@ -177,7 +177,7 @@ fn create_polygon_coverage(
     polygon_id: u64,
     mut geometry: geos::Geometry,
     mut geometry_projection: SpatialReference,
-    output_extent: &GeoMetadata,
+    output_extent: &GeoReference,
 ) -> Result<PolygonCellCoverage> {
     let mut cov = PolygonCellCoverage::default();
 
@@ -297,7 +297,7 @@ pub struct CoverageConfiguration {
 }
 
 pub struct CoverageData {
-    pub extent: GeoMetadata,
+    pub extent: GeoReference,
     pub polygons: Vec<PolygonCellCoverage>,
 }
 
@@ -343,7 +343,7 @@ impl CoverageData {
 
 pub fn create_geometries(
     vector_ds: &gdal::Dataset,
-    output_extent: &GeoMetadata,
+    output_extent: &GeoReference,
     config: &CoverageConfiguration,
 ) -> Result<Vec<(u64, f64, String, geos::Geometry)>> {
     let mut geometries: Vec<(u64, f64, String, geos::Geometry)> = Vec::new();
@@ -423,7 +423,7 @@ pub fn create_geometries(
 
 pub fn create_polygon_coverages(
     vector_ds: &gdal::Dataset,
-    output_extent: &GeoMetadata,
+    output_extent: &GeoReference,
     config: CoverageConfiguration,
     progress_cb: impl AsyncProgressNotification,
 ) -> Result<CoverageData> {

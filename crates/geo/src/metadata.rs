@@ -81,7 +81,7 @@ impl CellSize {
 
 /// Represents the metadata associated with a raster so it can be georeferenced.
 #[derive(Clone, Debug, PartialEq, Default)]
-pub struct GeoMetadata {
+pub struct GeoReference {
     /// The proj projection string
     projection: String,
     /// The size of the image in pixels (width, height)
@@ -92,9 +92,9 @@ pub struct GeoMetadata {
     nodata: Option<f64>,
 }
 
-impl GeoMetadata {
+impl GeoReference {
     pub fn new<S: Into<String>>(projection: S, size: RasterSize, geo_transform: [f64; 6], nodata: Option<f64>) -> Self {
-        GeoMetadata {
+        GeoReference {
             projection: projection.into(),
             size,
             geo_transform,
@@ -107,7 +107,7 @@ impl GeoMetadata {
     }
 
     pub fn without_spatial_reference(size: RasterSize, nodata: Option<f64>) -> Self {
-        GeoMetadata {
+        GeoReference {
             size,
             nodata,
             ..Default::default()
@@ -135,7 +135,7 @@ impl GeoMetadata {
             None => None,
         };
 
-        GeoMetadata {
+        GeoReference {
             projection: projection.into(),
             size,
             geo_transform,
@@ -156,7 +156,7 @@ impl GeoMetadata {
     }
 
     pub fn copy_with_nodata<T: ToPrimitive>(&self, nodata: Option<T>) -> Self {
-        GeoMetadata {
+        GeoReference {
             projection: self.projection.clone(),
             size: self.size,
             geo_transform: self.geo_transform,
@@ -360,7 +360,7 @@ impl GeoMetadata {
         Ok(())
     }
 
-    pub fn intersects(&self, other: &GeoMetadata) -> Result<bool> {
+    pub fn intersects(&self, other: &GeoReference) -> Result<bool> {
         if self.projection != other.projection {
             return Err(Error::InvalidArgument(
                 "Cannot intersect metadata with different projections".to_string(),
@@ -433,7 +433,7 @@ impl GeoMetadata {
             gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
 
             match crate::gdalinterop::check_rc(warp_rc) {
-                Ok(_) => Ok(GeoMetadata::new(
+                Ok(_) => Ok(GeoReference::new(
                     target_projection,
                     RasterSize {
                         rows: rows as usize,
@@ -461,7 +461,7 @@ pub fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
     diff % cellsize < 1e-12
 }
 
-pub fn metadata_is_aligned(meta1: &GeoMetadata, meta2: &GeoMetadata) -> bool {
+pub fn metadata_is_aligned(meta1: &GeoReference, meta2: &GeoReference) -> bool {
     let cell_size_x1 = meta1.cell_size_x();
     let cell_size_x2 = meta2.cell_size_x();
 
@@ -507,7 +507,7 @@ mod tests {
 
     #[test]
     fn bounding_box_zero_origin() {
-        let meta = GeoMetadata::with_origin(
+        let meta = GeoReference::with_origin(
             String::new(),
             RasterSize { rows: 10, cols: 5 },
             Point::new(0.0, 0.0),
@@ -522,7 +522,7 @@ mod tests {
 
     #[test]
     fn bounding_box_negative_y_origin() {
-        let meta = GeoMetadata::with_origin(
+        let meta = GeoReference::with_origin(
             String::new(),
             RasterSize { rows: 2, cols: 2 },
             Point::new(9.0, -10.0),
@@ -539,7 +539,7 @@ mod tests {
     fn bounding_box_epsg_4326() {
         const TRANS: [f64; 6] = [-30.0, 0.100, 0.0, 30.0, 0.0, -0.05];
 
-        let meta = GeoMetadata::new(
+        let meta = GeoReference::new(
             "EPSG:4326".to_string(),
             RasterSize { rows: 840, cols: 900 },
             TRANS,
@@ -556,7 +556,7 @@ mod tests {
 
     #[test]
     fn point_calculations_zero_origin() {
-        let meta = GeoMetadata::with_origin(
+        let meta = GeoReference::with_origin(
             String::new(),
             RasterSize { rows: 2, cols: 2 },
             Point::new(0.0, 0.0),
@@ -587,7 +587,7 @@ mod tests {
 
     #[test]
     fn point_calculations_non_negative_origin() {
-        let meta = GeoMetadata::with_origin(
+        let meta = GeoReference::with_origin(
             String::new(),
             RasterSize { rows: 2, cols: 2 },
             Point::new(-1.0, -1.0),
@@ -613,7 +613,7 @@ mod tests {
 
     #[test]
     fn point_calculations_non_positive_origin() {
-        let meta = GeoMetadata::with_origin(
+        let meta = GeoReference::with_origin(
             String::new(),
             RasterSize { rows: 2, cols: 2 },
             Point::new(1.0, 1.0),
@@ -632,7 +632,7 @@ mod tests {
     #[test]
     fn test_metadata_intersects() {
         let meta_with_origin = |orig| {
-            GeoMetadata::with_origin(
+            GeoReference::with_origin(
                 String::new(),
                 RasterSize { rows: 3, cols: 3 },
                 orig,
@@ -656,7 +656,7 @@ mod tests {
 
     #[test]
     fn metadata_intersects_only_y_overlap() {
-        let meta1 = GeoMetadata::with_origin(
+        let meta1 = GeoReference::with_origin(
             "",
             RasterSize { rows: 133, cols: 121 },
             Point::new(461_144.591_644_468_2, 6_609_204.087_706_049),
@@ -664,7 +664,7 @@ mod tests {
             Option::<f64>::None,
         );
 
-        let meta2 = GeoMetadata::with_origin(
+        let meta2 = GeoReference::with_origin(
             "",
             RasterSize { rows: 195, cols: 122 },
             Point::new(475_361.878_905_511, 6_607_216.724_970_634),
@@ -677,7 +677,7 @@ mod tests {
 
     #[test]
     fn metadata_intersects_only_x_overlap() {
-        let meta1 = GeoMetadata::with_origin(
+        let meta1 = GeoReference::with_origin(
             "",
             RasterSize { rows: 133, cols: 121 },
             Point::new(461_144.591_644_468_2, 6_609_204.087_706_049),
@@ -685,7 +685,7 @@ mod tests {
             Option::<f64>::None,
         );
 
-        let meta2 = GeoMetadata::with_origin(
+        let meta2 = GeoReference::with_origin(
             "",
             RasterSize { rows: 195, cols: 122 },
             Point::new(461_144.591_644_468_2, 6_807_216.724_970_634),
@@ -698,7 +698,7 @@ mod tests {
 
     #[test]
     fn metadata_intersects_different_but_aligned_cellsize() {
-        let meta1 = GeoMetadata::with_origin(
+        let meta1 = GeoReference::with_origin(
             "",
             RasterSize { rows: 3, cols: 3 },
             Point::new(0.0, 0.0),
@@ -707,7 +707,7 @@ mod tests {
         );
 
         assert!(meta1
-            .intersects(&GeoMetadata::with_origin(
+            .intersects(&GeoReference::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(10.0, 10.0),
@@ -717,7 +717,7 @@ mod tests {
             .unwrap());
 
         assert!(!&meta1
-            .intersects(&GeoMetadata::with_origin(
+            .intersects(&GeoReference::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(30.0, 30.0),
@@ -726,7 +726,7 @@ mod tests {
             ))
             .unwrap());
 
-        assert!(meta1.intersects(&GeoMetadata::with_origin(
+        assert!(meta1.intersects(&GeoReference::with_origin(
                 String::new(),
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(11.0, 10.0),
@@ -739,7 +739,7 @@ mod tests {
             true
         }));
 
-        assert!(meta1.intersects(&GeoMetadata::with_origin(
+        assert!(meta1.intersects(&GeoReference::with_origin(
                 String::new(),
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(10.0, 11.0),
@@ -752,7 +752,7 @@ mod tests {
             true
         }));
 
-        assert!(GeoMetadata::with_origin(
+        assert!(GeoReference::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(11.0, 10.0),
@@ -761,7 +761,7 @@ mod tests {
             ).intersects(&meta1)
         .is_err_and(|e| e.to_string() == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
 
-        assert!(GeoMetadata::with_origin(
+        assert!(GeoReference::with_origin(
                 "",
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(10.0, 11.0),
@@ -775,7 +775,7 @@ mod tests {
     fn metadata_set_bottom_left_coordinate() {
         let coord = Point::new(160000.0, 195000.0);
 
-        let mut meta = GeoMetadata::with_origin(
+        let mut meta = GeoReference::with_origin(
             "",
             RasterSize { rows: 920, cols: 2370 },
             Point::new(22000.0, 153000.0),
@@ -791,7 +791,7 @@ mod tests {
     #[test]
     #[cfg(feature = "gdal")]
     fn warp_metadata() {
-        let meta = GeoMetadata::with_origin(
+        let meta = GeoReference::with_origin(
             "EPSG:31370",
             RasterSize { rows: 120, cols: 144 },
             Point::new(-219000.0, -100000.0),

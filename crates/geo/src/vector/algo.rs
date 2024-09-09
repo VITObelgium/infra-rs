@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{gdalinterop, GeoMetadata};
+use crate::{gdalinterop, GeoReference};
 use gdal::raster::GdalType;
 
 use crate::{raster, Error, Result};
@@ -74,9 +74,9 @@ pub struct RasterizeOptionsWrapper {
 
 pub fn rasterize<T: raster::RasterNum<T> + GdalType>(
     ds: &gdal::Dataset,
-    meta: &GeoMetadata,
+    meta: &GeoReference,
     options: &[String],
-) -> Result<(GeoMetadata, Vec<T>)> {
+) -> Result<(GeoReference, Vec<T>)> {
     let gdal_options = RasterizeOptions::new(options)?;
 
     let data = vec![meta.nodata_as::<T>()?.unwrap_or(T::zero()); meta.rows() * meta.columns()];

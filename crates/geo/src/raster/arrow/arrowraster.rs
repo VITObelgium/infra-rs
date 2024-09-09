@@ -8,7 +8,7 @@ use num::NumCast;
 
 use crate::{
     raster::{Raster, RasterNum},
-    GeoMetadata,
+    GeoReference,
 };
 
 use super::arrowutil::ArrowType;
@@ -27,7 +27,7 @@ impl ArrowRasterNum<f32> for f32 {}
 impl ArrowRasterNum<f64> for f64 {}
 
 pub struct ArrowRaster<T: ArrowRasterNum<T>> {
-    pub(super) metadata: GeoMetadata,
+    pub(super) metadata: GeoReference,
     pub(super) data: PrimitiveArray<T::TArrow>,
 }
 
@@ -72,13 +72,13 @@ impl<T: ArrowRasterNum<T>> Raster<T> for ArrowRaster<T>
 where
     T::TArrow: ArrowPrimitiveType<Native = T>,
 {
-    fn new(metadata: GeoMetadata, data: Vec<T>) -> Self {
+    fn new(metadata: GeoReference, data: Vec<T>) -> Self {
         let nod = metadata.nodata();
         let data: PrimitiveArray<T::TArrow> = data.iter().map(|&v| (v.to_f64() != nod).then_some(v)).collect();
         ArrowRaster { metadata, data }
     }
 
-    fn from_iter<Iter>(metadata: GeoMetadata, iter: Iter) -> Self
+    fn from_iter<Iter>(metadata: GeoReference, iter: Iter) -> Self
     where
         Self: Sized,
         Iter: Iterator<Item = Option<T>>,
@@ -89,16 +89,16 @@ where
         }
     }
 
-    fn zeros(meta: GeoMetadata) -> Self {
+    fn zeros(meta: GeoReference) -> Self {
         ArrowRaster::filled_with(T::zero(), meta)
     }
 
-    fn filled_with(val: T, meta: GeoMetadata) -> Self {
+    fn filled_with(val: T, meta: GeoReference) -> Self {
         let data_size = meta.rows() * meta.columns();
         ArrowRaster::new(meta, vec![val; data_size])
     }
 
-    fn geo_metadata(&self) -> &GeoMetadata {
+    fn geo_metadata(&self) -> &GeoReference {
         &self.metadata
     }
 
@@ -188,7 +188,7 @@ mod tests {
 
     #[test]
     fn test_flatten() {
-        let metadata = GeoMetadata::new(
+        let metadata = GeoReference::new(
             "EPSG:4326".to_string(),
             RasterSize { rows: 2, cols: 2 },
             [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],

@@ -8,7 +8,7 @@ mod tests {
             testutils::{NOD, *},
             DenseRaster, Raster, RasterNum,
         },
-        GeoMetadata, RasterSize,
+        GeoReference, RasterSize,
     };
 
     #[cfg(feature = "arrow")]
@@ -20,7 +20,7 @@ mod tests {
         for<'a> &'a R: std::ops::Add<&'a R, Output = R>,
         R: Raster<T> + std::ops::Add<R, Output = R>,
     {
-        let metadata = GeoMetadata::new(
+        let metadata = GeoReference::new(
             "EPSG:4326".to_string(),
             RasterSize { rows: 2, cols: 2 },
             [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
@@ -49,7 +49,7 @@ mod tests {
         for<'a> &'a R: std::ops::Mul<T, Output = R>,
         R: Raster<T> + std::ops::Mul<T, Output = R>,
     {
-        let metadata = GeoMetadata::new(
+        let metadata = GeoReference::new(
             "EPSG:4326".to_string(),
             RasterSize { rows: 2, cols: 2 },
             [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
@@ -72,7 +72,7 @@ mod tests {
 
     #[test]
     fn test_sum<T: RasterNum<T>, R: Raster<T>>() {
-        let metadata = GeoMetadata::new(
+        let metadata = GeoReference::new(
             "EPSG:4326".to_string(),
             RasterSize { rows: 2, cols: 2 },
             [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],

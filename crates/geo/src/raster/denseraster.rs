@@ -1,4 +1,4 @@
-use crate::GeoMetadata;
+use crate::GeoReference;
 use num::NumCast;
 
 use super::{Raster, RasterNum};
@@ -8,7 +8,7 @@ use super::{Raster, RasterNum};
 /// and does not allocate additional data for tracking nodata cells.
 #[derive(Debug)]
 pub struct DenseRaster<T: RasterNum<T>> {
-    pub(super) metadata: GeoMetadata,
+    pub(super) metadata: GeoReference,
     pub(super) data: Vec<T>,
 }
 
@@ -28,12 +28,12 @@ impl<T: RasterNum<T>> DenseRaster<T> {
 }
 
 impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
-    fn new(metadata: GeoMetadata, mut data: Vec<T>) -> Self {
+    fn new(metadata: GeoReference, mut data: Vec<T>) -> Self {
         process_nodata(&mut data, metadata.nodata());
         DenseRaster { metadata, data }
     }
 
-    fn from_iter<Iter>(metadata: GeoMetadata, iter: Iter) -> Self
+    fn from_iter<Iter>(metadata: GeoReference, iter: Iter) -> Self
     where
         Self: Sized,
         Iter: Iterator<Item = Option<T>>,
@@ -46,16 +46,16 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
         DenseRaster { metadata, data }
     }
 
-    fn zeros(meta: GeoMetadata) -> Self {
+    fn zeros(meta: GeoReference) -> Self {
         DenseRaster::filled_with(T::zero(), meta)
     }
 
-    fn filled_with(val: T, meta: GeoMetadata) -> Self {
+    fn filled_with(val: T, meta: GeoReference) -> Self {
         let data_size = meta.rows() * meta.columns();
         DenseRaster::new(meta, vec![val; data_size])
     }
 
-    fn geo_metadata(&self) -> &GeoMetadata {
+    fn geo_metadata(&self) -> &GeoReference {
         &self.metadata
     }
 

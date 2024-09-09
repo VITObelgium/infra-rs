@@ -8,7 +8,7 @@ use pyo3::{pyclass, pymethods};
 
 use crate::{
     raster::{ArrowRaster, ArrowRasterNum, Raster},
-    GeoMetadata, RasterSize,
+    GeoReference, RasterSize,
 };
 
 #[derive(Clone)]
@@ -28,8 +28,8 @@ pub struct PyRasterMetadata {
     pub nodata: Option<f64>,
 }
 
-impl From<&GeoMetadata> for PyRasterMetadata {
-    fn from(meta: &GeoMetadata) -> Self {
+impl From<&GeoReference> for PyRasterMetadata {
+    fn from(meta: &GeoReference) -> Self {
         PyRasterMetadata {
             projection: meta.projection().to_string(),
             epsg: meta.projected_epsg().map(|crs| crs.into()),
@@ -41,9 +41,9 @@ impl From<&GeoMetadata> for PyRasterMetadata {
     }
 }
 
-impl From<&PyRasterMetadata> for GeoMetadata {
+impl From<&PyRasterMetadata> for GeoReference {
     fn from(val: &PyRasterMetadata) -> Self {
-        GeoMetadata::new(
+        GeoReference::new(
             val.projection.clone(),
             RasterSize {
                 rows: val.size.1,

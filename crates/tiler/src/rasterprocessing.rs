@@ -4,7 +4,7 @@ use std::path::Path;
 
 use geo::{
     crs::{self, web_mercator_to_lat_lon},
-    Coordinate, CoordinateTransformer, GeoMetadata, LatLonBounds, Point, RasterSize, SpatialReference,
+    Coordinate, CoordinateTransformer, GeoReference, LatLonBounds, Point, RasterSize, SpatialReference,
 };
 
 use crate::{layermetadata::LayerSourceType, Result};
@@ -49,7 +49,7 @@ pub fn raster_pixel(raster_path: &Path, mut coord: Coordinate, layer_name: Optio
     read_pixel_from_file(raster_path, coord.into())
 }
 
-pub fn metadata_bounds_wgs84(meta: GeoMetadata) -> Result<LatLonBounds> {
+pub fn metadata_bounds_wgs84(meta: GeoReference) -> Result<LatLonBounds> {
     let mut srs = SpatialReference::from_proj(meta.projection())?;
     let mut result = LatLonBounds::hull(meta.top_left().into(), meta.bottom_right().into());
 
@@ -111,7 +111,7 @@ mod tests {
     fn raster_bounds_invalid_projection_info() {
         let projection = "LOCAL_CS[\"Amersfoort / RD New\",UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]";
 
-        let meta = GeoMetadata::with_origin(
+        let meta = GeoReference::with_origin(
             projection,
             RasterSize { rows: 3250, cols: 2700 },
             Point::new(10000.0, 300000.0),

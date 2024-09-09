@@ -1,4 +1,4 @@
-use crate::GeoMetadata;
+use crate::GeoReference;
 use crate::Result;
 use gdal::raster::GdalType;
 
@@ -21,7 +21,7 @@ impl<T: RasterNum<T> + GdalType> RasterIO<T, DenseRaster<T>> for DenseRaster<T> 
     /// Reads a subset of the raster from disk into a DenseRaster
     /// The provided extent does not have to be contained within the raster
     /// Areas outside of the original raster will be filled with the nodata value
-    fn read_bounds(path: &std::path::Path, bounds: &GeoMetadata, band_index: usize) -> Result<DenseRaster<T>> {
+    fn read_bounds(path: &std::path::Path, bounds: &GeoReference, band_index: usize) -> Result<DenseRaster<T>> {
         let ds = gdal::Dataset::open(path)?;
         let (cols, rows) = ds.raster_size();
         let mut data: Vec<T> = vec![T::zero(); rows * cols];

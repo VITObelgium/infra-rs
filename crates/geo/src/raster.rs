@@ -9,7 +9,7 @@ mod rasteriotests;
 mod rastertests;
 #[cfg(test)]
 mod testutils;
-use crate::GeoMetadata;
+use crate::GeoReference;
 
 // pub mod warp;
 use super::Result;
@@ -47,27 +47,27 @@ pub trait RasterNum<T: num::ToPrimitive>:
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Raster<T: RasterNum<T>> {
     /// Create a new raster with the given metadata and data buffer.
-    fn new(metadata: GeoMetadata, data: Vec<T>) -> Self
+    fn new(metadata: GeoReference, data: Vec<T>) -> Self
     where
         Self: Sized;
 
-    fn from_iter<Iter>(metadata: GeoMetadata, iter: Iter) -> Self
+    fn from_iter<Iter>(metadata: GeoReference, iter: Iter) -> Self
     where
         Self: Sized,
         Iter: Iterator<Item = Option<T>>;
 
     /// Create a new raster with the given metadata and filled with zeros.
-    fn zeros(metadata: GeoMetadata) -> Self
+    fn zeros(metadata: GeoReference) -> Self
     where
         Self: Sized;
 
     /// Create a new raster with the given metadata and filled with the provided value.
-    fn filled_with(val: T, metadata: GeoMetadata) -> Self
+    fn filled_with(val: T, metadata: GeoReference) -> Self
     where
         Self: Sized;
 
     /// Returns a reference to the geographic metadata associated with the raster.
-    fn geo_metadata(&self) -> &GeoMetadata
+    fn geo_metadata(&self) -> &GeoReference
     where
         Self: Sized;
 
@@ -133,7 +133,7 @@ pub trait RasterIO<T: RasterNum<T>, TRas: Raster<T>> {
     /// Reads a subset of the raster from disk
     /// The provided extent does not have to be contained within the raster
     /// Areas outside of the original raster will be filled with the nodata value
-    fn read_bounds(path: &std::path::Path, region: &GeoMetadata, band_index: usize) -> Result<TRas>;
+    fn read_bounds(path: &std::path::Path, region: &GeoReference, band_index: usize) -> Result<TRas>;
 
     /// Write the full raster to disk
     fn write(&mut self, path: &std::path::Path) -> Result;

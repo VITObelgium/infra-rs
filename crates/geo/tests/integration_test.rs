@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use geo::{crs::Epsg, raster::Cell, vector, CellSize, GeoMetadata, RasterSize, SpatialReference};
+    use geo::{crs::Epsg, raster::Cell, vector, CellSize, GeoReference, RasterSize, SpatialReference};
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
     use vector::polygoncoverage::{BurnValue, CoverageConfiguration};
@@ -120,7 +120,7 @@ mod tests {
         };
 
         let ds = vector::io::dataset::open_read_only(&path).unwrap();
-        let output_extent = GeoMetadata::with_origin(
+        let output_extent = GeoReference::with_origin(
             SpatialReference::from_epsg(Epsg::from(31370))
                 .unwrap()
                 .to_wkt()

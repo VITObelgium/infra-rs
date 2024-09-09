@@ -1,7 +1,7 @@
 use inf::Rect;
 
 use crate::{
-    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, latlonbounds::LatLonBounds, metadata::GeoMetadata,
+    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, latlonbounds::LatLonBounds, metadata::GeoReference,
     Point,
 };
 use std::f64::consts::PI;
@@ -173,7 +173,7 @@ impl Tile {
         }
     }
 
-    pub fn tile_index(tile: &Tile, meta: &GeoMetadata) -> Option<i32> {
+    pub fn tile_index(tile: &Tile, meta: &GeoReference) -> Option<i32> {
         let upper_left = crs::lat_lon_to_web_mercator(tile.center());
 
         if meta.is_point_on_map(upper_left) {

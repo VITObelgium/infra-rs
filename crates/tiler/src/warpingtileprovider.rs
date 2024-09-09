@@ -8,7 +8,7 @@ use gdal::{
 use inf::legend::Legend;
 
 use geo::raster::{io::RasterFormat, RasterNum};
-use geo::{crs, raster, CellSize, Coordinate, GeoMetadata, LatLonBounds, RasterSize, SpatialReference, Tile};
+use geo::{crs, raster, CellSize, Coordinate, GeoReference, LatLonBounds, RasterSize, SpatialReference, Tile};
 use num::Num;
 
 use crate::{
@@ -121,7 +121,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
 
     let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-    let dest_extent = GeoMetadata::with_origin(
+    let dest_extent = GeoReference::with_origin(
         projection.to_wkt()?,
         RasterSize {
             rows: scaled_size,

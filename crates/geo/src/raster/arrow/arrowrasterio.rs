@@ -3,7 +3,7 @@ use gdal::raster::GdalType;
 
 use crate::{
     raster::{io, ArrowRaster, ArrowRasterNum, Raster, RasterIO},
-    GeoMetadata, Result,
+    GeoReference, Result,
 };
 
 impl<T: ArrowRasterNum<T> + GdalType> RasterIO<T, ArrowRaster<T>> for ArrowRaster<T>
@@ -35,7 +35,7 @@ where
     /// Reads a subset of the raster from disk into a DenseRaster
     /// The provided extent does not have to be contained within the raster
     /// Areas outside of the original raster will be filled with the nodata value
-    fn read_bounds(path: &std::path::Path, bounds: &GeoMetadata, band_index: usize) -> Result<ArrowRaster<T>>
+    fn read_bounds(path: &std::path::Path, bounds: &GeoReference, band_index: usize) -> Result<ArrowRaster<T>>
     where
         T::TArrow: ArrowPrimitiveType<Native = T>,
     {
