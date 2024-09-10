@@ -43,37 +43,46 @@ use num::NumCast;
 pub use python::pyraster::PyRaster;
 
 pub trait RasterNum<T: num::ToPrimitive>:
-    Copy + PartialEq + num::NumCast + num::Zero + num::One + num::Bounded + Nodata<T>
+    Copy
+    + PartialEq
+    + num::NumCast
+    + num::Zero
+    + num::One
+    + num::Bounded
+    + Nodata<T>
+    + std::fmt::Debug
+    + std::ops::Add<Output = Self>
+    + std::ops::Sub<Output = Self>
+    + std::ops::Mul<Output = Self>
+    + std::ops::Div<Output = Self>
+    + std::ops::AddAssign
+    + std::ops::SubAssign
+    + std::ops::MulAssign
+    + std::ops::DivAssign
 {
 }
 
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
-pub trait Raster<T: RasterNum<T>> {
+pub trait Raster<T: RasterNum<T>>: PartialEq
+where
+    Self: Sized + std::fmt::Debug + std::ops::Add<Output = Self>,
+{
     /// Create a new raster with the given metadata and data buffer.
-    fn new(metadata: GeoReference, data: Vec<T>) -> Self
-    where
-        Self: Sized;
+    fn new(metadata: GeoReference, data: Vec<T>) -> Self;
 
     fn from_iter<Iter>(metadata: GeoReference, iter: Iter) -> Self
     where
-        Self: Sized,
         Iter: Iterator<Item = Option<T>>;
 
     /// Create a new raster with the given metadata and filled with zeros.
-    fn zeros(metadata: GeoReference) -> Self
-    where
-        Self: Sized;
+    fn zeros(metadata: GeoReference) -> Self;
 
     /// Create a new raster with the given metadata and filled with the provided value.
-    fn filled_with(val: T, metadata: GeoReference) -> Self
-    where
-        Self: Sized;
+    fn filled_with(val: T, metadata: GeoReference) -> Self;
 
     /// Returns a reference to the geographic metadata associated with the raster.
-    fn geo_metadata(&self) -> &GeoReference
-    where
-        Self: Sized;
+    fn geo_metadata(&self) -> &GeoReference;
 
     /// Returns the width of the raster.
     fn width(&self) -> usize;

@@ -19,13 +19,14 @@
 		},
 		{
 			"type": "cargo",
-			"command": "cargo",
+			"command": "nextest",
 			"problemMatcher": [
 				"$rustc"
 			],
 			"args": [
-				"test",
-				"--features=serde,sqlite,gdal-static,arrow,derive"
+				"run",
+				"--all-features",
+				"--workspace"
 			],
 			"group": {
 				"kind": "test",

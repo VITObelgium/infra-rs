@@ -4,7 +4,10 @@ use gdal::raster::GdalType;
 
 use super::{io, DenseRaster, Raster, RasterIO, RasterNum};
 
-impl<T: RasterNum<T> + GdalType> RasterIO<T, DenseRaster<T>> for DenseRaster<T> {
+impl<T: RasterNum<T> + GdalType> RasterIO<T, DenseRaster<T>> for DenseRaster<T>
+where
+    Self: Raster<T>,
+{
     fn read(path: &std::path::Path) -> Result<Self> {
         DenseRaster::<T>::read_band(path, 1)
     }

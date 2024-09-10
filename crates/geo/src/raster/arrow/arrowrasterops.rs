@@ -50,6 +50,51 @@ where
     }
 }
 
+
+impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul for ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    type Output = ArrowRaster<T>;
+
+    fn mul(self, other: ArrowRaster<T>) -> ArrowRaster<T> {
+        raster::assert_dimensions(&self, &other);
+
+        match compute::kernels::numeric::mul_wrapping(&self.data, &other.data) {
+            Ok(data) => {
+                let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
+                ArrowRaster {
+                    metadata: self.metadata.clone(),
+                    data,
+                }
+            }
+            Err(e) => panic!("Error adding rasters: {:?}", e),
+        }
+    }
+}
+
+impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul for &ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    type Output = ArrowRaster<T>;
+
+    fn mul(self, other: &ArrowRaster<T>) -> ArrowRaster<T> {
+        raster::assert_dimensions(self, other);
+
+        match compute::kernels::numeric::mul_wrapping(&self.data, &other.data) {
+            Ok(data) => {
+                let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
+                ArrowRaster {
+                    metadata: self.metadata.clone(),
+                    data,
+                }
+            }
+            Err(e) => panic!("Error adding rasters: {:?}", e),
+        }
+    }
+}
+
 impl<T: ArrowRasterNum<T> + std::ops::Mul<Output = T>> std::ops::Mul<T> for ArrowRaster<T>
 where
     T::TArrow: ArrowPrimitiveType<Native = T>,
@@ -62,7 +107,7 @@ where
                 metadata: self.metadata.clone(),
                 data: downcast_array::<PrimitiveArray<T::TArrow>>(&data),
             },
-            Err(e) => panic!("Error adding rasters: {:?}", e),
+            Err(e) => panic!("Error multiplying rasters: {:?}", e),
         }
     }
 }

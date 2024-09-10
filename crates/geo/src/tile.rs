@@ -1,5 +1,5 @@
 use crate::{
-    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, latlonbounds::LatLonBounds, metadata::GeoReference,
+    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, latlonbounds::LatLonBounds, georeference::GeoReference,
     Point, Rect,
 };
 use std::f64::consts::PI;

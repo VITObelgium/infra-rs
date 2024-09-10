@@ -12,6 +12,12 @@ pub struct RasterSize {
     pub cols: usize,
 }
 
+impl RasterSize {
+    pub const fn with_rows_cols(rows: usize, cols: usize) -> Self {
+        RasterSize { rows, cols }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct CellSize {
     x: f64,
@@ -105,11 +111,12 @@ impl GeoReference {
         self.size
     }
 
-    pub fn without_spatial_reference(size: RasterSize, nodata: Option<f64>) -> Self {
+    pub const fn without_spatial_reference(size: RasterSize, nodata: Option<f64>) -> Self {
         GeoReference {
+            projection: String::new(),
             size,
+            geo_transform: [0.0; 6],
             nodata,
-            ..Default::default()
         }
     }
 

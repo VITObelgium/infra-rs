@@ -161,6 +161,23 @@ where
     }
 }
 
+impl<T: RasterNum<T>> PartialEq for DenseRaster<T> {
+    fn eq(&self, other: &Self) -> bool {
+        if self.metadata != other.metadata {
+            return false;
+        }
+
+        self.data
+            .iter()
+            .zip(other.data.iter())
+            .all(|(&a, &b)| match (T::is_nodata(a), T::is_nodata(b)) {
+                (true, true) => true,
+                (false, false) => a == b,
+                _ => false,
+            })
+    }
+}
+
 fn process_nodata<T: RasterNum<T>>(data: &mut [T], nodata: Option<f64>) {
     if let Some(nodata) = nodata {
         if nodata.is_nan() || NumCast::from(nodata) == Some(T::nodata_value()) {

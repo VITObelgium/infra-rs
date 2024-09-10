@@ -11,40 +11,55 @@ mod tests {
         GeoReference, RasterSize,
     };
 
+    const META: GeoReference = GeoReference::without_spatial_reference(RasterSize::with_rows_cols(3, 3), Some(NOD));
+
     #[cfg(feature = "arrow")]
     use crate::raster::ArrowRaster;
 
     #[test]
-    fn test_add_rasters<T: RasterNum<T>, R>()
+    fn test_add_nodata<T: RasterNum<T>, R>()
     where
         for<'a> &'a R: std::ops::Add<&'a R, Output = R>,
         R: Raster<T> + std::ops::Add<R, Output = R>,
     {
-        let metadata = GeoReference::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 2, cols: 2 },
-            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-            Some(NOD),
-        );
-
-        let data1 = create_vec(&[1.0, 2.0, NOD, 4.0]);
-        let data2 = create_vec(&[NOD, 6.0, 7.0, 8.0]);
-        let raster1 = R::new(metadata.clone(), data1);
-        let raster2 = R::new(metadata.clone(), data2);
+        let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
+        let raster2 = R::new(META, create_vec(&[1.0, 3.0, 3.0, 3.0, NOD, 3.0, 3.0, 3.0, NOD]));
+        let expected = R::new(META, create_vec(&[NOD, 5.0, 5.0, 6.0, NOD, 6.0, 4.0, 4.0, NOD]));
 
         {
             let result = &raster1 + &raster2;
-            assert_eq!(to_f64(result.masked_data()), &[None, Some(8.0), None, Some(12.0)]);
+            assert_eq!(result, expected);
         }
 
         {
             let result = raster1 + raster2;
-            assert_eq!(to_f64(result.masked_data()), &[None, Some(8.0), None, Some(12.0)]);
+            assert_eq!(result, expected);
         }
     }
 
     #[test]
-    fn test_multiply_scalar<T: RasterNum<T> + std::ops::Mul<Output = T>, R>()
+    fn test_multiply_nodata<T: RasterNum<T>, R>()
+    where
+        for<'a> &'a R: std::ops::Mul<&'a R, Output = R>,
+        R: Raster<T> + std::ops::Mul<R, Output = R>,
+    {
+        let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
+        let raster2 = R::new(META, create_vec(&[1.0, 3.0, 3.0, 3.0, NOD, 3.0, 3.0, 3.0, NOD]));
+        let expected = R::new(META, create_vec(&[NOD, 6.0, 6.0, 9.0, NOD, 9.0, 3.0, 3.0, NOD]));
+
+        {
+            let result = &raster1 * &raster2;
+            assert_eq!(result, expected);
+        }
+
+        {
+            let result = raster1 * raster2;
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_multiply_scalar<T: RasterNum<T>, R>()
     where
         for<'a> &'a R: std::ops::Mul<T, Output = R>,
         R: Raster<T> + std::ops::Mul<T, Output = R>,

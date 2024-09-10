@@ -13,7 +13,7 @@ use crate::{
 
 use super::arrowutil::ArrowType;
 
-pub trait ArrowRasterNum<T: num::ToPrimitive>: RasterNum<T> + ArrowType + ArrowNativeTypeOp {}
+pub trait ArrowRasterNum<T: num::ToPrimitive>: RasterNum<T> + ArrowType + ArrowNativeTypeOp + ToString {}
 
 impl ArrowRasterNum<i8> for i8 {}
 impl ArrowRasterNum<u8> for u8 {}
@@ -164,6 +164,46 @@ where
 
     fn into_iter(self) -> Self::IntoIter {
         self.data.into_iter()
+    }
+}
+
+impl<T: ArrowRasterNum<T>> PartialEq for ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    fn eq(&self, other: &Self) -> bool {
+        if self.metadata != other.metadata {
+            return false;
+        }
+
+        self.data.iter().zip(other.data.iter()).all(|(a, b)| a == b)
+    }
+}
+
+impl<T: ArrowRasterNum<T>> std::fmt::Debug for ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "ArrowRaster: {:?}", &self.metadata)?;
+        let rows = self.metadata.rows();
+        let cols = self.metadata.columns();
+        if rows * cols < 100 {
+            for row in self.as_slice().chunks(cols) {
+                write!(
+                    f,
+                    "{}",
+                    row.iter()
+                        .map(|&val| val.to_string())
+                        .collect::<Vec<String>>()
+                        .join(", ")
+                )?;
+            }
+        } else {
+            write!(f, "Data too big for debug output")?;
+        }
+
+        Ok(())
     }
 }
 
