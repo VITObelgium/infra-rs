@@ -13,6 +13,7 @@ pub enum GeometryType {
     None,
 }
 
+#[cfg(feature = "gdal")]
 impl TryFrom<gdal_sys::OGRwkbGeometryType::Type> for GeometryType {
     type Error = crate::Error;
 
@@ -35,6 +36,7 @@ impl TryFrom<gdal_sys::OGRwkbGeometryType::Type> for GeometryType {
     }
 }
 
+#[cfg(feature = "gdal")]
 impl From<GeometryType> for gdal_sys::OGRwkbGeometryType::Type {
     fn from(value: GeometryType) -> Self {
         match value {

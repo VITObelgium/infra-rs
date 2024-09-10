@@ -1,8 +1,11 @@
+#[cfg(feature = "gdal")]
 pub mod algo;
 mod cell;
 mod denseraster;
+#[cfg(feature = "gdal")]
 mod denserasterio;
 mod denserasterops;
+#[cfg(feature = "gdal")]
 pub mod io;
 mod nodata;
 mod rasteriotests;
@@ -17,6 +20,7 @@ use super::Result;
 #[cfg(feature = "arrow")]
 pub mod arrow {
     pub(super) mod arrowraster;
+    #[cfg(feature = "gdal")]
     mod arrowrasterio;
     mod arrowrasterops;
     mod arrowutil;

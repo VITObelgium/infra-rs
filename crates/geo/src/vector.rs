@@ -1,15 +1,22 @@
+#[cfg(feature = "gdal")]
 pub mod algo;
 mod burnvalue;
+#[cfg(feature = "gdal")]
 mod coveragetools;
+#[cfg(feature = "gdal")]
 pub mod datarow;
+#[cfg(feature = "gdal")]
 pub mod fieldtype;
 pub mod geometrytype;
+#[cfg(feature = "gdal")]
 pub mod io;
+#[cfg(feature = "gdal")]
 pub mod polygoncoverage;
 
 #[doc(inline)]
 pub use burnvalue::BurnValue;
 #[doc(inline)]
+#[cfg(feature = "gdal")]
 pub use datarow::DataRow;
 
 /// The `DataRow` trait is implemented using the `DataRow` derive macro
