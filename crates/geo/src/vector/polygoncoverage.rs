@@ -12,6 +12,7 @@ use crate::spatialreference::CoordinateWarpTransformer;
 use crate::{Error, GeoReference, Point, RasterSize, Result, SpatialReference};
 
 use super::coveragetools::VectorBuilder;
+use super::BurnValue;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct CellInfo {
@@ -260,18 +261,6 @@ fn process_region_borders(cell_coverages: Vec<PolygonCellCoverage>) -> Result<Ve
     Ok(result)
 }
 
-#[derive(Debug, Clone)]
-pub enum BurnValue {
-    Value(f64),
-    Field(String),
-}
-
-impl Default for BurnValue {
-    fn default() -> Self {
-        BurnValue::Value(1.0)
-    }
-}
-
 fn required_layer_field_index(layer: &gdal::vector::Layer, field_name: &str) -> Result<i32> {
     let field_name_c_str = CString::new(field_name)?;
     let field_index = unsafe { gdal_sys::OGR_L_FindFieldIndex(layer.c_layer(), field_name_c_str.as_ptr(), 1) };
@@ -290,7 +279,7 @@ fn required_layer_field_index(layer: &gdal::vector::Layer, field_name: &str) -> 
 #[derive(Debug, Default, Clone)]
 pub struct CoverageConfiguration {
     pub border_handling: BorderHandling,
-    pub burn_value: BurnValue,
+    pub burn_value: BurnValue<f64>,
     pub attribute_filter: Option<String>,
     pub input_layer: Option<String>,
     pub name_field: Option<String>,

@@ -1,10 +1,15 @@
 //! Algorithms for raster data processing (translate, warp, ...).
 
-use crate::gdalinterop::*;
-use gdal::cpl::CslStringList;
+use crate::{
+    gdalinterop::{self, *},
+    vector, GeoReference,
+};
+use gdal::{cpl::CslStringList, raster::GdalType, vector::LayerAccess};
 use std::ffi::{c_double, c_int, CString};
 
 use crate::{Error, Result};
+
+use super::{io, Nodata};
 
 struct TranslateOptionsWrapper {
     options: *mut gdal_sys::GDALTranslateOptions,
@@ -59,24 +64,29 @@ pub fn translate(ds: &gdal::Dataset, output_path: &std::path::Path, options: &[S
 
 pub struct WarpOptions {
     pub resample_algo: gdal::raster::ResampleAlg,
-    //PolygonCRef clipPolygon TODO
+    pub clip_polygon: Option<gdal::vector::Geometry>,
     pub clip_blend_distance: Option<f64>,
     pub additional_options: Option<Vec<String>>,
+    pub all_cpus: bool,
 }
 
 impl Default for WarpOptions {
     fn default() -> Self {
         WarpOptions {
             resample_algo: gdal::raster::ResampleAlg::NearestNeighbour,
+            clip_polygon: None,
             clip_blend_distance: None,
             additional_options: None,
+            all_cpus: true,
         }
     }
 }
 
 pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOptions) -> Result<()> {
     let mut str_options = CslStringList::new();
-    str_options.add_string("NUM_THREADS=ALL_CPUS")?;
+    if options.all_cpus {
+        str_options.add_string("NUM_THREADS=ALL_CPUS")?;
+    }
 
     if let Some(opts) = &options.additional_options {
         for opt in opts {
@@ -100,9 +110,14 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
         (*warp_options).pfnTransformer = Some(gdal_sys::GDALGenImgProjTransform);
         (*warp_options).eResampleAlg = options.resample_algo.to_gdal();
 
-        // if (options.clipPolygon.get() != nullptr) {
-        //     warpOptions->hCutline = options.clipPolygon.get()->clone();
-        // }
+        if let Some(poly) = options.clip_polygon.as_ref() {
+            if poly.geometry_type() != gdal_sys::OGRwkbGeometryType::wkbPolygon {
+                return Err(Error::InvalidArgument(
+                    "Warp clip polygon geometry type must be a polygon".to_string(),
+                ));
+            }
+            (*warp_options).hCutline = poly.c_geometry();
+        }
 
         if let Some(clip_dist) = options.clip_blend_distance {
             (*warp_options).dfCutlineBlendDist = clip_dist;
@@ -236,4 +251,55 @@ pub fn warp_cli(
     }
 
     Ok(())
+}
+
+fn polygonize_dataset(ds: &gdal::Dataset) -> Result<gdal::Dataset> {
+    let mut mem_ds = vector::io::dataset::create_in_memory()?;
+    if ds.raster_count() == 0 {
+        return Err(Error::InvalidArgument(
+            "Polygonize should be called on a raster dataset".to_string(),
+        ));
+    }
+
+    let srs = ds.spatial_ref()?;
+    let layer_options = gdal::vector::LayerOptions {
+        name: "Polygons",
+        srs: Some(&srs),
+        ..Default::default()
+    };
+
+    let layer = mem_ds.create_layer(layer_options)?;
+    layer.create_defn_fields(&[("Value", gdal::vector::OGRFieldType::OFTInteger)])?;
+
+    let raster_band = ds.rasterband(1)?;
+
+    gdalinterop::check_rc(unsafe {
+        match raster_band.band_type() {
+            gdal::raster::GdalDataType::Float32 | gdal::raster::GdalDataType::Float64 => gdal_sys::GDALFPolygonize(
+                raster_band.c_rasterband(),
+                std::ptr::null_mut(),
+                layer.c_layer(),
+                0,
+                std::ptr::null_mut(),
+                None,
+                std::ptr::null_mut(),
+            ),
+            _ => gdal_sys::GDALPolygonize(
+                raster_band.c_rasterband(),
+                std::ptr::null_mut(),
+                layer.c_layer(),
+                0,
+                std::ptr::null_mut(),
+                None,
+                std::ptr::null_mut(),
+            ),
+        }
+    })?;
+
+    Ok(mem_ds)
+}
+
+pub fn polygonize<T: GdalType + Nodata<T>>(meta: &GeoReference, data: &[T]) -> Result<gdal::Dataset> {
+    let ds = io::dataset::create_in_memory_with_data(meta, data)?;
+    polygonize_dataset(&ds)
 }

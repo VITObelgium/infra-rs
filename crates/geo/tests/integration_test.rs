@@ -1,10 +1,15 @@
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use geo::{crs::Epsg, raster::Cell, vector, CellSize, GeoReference, RasterSize, SpatialReference};
+    use geo::{
+        crs::Epsg,
+        raster::Cell,
+        vector::{self, BurnValue},
+        CellSize, GeoReference, RasterSize, SpatialReference,
+    };
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
-    use vector::polygoncoverage::{BurnValue, CoverageConfiguration};
+    use vector::polygoncoverage::CoverageConfiguration;
 
     #[cfg(feature = "derive")]
     mod derive {

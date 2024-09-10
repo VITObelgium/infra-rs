@@ -217,6 +217,23 @@ where
 impl<'a> LayerAccessExtension for gdal::vector::Layer<'a> {}
 impl LayerAccessExtension for gdal::vector::OwnedLayer {}
 
+/// [`gdal::vector::Defn`] extenstion trait that implements missing functionality
+/// for working with GDAL vector layer definitions
+pub trait FeatureDefinitionExtension {
+    fn field_count(&self) -> Result<i32>;
+}
+
+impl FeatureDefinitionExtension for gdal::vector::Defn {
+    fn field_count(&self) -> Result<i32> {
+        let field_count = unsafe { gdal_sys::OGR_FD_GetFieldCount(self.c_defn()) };
+        if field_count < 0 {
+            return Err(Error::Runtime("Failed to get layer field count".to_string()));
+        }
+
+        Ok(field_count)
+    }
+}
+
 /// [`gdal::vector::Feature`] extenstion trait that implements missing functionality
 /// for working with GDAL vector layers
 pub trait FeatureExtension {

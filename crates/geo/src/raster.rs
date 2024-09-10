@@ -39,7 +39,7 @@ use num::NumCast;
 pub use python::pyraster::PyRaster;
 
 pub trait RasterNum<T: num::ToPrimitive>:
-    Copy + PartialEq + num::NumCast + num::Zero + num::Bounded + Nodata<T>
+    Copy + PartialEq + num::NumCast + num::Zero + num::One + num::Bounded + Nodata<T>
 {
 }
 

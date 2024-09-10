@@ -1,10 +1,14 @@
 pub mod algo;
+mod burnvalue;
 mod coveragetools;
 pub mod datarow;
 pub mod fieldtype;
+pub mod geometrytype;
 pub mod io;
 pub mod polygoncoverage;
 
+#[doc(inline)]
+pub use burnvalue::BurnValue;
 #[doc(inline)]
 pub use datarow::DataRow;
 
