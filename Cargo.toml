@@ -20,10 +20,10 @@ sqlite = { path = "./crates/sqlite", optional = true }
 
 [features]
 tiler       = ["dep:tiler"]
-arrow       = ["inf/arrow"]
+arrow       = ["geo/arrow"]
 sqlite      = ["dep:sqlite"]
-gdal        = ["inf/gdal"]
-gdal-static = ["inf/gdal-static"]
+gdal        = ["geo/gdal"]
+gdal-static = ["geo/gdal-static"]
 serde       = ["inf/serde"]
 
 [package.metadata.vcpkg]

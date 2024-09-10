@@ -3,8 +3,8 @@ use gdal::spatial_ref::CoordTransform;
 use crate::crs::Epsg;
 use crate::spatialreference::SpatialReference;
 use crate::Coordinate;
-use crate::Error;
 use crate::Point;
+use crate::Result;
 
 pub struct CoordinateTransformer {
     source_srs: SpatialReference,
@@ -13,7 +13,7 @@ pub struct CoordinateTransformer {
 }
 
 impl CoordinateTransformer {
-    pub fn new(source_srs: SpatialReference, target_srs: SpatialReference) -> Result<Self, Error> {
+    pub fn new(source_srs: SpatialReference, target_srs: SpatialReference) -> Result<Self> {
         let transformer = CoordTransform::new(source_srs.srs(), target_srs.srs())?;
         Ok(Self {
             source_srs,
@@ -22,13 +22,13 @@ impl CoordinateTransformer {
         })
     }
 
-    pub fn from_epsg(source_epsg: Epsg, target_epsg: Epsg) -> Result<Self, Error> {
+    pub fn from_epsg(source_epsg: Epsg, target_epsg: Epsg) -> Result<Self> {
         let source_srs = SpatialReference::from_epsg(source_epsg)?;
         let target_srs = SpatialReference::from_epsg(target_epsg)?;
         Self::new(source_srs, target_srs)
     }
 
-    pub fn transform_point(&self, point: Point) -> Result<Point, Error> {
+    pub fn transform_point(&self, point: Point) -> Result<Point> {
         let mut result_x = [point.x()];
         let mut result_y = [point.y()];
         self.transformer
@@ -36,7 +36,7 @@ impl CoordinateTransformer {
         Ok(Point::new(result_x[0], result_y[0]))
     }
 
-    pub fn transform_point_in_place(&self, point: &mut Point) -> Result<(), Error> {
+    pub fn transform_point_in_place(&self, point: &mut Point) -> Result<()> {
         let mut result_x = [point.x()];
         let mut result_y = [point.y()];
         self.transformer
@@ -47,21 +47,21 @@ impl CoordinateTransformer {
         Ok(())
     }
 
-    pub fn transform_coordinate(&self, coord: Coordinate) -> Result<Coordinate, Error> {
+    pub fn transform_coordinate(&self, coord: Coordinate) -> Result<Coordinate> {
         Ok(Coordinate::from(self.transform_point(coord.into())?))
     }
 
-    pub fn transform_coordinate_in_place(&self, coord: &mut Coordinate) -> Result<(), Error> {
+    pub fn transform_coordinate_in_place(&self, coord: &mut Coordinate) -> Result<()> {
         let res = self.transform_coordinate(*coord)?;
         *coord = res;
         Ok(())
     }
 
-    pub fn source_projection(&self) -> Result<String, Error> {
+    pub fn source_projection(&self) -> Result<String> {
         self.source_srs.to_wkt()
     }
 
-    pub fn target_projection(&self) -> Result<String, Error> {
+    pub fn target_projection(&self) -> Result<String> {
         self.target_srs.to_wkt()
     }
 }

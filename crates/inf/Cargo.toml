@@ -4,25 +4,14 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-num = "0.4"
-chrono = { version = "^0.4" }
-phf = { version = "0.11", features = ["macros"] }
-geo-types = { version = "0.7", features = ["approx"] }
+num       = "0.4"
+chrono    = { version = "^0.4" }
+phf       = { version = "0.11", features = ["macros"] }
 thiserror = "1.0"
-gdal = { version = "^0.17", optional = true }
-gdal-sys = { version = "^0.10", optional = true }
-geozero = { version = "0.13", features = [
-    "with-gdal",
-    "with-geos",
-], optional = true }
-geos = { version = "^9", optional = true }
-libc = { version = "0.2", optional = true }
-approx = "0.5"
-log = "0.4"
-serde = { version = "1.0", features = ["derive"], optional = true }
-arrow = { version = "52.*", optional = true }
-pyo3 = { version = "0.*", optional = true }
-proj4rs = { version = "0", optional = true }
+libc      = { version = "0.2", optional = true }
+approx    = "0.5"
+log       = "0.4"
+serde     = { version = "1.0", features = ["derive"], optional = true }
 
 [dev-dependencies]
 test-log      = "0.2"
@@ -31,14 +20,4 @@ generic-tests = "0.1"
 ctor          = "0.2"
 
 [features]
-arrow       = ["dep:arrow"]
-gdal        = ["dep:gdal", "dep:gdal-sys", "dep:libc"]
-gdal-static = ["gdal"]
-serde       = ["dep:serde"]
-python      = ["arrow/pyarrow", "dep:pyo3"]
-geos        = ["dep:geos"]
-geozero     = ["dep:geozero"]
-proj4rs     = ["dep:proj4rs"]
-
-[package.metadata.vcpkg]
-dependencies = ["gdal[core,iconv]", "proj[core]", "tiff[core,lzma,zip]"]
+serde = ["dep:serde"]

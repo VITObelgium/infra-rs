@@ -64,7 +64,7 @@ pub fn create_output_directory_if_needed(p: &Path) -> Result<()> {
         return Ok(());
     }
 
-    fs::create_directory_for_file(p)
+    Ok(fs::create_directory_for_file(p)?)
 }
 
 pub fn check_rc(rc: gdal_sys::CPLErr::Type) -> std::result::Result<(), GdalError> {

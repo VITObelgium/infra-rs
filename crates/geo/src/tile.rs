@@ -1,8 +1,6 @@
-use inf::Rect;
-
 use crate::{
     constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, latlonbounds::LatLonBounds, metadata::GeoReference,
-    Point,
+    Point, Rect,
 };
 use std::f64::consts::PI;
 

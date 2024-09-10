@@ -16,6 +16,16 @@ pub enum AccessMode {
 pub use connection::Connection;
 pub use row::Row;
 pub use statement::Statement;
+use thiserror::Error;
 
-pub type Error = inf::Error;
-pub type Result<T> = inf::Result<T>;
+#[derive(Error, Debug)]
+pub enum Error {
+    #[error("Runtime error: {0}")]
+    Runtime(String),
+    #[error("Database error: {0}")]
+    DatabaseError(String),
+    #[error("Invalid string: {0}")]
+    InvalidString(#[from] std::ffi::NulError),
+}
+
+pub type Result<T> = std::result::Result<T, Error>;

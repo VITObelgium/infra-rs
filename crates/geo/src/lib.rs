@@ -1,14 +1,15 @@
 #![warn(clippy::unwrap_used)]
 
-pub type Error = inf::Error;
-pub type Result<T = ()> = inf::Result<T>;
+pub type Result<T = ()> = std::result::Result<T, Error>;
 pub mod constants;
 mod coordinate;
 mod coordinatetransformer;
 pub mod crs;
+mod error;
 mod gdalinterop;
 mod latlonbounds;
 mod metadata;
+pub mod rect;
 mod runtimeconfiguration;
 mod spatialreference;
 mod tile;
@@ -20,6 +21,8 @@ pub use coordinate::Coordinate;
 #[cfg(feature = "gdal")]
 pub use coordinatetransformer::CoordinateTransformer;
 #[doc(inline)]
+pub use error::Error;
+#[doc(inline)]
 pub use latlonbounds::LatLonBounds;
 #[doc(inline)]
 pub use metadata::CellSize;
@@ -27,10 +30,13 @@ pub use metadata::CellSize;
 pub use metadata::GeoReference;
 #[doc(inline)]
 pub use metadata::RasterSize;
+#[doc(inline)]
+pub use rect::Rect;
 pub use runtimeconfiguration::RuntimeConfiguration;
 #[cfg(feature = "gdal")]
 #[doc(inline)]
 pub use spatialreference::SpatialReference;
+use thiserror::Error;
 #[doc(inline)]
 pub use tile::Tile;
 

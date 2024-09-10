@@ -93,7 +93,6 @@ struct CutOut {
 
 pub mod dataset {
     use gdal::Metadata;
-    use inf::rect;
 
     use crate::raster::{Nodata, RasterNum};
 
@@ -440,7 +439,7 @@ pub mod dataset {
         let src_bbox = src_meta.bounding_box();
         let dst_bbox = dst_meta.bounding_box();
 
-        let intersect = rect::intersection(&src_bbox, &dst_bbox);
+        let intersect = src_bbox.intersection(&dst_bbox);
 
         // Calulate the cell in the source extent that corresponds to the top left cell of the intersect
         //let intersect_top_left_cell = src_meta.point_to_cell(*intersect.top_left() + Point::new(src_cellsize.x() / 2.0, src_cellsize.y() / 2.0));

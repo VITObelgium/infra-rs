@@ -1,15 +1,15 @@
 use gdal::vector::{LayerAccess, ToGdal};
 use geos::Geom;
 use geozero::ToGeos;
+use inf::duration;
 use inf::progressinfo::AsyncProgressNotification;
-use inf::{duration, Rect};
 use rayon::prelude::*;
 use std::ffi::CString;
 use std::path::Path;
 
 use crate::raster::{Cell, CellIterator};
 use crate::spatialreference::CoordinateWarpTransformer;
-use crate::{Error, GeoReference, Point, RasterSize, Result, SpatialReference};
+use crate::{Error, GeoReference, Point, RasterSize, Rect, Result, SpatialReference};
 
 use super::coveragetools::VectorBuilder;
 use super::BurnValue;

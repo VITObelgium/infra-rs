@@ -5,4 +5,5 @@ edition = "2021"
 
 [dependencies]
 inf            = { path = "../inf" }
-libsqlite3-sys = "0.29"
+libsqlite3-sys = "0.30"
+thiserror      = "1.0"

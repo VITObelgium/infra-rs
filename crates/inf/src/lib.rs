@@ -14,7 +14,6 @@ pub mod interpolate;
 pub mod legend;
 pub mod legendscaletype;
 pub mod progressinfo;
-pub mod rect;
 
 #[doc(inline)]
 pub use color::Color;
@@ -23,5 +22,3 @@ pub use color::Color;
 pub use legend::Legend;
 #[doc(inline)]
 pub use legend::MappedLegend;
-#[doc(inline)]
-pub use rect::Rect;

@@ -1,8 +1,7 @@
 use approx::{AbsDiffEq, RelativeEq};
-use inf::{rect, Rect};
 use num::{NumCast, ToPrimitive};
 
-use crate::{crs::Epsg, raster::Cell, Error, LatLonBounds, Point, Result};
+use crate::{crs::Epsg, raster::Cell, Error, LatLonBounds, Point, Rect, Result};
 
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
@@ -379,7 +378,7 @@ impl GeoReference {
             panic!("Extents cellsize is zero");
         }
 
-        Ok(rect::intersects(&self.bounding_box(), &other.bounding_box()))
+        Ok(self.bounding_box().intersects(&other.bounding_box()))
     }
 
     #[cfg(feature = "gdal")]
