@@ -64,7 +64,7 @@ pub trait RasterNum<T: num::ToPrimitive>:
 
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
-pub trait Raster<T: RasterNum<T>>: PartialEq
+pub trait Raster<T: RasterNum<T>>: PartialEq + Clone
 where
     Self: Sized + std::fmt::Debug + std::ops::Add<Output = Self>,
 {

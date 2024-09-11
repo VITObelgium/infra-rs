@@ -6,7 +6,7 @@ use super::{Raster, RasterNum};
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [crate::Nodata::nodata_value] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct DenseRaster<T: RasterNum<T>> {
     pub(super) metadata: GeoReference,
     pub(super) data: Vec<T>,

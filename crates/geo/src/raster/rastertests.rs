@@ -20,7 +20,8 @@ mod tests {
     fn test_add_nodata<T: RasterNum<T>, R>()
     where
         for<'a> &'a R: std::ops::Add<&'a R, Output = R>,
-        R: Raster<T> + std::ops::Add<R, Output = R>,
+        for<'a> R: std::ops::AddAssign<&'a R>,
+        R: Raster<T> + std::ops::Add<R, Output = R> + std::ops::AddAssign<R>,
     {
         let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
         let raster2 = R::new(META, create_vec(&[1.0, 3.0, 3.0, 3.0, NOD, 3.0, 3.0, 3.0, NOD]));
@@ -29,6 +30,19 @@ mod tests {
         {
             let result = &raster1 + &raster2;
             assert_eq!(result, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1 += &raster2;
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            let raster2 = raster2.clone();
+            raster1 += raster2;
+            assert_eq!(raster1, expected);
         }
 
         {

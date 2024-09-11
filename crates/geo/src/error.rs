@@ -19,7 +19,7 @@ pub enum Error {
     DatabaseError(String),
     #[error("Invalid string: {0}")]
     InvalidString(#[from] std::ffi::NulError),
-    #[error("Invalid : {0}")]
+    #[error("Invalid: {0}")]
     InvalidNumber(String),
     #[error("System time error")]
     TimeError(#[from] std::time::SystemTimeError),
@@ -31,9 +31,6 @@ pub enum Error {
     #[cfg(feature = "python")]
     #[error("Python error: {0}")]
     PythonError(#[from] pyo3::PyErr),
-    #[cfg(all(feature = "python", feature = "arrow"))]
-    #[error("PyArrow: {0}")]
-    PyArrowError(#[from] arrow::pyarrow::ArrowException),
     #[error("Geozero error: {0}")]
     GeoZeroError(#[from] geozero::error::GeozeroError),
     #[error("Geos error: {0}")]

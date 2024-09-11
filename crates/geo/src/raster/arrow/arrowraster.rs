@@ -31,6 +31,15 @@ pub struct ArrowRaster<T: ArrowRasterNum<T>> {
     pub(super) data: PrimitiveArray<T::TArrow>,
 }
 
+impl<T: ArrowRasterNum<T>> Clone for ArrowRaster<T> {
+    fn clone(&self) -> Self {
+        ArrowRaster {
+            metadata: self.metadata.clone(),
+            data: self.data.clone(),
+        }
+    }
+}
+
 impl<T: ArrowRasterNum<T>> ArrowRaster<T>
 where
     T::TArrow: ArrowPrimitiveType<Native = T>,
@@ -224,6 +233,14 @@ mod tests {
             f64_ras.as_slice(),
             &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0],
         );
+    }
+
+    #[test]
+    fn clone_raster() {
+        let ras = ArrowRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
+        let ras2 = ras.clone();
+
+        assert_eq!(ras, ras2);
     }
 
     #[test]
