@@ -1,13 +1,19 @@
-use arrow::{
-    array::{downcast_array, PrimitiveArray},
-    compute,
-    datatypes::ArrowPrimitiveType,
-};
+use arrow::datatypes::ArrowPrimitiveType;
 
-use crate::raster::{self, ArrowRaster, ArrowRasterNum};
+use crate::raster::{ArrowRaster, ArrowRasterNum};
 
+/// Macro to generate numeric raster operations.
 macro_rules! arrow_raster_op {
-    ($op_trait:path, $scalar_op_trait:path, $op_assign_trait:path, $op_assign_scalar_trait:path, $op_assign_ref_trait:path, $op_fn:ident, $op_assign_fn:ident, $kernel:ident) => {
+    (   $op_trait:path, // name of the trait e.g. std::ops::Add
+        $scalar_op_trait:path, // name of the trait with scalar argument e.g. std::ops::Add<T>
+        $op_assign_trait:path, // name of the trait with assignment e.g. std::ops::AddAssign
+        $op_assign_scalar_trait:path, // name of the trait with scalar assignment e.g. std::ops::AddAssign<T>
+        $op_assign_ref_trait:path, // name of the trait with reference assignment e.g. std::ops::AddAssign<&ArrowRaster<T>>
+        $op_fn:ident, // name of the operation function inside the trait e.g. add
+        $op_assign_fn:ident, // name of the assignment function inside the trait e.g. add_assign
+        $op_nodata_fn:ident, // name of the operation function with nodata handling e.g. add_nodata_aware
+        $op_assign_nodata_fn:ident // name of the assignment function with nodata handling e.g. add_assign_nodata_aware
+    ) => {
         impl<T> $op_trait for ArrowRaster<T>
         where
             T: ArrowRasterNum<T>,
@@ -16,18 +22,7 @@ macro_rules! arrow_raster_op {
             type Output = ArrowRaster<T>;
 
             fn $op_fn(self, other: ArrowRaster<T>) -> ArrowRaster<T> {
-                raster::assert_dimensions(&self, &other);
-
-                // Create a new ArrowRaster with the same metadata
-                let metadata = self.metadata.clone();
-
-                match compute::kernels::numeric::$kernel(&self.data, &other.data) {
-                    Ok(data) => {
-                        let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
-                        ArrowRaster { metadata, data }
-                    }
-                    Err(e) => panic!("Error on raster operation: {:?}", e),
-                }
+                self.binary_mut(&other, |x, y| x.$op_nodata_fn(y))
             }
         }
 
@@ -39,48 +34,7 @@ macro_rules! arrow_raster_op {
             type Output = ArrowRaster<T>;
 
             fn $op_fn(self, other: &ArrowRaster<T>) -> ArrowRaster<T> {
-                raster::assert_dimensions(self, other);
-
-                match compute::kernels::numeric::$kernel(&self.data, &other.data) {
-                    Ok(data) => {
-                        let data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
-                        ArrowRaster {
-                            metadata: self.metadata.clone(),
-                            data,
-                        }
-                    }
-                    Err(e) => panic!("Error on raster operation: {:?}", e),
-                }
-            }
-        }
-
-        impl<T: ArrowRasterNum<T>> $scalar_op_trait for ArrowRaster<T>
-        where
-            T::TArrow: ArrowPrimitiveType<Native = T>,
-        {
-            type Output = ArrowRaster<T>;
-
-            fn $op_fn(mut self, scalar: T) -> ArrowRaster<T> {
-                self.data = match self.data.unary_mut(|v| v.$op_fn(scalar)) {
-                    Ok(data) => data,
-                    Err(_) => panic!("Raster operation on shared buffer"),
-                };
-
-                self
-            }
-        }
-
-        impl<T: ArrowRasterNum<T>> $scalar_op_trait for &ArrowRaster<T>
-        where
-            T::TArrow: ArrowPrimitiveType<Native = T>,
-        {
-            type Output = ArrowRaster<T>;
-
-            fn $op_fn(self, scalar: T) -> ArrowRaster<T> {
-                ArrowRaster {
-                    metadata: self.metadata.clone(),
-                    data: self.data.unary(|v| v.$op_fn(scalar)),
-                }
+                self.binary(other, |x, y| x.$op_nodata_fn(y))
             }
         }
 
@@ -90,14 +44,9 @@ macro_rules! arrow_raster_op {
             T::TArrow: ArrowPrimitiveType<Native = T>,
         {
             fn $op_assign_fn(&mut self, other: ArrowRaster<T>) {
-                raster::assert_dimensions(self, &other);
-
-                match compute::kernels::numeric::$kernel(&self.data, &other.data) {
-                    Ok(data) => {
-                        self.data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
-                    }
-                    Err(e) => panic!("Error adding rasters: {:?}", e),
-                }
+                self.binary_inplace(&other, |x, y| {
+                    x.$op_assign_nodata_fn(y);
+                });
             }
         }
 
@@ -107,7 +56,9 @@ macro_rules! arrow_raster_op {
             T::TArrow: ArrowPrimitiveType<Native = T>,
         {
             fn $op_assign_fn(&mut self, scalar: T) {
-                self.data = self.data.unary(|v| v.$op_fn(scalar));
+                self.unary_inplace(|x| {
+                    x.$op_assign_nodata_fn(scalar);
+                });
             }
         }
 
@@ -117,14 +68,33 @@ macro_rules! arrow_raster_op {
             T::TArrow: ArrowPrimitiveType<Native = T>,
         {
             fn $op_assign_fn(&mut self, other: &ArrowRaster<T>) {
-                raster::assert_dimensions(self, other);
+                self.binary_inplace(&other, |x, y| {
+                    x.$op_assign_nodata_fn(y);
+                });
+            }
+        }
 
-                match compute::kernels::numeric::$kernel(&self.data, &other.data) {
-                    Ok(data) => {
-                        self.data = downcast_array::<PrimitiveArray<T::TArrow>>(&*data);
-                    }
-                    Err(e) => panic!("Error adding rasters: {:?}", e),
-                }
+        impl<T> $scalar_op_trait for ArrowRaster<T>
+        where
+            T: ArrowRasterNum<T>,
+            T::TArrow: ArrowPrimitiveType<Native = T>,
+        {
+            type Output = ArrowRaster<T>;
+
+            fn $op_fn(self, scalar: T) -> ArrowRaster<T> {
+                self.unary_mut(|x| x.$op_nodata_fn(scalar))
+            }
+        }
+
+        impl<T> $scalar_op_trait for &ArrowRaster<T>
+        where
+            T: ArrowRasterNum<T>,
+            T::TArrow: ArrowPrimitiveType<Native = T>,
+        {
+            type Output = ArrowRaster<T>;
+
+            fn $op_fn(self, scalar: T) -> ArrowRaster<T> {
+                self.unary(|x| x.$op_nodata_fn(scalar))
             }
         }
     };
@@ -138,7 +108,8 @@ arrow_raster_op!(
     std::ops::AddAssign<&ArrowRaster<T>>,
     add,
     add_assign,
-    add_wrapping
+    add_nodata_aware,
+    add_assign_nodata_aware
 );
 arrow_raster_op!(
     std::ops::Sub,
@@ -148,7 +119,8 @@ arrow_raster_op!(
     std::ops::SubAssign<&ArrowRaster<T>>,
     sub,
     sub_assign,
-    sub_wrapping
+    sub_nodata_aware,
+    sub_assign_nodata_aware
 );
 arrow_raster_op!(
     std::ops::Mul,
@@ -158,7 +130,8 @@ arrow_raster_op!(
     std::ops::MulAssign<&ArrowRaster<T>>,
     mul,
     mul_assign,
-    mul_wrapping
+    mul_nodata_aware,
+    mul_assign_nodata_aware
 );
 arrow_raster_op!(
     std::ops::Div,
@@ -168,5 +141,6 @@ arrow_raster_op!(
     std::ops::DivAssign<&ArrowRaster<T>>,
     div,
     div_assign,
-    div
+    div_nodata_aware,
+    div_assign_nodata_aware
 );

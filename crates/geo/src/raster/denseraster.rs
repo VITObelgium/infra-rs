@@ -20,10 +20,51 @@ impl<T: RasterNum<T>> DenseRaster<T> {
         }
 
         self.data.iter_mut().for_each(|x| {
-            if T::is_nodata(*x) {
+            if x.is_nodata() {
                 *x = T::nodata_value()
             }
         });
+    }
+
+    pub fn unary<F: Fn(T) -> T>(&self, op: F) -> Self {
+        DenseRaster::new(self.metadata.clone(), self.data.iter().map(|&a| op(a)).collect())
+    }
+
+    pub fn unary_inplace<F: Fn(&mut T)>(&mut self, op: F) {
+        self.data.iter_mut().for_each(op);
+    }
+
+    pub fn unary_mut<F: Fn(T) -> T>(mut self, op: F) -> Self {
+        self.data.iter_mut().for_each(|x| *x = op(*x));
+        self
+    }
+
+    pub fn binary<F: Fn(T, T) -> T>(&self, other: &Self, op: F) -> Self {
+        crate::raster::assert_dimensions(self, other);
+
+        let data = self
+            .data
+            .iter()
+            .zip(other.data.iter())
+            .map(|(&a, &b)| op(a, b))
+            .collect();
+
+        DenseRaster::new(self.metadata.clone(), data)
+    }
+
+    pub fn binary_inplace<F: Fn(&mut T, T)>(&mut self, other: &Self, op: F) {
+        crate::raster::assert_dimensions(self, other);
+        self.data.iter_mut().zip(other.data.iter()).for_each(|(a, &b)| op(a, b));
+    }
+
+    pub fn binary_mut<F: Fn(T, T) -> T>(mut self, other: &Self, op: F) -> Self {
+        crate::raster::assert_dimensions(&self, other);
+
+        self.data
+            .iter_mut()
+            .zip(other.data.iter())
+            .for_each(|(a, &b)| *a = op(*a, b));
+        self
     }
 }
 
@@ -91,7 +132,7 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
             return 0;
         }
 
-        self.data.iter().filter(|&&x| T::is_nodata(x)).count()
+        self.data.iter().filter(|x| x.is_nodata()).count()
     }
 
     fn value(&self, index: usize) -> Option<T> {
@@ -112,14 +153,14 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
     fn masked_data(&self) -> Vec<Option<T>> {
         self.data
             .iter()
-            .map(|&v| if T::is_nodata(v) { None } else { Some(v) })
+            .map(|&v| if v.is_nodata() { None } else { Some(v) })
             .collect()
     }
 
     fn sum(&self) -> f64 {
         self.data
             .iter()
-            .filter(|&&x| !T::is_nodata(x))
+            .filter(|&&x| !x.is_nodata())
             .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
     }
 }
@@ -170,7 +211,7 @@ impl<T: RasterNum<T>> PartialEq for DenseRaster<T> {
         self.data
             .iter()
             .zip(other.data.iter())
-            .all(|(&a, &b)| match (T::is_nodata(a), T::is_nodata(b)) {
+            .all(|(&a, &b)| match (a.is_nodata(), b.is_nodata()) {
                 (true, true) => true,
                 (false, false) => a == b,
                 _ => false,

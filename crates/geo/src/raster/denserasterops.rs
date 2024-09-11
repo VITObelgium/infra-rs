@@ -1,27 +1,25 @@
-use crate::raster;
+use super::{DenseRaster, RasterNum};
 
-use super::{DenseRaster, Raster, RasterNum};
-
+/// Macro to generate numeric raster operations.
 macro_rules! dense_raster_op {
-    ($op_trait:path, $scalar_op_trait:path, $op_assign_trait:path, $op_assign_scalar_trait:path, $op_assign_ref_trait:path, $op_fn:ident, $op_assign_fn:ident) => {
+    (   $op_trait:path, // name of the trait e.g. std::ops::Add
+        $scalar_op_trait:path, // name of the trait with scalar argument e.g. std::ops::Add<T>
+        $op_assign_trait:path, // name of the trait with assignment e.g. std::ops::AddAssign
+        $op_assign_scalar_trait:path, // name of the trait with scalar assignment e.g. std::ops::AddAssign<T>
+        $op_assign_ref_trait:path, // name of the trait with reference assignment e.g. std::ops::AddAssign<&DenseRaster<T>>
+        $op_fn:ident, // name of the operation function inside the trait e.g. add
+        $op_assign_fn:ident, // name of the assignment function inside the trait e.g. add_assign
+        $op_nodata_fn:ident, // name of the operation function with nodata handling e.g. add_nodata_aware
+        $op_assign_nodata_fn:ident // name of the assignment function with nodata handling e.g. add_assign_nodata_aware
+    ) => {
         impl<T> $op_trait for DenseRaster<T>
         where
             T: RasterNum<T>,
         {
             type Output = DenseRaster<T>;
 
-            fn $op_fn(mut self, other: DenseRaster<T>) -> DenseRaster<T> {
-                raster::assert_dimensions(&self, &other);
-
-                for (x, &y) in self.as_mut_slice().iter_mut().zip(other.as_slice().iter()) {
-                    if T::is_nodata(*x) || T::is_nodata(y) {
-                        *x = T::nodata_value();
-                    } else {
-                        x.$op_assign_fn(y);
-                    }
-                }
-
-                self
+            fn $op_fn(self, other: DenseRaster<T>) -> DenseRaster<T> {
+                self.binary_mut(&other, |x, y| x.$op_nodata_fn(y))
             }
         }
 
@@ -32,21 +30,7 @@ macro_rules! dense_raster_op {
             type Output = DenseRaster<T>;
 
             fn $op_fn(self, other: &DenseRaster<T>) -> DenseRaster<T> {
-                raster::assert_dimensions(self, other);
-
-                // Create a new DenseRaster with the same metadata
-                let metadata = self.metadata.clone();
-                let mut data = Vec::with_capacity(self.data.len());
-                // Perform element-wise addition
-                for (x, y) in self.data.iter().zip(other.data.iter()) {
-                    if T::is_nodata(*x) || T::is_nodata(*y) {
-                        data.push(T::nodata_value());
-                    } else {
-                        data.push(x.$op_fn(*y))
-                    }
-                }
-
-                DenseRaster { metadata, data }
+                self.binary(other, |x, y| x.$op_nodata_fn(y))
             }
         }
 
@@ -55,15 +39,9 @@ macro_rules! dense_raster_op {
             T: RasterNum<T>,
         {
             fn $op_assign_fn(&mut self, other: DenseRaster<T>) {
-                raster::assert_dimensions(self, &other);
-
-                for (x, &y) in self.as_mut_slice().iter_mut().zip(other.as_slice().iter()) {
-                    if T::is_nodata(*x) || T::is_nodata(y) {
-                        *x = T::nodata_value();
-                    } else {
-                        x.$op_assign_fn(y);
-                    }
-                }
+                self.binary_inplace(&other, |x, y| {
+                    x.$op_assign_nodata_fn(y);
+                });
             }
         }
 
@@ -72,11 +50,9 @@ macro_rules! dense_raster_op {
             T: RasterNum<T>,
         {
             fn $op_assign_fn(&mut self, scalar: T) {
-                for x in self.as_mut_slice().iter_mut() {
-                    if !T::is_nodata(*x) {
-                        x.$op_assign_fn(scalar);
-                    }
-                }
+                self.unary_inplace(|x| {
+                    x.$op_assign_nodata_fn(scalar);
+                });
             }
         }
 
@@ -85,15 +61,9 @@ macro_rules! dense_raster_op {
             T: RasterNum<T>,
         {
             fn $op_assign_fn(&mut self, other: &DenseRaster<T>) {
-                raster::assert_dimensions(self, other);
-
-                for (x, &y) in self.as_mut_slice().iter_mut().zip(other.as_slice().iter()) {
-                    if T::is_nodata(*x) || T::is_nodata(y) {
-                        *x = T::nodata_value();
-                    } else {
-                        x.$op_assign_fn(y);
-                    }
-                }
+                self.binary_inplace(&other, |x, y| {
+                    x.$op_assign_nodata_fn(y);
+                });
             }
         }
 
@@ -103,14 +73,8 @@ macro_rules! dense_raster_op {
         {
             type Output = DenseRaster<T>;
 
-            fn $op_fn(mut self, scalar: T) -> DenseRaster<T> {
-                for x in self.as_mut_slice() {
-                    if !T::is_nodata(*x) {
-                        x.$op_assign_fn(scalar);
-                    }
-                }
-
-                self
+            fn $op_fn(self, scalar: T) -> DenseRaster<T> {
+                self.unary_mut(|x| x.$op_nodata_fn(scalar))
             }
         }
 
@@ -121,20 +85,7 @@ macro_rules! dense_raster_op {
             type Output = DenseRaster<T>;
 
             fn $op_fn(self, scalar: T) -> DenseRaster<T> {
-                let mut data = Vec::with_capacity(self.data.len());
-
-                for x in self.as_slice() {
-                    if T::is_nodata(*x) {
-                        data.push(T::nodata_value());
-                    } else {
-                        data.push(x.$op_fn(scalar));
-                    }
-                }
-
-                DenseRaster {
-                    metadata: self.metadata.clone(),
-                    data,
-                }
+                self.unary(|x| x.$op_nodata_fn(scalar))
             }
         }
     };
@@ -147,7 +98,9 @@ dense_raster_op!(
     std::ops::AddAssign<T>,
     std::ops::AddAssign<&DenseRaster<T>>,
     add,
-    add_assign
+    add_assign,
+    add_nodata_aware,
+    add_assign_nodata_aware
 );
 dense_raster_op!(
     std::ops::Sub,
@@ -156,7 +109,9 @@ dense_raster_op!(
     std::ops::SubAssign<T>,
     std::ops::SubAssign<&DenseRaster<T>>,
     sub,
-    sub_assign
+    sub_assign,
+    sub_nodata_aware,
+    sub_assign_nodata_aware
 );
 dense_raster_op!(
     std::ops::Mul,
@@ -165,7 +120,9 @@ dense_raster_op!(
     std::ops::MulAssign<T>,
     std::ops::MulAssign<&DenseRaster<T>>,
     mul,
-    mul_assign
+    mul_assign,
+    mul_nodata_aware,
+    mul_assign_nodata_aware
 );
 dense_raster_op!(
     std::ops::Div,
@@ -174,5 +131,7 @@ dense_raster_op!(
     std::ops::DivAssign<T>,
     std::ops::DivAssign<&DenseRaster<T>>,
     div,
-    div_assign
+    div_assign,
+    div_nodata_aware,
+    div_assign_nodata_aware
 );

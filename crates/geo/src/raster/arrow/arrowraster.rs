@@ -1,5 +1,5 @@
 use arrow::{
-    array::{Array, ArrowNativeTypeOp, PrimitiveArray, PrimitiveIter},
+    array::{Array, ArrowNativeTypeOp, PrimitiveArray, PrimitiveBuilder, PrimitiveIter},
     buffer::ScalarBuffer,
     datatypes::ArrowPrimitiveType,
 };
@@ -25,6 +25,13 @@ impl ArrowRasterNum<i64> for i64 {}
 impl ArrowRasterNum<u64> for u64 {}
 impl ArrowRasterNum<f32> for f32 {}
 impl ArrowRasterNum<f64> for f64 {}
+
+/// Perform a deep copy of the array, not just the underlying ARC buffer
+fn primitive_array_copy<T: ArrowRasterNum<T>>(array: &PrimitiveArray<T::TArrow>) -> PrimitiveArray<T::TArrow> {
+    let mut builder = PrimitiveBuilder::<T::TArrow>::new();
+    array.iter().for_each(|x| builder.append_option(x));
+    builder.finish()
+}
 
 pub struct ArrowRaster<T: ArrowRasterNum<T>> {
     pub(super) metadata: GeoReference,
@@ -74,6 +81,109 @@ where
 
     pub fn arrow_array(&self) -> &PrimitiveArray<T::TArrow> {
         &self.data
+    }
+
+    pub fn unary<F: Fn(T) -> T>(&self, op: F) -> Self {
+        ArrowRaster {
+            metadata: self.metadata.clone(),
+            data: self.data.unary(op),
+        }
+    }
+
+    pub fn unary_inplace<F: Fn(&mut T)>(&mut self, op: F) {
+        let mut temp_array = PrimitiveBuilder::<T::TArrow>::new().finish();
+        std::mem::swap(&mut self.data, &mut temp_array);
+
+        let unary_result = temp_array.unary_mut(|mut x| {
+            op(&mut x);
+            x
+        });
+
+        temp_array = match unary_result {
+            Ok(data) => data,
+            Err(data) => {
+                // The operation failed because the underlying data is shared
+                // Perform a deep copy of the array and try again
+                primitive_array_copy::<T>(&data)
+                    .unary_mut(|mut x| {
+                        op(&mut x);
+                        x
+                    })
+                    .expect("Our deep copy should not be shared!")
+            }
+        };
+
+        std::mem::swap(&mut self.data, &mut temp_array);
+    }
+
+    pub fn unary_mut<F: Fn(T) -> T>(mut self, op: F) -> Self {
+        match self.data.unary_mut(op) {
+            Ok(data) => {
+                self.data = data;
+                self
+            }
+            Err(e) => panic!("Error on raster operation: {:?}", e),
+        }
+    }
+
+    pub fn binary<F: Fn(T, T) -> T>(&self, other: &Self, op: F) -> Self {
+        crate::raster::assert_dimensions(self, other);
+
+        let data = match arrow::compute::binary(&self.data, &other.data, op) {
+            Ok(data) => data,
+            Err(e) => panic!("Error on raster operation: {:?}", e),
+        };
+
+        ArrowRaster {
+            metadata: self.metadata.clone(),
+            data,
+        }
+    }
+
+    pub fn binary_inplace<F: Fn(&mut T, T)>(&mut self, other: &Self, op: F) {
+        crate::raster::assert_dimensions(self, other);
+
+        let mut temp_array = PrimitiveBuilder::<T::TArrow>::new().finish();
+        std::mem::swap(&mut self.data, &mut temp_array);
+
+        let binary_result = arrow::compute::binary_mut(temp_array, &other.data, |mut x, y| {
+            op(&mut x, y);
+            x
+        });
+
+        temp_array = match binary_result {
+            Ok(data) => data.expect("Binary operations should be infallible"),
+            Err(data) => {
+                // The opartion failed because the underlying data is shared
+                // Perform a deep copy of the array and try again
+                arrow::compute::binary_mut(primitive_array_copy::<T>(&data), &other.data, |mut x, y| {
+                    op(&mut x, y);
+                    x
+                })
+                .expect("Our deep copy should not be shared!")
+                .expect("Binary operations should be infallible")
+            }
+        };
+
+        std::mem::swap(&mut self.data, &mut temp_array);
+    }
+
+    pub fn binary_mut<F: Fn(T, T) -> T>(mut self, other: &Self, op: F) -> Self {
+        crate::raster::assert_dimensions(&self, other);
+
+        let data = match arrow::compute::binary_mut(self.data, &other.data, &op) {
+            Ok(data) => data.expect("Binary operations should be infallible"),
+            Err(data) => {
+                // The opartion failed because the underlying data is shared
+                // Perform a deep copy of the array and try again
+                arrow::compute::binary_mut(primitive_array_copy::<T>(&data), &other.data, op)
+                    .expect("Our deep copy should not be shared!")
+                    .expect("Binary operations should be infallible")
+            }
+        };
+
+        self.data = data;
+        self
     }
 }
 

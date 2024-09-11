@@ -9,6 +9,7 @@ mod denserasterops;
 pub mod io;
 mod nodata;
 mod rasteriotests;
+mod rasternum;
 mod rastertests;
 #[cfg(test)]
 mod testutils;
@@ -35,6 +36,8 @@ pub use cell::CellIterator;
 #[doc(inline)]
 pub use denseraster::DenseRaster;
 pub use nodata::Nodata;
+#[doc(inline)]
+pub use rasternum::RasterNum;
 
 #[cfg(all(feature = "python", feature = "arrow"))]
 mod python;
@@ -42,31 +45,37 @@ use num::NumCast;
 #[cfg(all(feature = "python", feature = "arrow"))]
 pub use python::pyraster::PyRaster;
 
-pub trait RasterNum<T: num::ToPrimitive>:
-    Copy
-    + PartialEq
-    + num::NumCast
-    + num::Zero
-    + num::One
-    + num::Bounded
-    + Nodata<T>
-    + std::fmt::Debug
-    + std::ops::Add<Output = Self>
-    + std::ops::Sub<Output = Self>
-    + std::ops::Mul<Output = Self>
-    + std::ops::Div<Output = Self>
-    + std::ops::AddAssign
-    + std::ops::SubAssign
-    + std::ops::MulAssign
-    + std::ops::DivAssign
-{
-}
-
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
-pub trait Raster<T: RasterNum<T>>: PartialEq + Clone
+pub trait Raster<T: RasterNum<T>>:
+    PartialEq
+    + Clone
+    + std::ops::Add<T, Output = Self>
+    + std::ops::Sub<T, Output = Self>
+    + std::ops::Mul<T, Output = Self>
+    + std::ops::Div<T, Output = Self>
+    + std::ops::Add<Self, Output = Self>
+    + std::ops::Sub<Self, Output = Self>
+    + std::ops::Mul<Self, Output = Self>
+    + std::ops::Div<Self, Output = Self>
+    + std::ops::AddAssign<T>
+    + std::ops::SubAssign<T>
+    + std::ops::MulAssign<T>
+    + std::ops::DivAssign<T>
+    + std::ops::AddAssign<Self>
+    + std::ops::SubAssign<Self>
+    + std::ops::MulAssign<Self>
+    + std::ops::DivAssign<Self>
+    + for<'a> std::ops::AddAssign<&'a Self>
+    + for<'a> std::ops::SubAssign<&'a Self>
+    + for<'a> std::ops::MulAssign<&'a Self>
+    + for<'a> std::ops::DivAssign<&'a Self>
+// + for<'a> std::ops::Add<&'a Self, Output = Self>
+// + for<'a> std::ops::Sub<&'a Self, Output = Self>
+// + for<'a> std::ops::Mul<&'a Self, Output = Self>
+// + for<'a> std::ops::Div<&'a Self, Output = Self>
 where
-    Self: Sized + std::fmt::Debug + std::ops::Add<Output = Self>,
+    Self: Sized + std::fmt::Debug,
 {
     /// Create a new raster with the given metadata and data buffer.
     fn new(metadata: GeoReference, data: Vec<T>) -> Self;
@@ -151,17 +160,6 @@ pub trait RasterIO<T: RasterNum<T>, TRas: Raster<T>> {
     /// Write the full raster to disk
     fn write(&mut self, path: &std::path::Path) -> Result;
 }
-
-impl RasterNum<i8> for i8 {}
-impl RasterNum<u8> for u8 {}
-impl RasterNum<i16> for i16 {}
-impl RasterNum<u16> for u16 {}
-impl RasterNum<i32> for i32 {}
-impl RasterNum<u32> for u32 {}
-impl RasterNum<i64> for i64 {}
-impl RasterNum<u64> for u64 {}
-impl RasterNum<f32> for f32 {}
-impl RasterNum<f64> for f64 {}
 
 // pub fn check_dimensions<R1, R2, T1, T2>(r1: &R1, r2: &R2) -> Result<()>
 // where

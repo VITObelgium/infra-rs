@@ -1,8 +1,6 @@
 #[cfg(test)]
 #[generic_tests::define]
 mod tests {
-    use num::NumCast;
-
     use crate::{
         raster::{
             testutils::{NOD, *},
@@ -17,11 +15,9 @@ mod tests {
     use crate::raster::ArrowRaster;
 
     #[test]
-    fn test_add_raster_with_nodata<T: RasterNum<T>, R>()
+    fn test_add_raster_with_nodata<T: RasterNum<T>, R: Raster<T>>()
     where
         for<'a> &'a R: std::ops::Add<&'a R, Output = R>,
-        for<'a> R: std::ops::AddAssign<&'a R>,
-        R: Raster<T> + std::ops::Add<R, Output = R> + std::ops::AddAssign<R>,
     {
         let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
         let raster2 = R::new(META, create_vec(&[1.0, 3.0, 4.0, 5.0, NOD, 3.0, 3.0, 3.0, NOD]));
@@ -52,10 +48,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_scalar_with_nodata<T: RasterNum<T>, R>()
-    where
-        R: Raster<T> + std::ops::Add<T, Output = R> + std::ops::Add<T> + std::ops::AddAssign<T>,
-    {
+    fn test_add_scalar_with_nodata<T: RasterNum<T>, R: Raster<T>>() {
         let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
         let expected = R::new(META, create_vec(&[NOD, 6.0, 6.0, 7.0, NOD, 7.0, 5.0, 5.0, 4.0]));
 
@@ -74,10 +67,61 @@ mod tests {
     }
 
     #[test]
-    fn test_multiply_nodata<T: RasterNum<T>, R>()
+    fn test_subtract_raster_with_nodata<T: RasterNum<T>, R: Raster<T>>()
+    where
+        for<'a> &'a R: std::ops::Sub<&'a R, Output = R>,
+    {
+        let raster1 = R::new(META, create_vec(&[NOD, 5.0, 9.0, 3.0, NOD, 13.0, 3.0, 4.0, 0.0]));
+        let raster2 = R::new(META, create_vec(&[1.0, 3.0, 4.0, 3.0, NOD, 3.0, 1.0, 3.0, NOD]));
+        let expected = R::new(META, create_vec(&[NOD, 2.0, 5.0, 0.0, NOD, 10.0, 2.0, 1.0, NOD]));
+
+        {
+            let result = &raster1 - &raster2;
+            assert_eq!(result, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1 -= &raster2;
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            let raster2 = raster2.clone();
+            raster1 -= raster2;
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let result = raster1 - raster2;
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_subtract_scalar_with_nodata<T: RasterNum<T>, R: Raster<T>>() {
+        let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 4.0, 8.0, 10.0]));
+        let expected = R::new(META, create_vec(&[NOD, 0.0, 0.0, 1.0, NOD, 1.0, 2.0, 6.0, 8.0]));
+
+        let scalar: T = num::NumCast::from(2.0).unwrap();
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1 -= scalar;
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let result = raster1 - scalar;
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_multiply_raster_with_nodata<T: RasterNum<T>, R: Raster<T>>()
     where
         for<'a> &'a R: std::ops::Mul<&'a R, Output = R>,
-        R: Raster<T> + std::ops::Mul<R, Output = R>,
     {
         let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
         let raster2 = R::new(META, create_vec(&[1.0, 3.0, 3.0, 3.0, NOD, 3.0, 3.0, 3.0, NOD]));
@@ -95,29 +139,66 @@ mod tests {
     }
 
     #[test]
-    fn test_multiply_scalar<T: RasterNum<T>, R>()
-    where
-        for<'a> &'a R: std::ops::Mul<T, Output = R>,
-        R: Raster<T> + std::ops::Mul<T, Output = R>,
-    {
-        let metadata = GeoReference::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 2, cols: 2 },
-            [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
-            Some(NOD),
-        );
+    fn test_multiply_scalar_with_nodata<T: RasterNum<T>, R: Raster<T>>() {
+        let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
+        let expected = R::new(META, create_vec(&[NOD, 8.0, 8.0, 12.0, NOD, 12.0, 4.0, 4.0, 0.0]));
 
-        let raster = R::new(metadata.clone(), create_vec(&[1.0, 2.0, NOD, 4.0]));
-        let scalar: T = NumCast::from(2).unwrap();
+        let scalar: T = num::NumCast::from(4.0).unwrap();
 
         {
-            let result = &raster * scalar;
-            assert_eq!(to_f64(result.masked_data()), &[Some(2.0), Some(4.0), None, Some(8.0)]);
+            let mut raster1 = raster1.clone();
+            raster1 *= scalar;
+            assert_eq!(raster1, expected);
         }
 
         {
-            let result = raster * scalar;
-            assert_eq!(to_f64(result.masked_data()), &[Some(2.0), Some(4.0), None, Some(8.0)]);
+            let result = raster1 * scalar;
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_divide_raster_with_nodata<T: RasterNum<T>, R: Raster<T>>()
+    where
+        for<'a> &'a R: std::ops::Div<&'a R, Output = R>,
+    {
+        let raster1 = R::new(META, create_vec(&[NOD, 9.0, 6.0, 3.0, NOD, 3.0, 1.0, 12.0, 0.0]));
+        let raster2 = R::new(META, create_vec(&[1.0, 3.0, 2.0, 0.0, NOD, 3.0, 1.0, 3.0, NOD]));
+        let expected = R::new(META, create_vec(&[NOD, 3.0, 3.0, NOD, NOD, 1.0, 1.0, 4.0, NOD]));
+
+        {
+            let result = &raster1 / &raster2;
+            assert_eq!(result, expected);
+        }
+
+        {
+            let result = raster1 / raster2;
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_divide_scalar_with_nodata<T: RasterNum<T>, R: Raster<T>>() {
+        let raster1 = R::new(META, create_vec(&[NOD, 6.0, 3.0, 0.0, NOD, 3.0, 30.0, 12.0, 0.0]));
+        let expected = R::new(META, create_vec(&[NOD, 2.0, 1.0, 0.0, NOD, 1.0, 10.0, 4.0, 0.0]));
+
+        let scalar: T = num::NumCast::from(3.0).unwrap();
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1 /= scalar;
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1 /= T::zero();
+            assert_eq!(raster1.nodata_count(), raster1.len());
+        }
+
+        {
+            let result = raster1 / scalar;
+            assert_eq!(result, expected);
         }
     }
 
