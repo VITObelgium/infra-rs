@@ -17,15 +17,15 @@ mod tests {
     use crate::raster::ArrowRaster;
 
     #[test]
-    fn test_add_nodata<T: RasterNum<T>, R>()
+    fn test_add_raster_with_nodata<T: RasterNum<T>, R>()
     where
         for<'a> &'a R: std::ops::Add<&'a R, Output = R>,
         for<'a> R: std::ops::AddAssign<&'a R>,
         R: Raster<T> + std::ops::Add<R, Output = R> + std::ops::AddAssign<R>,
     {
         let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
-        let raster2 = R::new(META, create_vec(&[1.0, 3.0, 3.0, 3.0, NOD, 3.0, 3.0, 3.0, NOD]));
-        let expected = R::new(META, create_vec(&[NOD, 5.0, 5.0, 6.0, NOD, 6.0, 4.0, 4.0, NOD]));
+        let raster2 = R::new(META, create_vec(&[1.0, 3.0, 4.0, 5.0, NOD, 3.0, 3.0, 3.0, NOD]));
+        let expected = R::new(META, create_vec(&[NOD, 5.0, 6.0, 8.0, NOD, 6.0, 4.0, 4.0, NOD]));
 
         {
             let result = &raster1 + &raster2;
@@ -47,6 +47,28 @@ mod tests {
 
         {
             let result = raster1 + raster2;
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_add_scalar_with_nodata<T: RasterNum<T>, R>()
+    where
+        R: Raster<T> + std::ops::Add<T, Output = R> + std::ops::Add<T> + std::ops::AddAssign<T>,
+    {
+        let raster1 = R::new(META, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
+        let expected = R::new(META, create_vec(&[NOD, 6.0, 6.0, 7.0, NOD, 7.0, 5.0, 5.0, 4.0]));
+
+        let scalar: T = num::NumCast::from(4.0).unwrap();
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1 += scalar;
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let result = raster1 + scalar;
             assert_eq!(result, expected);
         }
     }

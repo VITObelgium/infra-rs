@@ -7,7 +7,7 @@ use arrow::{
 use crate::raster::{self, ArrowRaster, ArrowRasterNum};
 
 macro_rules! arrow_raster_op {
-    ($op_trait:path, $scalar_op_trait:path, $op_assign_trait:path, $op_assign_ref_trait:path, $op_fn:ident, $op_assign_fn:ident, $kernel:ident) => {
+    ($op_trait:path, $scalar_op_trait:path, $op_assign_trait:path, $op_assign_scalar_trait:path, $op_assign_ref_trait:path, $op_fn:ident, $op_assign_fn:ident, $kernel:ident) => {
         impl<T> $op_trait for ArrowRaster<T>
         where
             T: ArrowRasterNum<T>,
@@ -63,7 +63,7 @@ macro_rules! arrow_raster_op {
             fn $op_fn(mut self, scalar: T) -> ArrowRaster<T> {
                 self.data = match self.data.unary_mut(|v| v.$op_fn(scalar)) {
                     Ok(data) => data,
-                    Err(e) => panic!("Error on raster operation: {:?}", e),
+                    Err(_) => panic!("Raster operation on shared buffer"),
                 };
 
                 self
@@ -101,6 +101,16 @@ macro_rules! arrow_raster_op {
             }
         }
 
+        impl<T> $op_assign_scalar_trait for ArrowRaster<T>
+        where
+            T: ArrowRasterNum<T>,
+            T::TArrow: ArrowPrimitiveType<Native = T>,
+        {
+            fn $op_assign_fn(&mut self, scalar: T) {
+                self.data = self.data.unary(|v| v.$op_fn(scalar));
+            }
+        }
+
         impl<T> $op_assign_ref_trait for ArrowRaster<T>
         where
             T: ArrowRasterNum<T>,
@@ -124,6 +134,7 @@ arrow_raster_op!(
     std::ops::Add,
     std::ops::Add<T>,
     std::ops::AddAssign,
+    std::ops::AddAssign<T>,
     std::ops::AddAssign<&ArrowRaster<T>>,
     add,
     add_assign,
@@ -133,6 +144,7 @@ arrow_raster_op!(
     std::ops::Sub,
     std::ops::Sub<T>,
     std::ops::SubAssign,
+    std::ops::SubAssign<T>,
     std::ops::SubAssign<&ArrowRaster<T>>,
     sub,
     sub_assign,
@@ -142,6 +154,7 @@ arrow_raster_op!(
     std::ops::Mul,
     std::ops::Mul<T>,
     std::ops::MulAssign,
+    std::ops::MulAssign<T>,
     std::ops::MulAssign<&ArrowRaster<T>>,
     mul,
     mul_assign,
@@ -151,6 +164,7 @@ arrow_raster_op!(
     std::ops::Div,
     std::ops::Div<T>,
     std::ops::DivAssign,
+    std::ops::DivAssign<T>,
     std::ops::DivAssign<&ArrowRaster<T>>,
     div,
     div_assign,
