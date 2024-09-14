@@ -76,9 +76,10 @@ impl TileProvider for DirectoryTileProvider {
     fn extent_value_range(&self, id: LayerId, extent: LatLonBounds, zoom: Option<i32>) -> Result<Range<f64>> {
         let layer = self.layer_data(id)?;
         match layer.source_format {
-            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii => {
-                WarpingTileProvider::value_range_for_extent(layer, extent, zoom)
-            }
+            LayerSourceType::GeoTiff
+            | LayerSourceType::GeoPackage
+            | LayerSourceType::ArcAscii
+            | LayerSourceType::Netcdf => WarpingTileProvider::value_range_for_extent(layer, extent, zoom),
             LayerSourceType::Mbtiles => MbtilesTileProvider::value_range_for_extent(layer, extent, zoom),
             _ => Err(Error::Runtime("Unsupported source format".to_string())),
         }

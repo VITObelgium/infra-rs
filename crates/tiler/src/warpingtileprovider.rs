@@ -35,8 +35,10 @@ fn type_string<T: GdalType>() -> &'static str {
     }
 }
 
-fn detect_raster_range(raster_path: &std::path::Path, bbox: LatLonBounds) -> Result<Range<f64>> {
+fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: LatLonBounds) -> Result<Range<f64>> {
     let options: Vec<String> = vec![
+        "-b".to_string(),
+        band_nr.to_string(),
         "-stats".to_string(),
         "-ot".to_string(),
         "Float32".to_string(),
@@ -66,7 +68,7 @@ fn detect_raster_range(raster_path: &std::path::Path, bbox: LatLonBounds) -> Res
     ));
 
     if let Ok(ds) = raster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
-        if let Ok(Some(stats)) = ds.rasterband(1)?.get_statistics(true, true) {
+        if let Ok(Some(stats)) = ds.rasterband(band_nr)?.get_statistics(true, true) {
             log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
             return Ok(Range {
                 start: stats.min,
@@ -84,6 +86,7 @@ fn detect_raster_range(raster_path: &std::path::Path, bbox: LatLonBounds) -> Res
 
 fn read_raster_tile<T: RasterNum<T> + GdalType>(
     raster_path: &std::path::Path,
+    band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
 ) -> Result<Vec<T>> {
@@ -91,6 +94,8 @@ fn read_raster_tile<T: RasterNum<T> + GdalType>(
     let scaled_size = Tile::TILE_SIZE * dpi_ratio as u16;
 
     let options: Vec<String> = vec![
+        "-b".to_string(),
+        band_nr.to_string(),
         "-ot".to_string(),
         type_string::<T>().to_string(),
         "-of".to_string(),
@@ -114,6 +119,7 @@ fn read_raster_tile<T: RasterNum<T> + GdalType>(
 
 fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     raster_path: &std::path::Path,
+    band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
 ) -> Result<Vec<T>> {
@@ -138,6 +144,8 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     let mut dest_ds = raster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
 
     let options = vec![
+        "-b".to_string(),
+        band_nr.to_string(),
         "-ovr".to_string(),
         "AUTO".to_string(),
         "-r".to_string(),
@@ -160,7 +168,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
 }
 
 pub struct WarpingTileProvider {
-    meta: LayerMetadata,
+    meta: Vec<LayerMetadata>,
 }
 
 impl WarpingTileProvider {
@@ -170,60 +178,75 @@ impl WarpingTileProvider {
         })
     }
 
-    fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<LayerMetadata> {
+    fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<Vec<LayerMetadata>> {
         let ds = raster::io::dataset::open_read_only(path)?;
 
-        // We assume to be working with a single raster band
-        let meta = raster::io::dataset::read_band_metadata(&ds, 1)?;
-        let raster_band = ds.rasterband(1)?;
-        let over_view_count = raster_band.overview_count()?;
+        let raster_count = ds.raster_count();
+        let mut result = Vec::with_capacity(raster_count);
 
-        let mut srs = SpatialReference::from_proj(meta.projection())?;
-        let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), true);
+        for band_nr in 1..=raster_count {
+            let meta = raster::io::dataset::read_band_metadata(&ds, band_nr)?;
+            let raster_band = ds.rasterband(band_nr)?;
+            let over_view_count = raster_band.overview_count()?;
 
-        let mut layer_meta = LayerMetadata {
-            id: tileprovider::unique_layer_id(),
-            data_type: to_raster_data_type(raster_band.band_type()),
-            url: String::new(),
-            path: path.to_path_buf(),
-            name: path
+            let mut srs = SpatialReference::from_proj(meta.projection())?;
+            let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), true);
+
+            let mut name = path
                 .file_stem()
                 .ok_or(Error::Runtime("No path stem".to_string()))?
                 .to_string_lossy()
-                .to_string(),
-            max_zoom: zoom_level,
-            min_zoom: if over_view_count > 0 {
-                zoom_level - over_view_count
-            } else {
-                6
-            },
-            nodata: meta.nodata(),
-            supports_dpi_ratio: true,
-            tile_format: TileFormat::Png,
-            source_is_web_mercator: srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
-            epsg: srs.epsg_cs().unwrap_or(0.into()),
-            bounds: metadata_bounds_wgs84(meta)?.array(),
-            description: String::new(),
-            min_value: f64::NAN,
-            max_value: f64::NAN,
-            source_format: source_type_for_path(path),
-            scheme: "xyz".to_string(),
-            additional_data: Default::default(),
-        };
+                .to_string();
 
-        if opts.calculate_stats {
-            let allow_approximation = raster_band.x_size() * raster_band.y_size() > 10000000;
-            let force = cfg!(not(debug_assertions));
-
-            if let Ok(Some(stats)) = raster_band.get_statistics(force, allow_approximation) {
-                layer_meta.min_value = stats.min;
-                layer_meta.max_value = stats.max;
+            if raster_count > 1 {
+                name.push_str(&format!(" - Band {}", band_nr));
             }
+
+            let mut layer_meta = LayerMetadata {
+                id: tileprovider::unique_layer_id(),
+                data_type: to_raster_data_type(raster_band.band_type()),
+                url: String::default(),
+                path: path.to_path_buf(),
+                name,
+                max_zoom: zoom_level,
+                min_zoom: if over_view_count > 0 {
+                    zoom_level - over_view_count
+                } else {
+                    6
+                },
+                nodata: meta.nodata(),
+                supports_dpi_ratio: true,
+                tile_format: TileFormat::Png,
+                source_is_web_mercator: srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
+                epsg: srs.epsg_cs().unwrap_or(0.into()),
+                bounds: metadata_bounds_wgs84(meta)?.array(),
+                description: String::new(),
+                min_value: f64::NAN,
+                max_value: f64::NAN,
+                source_format: source_type_for_path(path),
+                scheme: "xyz".to_string(),
+                additional_data: Default::default(),
+                band_nr: Some(band_nr),
+            };
+
+            if opts.calculate_stats {
+                let allow_approximation = raster_band.x_size() * raster_band.y_size() > 10000000;
+                let force = cfg!(not(debug_assertions));
+
+                if let Ok(Some(stats)) = raster_band.get_statistics(force, allow_approximation) {
+                    layer_meta.min_value = stats.min;
+                    layer_meta.max_value = stats.max;
+                }
+            }
+
+            result.push(layer_meta);
         }
 
-        log::debug!("Serving file: {:?}", layer_meta.path);
+        if let Some(layer) = result.first() {
+            log::debug!("Serving file: {:?}", layer.path)
+        }
 
-        Ok(layer_meta)
+        Ok(result)
     }
 
     pub fn supports_raster_type(raster_type: RasterFormat) -> bool {
@@ -232,6 +255,7 @@ impl WarpingTileProvider {
 
     fn read_tile<T: RasterNum<T> + Num + GdalType>(
         meta: &LayerMetadata,
+        band_nr: usize,
         tile: Tile,
         dpi_ratio: u8,
         legend: &Legend,
@@ -242,13 +266,13 @@ impl WarpingTileProvider {
         let mut nodata: T = meta.nodata::<T>().unwrap_or(T::nodata_value());
 
         if !meta.source_is_web_mercator {
-            raw_tile_data = read_raster_tile_warped(meta.path.as_path(), tile, dpi_ratio)?;
+            raw_tile_data = read_raster_tile_warped(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
             nodata = T::nodata_value();
         } else {
-            raw_tile_data = read_raster_tile(meta.path.as_path(), tile, dpi_ratio)?;
+            raw_tile_data = read_raster_tile(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
         }
 
-        //#[cfg(TILESERVER_VERBOSE)]
+        //[cfg(TILESERVER_VERBOSE)]
         log::debug!(
             "[{}/{}/{}@{}] {} took {}ms (data type: {}) [{:?}]",
             tile.z(),
@@ -299,16 +323,23 @@ impl WarpingTileProvider {
             return Ok(TileData::default());
         }
 
+        let band_nr = layer_meta.band_nr.unwrap_or(1);
         match layer_meta.data_type {
-            RasterDataType::Byte => WarpingTileProvider::read_tile::<u8>(layer_meta, tile, dpi_ratio, legend),
-            RasterDataType::Int32 => WarpingTileProvider::read_tile::<i32>(layer_meta, tile, dpi_ratio, legend),
-            RasterDataType::UInt32 => WarpingTileProvider::read_tile::<u32>(layer_meta, tile, dpi_ratio, legend),
-            RasterDataType::Float => WarpingTileProvider::read_tile::<f32>(layer_meta, tile, dpi_ratio, legend),
+            RasterDataType::Byte => WarpingTileProvider::read_tile::<u8>(layer_meta, band_nr, tile, dpi_ratio, legend),
+            RasterDataType::Int32 => {
+                WarpingTileProvider::read_tile::<i32>(layer_meta, band_nr, tile, dpi_ratio, legend)
+            }
+            RasterDataType::UInt32 => {
+                WarpingTileProvider::read_tile::<u32>(layer_meta, band_nr, tile, dpi_ratio, legend)
+            }
+            RasterDataType::Float => {
+                WarpingTileProvider::read_tile::<f32>(layer_meta, band_nr, tile, dpi_ratio, legend)
+            }
         }
     }
 
     pub fn raster_pixel(layer_meta: &LayerMetadata, coord: Coordinate) -> Result<Option<f32>> {
-        raster_pixel(layer_meta.path.as_path(), coord, None)
+        raster_pixel(&layer_meta.path, layer_meta.band_nr.unwrap_or(1), coord, None)
     }
 
     pub fn value_range_for_extent(
@@ -316,35 +347,38 @@ impl WarpingTileProvider {
         extent: LatLonBounds,
         _zoom: Option<i32>,
     ) -> Result<Range<f64>> {
-        detect_raster_range(&layer_meta.path, extent)
+        detect_raster_range(&layer_meta.path, layer_meta.band_nr.unwrap_or(1), extent)
     }
 
-    fn check_layer_id(&self, id: LayerId) -> Result<()> {
-        if id != self.meta.id {
-            return Err(Error::InvalidArgument(format!("Invalid layer id: {}", id)));
-        }
-
-        Ok(())
+    fn layer_ref(&self, id: LayerId) -> Result<&LayerMetadata> {
+        self.meta
+            .iter()
+            .find(|m| m.id == id)
+            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
     }
 }
 
 impl TileProvider for WarpingTileProvider {
     fn layers(&self) -> Vec<LayerMetadata> {
-        vec![self.meta.clone()]
+        self.meta.clone()
     }
 
-    fn layer(&self, _id: LayerId) -> Result<LayerMetadata> {
-        Ok(self.meta.clone())
+    fn layer(&self, id: LayerId) -> Result<LayerMetadata> {
+        self.meta
+            .iter()
+            .find(|m| m.id == id)
+            .cloned()
+            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
     }
 
     fn extent_value_range(&self, id: LayerId, extent: LatLonBounds, zoom: Option<i32>) -> Result<std::ops::Range<f64>> {
-        self.check_layer_id(id)?;
-        WarpingTileProvider::value_range_for_extent(&self.meta, extent, zoom)
+        let layer_meta = self.layer_ref(id)?;
+        WarpingTileProvider::value_range_for_extent(layer_meta, extent, zoom)
     }
 
     fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
-        self.check_layer_id(id)?;
-        WarpingTileProvider::raster_pixel(&self.meta, coord)
+        let layer_meta = self.layer_ref(id)?;
+        WarpingTileProvider::raster_pixel(layer_meta, coord)
     }
 
     fn get_tile(&self, id: LayerId, tile: Tile, dpi_ratio: u8) -> Result<TileData> {
@@ -354,8 +388,8 @@ impl TileProvider for WarpingTileProvider {
     }
 
     fn get_tile_colored(&self, id: LayerId, tile: Tile, dpi_ratio: u8, legend: &Legend) -> Result<TileData> {
-        self.check_layer_id(id)?;
-        WarpingTileProvider::tile_with_legend(&self.meta, tile, dpi_ratio, legend)
+        let layer_meta = self.layer_ref(id)?;
+        WarpingTileProvider::tile_with_legend(layer_meta, tile, dpi_ratio, legend)
     }
 }
 
@@ -376,8 +410,7 @@ mod tests {
 
     #[test]
     fn test_layer_metadata() -> Result<(), Error> {
-        let provider =
-            WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions { calculate_stats: false })?;
+        let provider = WarpingTileProvider::new(&test_raster(), &TileProviderOptions { calculate_stats: false })?;
         let layer_id = provider.layers().first().unwrap().id;
 
         let meta = provider.layer(layer_id)?;
@@ -396,7 +429,7 @@ mod tests {
             WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions { calculate_stats: false })?;
         let layer_id = provider.layers().first().unwrap().id;
 
-        assert_eq!(provider.meta.nodata::<u8>(), Some(255));
+        assert_eq!(provider.meta[0].nodata::<u8>(), Some(255));
 
         let tile_data = provider.get_tile(layer_id, Tile { x: 264, y: 171, z: 9 }, 1)?;
 

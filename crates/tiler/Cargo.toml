@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-inf        = { path = "../inf" }
-geo        = { path = "../geo", features = ["gdal"] }
+inf        = { path = "../inf", features = ["serde"] }
+geo        = { path = "../geo", features = ["gdal", "serde"] }
 sqlite     = { path = "../sqlite" }
 thiserror  = "1.0"
 gdal       = "0.17"

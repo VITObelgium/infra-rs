@@ -43,6 +43,7 @@ pub enum LayerSourceType {
     Mbtiles,
     ArcAscii,
     GeoTiff,
+    Netcdf,
     Unknown,
 }
 
@@ -69,6 +70,8 @@ pub struct LayerMetadata {
     pub scheme: String,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub additional_data: HashMap<String, String>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub band_nr: Option<usize>,
 }
 
 impl LayerMetadata {

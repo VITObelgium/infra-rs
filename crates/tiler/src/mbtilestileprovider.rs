@@ -62,6 +62,7 @@ impl MbtilesTileProvider {
             source_format: LayerSourceType::Mbtiles,
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
             additional_data: HashMap::new(),
+            band_nr: None,
         };
 
         meta.additional_data = meta_map;
@@ -115,6 +116,7 @@ impl TileProvider for MbtilesTileProvider {
     fn get_raster_value(&self, _layer_id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
         raster_pixel(
             &self.db_path,
+            1,
             Coordinate::from(crs::lat_lon_to_web_mercator(coord)),
             Some(self.meta.name.as_str()),
         )
