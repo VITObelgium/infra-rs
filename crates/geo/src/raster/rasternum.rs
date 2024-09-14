@@ -1,271 +1,146 @@
 use crate::raster::Nodata;
 
-pub trait RasterNum<T: num::ToPrimitive>:
-    Copy
-    + PartialEq
-    + num::NumCast
-    + num::Zero
-    + num::One
-    + num::Bounded
-    + Nodata<T>
-    + std::fmt::Debug
-    + std::ops::Add<Output = Self>
-    + std::ops::Sub<Output = Self>
-    + std::ops::Mul<Output = Self>
-    + std::ops::Div<Output = Self>
-    + std::ops::AddAssign
-    + std::ops::SubAssign
-    + std::ops::MulAssign
-    + std::ops::DivAssign
+pub trait RasterNum<T>:
+    Copy + Nodata<T> + num::NumCast + num::Num + num::Bounded + std::fmt::Debug + num::traits::NumAssignOps
 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self + other
-        }
-    }
+    fn add_nodata_aware(self, other: Self) -> Self;
+    fn sub_nodata_aware(self, other: Self) -> Self;
+    fn mul_nodata_aware(self, other: Self) -> Self;
+    fn div_nodata_aware(self, other: Self) -> Self;
 
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self - other
-        }
-    }
+    fn div_nodata_aware_opt(self, other: Self) -> Option<Self>;
 
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self * other
-        }
-    }
-
-    fn div_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() || other == Self::zero() {
-            Self::nodata_value()
-        } else {
-            self / other
-        }
-    }
-
+    #[inline]
     fn add_assign_nodata_aware(&mut self, other: Self) {
         *self = self.add_nodata_aware(other);
     }
 
+    #[inline]
     fn sub_assign_nodata_aware(&mut self, other: Self) {
         *self = self.sub_nodata_aware(other);
     }
 
+    #[inline]
     fn mul_assign_nodata_aware(&mut self, other: Self) {
         *self = self.mul_nodata_aware(other);
     }
 
+    #[inline]
     fn div_assign_nodata_aware(&mut self, other: Self) {
         *self = self.div_nodata_aware(other);
     }
 }
 
-impl RasterNum<i8> for i8 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
+macro_rules! rasternum_impl {
+    ($trait_name:path, $t:ty) => {
+        impl $trait_name for $t {
+            #[inline]
+            fn add_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() {
+                    Self::nodata_value()
+                } else {
+                    self.wrapping_add(other)
+                }
+            }
 
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
+            #[inline]
+            fn sub_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() {
+                    Self::nodata_value()
+                } else {
+                    self.wrapping_sub(other)
+                }
+            }
 
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
+            #[inline]
+            fn mul_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() {
+                    Self::nodata_value()
+                } else {
+                    self.wrapping_mul(other)
+                }
+            }
+
+            #[inline]
+            fn div_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() || other == 0 {
+                    Self::nodata_value()
+                } else {
+                    self / other
+                }
+            }
+
+            #[inline]
+            fn div_nodata_aware_opt(self, other: Self) -> Option<Self> {
+                if self.is_nodata() || other.is_nodata() {
+                    None
+                } else {
+                    self.checked_div(other)
+                }
+            }
         }
-    }
+    };
 }
-impl RasterNum<u8> for u8 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
 
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
+macro_rules! rasternum_fp_impl {
+    ($trait_name:path, $t:ty) => {
+        impl $trait_name for $t {
+            #[inline]
+            fn add_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() {
+                    Self::nodata_value()
+                } else {
+                    self + other
+                }
+            }
 
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
+            #[inline]
+            fn sub_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() {
+                    Self::nodata_value()
+                } else {
+                    self - other
+                }
+            }
+
+            #[inline]
+            fn mul_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() {
+                    Self::nodata_value()
+                } else {
+                    self * other
+                }
+            }
+
+            #[inline]
+            fn div_nodata_aware(self, other: Self) -> Self {
+                if self.is_nodata() || other.is_nodata() || other == 0.0 {
+                    Self::nodata_value()
+                } else {
+                    self / other
+                }
+            }
+
+            #[inline]
+            fn div_nodata_aware_opt(self, other: Self) -> Option<Self> {
+                if self.is_nodata() || other.is_nodata() || other == 0.0 {
+                    None
+                } else {
+                    Some(self / other)
+                }
+            }
         }
-    }
+    };
 }
-impl RasterNum<i16> for i16 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
 
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
+rasternum_impl!(RasterNum<i8>, i8);
+rasternum_impl!(RasterNum<u8>, u8);
+rasternum_impl!(RasterNum<i16>, i16);
+rasternum_impl!(RasterNum<u16>, u16);
+rasternum_impl!(RasterNum<i32>, i32);
+rasternum_impl!(RasterNum<u32>, u32);
+rasternum_impl!(RasterNum<i64>, i64);
+rasternum_impl!(RasterNum<u64>, u64);
 
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
-        }
-    }
-}
-impl RasterNum<u16> for u16 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
-
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
-
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
-        }
-    }
-}
-impl RasterNum<i32> for i32 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
-
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
-
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
-        }
-    }
-}
-impl RasterNum<u32> for u32 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
-
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
-
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
-        }
-    }
-}
-impl RasterNum<i64> for i64 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
-
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
-
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
-        }
-    }
-}
-impl RasterNum<u64> for u64 {
-    fn add_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_add(other)
-        }
-    }
-
-    fn sub_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_sub(other)
-        }
-    }
-
-    fn mul_nodata_aware(self, other: Self) -> Self {
-        if self.is_nodata() || other.is_nodata() {
-            Self::nodata_value()
-        } else {
-            self.wrapping_mul(other)
-        }
-    }
-}
-impl RasterNum<f32> for f32 {}
-impl RasterNum<f64> for f64 {}
+rasternum_fp_impl!(RasterNum<f32>, f32);
+rasternum_fp_impl!(RasterNum<f64>, f64);

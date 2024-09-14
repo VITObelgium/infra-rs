@@ -1,6 +1,6 @@
 use num::ToPrimitive;
 
-pub trait Nodata<T: ToPrimitive>: ToPrimitive + PartialEq + Sized + Copy {
+pub trait Nodata<T>: ToPrimitive + PartialEq + Sized + Copy {
     fn nodata_value() -> Self;
 
     fn is_nodata(self) -> bool {
