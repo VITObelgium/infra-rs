@@ -304,12 +304,12 @@ where
     T::TArrow: ArrowPrimitiveType<Native = T>,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "ArrowRaster: {:?}", &self.metadata)?;
+        writeln!(f, "ArrowRaster: {:?}", &self.metadata)?;
         let rows = self.metadata.rows();
         let cols = self.metadata.columns();
         if rows * cols < 100 {
             for row in self.as_slice().chunks(cols) {
-                write!(
+                writeln!(
                     f,
                     "{}",
                     row.iter()
