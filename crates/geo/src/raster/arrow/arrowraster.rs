@@ -47,6 +47,15 @@ impl<T: ArrowRasterNum<T>> Clone for ArrowRaster<T> {
     }
 }
 
+impl<T: ArrowRasterNum<T>> Default for ArrowRaster<T> {
+    fn default() -> Self {
+        ArrowRaster {
+            metadata: GeoReference::default(),
+            data: PrimitiveArray::<T::TArrow>::new_null(0),
+        }
+    }
+}
+
 impl<T: ArrowRasterNum<T>> ArrowRaster<T>
 where
     T::TArrow: ArrowPrimitiveType<Native = T>,
