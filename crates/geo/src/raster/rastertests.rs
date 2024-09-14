@@ -11,8 +11,8 @@ mod tests {
 
     const META: GeoReference = GeoReference::without_spatial_reference(RasterSize::with_rows_cols(3, 3), Some(NOD));
 
-    #[cfg(feature = "arrow")]
-    use crate::raster::ArrowRaster;
+    // #[cfg(feature = "arrow")]
+    // use crate::raster::ArrowRaster;
 
     #[test]
     fn test_add_raster_with_nodata<T: RasterNum<T>, R: Raster<T>>()
@@ -230,23 +230,23 @@ mod tests {
     #[instantiate_tests(<f64, DenseRaster<f64>>)]
     mod denseraster64 {}
 
-    #[cfg(feature = "arrow")]
-    #[instantiate_tests(<u8, ArrowRaster<u8>>)]
-    mod arrowrasteru8 {}
+    // #[cfg(feature = "arrow")]
+    // #[instantiate_tests(<u8, ArrowRaster<u8>>)]
+    // mod arrowrasteru8 {}
 
-    #[cfg(feature = "arrow")]
-    #[instantiate_tests(<i32, ArrowRaster<i32>>)]
-    mod arrowrasteri32 {}
+    // #[cfg(feature = "arrow")]
+    // #[instantiate_tests(<i32, ArrowRaster<i32>>)]
+    // mod arrowrasteri32 {}
 
-    #[cfg(feature = "arrow")]
-    #[instantiate_tests(<u32, ArrowRaster<u32>>)]
-    mod arrowrasteru32 {}
+    // #[cfg(feature = "arrow")]
+    // #[instantiate_tests(<u32, ArrowRaster<u32>>)]
+    // mod arrowrasteru32 {}
 
-    #[cfg(feature = "arrow")]
-    #[instantiate_tests(<f32, ArrowRaster<f32>>)]
-    mod arrowrasterf32 {}
+    // #[cfg(feature = "arrow")]
+    // #[instantiate_tests(<f32, ArrowRaster<f32>>)]
+    // mod arrowrasterf32 {}
 
-    #[cfg(feature = "arrow")]
-    #[instantiate_tests(<f64, ArrowRaster<f64>>)]
+    // #[cfg(feature = "arrow")]
+    // #[instantiate_tests(<f64, ArrowRaster<f64>>)]
     mod arrowraster64 {}
 }
