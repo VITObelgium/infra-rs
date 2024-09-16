@@ -233,9 +233,19 @@ impl WarpingTileProvider {
                 let allow_approximation = raster_band.x_size() * raster_band.y_size() > 10000000;
                 let force = cfg!(not(debug_assertions));
 
-                if let Ok(Some(stats)) = raster_band.get_statistics(force, allow_approximation) {
-                    layer_meta.min_value = stats.min;
-                    layer_meta.max_value = stats.max;
+                match raster_band.get_statistics(force, allow_approximation) {
+                    Ok(Some(stats)) => {
+                        layer_meta.min_value = stats.min;
+                        layer_meta.max_value = stats.max;
+                    }
+                    Ok(None) => {
+                        log::warn!("No statistics available for band {}", band_nr);
+                        layer_meta.min_value = 0.0;
+                        layer_meta.max_value = f64::MAX;
+                    }
+                    Err(e) => {
+                        log::warn!("Failed to calculate statistics: {}", e);
+                    }
                 }
             }
 
