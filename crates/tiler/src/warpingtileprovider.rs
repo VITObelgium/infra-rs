@@ -212,7 +212,7 @@ impl WarpingTileProvider {
                 min_zoom: if over_view_count > 0 {
                     zoom_level - over_view_count
                 } else {
-                    6
+                    0
                 },
                 nodata: meta.nodata(),
                 supports_dpi_ratio: true,
@@ -466,6 +466,8 @@ mod tests {
 
         let meta = provider.layer(layer_id)?;
         assert_eq!(meta.nodata::<f32>(), Some(1e+20));
+        assert_eq!(meta.min_zoom, 0);
+        assert_eq!(meta.max_zoom, 19);
         assert_relative_eq!(meta.bounds[0], -180.0, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[1], -90.0, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[2], 180.0, epsilon = 1e-6);
