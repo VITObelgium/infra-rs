@@ -250,7 +250,10 @@ impl WarpingTileProvider {
     }
 
     pub fn supports_raster_type(raster_type: RasterFormat) -> bool {
-        matches!(raster_type, RasterFormat::GeoTiff | RasterFormat::Vrt)
+        matches!(
+            raster_type,
+            RasterFormat::GeoTiff | RasterFormat::Vrt | RasterFormat::Netcdf
+        )
     }
 
     fn read_tile<T: RasterNum<T> + Num + GdalType>(

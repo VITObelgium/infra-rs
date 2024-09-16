@@ -8,6 +8,7 @@ mod denserasterops;
 #[cfg(feature = "gdal")]
 pub mod io;
 mod nodata;
+#[cfg(feature = "gdal")]
 mod rasteriotests;
 mod rasternum;
 mod rastertests;

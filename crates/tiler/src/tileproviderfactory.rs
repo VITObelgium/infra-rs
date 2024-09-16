@@ -19,9 +19,6 @@ pub fn create_single_file_tile_provider(
 ) -> Result<Box<dyn TileProvider + Send>> {
     let raster_type = RasterFormat::guess_from_path(path);
 
-    // if raster_type == RasterType::GeoPackage {
-    //     Ok(Box::new(GpkgTileProvider::new(path)))
-    // } else
     if raster_type == RasterFormat::MBTiles {
         Ok(Box::new(MbtilesTileProvider::new(path)?))
     } else if WarpingTileProvider::supports_raster_type(raster_type) {

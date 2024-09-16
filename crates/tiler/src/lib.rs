@@ -27,7 +27,7 @@ pub enum Error {
     Runtime(String),
     #[error("Invalid argument: {0}")]
     InvalidArgument(String),
-    #[error("The operation has been cancelled")]
+    #[error("Geo error: {0}")]
     GeoError(#[from] geo::Error),
     #[error("Error: {0}")]
     InfError(#[from] inf::Error),

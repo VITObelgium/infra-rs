@@ -1,0 +1,27 @@
+[package]
+name    = "tileserver"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+inf = { path = "../../crates/inf", features = ["serde"] }
+geo = { path = "../../crates/geo", features = ["gdal-static", "serde"] }
+tiler = { path = "../../crates/tiler", features = ["serde"] }
+axum = { version = "0.7", features = ["macros"] }
+clap = { version = "4.5", features = ["derive", "env"] }
+log = "0.4"
+env_logger = { version = "0.11" }
+tower = { version = "0.5" }
+tokio = { version = "1.38", features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "time",
+] }
+tower-http = { version = "0.5", features = ["trace"] }
+thiserror = "1.0"
+serde_json = { version = "1.0" }
+serde = { version = "1.0", features = ["derive"] }
+
+[package.metadata.vcpkg]
+dependencies = ["gdal[netcdf]"]

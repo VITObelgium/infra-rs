@@ -41,21 +41,26 @@ impl DirectoryTileProvider {
                 continue;
             }
 
-            match create_single_file_tile_provider(
-                file_entry.path().as_path(),
-                TileProviderOptions { calculate_stats: true },
-            ) {
+            match create_single_file_tile_provider(&file_entry.path(), TileProviderOptions { calculate_stats: true }) {
                 Ok(provider) => {
-                    let meta = provider
-                        .layers()
-                        .first()
-                        .ok_or(Error::Runtime("No layer meta info available".to_string()))?
-                        .clone();
+                    let file_layers = provider.layers();
+                    let layer_count = file_layers.len();
+                    if layer_count == 0 {
+                        log::warn!("No layer found in file: {}", file_entry.path().to_string_lossy());
+                    } else {
+                        for layer in file_layers.into_iter() {
+                            layers.insert(layer.id, layer);
+                        }
 
-                    layers.insert(meta.id, meta);
+                        log::info!(
+                            "Serving {}, layer count: {}",
+                            &file_entry.path().to_string_lossy(),
+                            layer_count
+                        );
+                    }
                 }
                 Err(e) => {
-                    log::warn!("{}", e);
+                    log::warn!("Error serving {}: {}", &file_entry.path().to_string_lossy(), e);
                 }
             }
         }
