@@ -410,15 +410,14 @@ impl TileProvider for WarpingTileProvider {
 mod tests {
     use approx::assert_relative_eq;
     use geo::Tile;
+    use path_macro::path;
 
     use crate::{
         tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider, Error, TileProvider,
     };
 
     fn test_raster() -> std::path::PathBuf {
-        [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"]
-            .iter()
-            .collect()
+        path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "landusebyte.tif")
     }
 
     #[test]
@@ -455,6 +454,25 @@ mod tests {
         // The transparent pixel count should be more than 80% of the total pixel count, otherwise there is an issue with the nodata handling
         assert!(transparent_count > (raw_data.pixels().count() as f64 * 0.8) as usize);
         assert!(transparent_count < (raw_data.pixels().count() as f64 * 0.9) as usize);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_netcdf_tile() -> Result<(), Error> {
+        let netcdf_path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "winddata.nc");
+        let provider = WarpingTileProvider::new(&netcdf_path, &TileProviderOptions { calculate_stats: true })?;
+        let layer_id = provider.layers().first().unwrap().id;
+
+        let meta = provider.layer(layer_id)?;
+        assert_eq!(meta.nodata::<f32>(), Some(1e+20));
+        assert_relative_eq!(meta.bounds[0], -180.0, epsilon = 1e-6);
+        assert_relative_eq!(meta.bounds[1], -90.0, epsilon = 1e-6);
+        assert_relative_eq!(meta.bounds[2], 180.0, epsilon = 1e-6);
+        assert_relative_eq!(meta.bounds[3], 90.0, epsilon = 1e-6);
+
+        let tile_data = provider.get_tile(layer_id, Tile { x: 0, y: 0, z: 0 }, 1);
+        assert!(tile_data.is_ok());
 
         Ok(())
     }
