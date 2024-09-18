@@ -5,7 +5,6 @@ use std::{
 };
 
 use geo::{crs, Coordinate, LatLonBounds, Tile};
-use inf::Legend;
 use mbtilesdb::MbtilesDb;
 
 use crate::{
@@ -13,8 +12,8 @@ use crate::{
     rasterprocessing::raster_pixel,
     tiledata::TileData,
     tileformat::TileFormat,
-    tileprovider::unique_layer_id,
-    Error, Result, TileProvider,
+    tileprovider::{unique_layer_id, ColorMappedTileRequest, TileRequest},
+    Error, PixelFormat, Result, TileProvider,
 };
 
 pub struct MbtilesTileProvider {
@@ -82,7 +81,11 @@ impl MbtilesTileProvider {
 
     pub fn tile(meta: &LayerMetadata, tile: Tile) -> Result<TileData> {
         let mut db = MbtilesDb::new(&meta.path)?;
-        Ok(TileData::new(meta.tile_format, db.get_tile_data(&tile)?))
+        Ok(TileData::new(
+            meta.tile_format,
+            PixelFormat::Rgba,
+            db.get_tile_data(&tile)?,
+        ))
     }
 
     pub fn value_range_for_extent(
@@ -122,15 +125,31 @@ impl TileProvider for MbtilesTileProvider {
         )
     }
 
-    fn get_tile(&self, _layer_id: LayerId, tile: Tile, _dpi_ratio: u8) -> Result<TileData> {
-        log::debug!("Get tile {}/{}/{}", tile.z(), tile.x(), tile.y());
+    fn get_tile(&self, _layer_id: LayerId, req: &TileRequest) -> Result<TileData> {
+        log::debug!("Get tile {}/{}/{}", req.tile.z(), req.tile.x(), req.tile.y());
+
+        if req.pixel_format != PixelFormat::Rgba {
+            return Err(Error::Runtime(
+                "Only RGBA pixel format is supported for mbtiles".to_string(),
+            ));
+        }
 
         let mut db = mbtilesdb::MbtilesDb::new(&self.db_path)?;
-        Ok(TileData::new(self.meta.tile_format, db.get_tile_data(&tile)?))
+        Ok(TileData::new(
+            self.meta.tile_format,
+            PixelFormat::Rgba,
+            db.get_tile_data(&req.tile)?,
+        ))
     }
 
-    fn get_tile_colored(&self, layer_id: LayerId, tile: Tile, dpi_ratio: u8, _legend: &Legend) -> Result<TileData> {
-        self.get_tile(layer_id, tile, dpi_ratio)
+    fn get_tile_color_mapped(&self, layer_id: LayerId, req: &ColorMappedTileRequest) -> Result<TileData> {
+        let tile_req = TileRequest {
+            tile: req.tile,
+            dpi_ratio: req.dpi_ratio,
+            pixel_format: PixelFormat::Rgba,
+        };
+
+        self.get_tile(layer_id, &tile_req)
     }
 
     fn layers(&self) -> Vec<LayerMetadata> {

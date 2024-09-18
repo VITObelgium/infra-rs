@@ -12,7 +12,10 @@ use geo::{LatLonBounds, Tile};
 use inf::{legend, Color, Legend};
 use serde_json::json;
 use std::ops::Range;
-use tiler::{DirectoryTileProvider, LayerId, LayerMetadata, TileData, TileFormat, TileJson, TileProvider};
+use tiler::{
+    ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata, PixelFormat, TileData, TileFormat, TileJson,
+    TileProvider, TileRequest,
+};
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
@@ -304,8 +307,9 @@ impl TileApiHandler {
         params: HashMap<String, String>,
     ) -> Result<TileData> {
         let mut cmap = String::from("gray");
-        let mut min_value: Option<f64> = None;
-        let mut max_value: Option<f64> = None;
+        let mut min_value = Option::<f64>::None;
+        let mut max_value = Option::<f64>::None;
+        let mut pixel_format = Option::<PixelFormat>::None;
 
         if let Some(cmap_str) = params.get("cmap") {
             cmap = cmap_str.to_string();
@@ -319,6 +323,10 @@ impl TileApiHandler {
             max_value = max_str.parse::<f64>().ok();
         }
 
+        if let Some(format) = params.get("pixel_format") {
+            pixel_format = Some(PixelFormat::from(format.as_str()));
+        }
+
         let splitted: Vec<&str> = y.split('.').collect();
         if splitted.len() != 2 {
             return Err(Error::InvalidArgument("Invalid tile coordinates".to_string()));
@@ -330,27 +338,51 @@ impl TileApiHandler {
         }
 
         log::debug!(
-            "Tile request {}/{}/{}/{}: cmap({}) min({:?}) max({:?})",
+            "Tile request {}/{}/{}/{}: cmap({}) min({:?}) max({:?}) format({:?})",
             layer,
             z,
             x,
             y,
             cmap,
             min_value,
-            max_value
+            max_value,
+            pixel_format,
         );
 
         let layer_id = parse_layer_id(layer)?;
         let layer_meta = self.tile_provider.layer(layer_id)?;
-        let legend = create_legend(
-            cmap.as_str(),
-            min_value.unwrap_or(layer_meta.min_value),
-            max_value.unwrap_or(layer_meta.max_value),
-        )?;
 
-        let tile = self
-            .tile_provider
-            .get_tile_colored(layer_id, Tile { x, y, z }, dpi_ratio, &legend)?;
+        let tile;
+        if let Some(PixelFormat::RawFloat) = pixel_format {
+            if min_value.is_some() || max_value.is_some() || !cmap.is_empty() {
+                return Err(Error::InvalidArgument(
+                    "Float pixel format is incompatible with colormaping or value ranges".to_string(),
+                ));
+            }
+
+            let tile_request = TileRequest {
+                tile: Tile { x, y, z },
+                dpi_ratio,
+                pixel_format: PixelFormat::RawFloat,
+            };
+
+            tile = self.tile_provider.get_tile(layer_id, &tile_request)?;
+        } else {
+            let legend = create_legend(
+                cmap.as_str(),
+                min_value.unwrap_or(layer_meta.min_value),
+                max_value.unwrap_or(layer_meta.max_value),
+            )?;
+
+            let tile_request = ColorMappedTileRequest {
+                tile: Tile { x, y, z },
+                dpi_ratio,
+                legend: &legend,
+            };
+
+            tile = self.tile_provider.get_tile_color_mapped(layer_id, &tile_request)?;
+        }
+
         if tile.format == TileFormat::Protobuf {
             if let Some(host) = headers.get("accept-encoding") {
                 if !(host.to_str().unwrap_or_default().contains("gzip")) {

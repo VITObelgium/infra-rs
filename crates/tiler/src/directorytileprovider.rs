@@ -1,10 +1,10 @@
 use geo::raster::io::RasterFormat;
-use geo::{Coordinate, LatLonBounds, Tile};
-use inf::Legend;
+use geo::{Coordinate, LatLonBounds};
 
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;
 use crate::tiledata::TileData;
+use crate::tileprovider::{ColorMappedTileRequest, TileRequest};
 use crate::tileproviderfactory::{create_single_file_tile_provider, TileProviderOptions};
 use crate::warpingtileprovider::WarpingTileProvider;
 use crate::{Error, Result, TileProvider};
@@ -102,28 +102,26 @@ impl TileProvider for DirectoryTileProvider {
         }
     }
 
-    fn get_tile(&self, id: LayerId, tile: Tile, dpi_ratio: u8) -> Result<TileData> {
+    fn get_tile(&self, id: LayerId, tile_req: &TileRequest) -> Result<TileData> {
         let layer = self.layer_data(id)?;
         match layer.source_format {
             LayerSourceType::GeoTiff
             | LayerSourceType::GeoPackage
             | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => {
-                WarpingTileProvider::tile_with_legend(layer, tile, dpi_ratio, &Legend::default())
-            }
-            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile),
+            | LayerSourceType::Netcdf => WarpingTileProvider::tile(layer, tile_req),
+            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
     }
 
-    fn get_tile_colored(&self, id: LayerId, tile: Tile, dpi_ratio: u8, legend: &Legend) -> Result<TileData> {
+    fn get_tile_color_mapped(&self, id: LayerId, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
         let layer = self.layer_data(id)?;
         match layer.source_format {
             LayerSourceType::GeoTiff
             | LayerSourceType::GeoPackage
             | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::tile_with_legend(layer, tile, dpi_ratio, legend),
-            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile),
+            | LayerSourceType::Netcdf => WarpingTileProvider::color_mapped_tile(layer, tile_req),
+            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
     }

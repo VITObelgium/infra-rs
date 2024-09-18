@@ -12,14 +12,14 @@ use geo::{crs, raster, CellSize, Coordinate, GeoReference, LatLonBounds, RasterS
 use num::Num;
 
 use crate::{
-    imageprocessing::raw_tile_to_png,
+    imageprocessing::{self},
     layermetadata::{to_raster_data_type, LayerId, LayerMetadata, RasterDataType},
     rasterprocessing::{metadata_bounds_wgs84, raster_pixel, source_type_for_path},
     tiledata::TileData,
     tileformat::TileFormat,
-    tileprovider::{self, TileProvider},
+    tileprovider::{self, ColorMappedTileRequest, TileProvider, TileRequest},
     tileproviderfactory::TileProviderOptions,
-    Error, Result,
+    Error, PixelFormat, Result,
 };
 
 fn type_string<T: GdalType>() -> &'static str {
@@ -266,13 +266,13 @@ impl WarpingTileProvider {
         )
     }
 
-    fn read_tile<T: RasterNum<T> + Num + GdalType>(
+    /// Read the raw tile data, result is a tuple with the raw data and the nodata value
+    fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
         meta: &LayerMetadata,
         band_nr: usize,
         tile: Tile,
         dpi_ratio: u8,
-        legend: &Legend,
-    ) -> Result<TileData> {
+    ) -> Result<(Vec<T>, T)> {
         let raw_tile_data: Vec<T>;
         let start = std::time::Instant::now();
 
@@ -306,47 +306,107 @@ impl WarpingTileProvider {
             log::warn!("Slow tile: {}/{}/{}", tile.z(), tile.x(), tile.y());
         }
 
+        Ok((raw_tile_data, nodata))
+    }
+
+    fn read_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, req: &TileRequest) -> Result<TileData>
+    where
+        T: RasterNum<T> + Num + GdalType,
+    {
+        let (raw_tile_data, nodata) = WarpingTileProvider::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
         if raw_tile_data.is_empty() {
             return Ok(TileData::default());
         }
 
-        raw_tile_to_png::<T>(
+        match req.pixel_format {
+            PixelFormat::Rgba => {
+                // The default legend is with grayscale colors in range 0-255
+                imageprocessing::raw_tile_to_png_color_mapped::<T>(
+                    raw_tile_data.as_slice(),
+                    (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+                    (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+                    Some(nodata),
+                    &Legend::default(),
+                )
+            }
+            PixelFormat::RawFloat => imageprocessing::raw_tile_to_float_encoded_png::<T>(
+                raw_tile_data.as_slice(),
+                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+                Some(nodata),
+            ),
+            _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
+        }
+    }
+
+    fn read_color_mapped_tile_as_png<T>(
+        meta: &LayerMetadata,
+        band_nr: usize,
+        req: &ColorMappedTileRequest,
+    ) -> Result<TileData>
+    where
+        T: RasterNum<T> + Num + GdalType,
+    {
+        let (raw_tile_data, nodata) = WarpingTileProvider::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
+        if raw_tile_data.is_empty() {
+            return Ok(TileData::default());
+        }
+
+        imageprocessing::raw_tile_to_png_color_mapped::<T>(
             raw_tile_data.as_slice(),
-            (Tile::TILE_SIZE * dpi_ratio as u16) as usize,
-            (Tile::TILE_SIZE * dpi_ratio as u16) as usize,
+            (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+            (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
             Some(nodata),
-            legend,
+            req.legend,
         )
     }
 
-    pub fn tile_with_legend(
-        layer_meta: &LayerMetadata,
-        tile: Tile,
-        dpi_ratio: u8,
-        legend: &Legend,
-    ) -> Result<TileData> {
-        if !(Range { start: 1, end: 10 }).contains(&dpi_ratio) {
-            return Err(crate::Error::InvalidArgument(format!(
-                "Invalid dpi ratio {}",
-                dpi_ratio
-            )));
+    fn verify_tile_dpi(dpi: u8) -> Result<()> {
+        if !(Range { start: 1, end: 10 }).contains(&dpi) {
+            return Err(crate::Error::InvalidArgument(format!("Invalid dpi ratio {}", dpi)));
         }
 
+        Ok(())
+    }
+
+    pub fn tile(layer_meta: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
+        Self::verify_tile_dpi(tile_req.dpi_ratio)?;
+
+        let tile = &tile_req.tile;
         if tile.z() < layer_meta.min_zoom || tile.z() > layer_meta.max_zoom {
             return Ok(TileData::default());
         }
 
         let band_nr = layer_meta.band_nr.unwrap_or(1);
         match layer_meta.data_type {
-            RasterDataType::Byte => WarpingTileProvider::read_tile::<u8>(layer_meta, band_nr, tile, dpi_ratio, legend),
+            RasterDataType::Byte => WarpingTileProvider::read_tile_as_png::<u8>(layer_meta, band_nr, tile_req),
+            RasterDataType::Int32 => WarpingTileProvider::read_tile_as_png::<i32>(layer_meta, band_nr, tile_req),
+            RasterDataType::UInt32 => WarpingTileProvider::read_tile_as_png::<u32>(layer_meta, band_nr, tile_req),
+            RasterDataType::Float => WarpingTileProvider::read_tile_as_png::<f32>(layer_meta, band_nr, tile_req),
+        }
+    }
+
+    pub fn color_mapped_tile(layer_meta: &LayerMetadata, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
+        Self::verify_tile_dpi(tile_req.dpi_ratio)?;
+
+        let tile = &tile_req.tile;
+        if tile.z() < layer_meta.min_zoom || tile.z() > layer_meta.max_zoom {
+            return Ok(TileData::default());
+        }
+
+        let band_nr = layer_meta.band_nr.unwrap_or(1);
+        match layer_meta.data_type {
+            RasterDataType::Byte => {
+                WarpingTileProvider::read_color_mapped_tile_as_png::<u8>(layer_meta, band_nr, tile_req)
+            }
             RasterDataType::Int32 => {
-                WarpingTileProvider::read_tile::<i32>(layer_meta, band_nr, tile, dpi_ratio, legend)
+                WarpingTileProvider::read_color_mapped_tile_as_png::<i32>(layer_meta, band_nr, tile_req)
             }
             RasterDataType::UInt32 => {
-                WarpingTileProvider::read_tile::<u32>(layer_meta, band_nr, tile, dpi_ratio, legend)
+                WarpingTileProvider::read_color_mapped_tile_as_png::<u32>(layer_meta, band_nr, tile_req)
             }
             RasterDataType::Float => {
-                WarpingTileProvider::read_tile::<f32>(layer_meta, band_nr, tile, dpi_ratio, legend)
+                WarpingTileProvider::read_color_mapped_tile_as_png::<f32>(layer_meta, band_nr, tile_req)
             }
         }
     }
@@ -394,15 +454,14 @@ impl TileProvider for WarpingTileProvider {
         WarpingTileProvider::raster_pixel(layer_meta, coord)
     }
 
-    fn get_tile(&self, id: LayerId, tile: Tile, dpi_ratio: u8) -> Result<TileData> {
-        // This creates a legend with grayscale colors, is this the desired behavior?
-        // Or should we return the raw pixel data?
-        self.get_tile_colored(id, tile, dpi_ratio, &Legend::default())
+    fn get_tile(&self, id: LayerId, tile_req: &TileRequest) -> Result<TileData> {
+        let layer_meta = self.layer_ref(id)?;
+        WarpingTileProvider::tile(layer_meta, tile_req)
     }
 
-    fn get_tile_colored(&self, id: LayerId, tile: Tile, dpi_ratio: u8, legend: &Legend) -> Result<TileData> {
+    fn get_tile_color_mapped(&self, id: LayerId, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
         let layer_meta = self.layer_ref(id)?;
-        WarpingTileProvider::tile_with_legend(layer_meta, tile, dpi_ratio, legend)
+        WarpingTileProvider::color_mapped_tile(layer_meta, tile_req)
     }
 }
 
@@ -413,7 +472,8 @@ mod tests {
     use path_macro::path;
 
     use crate::{
-        tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider, Error, TileProvider,
+        tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider,
+        Error, PixelFormat, TileProvider,
     };
 
     fn test_raster() -> std::path::PathBuf {
@@ -443,7 +503,13 @@ mod tests {
 
         assert_eq!(provider.meta[0].nodata::<u8>(), Some(255));
 
-        let tile_data = provider.get_tile(layer_id, Tile { x: 264, y: 171, z: 9 }, 1)?;
+        let req = TileRequest {
+            tile: Tile { x: 264, y: 171, z: 9 },
+            dpi_ratio: 1,
+            pixel_format: PixelFormat::Rgba,
+        };
+
+        let tile_data = provider.get_tile(layer_id, &req)?;
 
         // decode the png data to raw data
         let raw_data = image::load_from_memory(&tile_data.data)
@@ -473,7 +539,13 @@ mod tests {
         assert_relative_eq!(meta.bounds[2], 180.0, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[3], 90.0, epsilon = 1e-6);
 
-        let tile_data = provider.get_tile(layer_id, Tile { x: 0, y: 0, z: 0 }, 1);
+        let req = TileRequest {
+            tile: Tile { x: 0, y: 0, z: 0 },
+            dpi_ratio: 1,
+            pixel_format: PixelFormat::Rgba,
+        };
+
+        let tile_data = provider.get_tile(layer_id, &req);
         assert!(tile_data.is_ok());
 
         Ok(())

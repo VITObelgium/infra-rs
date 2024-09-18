@@ -8,6 +8,7 @@ pub trait Nodata<T>: ToPrimitive + PartialEq + Sized + Copy {
     }
 
     fn has_nan() -> bool;
+    fn is_nan(self) -> bool;
 }
 
 impl Nodata<u8> for u8 {
@@ -16,6 +17,10 @@ impl Nodata<u8> for u8 {
     }
 
     fn has_nan() -> bool {
+        false
+    }
+
+    fn is_nan(self) -> bool {
         false
     }
 }
@@ -28,6 +33,10 @@ impl Nodata<u16> for u16 {
     fn has_nan() -> bool {
         false
     }
+
+    fn is_nan(self) -> bool {
+        false
+    }
 }
 
 impl Nodata<u32> for u32 {
@@ -36,6 +45,10 @@ impl Nodata<u32> for u32 {
     }
 
     fn has_nan() -> bool {
+        false
+    }
+
+    fn is_nan(self) -> bool {
         false
     }
 }
@@ -48,6 +61,10 @@ impl Nodata<u64> for u64 {
     fn has_nan() -> bool {
         false
     }
+
+    fn is_nan(self) -> bool {
+        false
+    }
 }
 
 impl Nodata<i8> for i8 {
@@ -56,6 +73,10 @@ impl Nodata<i8> for i8 {
     }
 
     fn has_nan() -> bool {
+        false
+    }
+
+    fn is_nan(self) -> bool {
         false
     }
 }
@@ -68,6 +89,10 @@ impl Nodata<i16> for i16 {
     fn has_nan() -> bool {
         false
     }
+
+    fn is_nan(self) -> bool {
+        false
+    }
 }
 
 impl Nodata<i32> for i32 {
@@ -78,6 +103,10 @@ impl Nodata<i32> for i32 {
     fn has_nan() -> bool {
         false
     }
+
+    fn is_nan(self) -> bool {
+        false
+    }
 }
 
 impl Nodata<i64> for i64 {
@@ -86,6 +115,10 @@ impl Nodata<i64> for i64 {
     }
 
     fn has_nan() -> bool {
+        false
+    }
+
+    fn is_nan(self) -> bool {
         false
     }
 }
@@ -102,6 +135,10 @@ impl Nodata<f32> for f32 {
     fn has_nan() -> bool {
         true
     }
+
+    fn is_nan(self) -> bool {
+        false
+    }
 }
 
 impl Nodata<f64> for f64 {
@@ -115,5 +152,9 @@ impl Nodata<f64> for f64 {
 
     fn has_nan() -> bool {
         true
+    }
+
+    fn is_nan(self) -> bool {
+        self.is_nan()
     }
 }

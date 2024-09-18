@@ -5,8 +5,22 @@ use std::{ops::Range, sync::atomic::AtomicU64};
 use crate::{
     layermetadata::{LayerId, LayerMetadata},
     tiledata::TileData,
-    Result,
+    PixelFormat, Result,
 };
+
+#[derive(Debug, Clone)]
+pub struct TileRequest {
+    pub tile: Tile,
+    pub dpi_ratio: u8,
+    pub pixel_format: PixelFormat,
+}
+
+#[derive(Debug, Clone)]
+pub struct ColorMappedTileRequest<'a> {
+    pub tile: Tile,
+    pub dpi_ratio: u8,
+    pub legend: &'a Legend,
+}
 
 /// All tile providers must implement this trait.
 pub trait TileProvider {
@@ -20,9 +34,9 @@ pub trait TileProvider {
     /// For a given layer, returns the pixel vlalue at the provided coordinate
     fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>>;
     /// For a given layer, get the raw tile data
-    fn get_tile(&self, id: LayerId, tile: Tile, dpi_ratio: u8) -> Result<TileData>;
+    fn get_tile(&self, id: LayerId, req: &TileRequest) -> Result<TileData>;
     /// For a given layer, get the tile data, the coloring is done using the provided legend
-    fn get_tile_colored(&self, id: LayerId, tile: Tile, dpi_ratio: u8, legend: &Legend) -> Result<TileData>;
+    fn get_tile_color_mapped(&self, id: LayerId, req: &ColorMappedTileRequest) -> Result<TileData>;
 }
 
 static mut LAYER_ID: AtomicU64 = AtomicU64::new(0);

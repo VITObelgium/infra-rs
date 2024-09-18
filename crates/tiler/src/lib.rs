@@ -1,6 +1,7 @@
 #![warn(clippy::unwrap_used)]
 
 mod layermetadata;
+mod pixelformat;
 mod tiledata;
 mod tileformat;
 mod tileprovider;
@@ -16,10 +17,13 @@ pub use directorytileprovider::DirectoryTileProvider;
 pub use layermetadata::LayerId;
 pub use layermetadata::LayerMetadata;
 pub use layermetadata::TileJson;
+pub use pixelformat::PixelFormat;
 use thiserror::Error;
 pub use tiledata::TileData;
 pub use tileformat::TileFormat;
+pub use tileprovider::ColorMappedTileRequest;
 pub use tileprovider::TileProvider;
+pub use tileprovider::TileRequest;
 
 #[derive(Error, Debug)]
 pub enum Error {

@@ -1,6 +1,7 @@
-use crate::{tiledata::TileData, tileformat::TileFormat, Error, Result};
+use crate::{tiledata::TileData, tileformat::TileFormat, Error, PixelFormat, Result};
 use geo::raster::RasterNum;
 use inf::{Color, Legend};
+use num::NumCast;
 use std::io::BufWriter;
 
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
@@ -37,7 +38,38 @@ fn encode_png(colors: &[Color], width: u32, height: u32) -> Result<Vec<u8>> {
     Ok(data)
 }
 
-pub fn raw_tile_to_png<T: RasterNum<T>>(
+fn float_as_color(val: f32) -> Color {
+    match val.to_le_bytes() {
+        [r, g, b, a] => Color::rgba(r, g, b, a),
+    }
+}
+
+pub fn raw_tile_to_float_encoded_png<T: RasterNum<T>>(
+    raw_data: &[T],
+    width: usize,
+    height: usize,
+    nodata: Option<T>,
+) -> Result<TileData> {
+    let raw_colors = raw_data
+        .iter()
+        .map(|&v| {
+            if v.is_nan() || Some(v) == nodata {
+                // Absolute white is used as nodata color, otherwise zero values would be invisible
+                Color::rgba(255, 255, 255, 255)
+            } else {
+                float_as_color(NumCast::from(v).unwrap_or(0.0))
+            }
+        })
+        .collect::<Vec<Color>>();
+
+    Ok(TileData::new(
+        TileFormat::Png,
+        PixelFormat::RawFloat,
+        encode_png(&raw_colors, width as u32, height as u32)?,
+    ))
+}
+
+pub fn raw_tile_to_png_color_mapped<T: RasterNum<T>>(
     raw_data: &[T],
     width: usize,
     height: usize,
@@ -46,6 +78,7 @@ pub fn raw_tile_to_png<T: RasterNum<T>>(
 ) -> Result<TileData> {
     Ok(TileData::new(
         TileFormat::Png,
+        PixelFormat::Rgba,
         encode_png(&legend.apply(raw_data, nodata), width as u32, height as u32)?,
     ))
 }
