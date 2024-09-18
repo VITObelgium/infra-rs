@@ -797,6 +797,8 @@ mod tests {
     #[test]
     #[cfg(feature = "gdal")]
     fn warp_metadata() {
+        use approx::assert_relative_eq;
+
         let meta = GeoReference::with_origin(
             "EPSG:31370",
             RasterSize { rows: 120, cols: 144 },
@@ -809,6 +811,6 @@ mod tests {
 
         assert_eq!(warped.projected_epsg(), Some(4326.into()));
         assert_eq!(warped.raster_size(), RasterSize { rows: 89, cols: 176 });
-        assert_eq!(warped.cell_size(), CellSize::square(0.062023851850733745));
+        assert_relative_eq!(warped.cell_size(), CellSize::square(0.062023851850733745), epsilon = 1e-10);
     }
 }
