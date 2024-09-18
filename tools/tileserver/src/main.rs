@@ -20,8 +20,7 @@ async fn main() {
             .expect("Unable to get parent directory of executable"),
     );
 
-    let gdal_config = geo::RuntimeConfiguration::new(&exe_dir);
-
+    let gdal_config = geo::RuntimeConfiguration::builder().proj_db(&exe_dir).build();
     gdal_config.apply().expect("Failed to configure GDAL");
 
     let app = tileapihandler::create_router(&opt);

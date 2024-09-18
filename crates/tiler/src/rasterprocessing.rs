@@ -109,7 +109,7 @@ mod tests {
     fn init() {
         let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
 
-        let config = RuntimeConfiguration::new(&data_dir);
+        let config = RuntimeConfiguration::builder().proj_db(&data_dir).build();
         config.apply().expect("Failed to configure runtime");
     }
 

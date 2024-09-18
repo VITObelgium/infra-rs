@@ -1,15 +1,18 @@
 use crate::gdalinterop;
 use crate::Result;
+use bon::bon;
 
 pub struct RuntimeConfiguration {
     gdal_config: gdalinterop::Config,
 }
 
+#[bon]
 impl RuntimeConfiguration {
-    pub fn new(proj_db: &std::path::Path) -> Self {
+    #[builder]
+    pub fn new(proj_db: &std::path::Path, gdal_debug_log: Option<bool>) -> Self {
         Self {
             gdal_config: gdalinterop::Config {
-                debug_logging: false,
+                debug_logging: gdal_debug_log.unwrap_or(false),
                 proj_db_search_location: proj_db.to_path_buf(),
             },
         }
