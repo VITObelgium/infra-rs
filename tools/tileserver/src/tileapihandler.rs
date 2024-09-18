@@ -1,4 +1,4 @@
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, sync::Arc};
 
 use axum::{
     body::Body,
@@ -7,8 +7,8 @@ use axum::{
     routing::get,
     Json,
 };
-use clap::Parser;
-use geo::{LatLonBounds, Tile};
+
+use geo::{Coordinate, LatLonBounds, Tile};
 use inf::{legend, Color, Legend};
 use serde_json::json;
 use std::ops::Range;
@@ -81,25 +81,9 @@ impl From<TileData> for TileResponse {
     }
 }
 
-#[derive(Parser, Debug)]
-#[clap(name = "tileserver", about = "The tile server")]
-pub struct Opt {
-    // set the listen addr
-    #[clap(short = 'a', long = "addr")]
-    pub addr: Option<String>,
-
-    // set the listen port
-    #[clap(short = 'p', long = "port", default_value = "8080")]
-    pub port: u16,
-
-    // set the directory where static files are to be found
-    #[clap(long = "gis-dir")]
-    pub gis_dir: PathBuf,
-}
-
 impl State {
-    fn new(opt: &Opt) -> Self {
-        match TileApiHandler::new(&opt.gis_dir) {
+    fn new(gis_dir: &std::path::Path) -> Self {
+        match TileApiHandler::new(gis_dir) {
             Ok(api) => Self { api },
             Err(err) => {
                 log::error!("Failed to create tile server api handler: {err}");
@@ -137,7 +121,11 @@ async fn layer_tile(
     headers: http::HeaderMap,
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> std::result::Result<TileResponse, AppError> {
-    Ok(state.api.get_tile(layer.as_str(), z, x, y, headers, params)?.into())
+    Ok(state
+        .api
+        .get_tile(layer.as_str(), z, x, y, headers, params)
+        .await?
+        .into())
 }
 
 async fn layer_value_range(
@@ -145,7 +133,7 @@ async fn layer_value_range(
     axum::extract::Path(layer): axum::extract::Path<String>,
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> std::result::Result<Json<std::ops::Range<f64>>, AppError> {
-    Ok(state.api.get_value_range(layer.as_str(), params)?)
+    Ok(state.api.get_value_range(layer.as_str(), params).await?)
 }
 
 async fn layer_raster_value(
@@ -153,17 +141,17 @@ async fn layer_raster_value(
     axum::extract::Path(layer): axum::extract::Path<String>,
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> std::result::Result<Json<RasterValueResponse>, AppError> {
-    Ok(state.api.get_raster_value(layer.as_str(), params)?)
+    Ok(state.api.get_raster_value(layer.as_str(), params).await?)
 }
 
-pub fn create_router(opt: &Opt) -> axum::routing::Router {
+pub fn create_router(gis_dir: &std::path::Path) -> axum::routing::Router {
     axum::Router::new()
         .route("/api/layers", get(list_layers))
         .route("/api/:layer", get(layer_json))
         .route("/api/:layer/:z/:x/:y", get(layer_tile))
         .route("/api/:layer/valuerange", get(layer_value_range))
         .route("/api/:layer/rastervalue", get(layer_raster_value))
-        .layer(axum::Extension(Arc::new(State::new(opt))))
+        .layer(axum::Extension(Arc::new(State::new(gis_dir))))
         .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
 }
 
@@ -297,7 +285,89 @@ impl TileApiHandler {
         Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
     }
 
-    pub fn get_tile(
+    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, pixel_format: PixelFormat) -> Result<TileData> {
+        let (send, recv) = tokio::sync::oneshot::channel();
+
+        rayon::spawn(move || {
+            let tile_request = TileRequest {
+                tile,
+                dpi_ratio: dpi,
+                pixel_format,
+            };
+
+            let tile = DirectoryTileProvider::get_tile_for_layer(&layer_meta, &tile_request);
+            let _ = send.send(tile);
+        });
+
+        recv.await.expect("Panic in rayon::spawn")
+    }
+
+    async fn fetch_tile_color_mapped(
+        layer_meta: LayerMetadata,
+        value_range: Range<Option<f64>>,
+        cmap: String,
+        tile: Tile,
+        dpi: u8,
+    ) -> Result<TileData> {
+        let (send, recv) = tokio::sync::oneshot::channel();
+
+        rayon::spawn(move || {
+            let legend = create_legend(
+                &cmap,
+                value_range.start.unwrap_or(layer_meta.min_value),
+                value_range.end.unwrap_or(layer_meta.max_value),
+            );
+
+            match legend {
+                Ok(legend) => {
+                    let tile_request = ColorMappedTileRequest {
+                        tile,
+                        dpi_ratio: dpi,
+                        legend: &legend,
+                    };
+
+                    let tile = DirectoryTileProvider::get_tile_color_mapped_for_layer(&layer_meta, &tile_request);
+                    let _ = send.send(tile);
+                }
+                Err(err) => {
+                    let _ = send.send(Err(err));
+                }
+            }
+        });
+
+        recv.await.expect("Panic in rayon::spawn")
+    }
+
+    async fn fetch_extent_value_range(
+        layer_meta: LayerMetadata,
+        top_left: Coordinate,
+        bottom_right: Coordinate,
+        zoom: Option<i32>,
+    ) -> Result<Range<f64>> {
+        let (send, recv) = tokio::sync::oneshot::channel();
+
+        rayon::spawn(move || {
+            let _ = send.send(DirectoryTileProvider::extent_value_range_for_layer(
+                &layer_meta,
+                LatLonBounds::hull(top_left, bottom_right),
+                zoom,
+            ));
+        });
+
+        recv.await.expect("Panic in rayon::spawn")
+    }
+
+    async fn fetch_raster_value(layer_meta: LayerMetadata, coord: Coordinate) -> Result<Option<f32>> {
+        let (send, recv) = tokio::sync::oneshot::channel();
+
+        rayon::spawn(move || {
+            let _ = send.send(DirectoryTileProvider::get_raster_value_for_layer(&layer_meta, coord));
+        });
+
+        recv.await.expect("Panic in rayon::spawn")
+    }
+
+    pub async fn get_tile(
         &self,
         layer: &str,
         z: i32,
@@ -349,39 +419,26 @@ impl TileApiHandler {
             pixel_format,
         );
 
-        let layer_id = parse_layer_id(layer)?;
-        let layer_meta = self.tile_provider.layer(layer_id)?;
+        let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
 
-        let tile;
-        if let Some(PixelFormat::RawFloat) = pixel_format {
+        let tile = if let Some(PixelFormat::RawFloat) = pixel_format {
             if min_value.is_some() || max_value.is_some() || !cmap.is_empty() {
                 return Err(Error::InvalidArgument(
                     "Float pixel format is incompatible with colormaping or value ranges".to_string(),
                 ));
             }
 
-            let tile_request = TileRequest {
-                tile: Tile { x, y, z },
-                dpi_ratio,
-                pixel_format: PixelFormat::RawFloat,
-            };
-
-            tile = self.tile_provider.get_tile(layer_id, &tile_request)?;
+            Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, PixelFormat::RawFloat).await?
         } else {
-            let legend = create_legend(
-                cmap.as_str(),
-                min_value.unwrap_or(layer_meta.min_value),
-                max_value.unwrap_or(layer_meta.max_value),
-            )?;
-
-            let tile_request = ColorMappedTileRequest {
-                tile: Tile { x, y, z },
+            Self::fetch_tile_color_mapped(
+                layer_meta,
+                min_value..max_value,
+                cmap.to_string(),
+                Tile { x, y, z },
                 dpi_ratio,
-                legend: &legend,
-            };
-
-            tile = self.tile_provider.get_tile_color_mapped(layer_id, &tile_request)?;
-        }
+            )
+            .await?
+        };
 
         if tile.format == TileFormat::Protobuf {
             if let Some(host) = headers.get("accept-encoding") {
@@ -394,7 +451,11 @@ impl TileApiHandler {
         Ok(tile)
     }
 
-    pub fn get_value_range(&self, layer: &str, query_params: HashMap<String, String>) -> Result<Json<Range<f64>>> {
+    pub async fn get_value_range(
+        &self,
+        layer: &str,
+        query_params: HashMap<String, String>,
+    ) -> Result<Json<Range<f64>>> {
         let mut zoom: Option<i32> = None;
         let top_left = parse_coordinate_param(&query_params, "topleft_lat", "topleft_lon")?;
         let bottom_right = parse_coordinate_param(&query_params, "bottomright_lat", "bottomright_lon")?;
@@ -409,23 +470,22 @@ impl TileApiHandler {
             }
         }
 
-        let layer_id = parse_layer_id(layer)?;
-        Ok(Json(self.tile_provider.extent_value_range(
-            layer_id,
-            LatLonBounds::hull(top_left, bottom_right),
-            zoom,
-        )?))
+        let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
+
+        Ok(Json(
+            Self::fetch_extent_value_range(layer_meta, top_left, bottom_right, zoom).await?,
+        ))
     }
 
-    pub fn get_raster_value(
+    pub async fn get_raster_value(
         &self,
         layer: &str,
         query_params: HashMap<String, String>,
     ) -> Result<Json<RasterValueResponse>> {
-        let layer_id = parse_layer_id(layer)?;
+        let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
         let coord = parse_coordinate_param(&query_params, "lat", "lon")?;
 
-        let val = self.tile_provider.get_raster_value(layer_id, coord)?;
+        let val = Self::fetch_raster_value(layer_meta, coord).await?;
         Ok(Json(RasterValueResponse {
             value: val.unwrap_or(f32::NAN),
         }))

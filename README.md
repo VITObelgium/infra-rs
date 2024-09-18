@@ -27,3 +27,28 @@ It is recommended to also add the crates to your workspace when you expect to ma
 [workspace]
 members = ["infra-rs/crates/inf", "infra-rs/crates/vector"]
 ```
+
+# Setup development tools
+To build infra-rs as a standalone project
+
+## Windows
+Install the msvc compiler
+download and run `https://win.rustup.rs/x86_64`
+
+## Linux
+run `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
+
+And follow onscreen instructions.
+
+## Mac
+Install the developer tools
+`xcode-select --install`
+
+If the bootstrap fails make sure to use m4 from homebrew
+`brew link m4 --force`
+
+### Additional tooling
+`cargo install sd fd-find just cargo-vcpkg cargo-nextest`
+
+### Compile the C++ dependencies
+`just bootstrap`

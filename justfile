@@ -44,6 +44,9 @@ build_debug:
 build_release:
   cargo build --workspace --release
 
+serve_tiles dir:
+  cargo run -p tileserver --release -- --gis-dir {{dir}}
+
 doc:
   cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --no-deps --all-features --open
 

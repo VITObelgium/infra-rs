@@ -1,13 +1,31 @@
 #![warn(clippy::unwrap_used)]
+use std::path::PathBuf;
+
 use clap::Parser;
 use env_logger::{Env, TimestampPrecision};
 use tileserver::tileapihandler;
 
-#[tokio::main(worker_threads = 16)]
+#[derive(Parser, Debug)]
+#[clap(name = "tileserver", about = "The tile server")]
+pub struct Opt {
+    // set the listen addr
+    #[clap(short = 'a', long = "addr")]
+    pub addr: Option<String>,
+
+    // set the listen port
+    #[clap(short = 'p', long = "port", default_value = "8080")]
+    pub port: u16,
+
+    // set the directory where static files are to be found
+    #[clap(long = "gis-dir")]
+    pub gis_dir: PathBuf,
+}
+
+#[tokio::main]
 async fn main() {
     use std::{path::PathBuf, str::FromStr};
 
-    let opt = tileapihandler::Opt::parse();
+    let opt = Opt::parse();
 
     env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
         .format_timestamp(Some(TimestampPrecision::Millis))
@@ -23,7 +41,7 @@ async fn main() {
     let gdal_config = geo::RuntimeConfiguration::builder().proj_db(&exe_dir).build();
     gdal_config.apply().expect("Failed to configure GDAL");
 
-    let app = tileapihandler::create_router(&opt);
+    let app = tileapihandler::create_router(&opt.gis_dir);
 
     let ip_addr = match opt.addr {
         Some(addr) => std::net::IpAddr::from_str(addr.as_str()).expect("Invalid ip address provided"),

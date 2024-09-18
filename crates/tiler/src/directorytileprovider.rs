@@ -67,6 +67,57 @@ impl DirectoryTileProvider {
 
         Ok(layers)
     }
+
+    pub fn extent_value_range_for_layer(
+        layer: &LayerMetadata,
+        extent: LatLonBounds,
+        zoom: Option<i32>,
+    ) -> Result<Range<f64>> {
+        match layer.source_format {
+            LayerSourceType::GeoTiff
+            | LayerSourceType::GeoPackage
+            | LayerSourceType::ArcAscii
+            | LayerSourceType::Netcdf => WarpingTileProvider::value_range_for_extent(layer, extent, zoom),
+            LayerSourceType::Mbtiles => MbtilesTileProvider::value_range_for_extent(layer, extent, zoom),
+            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
+        }
+    }
+
+    pub fn get_raster_value_for_layer(layer: &LayerMetadata, coord: Coordinate) -> Result<Option<f32>> {
+        match layer.source_format {
+            LayerSourceType::GeoTiff
+            | LayerSourceType::GeoPackage
+            | LayerSourceType::ArcAscii
+            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord),
+            LayerSourceType::Mbtiles => MbtilesTileProvider::raster_pixel(layer, coord),
+            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
+        }
+    }
+
+    pub fn get_tile_for_layer(layer: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
+        match layer.source_format {
+            LayerSourceType::GeoTiff
+            | LayerSourceType::GeoPackage
+            | LayerSourceType::ArcAscii
+            | LayerSourceType::Netcdf => WarpingTileProvider::tile(layer, tile_req),
+            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
+            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
+        }
+    }
+
+    pub fn get_tile_color_mapped_for_layer(
+        layer: &LayerMetadata,
+        tile_req: &ColorMappedTileRequest,
+    ) -> Result<TileData> {
+        match layer.source_format {
+            LayerSourceType::GeoTiff
+            | LayerSourceType::GeoPackage
+            | LayerSourceType::ArcAscii
+            | LayerSourceType::Netcdf => WarpingTileProvider::color_mapped_tile(layer, tile_req),
+            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
+            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
+        }
+    }
 }
 
 impl TileProvider for DirectoryTileProvider {
@@ -79,50 +130,18 @@ impl TileProvider for DirectoryTileProvider {
     }
 
     fn extent_value_range(&self, id: LayerId, extent: LatLonBounds, zoom: Option<i32>) -> Result<Range<f64>> {
-        let layer = self.layer_data(id)?;
-        match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::value_range_for_extent(layer, extent, zoom),
-            LayerSourceType::Mbtiles => MbtilesTileProvider::value_range_for_extent(layer, extent, zoom),
-            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
-        }
+        Self::extent_value_range_for_layer(self.layer_data(id)?, extent, zoom)
     }
 
     fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
-        let layer = self.layer_data(id)?;
-        match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord),
-            LayerSourceType::Mbtiles => MbtilesTileProvider::raster_pixel(layer, coord),
-            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
-        }
+        Self::get_raster_value_for_layer(self.layer_data(id)?, coord)
     }
 
     fn get_tile(&self, id: LayerId, tile_req: &TileRequest) -> Result<TileData> {
-        let layer = self.layer_data(id)?;
-        match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::tile(layer, tile_req),
-            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
-            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
-        }
+        Self::get_tile_for_layer(self.layer_data(id)?, tile_req)
     }
 
     fn get_tile_color_mapped(&self, id: LayerId, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
-        let layer = self.layer_data(id)?;
-        match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::color_mapped_tile(layer, tile_req),
-            LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
-            LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
-        }
+        Self::get_tile_color_mapped_for_layer(self.layer_data(id)?, tile_req)
     }
 }
