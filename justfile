@@ -38,12 +38,6 @@ build_py:
   conda activate ./target/conda
   cd ruster && maturin develop && python ./test.py
 
-build_debug:
-  cargo build --workspace
-
-build_release:
-  cargo build --workspace --release
-
 serve_tiles dir:
   cargo run -p tileserver --release -- --gis-dir {{dir}}
 
@@ -53,5 +47,17 @@ doc:
 docdeps:
   cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features --open
 
-test:
-  cargo nextest run --workspace --release --all-features
+build_debug:
+  cargo build --workspace
+
+build_release:
+  cargo build --workspace --release
+
+test_debug:
+  cargo nextest run --profile ci  --workspace --all-features
+
+test_release:
+  cargo nextest run --profile ci  --workspace --release --all-features
+
+build: build_release
+test: test_release

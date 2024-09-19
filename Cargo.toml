@@ -31,6 +31,7 @@ serde       = ["inf/serde"]
 git                   = "https://github.com/microsoft/vcpkg"
 rev                   = "943c5ef"
 overlay-triplets-path = "vcpkg-triplets"
+dependencies          = ["gdal[core,netcdf]"]                # needed to run the geo tests
 
 [package.metadata.vcpkg.target]
 #aarch64-apple-darwin = { triplet = "arm64-osx-debugsymbols" }
