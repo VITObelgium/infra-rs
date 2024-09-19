@@ -4,7 +4,7 @@ use geo::{crs::Epsg, Coordinate, LatLonBounds};
 use num::NumCast;
 use std::{collections::HashMap, path::PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct LayerId(u64);
 
@@ -47,7 +47,7 @@ pub enum LayerSourceType {
     Unknown,
 }
 
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
 pub struct LayerMetadata {
     pub id: LayerId,

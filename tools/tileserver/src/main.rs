@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use env_logger::{Env, TimestampPrecision};
+use tiler::Result;
 use tileserver::tileapihandler;
 
 #[derive(Parser, Debug)]
@@ -19,17 +20,27 @@ pub struct Opt {
     // set the directory where static files are to be found
     #[clap(long = "gis-dir")]
     pub gis_dir: PathBuf,
+
+    // start in terminal ui mode
+    #[cfg(feature = "tui")]
+    #[clap(long = "tui")]
+    pub tui: bool,
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<()> {
     use std::{path::PathBuf, str::FromStr};
 
     let opt = Opt::parse();
 
-    env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
-        .format_timestamp(Some(TimestampPrecision::Millis))
-        .init();
+    if !opt.tui {
+        env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
+            .format_timestamp(Some(TimestampPrecision::Millis))
+            .init();
+    } else {
+        #[cfg(feature = "tui")]
+        tui_logger::init_logger(log::LevelFilter::Info).expect("Failed to initialize logger");
+    }
 
     let exe_dir = PathBuf::from(
         std::env::current_exe()
@@ -41,18 +52,23 @@ async fn main() {
     let gdal_config = geo::RuntimeConfiguration::builder().proj_db(&exe_dir).build();
     gdal_config.apply().expect("Failed to configure GDAL");
 
-    let app = tileapihandler::create_router(&opt.gis_dir);
-
     let ip_addr = match opt.addr {
         Some(addr) => std::net::IpAddr::from_str(addr.as_str()).expect("Invalid ip address provided"),
         None => std::net::IpAddr::V6(std::net::Ipv6Addr::UNSPECIFIED),
     };
 
     let sock_addr = std::net::SocketAddr::from((ip_addr, opt.port));
-    log::debug!("Run server on: {sock_addr}");
-
+    let (router, status_rx) = tileapihandler::create_router(&opt.gis_dir);
     let listener = tokio::net::TcpListener::bind(&sock_addr)
         .await
         .expect("Unable to bind to address");
-    axum::serve(listener, app).await.expect("Unable to start server");
+
+    #[cfg(feature = "tui")]
+    if opt.tui {
+        tileserver::tui::launch(router, listener, status_rx).await?;
+        return Ok(());
+    }
+
+    axum::serve(listener, router).await?;
+    Ok(())
 }

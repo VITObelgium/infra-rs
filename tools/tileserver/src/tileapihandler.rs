@@ -21,6 +21,12 @@ use tower_http::trace::TraceLayer;
 
 use crate::{Error, Result};
 
+#[derive(Clone)]
+pub enum StatusEvent {
+    Layers(Vec<LayerMetadata>),
+    TileServed(LayerId),
+}
+
 #[derive(serde::Serialize)]
 pub struct RasterValueResponse {
     value: f32,
@@ -84,8 +90,8 @@ impl From<TileData> for TileResponse {
 }
 
 impl State {
-    fn new(gis_dir: &std::path::Path) -> Self {
-        match TileApiHandler::new(gis_dir) {
+    fn new(gis_dir: &std::path::Path, status_tx: tokio::sync::broadcast::Sender<StatusEvent>) -> Self {
+        match TileApiHandler::new(gis_dir, status_tx) {
             Ok(api) => Self { api },
             Err(err) => {
                 log::error!("Failed to create tile server api handler: {err}");
@@ -146,15 +152,22 @@ async fn layer_raster_value(
     Ok(state.api.get_raster_value(layer.as_str(), params).await?)
 }
 
-pub fn create_router(gis_dir: &std::path::Path) -> axum::routing::Router {
-    axum::Router::new()
-        .route("/api/layers", get(list_layers))
-        .route("/api/:layer", get(layer_json))
-        .route("/api/:layer/:z/:x/:y", get(layer_tile))
-        .route("/api/:layer/valuerange", get(layer_value_range))
-        .route("/api/:layer/rastervalue", get(layer_raster_value))
-        .layer(axum::Extension(Arc::new(State::new(gis_dir))))
-        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
+pub fn create_router(
+    gis_dir: &std::path::Path,
+) -> (axum::routing::Router, tokio::sync::broadcast::Receiver<StatusEvent>) {
+    let (status_tx, status_rx) = tokio::sync::broadcast::channel(100);
+
+    (
+        axum::Router::new()
+            .route("/api/layers", get(list_layers))
+            .route("/api/:layer", get(layer_json))
+            .route("/api/:layer/:z/:x/:y", get(layer_tile))
+            .route("/api/:layer/valuerange", get(layer_value_range))
+            .route("/api/:layer/rastervalue", get(layer_raster_value))
+            .layer(axum::Extension(Arc::new(State::new(gis_dir, status_tx))))
+            .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http())),
+        status_rx,
+    )
 }
 
 const fn tile_format_content_type(tile_format: TileFormat) -> &'static str {
@@ -225,12 +238,16 @@ impl axum::response::IntoResponse for TileResponse {
 
 pub struct TileApiHandler {
     tile_provider: DirectoryTileProvider,
+    status_tx: tokio::sync::broadcast::Sender<StatusEvent>,
 }
 
 impl TileApiHandler {
-    pub fn new(gis_dir: &std::path::Path) -> Result<Self> {
+    pub fn new(gis_dir: &std::path::Path, status_tx: tokio::sync::broadcast::Sender<StatusEvent>) -> Result<Self> {
+        let tile_provider = DirectoryTileProvider::new(gis_dir)?;
+        let _ = status_tx.send(StatusEvent::Layers(tile_provider.layers().clone()));
         Ok(TileApiHandler {
-            tile_provider: DirectoryTileProvider::new(gis_dir)?,
+            tile_provider,
+            status_tx,
         })
     }
 
@@ -421,7 +438,8 @@ impl TileApiHandler {
             tile_format,
         );
 
-        let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
+        let layer_id = parse_layer_id(layer)?;
+        let layer_meta = self.tile_provider.layer(layer_id)?;
         let tile = match tile_format {
             Some(TileFormat::FloatEncodedPng | TileFormat::VitoTileFormat) => {
                 Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, tile_format.unwrap()).await?
@@ -440,6 +458,7 @@ impl TileApiHandler {
             }
         }
 
+        let _ = self.status_tx.send(StatusEvent::TileServed(layer_id));
         Ok(tile)
     }
 
