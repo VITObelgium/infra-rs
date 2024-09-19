@@ -2,6 +2,7 @@
 pub mod algo;
 mod cell;
 mod denseraster;
+mod denserasterconversions;
 #[cfg(feature = "gdal")]
 mod denserasterio;
 mod denserasterops;
@@ -25,7 +26,7 @@ pub mod arrow {
     #[cfg(feature = "gdal")]
     mod arrowrasterio;
     mod arrowrasterops;
-    mod arrowutil;
+    pub(super) mod arrowutil;
 }
 
 #[cfg(feature = "arrow")]
