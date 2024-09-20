@@ -21,7 +21,6 @@ RUN apt update && apt install -y \
     bison \
     git
 
-ENV VCPKG_FORCE_SYSTEM_BINARIES=1
 ENV CURL_HOME=/etc
 RUN echo "-k" > $CURL_HOME/.curlrc
 

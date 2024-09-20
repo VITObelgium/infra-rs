@@ -4,13 +4,16 @@ pipeline {
             filename "Dockerfile"
             dir "docker"
             additionalBuildArgs '--build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)'
+            args '-v /home/jenkins/.cache/vcpkg:/home/jenkins/.cache/vcpkg'
         }
     }
 
     environment {
-        PYO3_PYTHON = '/usr/bin/python3'
+        //VCPKG_DOWNLOADS = '/home/jenkins/.cache/vcpkg/downloads'
+        //VCPKG_DEFAULT_BINARY_CACHE = '/home/jenkins/.cache/vcpkg'
+        VCPKG_FORCE_SYSTEM_BINARIES = '1'
     }
-    
+
     options {
         disableConcurrentBuilds()
         buildDiscarder(logRotator(numToKeepStr: '30', artifactNumToKeepStr: '10'))
