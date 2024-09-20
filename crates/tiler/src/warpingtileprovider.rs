@@ -253,7 +253,7 @@ impl WarpingTileProvider {
         }
 
         if let Some(layer) = result.first() {
-            log::debug!("Serving file: {:?}", layer.path)
+            log::debug!("Serving file: {:?}", layer.path);
         }
 
         Ok(result)
@@ -335,7 +335,7 @@ impl WarpingTileProvider {
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
                 Some(nodata),
             ),
-            _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
+            PixelFormat::Unknown => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
         }
     }
 

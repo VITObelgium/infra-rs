@@ -85,7 +85,7 @@ pub struct RasterizeOptions<T: num::One> {
     pub target_aligned_pixels: bool,
     /// Additional cli options to pass to the rasterize command
     /// in the form `["-option1", "value1", "-option2", "value2"]`
-    /// and match the options of the gdal gdal_rasterize command line tool
+    /// and match the options of the gdal `gdal_rasterize` command line tool
     /// Use when the provided options are not sufficient or new command line options are not supported yet
     pub cli_options: Vec<String>,
 }
@@ -153,7 +153,7 @@ pub fn rasterize<T: raster::RasterNum<T> + GdalType + ToString>(
 
 /// Rasterize a GDAL vector dataset using the provided rasterize options
 /// The options are passed as a list of strings in the form `["-option1", "value1", "-option2", "value2"]`
-/// and match the options of the gdal gdal_rasterize command line tool
+/// and match the options of the gdal `gdal_rasterize` command line tool
 /// The rasterized dataset is returned
 pub fn rasterize_with_cli_options<T: raster::RasterNum<T> + GdalType>(
     ds: &gdal::Dataset,

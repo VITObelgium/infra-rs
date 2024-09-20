@@ -35,7 +35,7 @@ impl Config {
 
 pub fn setup_logging(debug: bool) {
     if debug && gdal::config::set_config_option("CPL_DEBUG", "ON").is_err() {
-        log::debug!("Failed to set GDAL debug level")
+        log::debug!("Failed to set GDAL debug level");
     }
 
     gdal::config::set_error_handler(|sev, _ec, msg| {
@@ -160,7 +160,7 @@ impl MemoryFile {
     #[allow(dead_code)]
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
         let bytes_written =
-            unsafe { gdal_sys::VSIFWriteL(data.as_ptr() as *const std::ffi::c_void, 1, data.len(), self.file_ptr) };
+            unsafe { gdal_sys::VSIFWriteL(data.as_ptr().cast::<std::ffi::c_void>(), 1, data.len(), self.file_ptr) };
         if bytes_written != data.len() {
             Err(Error::Runtime("Failed to write to memory file".to_string()))
         } else {

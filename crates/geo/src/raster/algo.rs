@@ -102,10 +102,10 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
         (*warp_options).hDstDS = dst_ds.c_dataset();
         (*warp_options).nBandCount = 1;
         (*warp_options).panSrcBands =
-            gdal_sys::CPLMalloc(std::mem::size_of::<c_int>() * (*warp_options).nBandCount as usize) as *mut c_int;
+            gdal_sys::CPLMalloc(std::mem::size_of::<c_int>() * (*warp_options).nBandCount as usize).cast::<c_int>();
         (*warp_options).panSrcBands.wrapping_add(0).write(1); // warpOptions->panSrcBands[0]   = 1;
         (*warp_options).panDstBands =
-            gdal_sys::CPLMalloc(std::mem::size_of::<c_int>() * (*warp_options).nBandCount as usize) as *mut c_int;
+            gdal_sys::CPLMalloc(std::mem::size_of::<c_int>() * (*warp_options).nBandCount as usize).cast::<c_int>();
         (*warp_options).panDstBands.wrapping_add(0).write(1); // warpOptions->panDstBands[0]   = 1;
         (*warp_options).pfnTransformer = Some(gdal_sys::GDALGenImgProjTransform);
         (*warp_options).eResampleAlg = options.resample_algo.to_gdal();
@@ -128,7 +128,7 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
         let band_size = (*warp_options).nBandCount as usize * std::mem::size_of::<c_double>();
         if let Some(src_nodata_value) = dst_band.no_data_value() {
             // will get freed by gdal
-            (*warp_options).padfSrcNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut c_double;
+            (*warp_options).padfSrcNoDataReal = gdal_sys::CPLMalloc(band_size).cast::<c_double>();
             // C++ equivalent: padfSrcNoDataReal[0] = src_nodata_value;
             (*warp_options)
                 .padfSrcNoDataReal
@@ -138,7 +138,7 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
 
         if let Some(dst_nodata_value) = dst_ds.rasterband(1)?.no_data_value() {
             // will get freed by gdal
-            (*warp_options).padfDstNoDataReal = gdal_sys::CPLMalloc(band_size) as *mut c_double;
+            (*warp_options).padfDstNoDataReal = gdal_sys::CPLMalloc(band_size).cast::<c_double>();
             // C++ equivalent: padfDstNoDataReal[0] = dstNodataValue.value();
             (*warp_options)
                 .padfDstNoDataReal

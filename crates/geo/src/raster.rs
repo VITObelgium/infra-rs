@@ -151,7 +151,7 @@ pub trait RasterIO<T: RasterNum<T>, TRas: Raster<T>> {
     /// Reads the full raster from disk
     /// No processing (cutting, resampling) is done on the raster data, the original data is returned
     fn read_band(path: &std::path::Path, band_index: usize) -> Result<TRas>;
-    /// Same as read_band_from_disk but reads the first band
+    /// Same as `read_band_from_disk` but reads the first band
     fn read(path: &std::path::Path) -> Result<TRas>;
 
     /// Reads a subset of the raster from disk

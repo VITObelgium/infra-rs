@@ -7,7 +7,7 @@ use std::io::BufWriter;
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
 /// Otherwise the slice will contain (uninitialized) padding bytes
 unsafe fn vec_as_u8_slice<T: Sized>(data: &[T]) -> &[u8] {
-    ::core::slice::from_raw_parts((&data[0] as *const T) as *const u8, std::mem::size_of_val(data))
+    ::core::slice::from_raw_parts((&data[0] as *const T).cast::<u8>(), std::mem::size_of_val(data))
 }
 
 fn encode_png(colors: &[Color], width: u32, height: u32) -> Result<Vec<u8>> {

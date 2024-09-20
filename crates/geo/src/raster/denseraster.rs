@@ -4,7 +4,7 @@ use num::NumCast;
 use super::{Raster, RasterNum};
 
 /// Raster implementation using a dense data structure.
-/// The nodata values are stored as the [crate::Nodata::nodata_value] for the type T in the same array data structure
+/// The nodata values are stored as the [`crate::Nodata::nodata_value`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
 #[derive(Debug, Clone)]
 pub struct DenseRaster<T: RasterNum<T>> {
@@ -21,7 +21,7 @@ impl<T: RasterNum<T>> DenseRaster<T> {
 
         self.data.iter_mut().for_each(|x| {
             if x.is_nodata() {
-                *x = T::nodata_value()
+                *x = T::nodata_value();
             }
         });
     }
@@ -228,11 +228,11 @@ fn process_nodata<T: RasterNum<T>>(data: &mut [T], nodata: Option<f64>) {
         }
 
         let nodata = NumCast::from(nodata).unwrap_or(T::nodata_value());
-        data.iter_mut().for_each(|v| {
+        for v in data.iter_mut() {
             if *v == nodata {
                 *v = T::nodata_value();
             }
-        });
+        }
     }
 }
 

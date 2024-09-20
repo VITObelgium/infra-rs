@@ -44,10 +44,10 @@ impl Coordinate {
     }
 
     fn wrap(&mut self) {
-        self.longitude = self.wrap_value(self.longitude, -180.0, 180.0);
+        self.longitude = Self::wrap_value(self.longitude, -180.0, 180.0);
     }
 
-    fn wrap_value(&self, value: f64, min: f64, max: f64) -> f64 {
+    fn wrap_value(value: f64, min: f64, max: f64) -> f64 {
         if value >= min && value < max {
             return value;
         } else if value == max {
@@ -67,7 +67,7 @@ impl Coordinate {
         let lat = other.latitude - self.latitude;
         let lon = other.longitude - self.longitude;
 
-        (lat * lat + lon * lon).sqrt()
+        lat.hypot(lon)
     }
 }
 

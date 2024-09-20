@@ -53,9 +53,10 @@ impl IntoResponse for AppError {
                 Error::TimeError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::IOError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::InfError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::InvalidArgument(err) => (http::StatusCode::BAD_REQUEST, err.to_string()),
-                Error::GeoError(_) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::SqliteError(_) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+                Error::InvalidArgument(err) => (http::StatusCode::BAD_REQUEST, err),
+                Error::GeoError(_) | Error::SqliteError(_) => {
+                    (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
+                }
             },
         };
 
@@ -160,7 +161,7 @@ const fn tile_format_content_type(tile_format: TileFormat) -> &'static str {
         TileFormat::Protobuf => "application/protobuf",
         TileFormat::Png => "image/png",
         TileFormat::Jpeg => "image/jpeg",
-        _ => "application/octet-stream",
+        TileFormat::Unknown => "application/octet-stream",
     }
 }
 
@@ -430,14 +431,7 @@ impl TileApiHandler {
 
             Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, PixelFormat::RawFloat).await?
         } else {
-            Self::fetch_tile_color_mapped(
-                layer_meta,
-                min_value..max_value,
-                cmap.to_string(),
-                Tile { x, y, z },
-                dpi_ratio,
-            )
-            .await?
+            Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, Tile { x, y, z }, dpi_ratio).await?
         };
 
         if tile.format == TileFormat::Protobuf {

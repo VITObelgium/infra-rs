@@ -3,7 +3,7 @@ use crate::GeoReference;
 use crate::{RasterSize, Result};
 use num::NumCast;
 
-/// Try to convert a python arrow object to a DenseRaster.
+/// Try to convert a python arrow object to a `DenseRaster`.
 /// This will only convert the raster data, so no projection information will be available
 #[cfg(all(feature = "python", feature = "arrow"))]
 impl<T> TryFrom<pyo3::Py<pyo3::PyAny>> for DenseRaster<T>

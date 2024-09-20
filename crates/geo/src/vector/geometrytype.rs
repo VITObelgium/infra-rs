@@ -1,4 +1,4 @@
-/// A subset of the geometry types we are expected to actually use (maches the types in the geo_types crate)
+/// A subset of the geometry types we are expected to actually use (maches the types in the `geo_types` crate)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GeometryType {
     Point,

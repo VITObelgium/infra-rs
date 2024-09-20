@@ -41,7 +41,7 @@ impl Row {
     pub fn column_string(&self, index: c_int) -> Option<&str> {
         let data = unsafe { libsqlite3_sys::sqlite3_column_text(self.stmt, index) };
         if !data.is_null() {
-            let c_str = unsafe { CStr::from_ptr(data as *const c_char) };
+            let c_str = unsafe { CStr::from_ptr(data.cast::<c_char>()) };
             return c_str.to_str().ok();
         }
         None
@@ -51,7 +51,7 @@ impl Row {
         let data = unsafe { libsqlite3_sys::sqlite3_column_blob(self.stmt, index) };
         let size = unsafe { libsqlite3_sys::sqlite3_column_bytes(self.stmt, index) };
         if !data.is_null() && size > 0 {
-            let data_slice = unsafe { slice::from_raw_parts(data as *const u8, size as usize) };
+            let data_slice = unsafe { slice::from_raw_parts(data.cast::<u8>(), size as usize) };
             return Some(data_slice);
         }
         None

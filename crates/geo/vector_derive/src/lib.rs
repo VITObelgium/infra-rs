@@ -76,7 +76,7 @@ fn field_names(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenStream>> 
 
             let attr_name = check_col_attr(item);
             let name = item.ident.as_ref().unwrap().to_string();
-            let name_str = attr_name.unwrap_or(name.to_string());
+            let name_str = attr_name.unwrap_or(name);
             Some(quote! {#name_str})
         })
         .collect();

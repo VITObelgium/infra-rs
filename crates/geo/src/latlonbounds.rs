@@ -46,7 +46,7 @@ impl LatLonBounds {
     /// Construct an infinite bound, a bound for which the constrain method returns its
     /// input unmodified.
     ///
-    /// Note: this is different than LatLonBounds::world() since arbitrary unwrapped
+    /// Note: this is different than `LatLonBounds::world()` since arbitrary unwrapped
     /// coordinates are also inside the bounds.
     pub const fn infinite() -> LatLonBounds {
         LatLonBounds {

@@ -21,7 +21,7 @@ where
         Ok(DenseRaster::new(metadata, data))
     }
 
-    /// Reads a subset of the raster from disk into a DenseRaster
+    /// Reads a subset of the raster from disk into a `DenseRaster`
     /// The provided extent does not have to be contained within the raster
     /// Areas outside of the original raster will be filled with the nodata value
     fn read_bounds(path: &std::path::Path, bounds: &GeoReference, band_index: usize) -> Result<DenseRaster<T>> {

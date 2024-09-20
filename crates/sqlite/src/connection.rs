@@ -26,7 +26,7 @@ impl Connection {
     pub fn path(&self) -> Option<String> {
         let filename = unsafe { libsqlite3_sys::sqlite3_db_filename(self.db, std::ptr::null()) };
         if !filename.is_null() {
-            let c_str = unsafe { CStr::from_ptr(filename as *const c_char) };
+            let c_str = unsafe { CStr::from_ptr(filename.cast::<c_char>()) };
             return Some(c_str.to_string_lossy().to_string());
         }
         None

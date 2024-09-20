@@ -80,7 +80,7 @@ mod tests {
             .iter()
             .collect();
         if !data_dir.exists() {
-            panic!("Proj.db data directory not found");
+            panic!("Proj.db data directory not found: {}", data_dir.display());
 
             //     // Infra used a s subcrate, try the parent directory
             //     if !data_dir.exists() {

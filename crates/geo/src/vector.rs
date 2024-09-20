@@ -21,7 +21,7 @@ pub use datarow::DataRow;
 
 /// The `DataRow` trait is implemented using the `DataRow` derive macro
 /// This allows to read vector data in a more type-safe way directly into a struct
-/// # DataframeIterator iterator example using the `DataRow` derive macro
+/// # `DataframeIterator` iterator example using the `DataRow` derive macro
 /// ```
 /// # use geo::vector::io::DataframeIterator;
 /// # use geo::vector::DataRow;

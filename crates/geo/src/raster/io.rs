@@ -1,6 +1,6 @@
 //! Contains low-level functions to read and write raster data using the GDAL library.
 //! These functions should only be used for specfiic use-cases.
-//! For general use, the [crate::Raster] and [crate::RasterIO] traits should be used.
+//! For general use, the [`crate::Raster`] and [`crate::RasterIO`] traits should be used.
 
 use std::{
     ffi::{c_void, CString},
@@ -276,7 +276,7 @@ pub mod dataset {
                 window.1,
                 window_size.0,
                 window_size.1,
-                data_ptr as *mut c_void,
+                data_ptr.cast::<c_void>(),
                 size.0,
                 size.1,
                 T::gdal_ordinal(),
@@ -291,7 +291,7 @@ pub mod dataset {
 
     /// Write raster to disk using a different data type then present in the data buffer
     /// Driver options (as documented in the GDAL drivers) can be provided
-    /// If no driver options are provided, some sane defaults will be used for GeoTIFF files
+    /// If no driver options are provided, some sane defaults will be used for geotiff files
     pub fn write_as<TStore, T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result<()>
     where
         T: GdalType + Nodata<T> + num::NumCast + Copy,
@@ -321,7 +321,7 @@ pub mod dataset {
 
     /// Write the raster to disk.
     /// Driver options (as documented in the GDAL drivers) can be provided.
-    /// If no driver options are provided, some sane defaults will be used for GeoTIFF files (compression, tiling).
+    /// If no driver options are provided, some sane defaults will be used for geotiff files (compression, tiling).
     pub fn write<T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result
     where
         T: GdalType + Nodata<T> + num::NumCast + Copy,

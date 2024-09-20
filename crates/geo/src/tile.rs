@@ -1,6 +1,6 @@
 use crate::{
-    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, latlonbounds::LatLonBounds, georeference::GeoReference,
-    Point, Rect,
+    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, georeference::GeoReference,
+    latlonbounds::LatLonBounds, Point, Rect,
 };
 use std::f64::consts::PI;
 
@@ -142,7 +142,7 @@ impl Tile {
         let mut result = Vec::new();
 
         if self.z < target_zoom {
-            for child in self.direct_children().into_iter() {
+            for child in self.direct_children() {
                 let children = child.children(target_zoom);
                 result.push(child);
                 result.extend(children);

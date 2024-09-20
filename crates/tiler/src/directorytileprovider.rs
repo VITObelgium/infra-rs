@@ -48,7 +48,7 @@ impl DirectoryTileProvider {
                     if layer_count == 0 {
                         log::warn!("No layer found in file: {}", file_entry.path().to_string_lossy());
                     } else {
-                        for layer in file_layers.into_iter() {
+                        for layer in file_layers {
                             layers.insert(layer.id, layer);
                         }
 
