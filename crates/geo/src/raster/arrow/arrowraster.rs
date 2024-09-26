@@ -226,6 +226,16 @@ where
         ArrowRaster::new(meta, vec![val; data_size])
     }
 
+    fn filled_with_nodata(metadata: GeoReference) -> Self {
+        let mut builder = PrimitiveBuilder::<T::TArrow>::new();
+        builder.append_nulls(metadata.rows() * metadata.columns());
+
+        ArrowRaster {
+            metadata,
+            data: builder.finish(),
+        }
+    }
+
     fn geo_metadata(&self) -> &GeoReference {
         &self.metadata
     }
@@ -280,6 +290,10 @@ where
             .iter()
             .filter_map(|x| x.and_then(|v| v.to_f64()))
             .fold(0.0, |acc, x| acc + x)
+    }
+
+    fn iter(&self) -> impl Iterator<Item = Option<T>> {
+        self.data.iter()
     }
 }
 
