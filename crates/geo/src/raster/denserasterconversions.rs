@@ -1,6 +1,10 @@
+#[cfg(all(feature = "python", feature = "arrow"))]
 use super::{DenseRaster, Raster, RasterNum};
+#[cfg(all(feature = "python", feature = "arrow"))]
 use crate::GeoReference;
+#[cfg(all(feature = "python", feature = "arrow"))]
 use crate::{RasterSize, Result};
+#[cfg(all(feature = "python", feature = "arrow"))]
 use num::NumCast;
 
 /// Try to convert a python arrow object to a `DenseRaster`.

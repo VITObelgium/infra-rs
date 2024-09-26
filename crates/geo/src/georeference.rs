@@ -16,6 +16,10 @@ impl RasterSize {
     pub const fn with_rows_cols(rows: usize, cols: usize) -> Self {
         RasterSize { rows, cols }
     }
+
+    pub fn is_empty(&self) -> bool {
+        self.rows == 0 || self.cols == 0
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Default)]
@@ -202,6 +206,10 @@ impl GeoReference {
         self.set_cell_size_y(-size);
     }
 
+    pub fn cell_at_index(&self, index: usize) -> Cell {
+        Cell::from_row_col((index / self.columns()) as i32, (index % self.columns()) as i32)
+    }
+
     pub fn rows(&self) -> usize {
         self.size.rows
     }
@@ -373,7 +381,7 @@ impl GeoReference {
             ));
         }
 
-        if self.cell_size() != other.cell_size() && !metadata_is_aligned(self, other) {
+        if self.cell_size() != other.cell_size() && !self.is_aligned_with(other) {
             return Err(Error::InvalidArgument(format!(
                 "Extents cellsize does not match {:?} <-> {:?}",
                 self.cell_size(),
@@ -386,6 +394,43 @@ impl GeoReference {
         }
 
         Ok(self.bounding_box().intersects(&other.bounding_box()))
+    }
+
+    pub fn is_aligned_with(&self, other: &GeoReference) -> bool {
+        let cell_size_x1 = self.cell_size_x();
+        let cell_size_x2 = other.cell_size_x();
+
+        let cell_size_y1 = self.cell_size_y().abs();
+        let cell_size_y2 = other.cell_size_y().abs();
+
+        if cell_size_x1 != cell_size_x2 {
+            let (larger, smaller) = if cell_size_x1 < cell_size_x2 {
+                (cell_size_x2, cell_size_x1)
+            } else {
+                (cell_size_x1, cell_size_x2)
+            };
+
+            if larger % smaller != 0.0 {
+                return false;
+            }
+        }
+
+        if cell_size_y1 != cell_size_y2 {
+            let (larger, smaller) = if cell_size_y1 < cell_size_y2 {
+                (cell_size_y2, cell_size_y1)
+            } else {
+                (cell_size_y1, cell_size_y2)
+            };
+
+            if larger % smaller != 0.0 {
+                return false;
+            }
+        }
+
+        let x_aligned = is_aligned(self.geo_transform[0], other.geo_transform[0], self.cell_size_x());
+        let y_aligned = is_aligned(self.geo_transform[3], other.geo_transform[3], self.cell_size_y());
+
+        x_aligned && y_aligned
     }
 
     #[cfg(feature = "gdal")]
@@ -460,48 +505,49 @@ impl GeoReference {
     pub fn warped_to_epsg(&self, epsg: Epsg) -> Result<Self> {
         self.warped(&crate::SpatialReference::from_epsg(epsg)?)
     }
+
+    pub fn intersection(&self, other: &GeoReference) -> Result<GeoReference> {
+        if self.projection() != other.projection() {
+            return Err(Error::InvalidArgument(
+                "Cannot intersect georeferences with different projections".to_string(),
+            ));
+        }
+
+        if self.cell_size() != other.cell_size() {
+            return Err(Error::InvalidArgument(
+                "Cannot intersect georeferences with different cell sizes".to_string(),
+            ));
+        }
+
+        if !self.is_aligned_with(other) {
+            return Err(Error::InvalidArgument(
+                "Cannot intersect georeferences that are not aligned".to_string(),
+            ));
+        }
+
+        let intersection = self.bounding_box().intersection(&other.bounding_box());
+        if !intersection.empty() {
+            let raster_size = RasterSize {
+                rows: (intersection.height() / self.cell_size_y().abs()).round() as usize,
+                cols: (intersection.width() / self.cell_size_x().abs()).round() as usize,
+            };
+
+            Ok(GeoReference::with_origin(
+                self.projection(),
+                raster_size,
+                intersection.bottom_left(),
+                self.cell_size(),
+                self.nodata,
+            ))
+        } else {
+            Ok(GeoReference::default())
+        }
+    }
 }
 
-pub fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
+fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
     let diff = (val1 - val2).abs();
     diff % cellsize < 1e-12
-}
-
-pub fn metadata_is_aligned(meta1: &GeoReference, meta2: &GeoReference) -> bool {
-    let cell_size_x1 = meta1.cell_size_x();
-    let cell_size_x2 = meta2.cell_size_x();
-
-    let cell_size_y1 = meta1.cell_size_y().abs();
-    let cell_size_y2 = meta2.cell_size_y().abs();
-
-    if cell_size_x1 != cell_size_x2 {
-        let (larger, smaller) = if cell_size_x1 < cell_size_x2 {
-            (cell_size_x2, cell_size_x1)
-        } else {
-            (cell_size_x1, cell_size_x2)
-        };
-
-        if larger % smaller != 0.0 {
-            return false;
-        }
-    }
-
-    if cell_size_y1 != cell_size_y2 {
-        let (larger, smaller) = if cell_size_y1 < cell_size_y2 {
-            (cell_size_y2, cell_size_y1)
-        } else {
-            (cell_size_y1, cell_size_y2)
-        };
-
-        if larger % smaller != 0.0 {
-            return false;
-        }
-    }
-
-    let x_aligned = is_aligned(meta1.geo_transform[0], meta2.geo_transform[0], meta1.cell_size_x());
-    let y_aligned = is_aligned(meta1.geo_transform[3], meta2.geo_transform[3], meta1.cell_size_y());
-
-    x_aligned && y_aligned
 }
 
 #[cfg(test)]
@@ -811,6 +857,10 @@ mod tests {
 
         assert_eq!(warped.projected_epsg(), Some(4326.into()));
         assert_eq!(warped.raster_size(), RasterSize { rows: 89, cols: 176 });
-        assert_relative_eq!(warped.cell_size(), CellSize::square(0.062023851850733745), epsilon = 1e-10);
+        assert_relative_eq!(
+            warped.cell_size(),
+            CellSize::square(0.062023851850733745),
+            epsilon = 1e-10
+        );
     }
 }

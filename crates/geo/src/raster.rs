@@ -92,6 +92,9 @@ where
     /// Create a new raster with the given metadata and filled with the provided value.
     fn filled_with(val: T, metadata: GeoReference) -> Self;
 
+    /// Create a new raster filled with nodata.
+    fn filled_with_nodata(meta: GeoReference) -> Self;
+
     /// Returns a reference to the geographic metadata associated with the raster.
     fn geo_metadata(&self) -> &GeoReference;
 
@@ -132,6 +135,9 @@ where
 
     /// Return the sum of all the data values
     fn sum(&self) -> f64;
+
+    /// Return an iterator over the raster data, nodata values are represented as None
+    fn iter(&self) -> impl Iterator<Item = Option<T>>;
 }
 
 pub fn cast<TDest: RasterNum<TDest>, TSrc: RasterNum<TSrc>, RDest, RSrc>(src: &RSrc) -> RDest

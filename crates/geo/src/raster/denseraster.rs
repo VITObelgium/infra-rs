@@ -1,4 +1,9 @@
-use crate::GeoReference;
+use crate::{
+    crs,
+    raster::algo::{self, WarpOptions},
+    GeoReference, Result,
+};
+use gdal::raster::GdalType;
 use num::NumCast;
 
 use super::{Raster, RasterNum};
@@ -68,6 +73,23 @@ impl<T: RasterNum<T>> DenseRaster<T> {
     }
 }
 
+#[cfg(feature = "gdal")]
+impl<T: RasterNum<T> + GdalType> DenseRaster<T> {
+    pub fn warped_to_epsg(&self, epsg: crs::Epsg) -> Result<Self> {
+        use super::io;
+
+        let dest_meta = self.metadata.warped_to_epsg(epsg)?;
+        let result = DenseRaster::filled_with_nodata(dest_meta);
+
+        let src_ds = io::dataset::create_in_memory_with_data(&self.metadata, self.data.as_slice())?;
+        let dst_ds = io::dataset::create_in_memory_with_data(&result.metadata, result.data.as_slice())?;
+
+        algo::warp(&src_ds, &dst_ds, &WarpOptions::default())?;
+
+        Ok(result)
+    }
+}
+
 impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
     fn new(metadata: GeoReference, mut data: Vec<T>) -> Self {
         process_nodata(&mut data, metadata.nodata());
@@ -94,6 +116,11 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
     fn filled_with(val: T, meta: GeoReference) -> Self {
         let data_size = meta.rows() * meta.columns();
         DenseRaster::new(meta, vec![val; data_size])
+    }
+
+    fn filled_with_nodata(meta: GeoReference) -> Self {
+        let data_size = meta.rows() * meta.columns();
+        DenseRaster::new(meta, vec![T::nodata_value(); data_size])
     }
 
     fn geo_metadata(&self) -> &GeoReference {
@@ -162,6 +189,10 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
             .iter()
             .filter(|&&x| !x.is_nodata())
             .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
+    }
+
+    fn iter(&self) -> impl Iterator<Item = Option<T>> {
+        DenserRasterIterator::new(self)
     }
 }
 

@@ -1,5 +1,16 @@
 //! Algorithms for raster data processing (translate, warp, ...).
 
+mod rasterdiff;
+
+#[cfg(feature = "gdal")]
+pub use rasterdiff::raster_files_diff;
+#[cfg(feature = "gdal")]
+pub use rasterdiff::raster_files_intersection_diff;
+
+pub use rasterdiff::raster_diff;
+pub use rasterdiff::RasterCellMismatch;
+pub use rasterdiff::RasterDiffResult;
+
 use crate::{
     gdalinterop::{self, *},
     vector, GeoReference,
