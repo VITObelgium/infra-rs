@@ -7,7 +7,7 @@ edition = "2021"
 num       = "0.4"
 chrono    = { version = "^0.4" }
 phf       = { version = "0.11", features = ["macros"] }
-thiserror = "1.0"
+thiserror = "2.0"
 libc      = { version = "0.2", optional = true }
 approx    = "0.5"
 log       = "0.4"

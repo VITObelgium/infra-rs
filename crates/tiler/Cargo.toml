@@ -7,7 +7,7 @@ edition = "2021"
 inf        = { path = "../inf", features = ["serde"] }
 geo        = { path = "../geo", features = ["gdal", "serde"] }
 sqlite     = { path = "../sqlite" }
-thiserror  = "1.0"
+thiserror  = "2.0"
 gdal       = "0.17"
 log        = "0.4"
 num        = "0.4"

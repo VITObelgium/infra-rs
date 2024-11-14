@@ -41,4 +41,4 @@ dependencies          = ["gdal[core,netcdf]"]                # needed to run the
 # version of geos that contains our pull request to transform geometry, remove on next geos release
 geos = { git = "https://github.com/georust/geos.git", rev = "bac564a845893cb9be799b2373ff496f5e8859cf" }
 # patched geozero to avoid multiple gdal copies
-geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "ac37045d213d78fb300488f899519248d523e086" }
+geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "a5ef06a055affa8816e743ac12834414eebd87aa" }
