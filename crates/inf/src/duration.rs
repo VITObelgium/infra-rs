@@ -18,15 +18,15 @@ impl Recorder {
     }
 
     pub fn elapsed_time_string(&self) -> String {
-        let elapsed = chrono::TimeDelta::from_std(self.elapsed_time()).unwrap_or_default();
+        let elapsed = self.elapsed_time();
 
-        if elapsed.num_seconds() > 60 {
-            let minutes = elapsed.num_minutes();
-            let seconds = elapsed.num_seconds() - (minutes * 60);
+        if elapsed.as_secs() > 60 {
+            let minutes = elapsed.as_secs() / 60;
+            let seconds = elapsed.as_secs() - (minutes * 60);
             format!("{} minutes {} seconds", minutes, seconds)
         } else {
-            let seconds = elapsed.num_seconds();
-            let milliseconds = elapsed.num_milliseconds() - (seconds * 1000);
+            let seconds = elapsed.as_secs();
+            let milliseconds = elapsed.as_millis() - (seconds * 1000) as u128;
             format!("{}.{:03} seconds", seconds, milliseconds)
         }
     }
