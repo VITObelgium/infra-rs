@@ -76,6 +76,11 @@ impl Color {
     pub fn to_hex_argb(&self) -> String {
         format!("#{:02X}{:02X}{:02X}{:02X}", self.a, self.r, self.g, self.b)
     }
+
+    pub const fn to_bits(self) -> u32 {
+        // SAFETY: `u32` is a plain old datatype so we can always transmute to it since Color is four bytes.
+        unsafe { std::mem::transmute(self) }
+    }
 }
 
 pub const BLACK: Color = Color {
