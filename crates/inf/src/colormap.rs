@@ -47,6 +47,7 @@ impl Default for ColorMap {
 
 #[derive(Debug, PartialEq, strum::EnumString)]
 #[strum(serialize_all = "lowercase")]
+#[cfg_attr(feature = "wasm", wasm_bindgen::prelude::wasm_bindgen)]
 pub enum ColorMapPreset {
     Bone,
     Cool,
