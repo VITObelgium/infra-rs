@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{color::Color, Error};
 
 pub struct ColorDictEntry {
@@ -32,17 +34,19 @@ impl ColorInfo {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct ColorMap {
-    cmap: Vec<Color>,
+    cmap: [Color; 256],
 }
 
 impl Default for ColorMap {
     fn default() -> ColorMap {
         ColorMap {
-            cmap: vec![Color::default(); 256],
+            cmap: [Color::default(); 256],
         }
     }
 }
 
+#[derive(Debug, PartialEq, strum::EnumString)]
+#[strum(serialize_all = "lowercase")]
 pub enum ColorMapPreset {
     Bone,
     Cool,
@@ -61,6 +65,48 @@ pub enum ColorMapPreset {
     GistEarth,
     GistNcar,
     GistStern,
+    Terrain,
+    Rainbow,
+    Blues,
+    BrBg,
+    BuGn,
+    BuPu,
+    GnBu,
+    Greens,
+    Greys,
+    Oranges,
+    OrRd,
+    PiYg,
+    PrGn,
+    PuBu,
+    PuBuGn,
+    PuOr,
+    PuRd,
+    Purples,
+    RdBu,
+    RdGy,
+    RdPu,
+    RdYlBu,
+    RdYlGn,
+    Reds,
+    Spectral,
+    YlGn,
+    YlGnBu,
+    YlOrBr,
+    YlOrRd,
+    Turbo,
+    Accent,
+    Dark2,
+    Paired,
+    Pastel1,
+    Pastel2,
+    Set1,
+    Set2,
+    Set3,
+    Tab10,
+    Tab20,
+    Tab20B,
+    Tab20C,
 }
 
 impl ColorMap {
@@ -74,7 +120,7 @@ impl ColorMap {
             )
         };
 
-        let mut cmap = vec![Color::default(); 256];
+        let mut cmap = [Color::default(); 256];
         let mut index = 0;
         if reverse {
             for iter in cmap.iter_mut().rev() {
@@ -101,7 +147,7 @@ impl ColorMap {
         ColorMap::new(&cdict, reverse)
     }
 
-    pub fn from_color_array(mut cmap: Vec<Color>, reverse: bool) -> ColorMap {
+    pub fn from_color_array(mut cmap: [Color; 256], reverse: bool) -> ColorMap {
         if reverse {
             cmap.reverse();
         }
@@ -110,7 +156,7 @@ impl ColorMap {
     }
 
     pub fn from_color_mapper(cmap: &ColorMapper, reverse: bool) -> ColorMap {
-        let mut cmap_values = vec![Color::default(); 256];
+        let mut cmap_values = [Color::default(); 256];
         for (i, cmap_value) in cmap_values.iter_mut().enumerate() {
             let map_val = i as f64 / 255.0;
             *cmap_value = Color::rgb((cmap.red)(map_val), (cmap.green)(map_val), (cmap.blue)(map_val));
@@ -124,7 +170,7 @@ impl ColorMap {
     }
 
     pub fn qualitative(clist: &[Color]) -> ColorMap {
-        let mut cmap = vec![Color::default(); 256];
+        let mut cmap = [Color::default(); 256];
         for (i, color) in cmap.iter_mut().enumerate() {
             let index = (i as f64 / 255.0 * (clist.len() - 1) as f64) as usize;
             *color = clist[index];
@@ -133,26 +179,67 @@ impl ColorMap {
         ColorMap { cmap }
     }
 
-    fn create_colordict_cmap(name: &str) -> Option<ColorDict> {
-        match name {
-            "bone" => Some(cmap::bone()),
-            "cool" => Some(cmap::cool()),
-            "copper" => Some(cmap::copper()),
-            "gray" => Some(cmap::gray()),
-            "hot" => Some(cmap::hot()),
-            "hsv" => Some(cmap::hsv()),
-            "pink" => Some(cmap::pink()),
-            "jet" => Some(cmap::jet()),
-            "spring" => Some(cmap::spring()),
-            "summer" => Some(cmap::summer()),
-            "autumn" => Some(cmap::autumn()),
-            "winter" => Some(cmap::winter()),
-            "wistia" => Some(cmap::wistia()),
-            "nipy_spectral" => Some(cmap::nipy_spectral()),
-            "gist_earth" => Some(cmap::gist_earth()),
-            "gist_ncar" => Some(cmap::gist_ncar()),
-            "gist_stern" => Some(cmap::gist_stern()),
-            _ => None,
+    pub fn create_for_preset(preset: ColorMapPreset, reverse: bool) -> ColorMap {
+        match preset {
+            ColorMapPreset::Bone => ColorMap::new(&cmap::bone(), reverse),
+            ColorMapPreset::Cool => ColorMap::new(&cmap::cool(), reverse),
+            ColorMapPreset::Copper => ColorMap::new(&cmap::copper(), reverse),
+            ColorMapPreset::Gray => ColorMap::new(&cmap::gray(), reverse),
+            ColorMapPreset::Hot => ColorMap::new(&cmap::hot(), reverse),
+            ColorMapPreset::Hsv => ColorMap::new(&cmap::hsv(), reverse),
+            ColorMapPreset::Pink => ColorMap::new(&cmap::pink(), reverse),
+            ColorMapPreset::Jet => ColorMap::new(&cmap::jet(), reverse),
+            ColorMapPreset::Spring => ColorMap::new(&cmap::spring(), reverse),
+            ColorMapPreset::Summer => ColorMap::new(&cmap::summer(), reverse),
+            ColorMapPreset::Autumn => ColorMap::new(&cmap::autumn(), reverse),
+            ColorMapPreset::Winter => ColorMap::new(&cmap::winter(), reverse),
+            ColorMapPreset::Wistia => ColorMap::new(&cmap::wistia(), reverse),
+            ColorMapPreset::NipySpectral => ColorMap::new(&cmap::nipy_spectral(), reverse),
+            ColorMapPreset::GistEarth => ColorMap::new(&cmap::gist_earth(), reverse),
+            ColorMapPreset::GistNcar => ColorMap::new(&cmap::gist_ncar(), reverse),
+            ColorMapPreset::GistStern => ColorMap::new(&cmap::gist_stern(), reverse),
+            ColorMapPreset::Terrain => ColorMap::from_color_info_list(&cmap::TERRAIN, reverse),
+            ColorMapPreset::Rainbow => ColorMap::from_color_mapper(&cmap::RAINBOW, reverse),
+            ColorMapPreset::Blues => ColorMap::from_color_list(&cmap::BLUES, reverse),
+            ColorMapPreset::BrBg => ColorMap::from_color_list(&cmap::BR_BG, reverse),
+            ColorMapPreset::BuGn => ColorMap::from_color_list(&cmap::BU_GN, reverse),
+            ColorMapPreset::BuPu => ColorMap::from_color_list(&cmap::BU_PU, reverse),
+            ColorMapPreset::GnBu => ColorMap::from_color_list(&cmap::GN_BU, reverse),
+            ColorMapPreset::Greens => ColorMap::from_color_list(&cmap::GREENS, reverse),
+            ColorMapPreset::Greys => ColorMap::from_color_list(&cmap::GREYS, reverse),
+            ColorMapPreset::Oranges => ColorMap::from_color_list(&cmap::ORANGES, reverse),
+            ColorMapPreset::OrRd => ColorMap::from_color_list(&cmap::OR_RD, reverse),
+            ColorMapPreset::PiYg => ColorMap::from_color_list(&cmap::PI_YG, reverse),
+            ColorMapPreset::PrGn => ColorMap::from_color_list(&cmap::PR_GN, reverse),
+            ColorMapPreset::PuBu => ColorMap::from_color_list(&cmap::PU_BU, reverse),
+            ColorMapPreset::PuBuGn => ColorMap::from_color_list(&cmap::PU_BU_GN, reverse),
+            ColorMapPreset::PuOr => ColorMap::from_color_list(&cmap::PU_OR, reverse),
+            ColorMapPreset::PuRd => ColorMap::from_color_list(&cmap::PU_RD, reverse),
+            ColorMapPreset::Purples => ColorMap::from_color_list(&cmap::PURPLES, reverse),
+            ColorMapPreset::RdBu => ColorMap::from_color_list(&cmap::RD_BU, reverse),
+            ColorMapPreset::RdGy => ColorMap::from_color_list(&cmap::RD_GY, reverse),
+            ColorMapPreset::RdPu => ColorMap::from_color_list(&cmap::RD_PU, reverse),
+            ColorMapPreset::RdYlBu => ColorMap::from_color_list(&cmap::RD_YL_BU, reverse),
+            ColorMapPreset::RdYlGn => ColorMap::from_color_list(&cmap::RD_YL_GN, reverse),
+            ColorMapPreset::Reds => ColorMap::from_color_list(&cmap::REDS, reverse),
+            ColorMapPreset::Spectral => ColorMap::from_color_list(&cmap::SPECTRAL, reverse),
+            ColorMapPreset::YlGn => ColorMap::from_color_list(&cmap::YL_GN, reverse),
+            ColorMapPreset::YlGnBu => ColorMap::from_color_list(&cmap::YL_GN_BU, reverse),
+            ColorMapPreset::YlOrBr => ColorMap::from_color_list(&cmap::YL_OR_BR, reverse),
+            ColorMapPreset::YlOrRd => ColorMap::from_color_list(&cmap::YL_OR_RD, reverse),
+            ColorMapPreset::Turbo => ColorMap::from_color_list(&cmap::TURBO, reverse),
+            ColorMapPreset::Accent => ColorMap::from_color_list(&cmap::ACCENT, reverse),
+            ColorMapPreset::Dark2 => ColorMap::from_color_list(&cmap::DARK2, reverse),
+            ColorMapPreset::Paired => ColorMap::from_color_list(&cmap::PAIRED, reverse),
+            ColorMapPreset::Pastel1 => ColorMap::from_color_list(&cmap::PASTEL1, reverse),
+            ColorMapPreset::Pastel2 => ColorMap::from_color_list(&cmap::PASTEL2, reverse),
+            ColorMapPreset::Set1 => ColorMap::from_color_list(&cmap::SET1, reverse),
+            ColorMapPreset::Set2 => ColorMap::from_color_list(&cmap::SET2, reverse),
+            ColorMapPreset::Set3 => ColorMap::from_color_list(&cmap::SET3, reverse),
+            ColorMapPreset::Tab10 => ColorMap::from_color_list(&cmap::TAB10, reverse),
+            ColorMapPreset::Tab20 => ColorMap::from_color_list(&cmap::TAB20, reverse),
+            ColorMapPreset::Tab20B => ColorMap::from_color_list(&cmap::TAB20B, reverse),
+            ColorMapPreset::Tab20C => ColorMap::from_color_list(&cmap::TAB20C, reverse),
         }
     }
 
@@ -164,67 +251,10 @@ impl ColorMap {
             lowername.truncate(lowername.len() - 2);
         }
 
-        static CMAP_LOOKUP2: phf::Map<&str, &'static [Color]> = phf::phf_map! {
-            "blues" => &cmap::BLUES,
-            "brbg" => &cmap::BR_BG,
-            "bugn" => &cmap::BU_GN,
-            "bupu" => &cmap::BU_PU,
-            "gnbu" => &cmap::GN_BU,
-            "greens" => &cmap::GREENS,
-            "greys" => &cmap::GREYS,
-            "oranges" => &cmap::ORANGES,
-            "orrd" => &cmap::OR_RD,
-            "piyg" => &cmap::PI_YG,
-            "prgn" => &cmap::PR_GN,
-            "pubu" => &cmap::PU_BU,
-            "pubugn" => &cmap::PU_BU_GN,
-            "puor" => &cmap::PU_OR,
-            "purd" => &cmap::PU_RD,
-            "purples" => &cmap::PURPLES,
-            "rdbu" => &cmap::RD_BU,
-            "rdgy" => &cmap::RD_GY,
-            "rdpu" => &cmap::RD_PU,
-            "rdylbu" => &cmap::RD_YL_BU,
-            "rdylgn" => &cmap::RD_YL_GN,
-            "reds" => &cmap::REDS,
-            "spectral" => &cmap::SPECTRAL,
-            "ylgn" => &cmap::YL_GN,
-            "ylgnbu" => &cmap::YL_GN_BU,
-            "ylorbr" => &cmap::YL_OR_BR,
-            "ylorrd" => &cmap::YL_OR_RD,
-            "turbo" => &cmap::TURBO,
-            "accent" => &cmap::ACCENT,
-            "dark2" => &cmap::DARK2,
-            "paired" => &cmap::PAIRED,
-            "pastel1" => &cmap::PASTEL1,
-            "pastel2" => &cmap::PASTEL2,
-            "set1" => &cmap::SET1,
-            "set2" => &cmap::SET2,
-            "set3" => &cmap::SET3,
-            "tab10" => &cmap::TAB10,
-            "tab20" => &cmap::TAB20,
-            "tab20b" => &cmap::TAB20B,
-            "tab20c" => &cmap::TAB20C,
-        };
-
-        static CMAP_LOOKUP3: phf::Map<&str, &'static [ColorInfo]> = phf::phf_map! {
-            "terrain" => &cmap::TERRAIN,
-        };
-
-        static CMAP_LOOKUP4: phf::Map<&str, &'static ColorMapper> = phf::phf_map! {
-            "rainbow" => &cmap::RAINBOW,
-        };
-
-        if let Some(cmap) = ColorMap::create_colordict_cmap(lowername.as_str()) {
-            Ok(ColorMap::new(&cmap, reverse))
-        } else if let Some(clist) = CMAP_LOOKUP2.get(lowername.as_str()) {
-            Ok(ColorMap::from_color_list(clist, reverse))
-        } else if let Some(clist) = CMAP_LOOKUP3.get(lowername.as_str()) {
-            Ok(ColorMap::from_color_info_list(clist, reverse))
-        } else if let Some(cmap) = CMAP_LOOKUP4.get(lowername.as_str()) {
-            Ok(ColorMap::from_color_mapper(cmap, reverse))
+        if let Ok(preset) = ColorMapPreset::from_str(&lowername) {
+            Ok(ColorMap::create_for_preset(preset, reverse))
         } else {
-            Err(Error::Runtime(format!("Unsupported color map: {}", name)))
+            Err(Error::InvalidArgument(format!("Unsupported color map name: {}", name)))
         }
     }
 
