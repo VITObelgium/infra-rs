@@ -1,6 +1,9 @@
 use std::str::FromStr;
 
-use crate::{color::Color, Error};
+use crate::{
+    color::{self, Color},
+    Error,
+};
 
 pub struct ColorDictEntry {
     pub x: f64,
@@ -260,6 +263,9 @@ impl ColorMap {
     }
 
     pub fn get_color(&self, value: f64) -> Color {
+        if !(0.0..=1.0).contains(&value) {
+            return color::TRANSPARENT;
+        }
         self.cmap[(value * 255.0).round() as usize]
     }
 
@@ -3727,4 +3733,17 @@ pub mod cmap {
         green: MAPPER13,
         blue: MAPPER10,
     };
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn map_color() {
+        let cmap = ColorMap::create_for_preset(ColorMapPreset::Turbo, false);
+
+        assert_eq!(cmap.get_color(1.0), cmap::TURBO[255]);
+    }
 }
