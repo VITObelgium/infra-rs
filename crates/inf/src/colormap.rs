@@ -317,21 +317,32 @@ fn color_list_to_dict(clist: &[Color]) -> ColorDict {
     assert!(clist.len() > 1);
 
     let mut cdict = ColorDict {
-        red: Vec::new(),
-        green: Vec::new(),
-        blue: Vec::new(),
+        red: Vec::with_capacity(clist.len()),
+        green: Vec::with_capacity(clist.len()),
+        blue: Vec::with_capacity(clist.len()),
     };
     let band_width = 1.0 / (clist.len() - 1) as f64;
     let mut val = 0.0;
-    for color in clist {
+
+    let mut map_value = |val: f64, color: Color| {
         let r = color.r as f64 / 255.0;
         let g = color.g as f64 / 255.0;
         let b = color.b as f64 / 255.0;
+
         cdict.red.push(ColorDictEntry { x: val, y0: r, y1: r });
         cdict.green.push(ColorDictEntry { x: val, y0: g, y1: g });
         cdict.blue.push(ColorDictEntry { x: val, y0: b, y1: b });
+    };
 
+    // Process all colors except the last one
+    for color in clist.iter().take(clist.len() - 1) {
+        map_value(val, *color);
         val += band_width;
+    }
+
+    // Make sure the last color is called with the exact value of 1.0, to avoid floating point errors
+    for color in clist.iter().rev().take(1) {
+        map_value(1.0, *color);
     }
 
     cdict
