@@ -21,3 +21,9 @@ where
 {
     from.and_then(|x| NumCast::from(x)).unwrap_or(default)
 }
+
+/// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
+/// Otherwise the slice will contain (uninitialized) padding bytes
+pub unsafe fn vec_as_u8_slice<T: Sized>(data: &[T]) -> &[u8] {
+    ::core::slice::from_raw_parts(data.as_ptr().cast::<u8>(), std::mem::size_of_val(data))
+}
