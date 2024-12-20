@@ -4,14 +4,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-num          = "0.4"
-thiserror    = "2.0"
-libc         = { version = "0.2", optional = true }
-approx       = "0.5"
-log          = "0.4"
-serde        = { version = "1.0", features = ["derive"], optional = true }
-strum        = { version = "0.26", features = ["derive"] }
-wasm-bindgen = { version = "0.2", optional = true }
+num       = "0.4"
+thiserror = "2.0"
+libc      = { version = "0.2", optional = true }
+approx    = "0.5"
+log       = "0.4"
+serde     = { version = "1.0", features = ["derive"], optional = true }
+strum     = { version = "0.26", features = ["derive"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen = "0.2"
 
 [dev-dependencies]
 test-log      = "0.2"
@@ -21,4 +23,3 @@ ctor          = "0.2"
 
 [features]
 serde = ["dep:serde"]
-wasm  = ["dep:wasm-bindgen"]
