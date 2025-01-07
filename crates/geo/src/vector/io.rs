@@ -214,7 +214,7 @@ where
     }
 }
 
-impl<'a> LayerAccessExtension for gdal::vector::Layer<'a> {}
+impl LayerAccessExtension for gdal::vector::Layer<'_> {}
 impl LayerAccessExtension for gdal::vector::OwnedLayer {}
 
 /// [`gdal::vector::Defn`] extenstion trait that implements missing functionality
@@ -242,7 +242,7 @@ pub trait FeatureExtension {
     fn field_is_valid(&self, field_index: i32) -> bool;
 }
 
-impl<'a> FeatureExtension for gdal::vector::Feature<'a> {
+impl FeatureExtension for gdal::vector::Feature<'_> {
     fn field_index_from_name(&self, field_name: &str) -> Result<i32> {
         let field_name_c_str = CString::new(field_name)?;
         let field_index = unsafe { gdal_sys::OGR_F_GetFieldIndex(self.c_feature(), field_name_c_str.as_ptr()) };

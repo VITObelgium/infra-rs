@@ -216,7 +216,7 @@ impl<'a, T: RasterNum<T>> DenserRasterIterator<'a, T> {
     }
 }
 
-impl<'a, T> Iterator for DenserRasterIterator<'a, T>
+impl<T> Iterator for DenserRasterIterator<'_, T>
 where
     T: RasterNum<T>,
 {

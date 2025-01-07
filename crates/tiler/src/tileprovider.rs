@@ -39,8 +39,8 @@ pub trait TileProvider {
     fn get_tile_color_mapped(&self, id: LayerId, req: &ColorMappedTileRequest) -> Result<TileData>;
 }
 
-static mut LAYER_ID: AtomicU64 = AtomicU64::new(0);
+static LAYER_ID: AtomicU64 = AtomicU64::new(0);
 
 pub fn unique_layer_id() -> LayerId {
-    unsafe { LayerId::from(LAYER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1) }
+    LayerId::from(LAYER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1)
 }
