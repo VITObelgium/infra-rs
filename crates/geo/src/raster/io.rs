@@ -106,14 +106,22 @@ pub mod dataset {
         gdal::Dataset::open_ex(path, options).map_err(|err| match err {
             // Match on the error to give a cleaner error message when the file does not exist
             GdalError::NullPointer { method_name: _, msg: _ } => {
-                let ras_type = RasterFormat::guess_from_path(path);
-                if ras_type != RasterFormat::Unknown
-                    && gdal::DriverManager::get_driver_by_name(ras_type.gdal_driver_name()).is_err()
-                {
-                    return Error::Runtime(format!("Gdal driver not supported: {}", ras_type.gdal_driver_name()));
-                }
+                if !path.exists() {
+                    Error::InvalidPath(PathBuf::from(path))
+                } else {
+                    let ras_type = RasterFormat::guess_from_path(path);
+                    if ras_type != RasterFormat::Unknown
+                        && gdal::DriverManager::get_driver_by_name(ras_type.gdal_driver_name()).is_err()
+                    {
+                        return Error::Runtime(format!("Gdal driver not supported: {}", ras_type.gdal_driver_name()));
+                    }
 
-                Error::InvalidPath(PathBuf::from(path))
+                    Error::Runtime(format!(
+                        "Failed to open raster dataset ({}), check file correctness or driver configuration ({})",
+                        path.to_string_lossy(),
+                        err
+                    ))
+                }
             }
             _ => Error::Runtime(format!(
                 "Failed to open raster dataset: {} ({})",
