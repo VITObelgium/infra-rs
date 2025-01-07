@@ -20,7 +20,7 @@ RUN apt update && apt install -y \
     flex \
     bison \
     git \
-    nodejs \
+    nodejs
 
 ENV CURL_HOME=/etc
 RUN echo "-k" > $CURL_HOME/.curlrc
