@@ -5,14 +5,14 @@ use std::{ops::Range, sync::atomic::AtomicU64};
 use crate::{
     layermetadata::{LayerId, LayerMetadata},
     tiledata::TileData,
-    PixelFormat, Result,
+    Result, TileFormat,
 };
 
 #[derive(Debug, Clone)]
 pub struct TileRequest {
     pub tile: Tile,
     pub dpi_ratio: u8,
-    pub pixel_format: PixelFormat,
+    pub tile_format: TileFormat,
 }
 
 #[derive(Debug, Clone)]

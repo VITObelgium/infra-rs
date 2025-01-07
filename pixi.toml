@@ -1,0 +1,21 @@
+[project]
+authors     = ["Dirk Vanden Boer <dirk.vdb@gmail.com>"]
+channels    = ["conda-forge"]
+description = "Python environment for testing python bindings related code"
+name        = "test_env"
+platforms   = ["osx-64"]
+version     = "0.1.0"
+
+# on mac symlinks need to be created to avoid python lib errors
+# see: https://github.com/PyO3/pyo3/issues/4155
+# in target/debug
+# ln -s ../../.pixi/envs/default/lib/libpython3.12.dylib libpython3.12.dylib
+# in target/release
+# ln -s ../../.pixi/envs/default/lib/libpython3.12.dylib libpython3.12.dylib
+
+[tasks]
+test_release = { cmd = "cargo nextest run --profile ci --workspace --all-features --release" }
+test_debug   = "cargo nextest run --profile ci  --workspace --all-features"
+
+[dependencies]
+pyarrow = ">=18.1.0,<19"

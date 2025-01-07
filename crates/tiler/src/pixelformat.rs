@@ -6,8 +6,12 @@ use core::fmt;
 pub enum PixelFormat {
     #[default]
     Unknown,
+    // Regular rbga pixel format
     Rgba,
+    // The source data is converted to float and stored in the pixel data
     RawFloat,
+    // The pixel data is stored in the native format of the source
+    Native,
 }
 
 impl fmt::Display for PixelFormat {
@@ -18,6 +22,7 @@ impl fmt::Display for PixelFormat {
             match self {
                 PixelFormat::Rgba => "rgba",
                 PixelFormat::RawFloat => "rawfloat",
+                PixelFormat::Native => "native",
                 PixelFormat::Unknown => "",
             }
         )
@@ -29,6 +34,7 @@ impl From<&str> for PixelFormat {
         match s {
             "rgba" => PixelFormat::Rgba,
             "rawfloat" => PixelFormat::RawFloat,
+            "native" => PixelFormat::Native,
             _ => PixelFormat::Unknown,
         }
     }

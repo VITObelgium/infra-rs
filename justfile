@@ -54,10 +54,16 @@ build_release:
   cargo build --workspace --release
 
 test_debug:
-  cargo nextest run --profile ci  --workspace --all-features
+  cargo nextest run --profile ci --workspace --features=serde,gdal-static,arrow,derive
 
 test_release:
-  cargo nextest run --profile ci  --workspace --release --all-features
+  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,arrow,derive
+
+test_debug_py:
+  pixi run test_debug
+
+test_release_py:
+  pixi run test_release
 
 build: build_release
 test: test_release

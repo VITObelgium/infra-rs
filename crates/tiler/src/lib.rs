@@ -45,6 +45,8 @@ pub enum Error {
     TimeError(#[from] std::time::SystemTimeError),
     #[error("IO error: {0}")]
     IOError(#[from] std::io::Error),
+    #[error("Vito tile error: {0}")]
+    VitoTileError(#[from] vito_tile_format::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

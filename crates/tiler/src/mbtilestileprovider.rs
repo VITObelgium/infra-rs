@@ -128,10 +128,8 @@ impl TileProvider for MbtilesTileProvider {
     fn get_tile(&self, _layer_id: LayerId, req: &TileRequest) -> Result<TileData> {
         log::debug!("Get tile {}/{}/{}", req.tile.z(), req.tile.x(), req.tile.y());
 
-        if req.pixel_format != PixelFormat::Rgba {
-            return Err(Error::Runtime(
-                "Only RGBA pixel format is supported for mbtiles".to_string(),
-            ));
+        if req.tile_format != TileFormat::Png {
+            return Err(Error::Runtime("Only png format is supported for mbtiles".to_string()));
         }
 
         let mut db = mbtilesdb::MbtilesDb::new(&self.db_path)?;
@@ -146,7 +144,7 @@ impl TileProvider for MbtilesTileProvider {
         let tile_req = TileRequest {
             tile: req.tile,
             dpi_ratio: req.dpi_ratio,
-            pixel_format: PixelFormat::Rgba,
+            tile_format: TileFormat::Png,
         };
 
         self.get_tile(layer_id, &tile_req)

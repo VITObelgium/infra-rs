@@ -1,0 +1,13 @@
+[package]
+name    = "vito-tile-format"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+thiserror = "2.0"
+lz4 = "1.28"
+bytemuck = { version = "1.21", features = [
+    "derive",
+    "min_const_generics",
+    "must_cast",
+] }

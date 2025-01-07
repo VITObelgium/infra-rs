@@ -7,16 +7,19 @@ pub enum TileFormat {
     #[default]
     Unknown,
     Png,
+    FloatEncodedPng,
     Jpeg,
     Protobuf,
+    VitoTileFormat,
 }
 
 impl TileFormat {
     pub fn extension(&self) -> &str {
         match self {
             TileFormat::Protobuf => "pbf",
-            TileFormat::Png => "png",
+            TileFormat::Png | TileFormat::FloatEncodedPng => "png",
             TileFormat::Jpeg => "jpg",
+            TileFormat::VitoTileFormat => "vtf",
             TileFormat::Unknown => "",
         }
     }
@@ -30,7 +33,9 @@ impl fmt::Display for TileFormat {
             match self {
                 TileFormat::Protobuf => "pbf",
                 TileFormat::Png => "png",
+                TileFormat::FloatEncodedPng => "float_png",
                 TileFormat::Jpeg => "jpeg",
+                TileFormat::VitoTileFormat => "vtf",
                 TileFormat::Unknown => "",
             }
         )
@@ -43,6 +48,7 @@ impl From<&str> for TileFormat {
             "png" => TileFormat::Png,
             "jpeg" => TileFormat::Jpeg,
             "pbf" => TileFormat::Protobuf,
+            "vtf" => TileFormat::VitoTileFormat,
             _ => TileFormat::Unknown,
         }
     }

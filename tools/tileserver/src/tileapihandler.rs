@@ -13,7 +13,7 @@ use inf::{legend, Color, Legend};
 use serde_json::json;
 use std::ops::Range;
 use tiler::{
-    ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata, PixelFormat, TileData, TileFormat, TileJson,
+    ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata, TileData, TileFormat, TileJson,
     TileProvider, TileRequest,
 };
 use tower::ServiceBuilder;
@@ -53,6 +53,7 @@ impl IntoResponse for AppError {
                 Error::TimeError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::IOError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::InfError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+                Error::VitoTileError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::InvalidArgument(err) => (http::StatusCode::BAD_REQUEST, err),
                 Error::GeoError(_) | Error::SqliteError(_) => {
                     (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
@@ -159,9 +160,9 @@ pub fn create_router(gis_dir: &std::path::Path) -> axum::routing::Router {
 const fn tile_format_content_type(tile_format: TileFormat) -> &'static str {
     match tile_format {
         TileFormat::Protobuf => "application/protobuf",
-        TileFormat::Png => "image/png",
+        TileFormat::Png | TileFormat::FloatEncodedPng => "image/png",
         TileFormat::Jpeg => "image/jpeg",
-        TileFormat::Unknown => "application/octet-stream",
+        TileFormat::VitoTileFormat | TileFormat::Unknown => "application/octet-stream",
     }
 }
 
@@ -286,14 +287,14 @@ impl TileApiHandler {
         Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
     }
 
-    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, pixel_format: PixelFormat) -> Result<TileData> {
+    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
             let tile_request = TileRequest {
                 tile,
                 dpi_ratio: dpi,
-                pixel_format,
+                tile_format,
             };
 
             let tile = DirectoryTileProvider::get_tile_for_layer(&layer_meta, &tile_request);
@@ -380,7 +381,7 @@ impl TileApiHandler {
         let mut cmap = String::from("gray");
         let mut min_value = Option::<f64>::None;
         let mut max_value = Option::<f64>::None;
-        let mut pixel_format = Option::<PixelFormat>::None;
+        let mut tile_format = Option::<TileFormat>::None;
 
         if let Some(cmap_str) = params.get("cmap") {
             cmap = cmap_str.to_string();
@@ -394,8 +395,8 @@ impl TileApiHandler {
             max_value = max_str.parse::<f64>().ok();
         }
 
-        if let Some(format) = params.get("pixel_format") {
-            pixel_format = Some(PixelFormat::from(format.as_str()));
+        if let Some(format) = params.get("tile_format") {
+            tile_format = Some(TileFormat::from(format.as_str()));
         }
 
         let splitted: Vec<&str> = y.split('.').collect();
@@ -417,21 +418,18 @@ impl TileApiHandler {
             cmap,
             min_value,
             max_value,
-            pixel_format,
+            tile_format,
         );
 
         let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
-
-        let tile = if let Some(PixelFormat::RawFloat) = pixel_format {
-            if min_value.is_some() || max_value.is_some() || !cmap.is_empty() {
-                return Err(Error::InvalidArgument(
-                    "Float pixel format is incompatible with colormaping or value ranges".to_string(),
-                ));
+        let tile = match tile_format {
+            Some(TileFormat::FloatEncodedPng | TileFormat::VitoTileFormat) => {
+                Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, tile_format.unwrap()).await?
             }
-
-            Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, PixelFormat::RawFloat).await?
-        } else {
-            Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, Tile { x, y, z }, dpi_ratio).await?
+            _ => {
+                Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, Tile { x, y, z }, dpi_ratio)
+                    .await?
+            }
         };
 
         if tile.format == TileFormat::Protobuf {
