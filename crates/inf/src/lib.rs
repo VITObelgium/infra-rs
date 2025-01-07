@@ -4,6 +4,8 @@ extern crate approx;
 pub use error::Error;
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
+#[cfg(feature = "serde")]
+mod bigarray;
 pub mod cast;
 pub mod color;
 pub mod colormap;

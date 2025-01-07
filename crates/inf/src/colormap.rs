@@ -1,9 +1,11 @@
-use std::str::FromStr;
-
 use crate::{
     color::{self, Color},
     Error,
 };
+use std::str::FromStr;
+
+#[cfg(feature = "serde")]
+use crate::bigarray::BigArray;
 
 pub struct ColorDictEntry {
     pub x: f64,
@@ -37,6 +39,7 @@ impl ColorInfo {
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct ColorMap {
+    #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
     cmap: [Color; 256],
 }
 
