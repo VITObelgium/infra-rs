@@ -59,7 +59,7 @@ where
 #[cfg(test)]
 mod tests {
     use arrow::{array::Array, pyarrow::PyArrowType};
-    use pyo3::{IntoPy, PyObject};
+    use pyo3::{IntoPyObject, PyObject};
 
     use crate::raster::{DenseRaster, Nodata, Raster};
 
@@ -68,7 +68,7 @@ mod tests {
         pyo3::prepare_freethreaded_python();
 
         pyo3::Python::with_gil(|py| {
-            if py.import_bound("pyarrow").is_err() {
+            if py.import("pyarrow").is_err() {
                 panic!("PyArrow is not installed in the current python environment. Run 'pip install pyarrow' to install it.");
             }
         });
@@ -77,7 +77,9 @@ mod tests {
     #[test]
     fn test_pyarrow_to_denseraster() {
         let array = arrow::array::Int32Array::from(vec![1, 10, 3, 20]);
-        let py_array = pyo3::Python::with_gil(|py| -> PyObject { PyArrowType(array.into_data()).into_py(py) });
+        let py_array = pyo3::Python::with_gil(|py| -> PyObject {
+            PyArrowType(array.into_data()).into_pyobject(py).unwrap().into()
+        });
 
         let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 
@@ -90,7 +92,9 @@ mod tests {
     #[test]
     fn test_pyarrow_with_mask_to_denseraster() {
         let array = arrow::array::Int32Array::from(vec![Some(1), Some(10), None, Some(20)]);
-        let py_array = pyo3::Python::with_gil(|py| -> PyObject { PyArrowType(array.into_data()).into_py(py) });
+        let py_array = pyo3::Python::with_gil(|py| -> PyObject {
+            PyArrowType(array.into_data()).into_pyobject(py).unwrap().into()
+        });
 
         let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 
