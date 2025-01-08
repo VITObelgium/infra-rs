@@ -17,6 +17,7 @@ use crate::{
 };
 use gdal::{cpl::CslStringList, raster::GdalType, vector::LayerAccess};
 use std::ffi::{c_double, c_int, CString};
+use std::path::Path;
 
 use crate::{Error, Result};
 
@@ -234,6 +235,36 @@ impl Drop for WarpAppOptionsWrapper {
             gdal_sys::GDALWarpAppOptionsFree(self.options);
         }
     }
+}
+
+pub fn warp_to_disk_cli(
+    src_ds: &gdal::Dataset,
+    dest_path: &Path,
+    options: &[String],
+    key_value_options: &Vec<(String, String)>,
+) -> Result<()> {
+    let mut warp_options = WarpAppOptionsWrapper::new(options)?;
+    warp_options.set_warp_options(key_value_options)?;
+
+    let path_str = CString::new(dest_path.to_string_lossy().as_ref())?;
+
+    unsafe {
+        let mut user_error: c_int = 0;
+        gdal_sys::GDALWarp(
+            path_str.as_ptr(),
+            std::ptr::null_mut(),
+            1,
+            &mut src_ds.c_dataset(),
+            warp_options.options,
+            &mut user_error,
+        );
+
+        if user_error != 0 {
+            return Err(Error::Runtime("GDAL Warp: invalid arguments".to_string()));
+        }
+    }
+
+    Ok(())
 }
 
 pub fn warp_cli(
