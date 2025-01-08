@@ -31,6 +31,10 @@ impl<T: RasterNum<T>> DenseRaster<T> {
         });
     }
 
+    pub fn to_raw_parts(self) -> (GeoReference, Vec<T>) {
+        (self.metadata.clone(), self.data.clone())
+    }
+
     pub fn unary<F: Fn(T) -> T>(&self, op: F) -> Self {
         DenseRaster::new(self.metadata.clone(), self.data.iter().map(|&a| op(a)).collect())
     }
