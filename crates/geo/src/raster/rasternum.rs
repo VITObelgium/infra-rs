@@ -1,7 +1,14 @@
 use crate::raster::Nodata;
 
 pub trait RasterNum<T>:
-    Copy + Nodata<T> + num::NumCast + num::Num + num::Bounded + std::fmt::Debug + num::traits::NumAssignOps
+    Copy
+    + Nodata<T>
+    + num::NumCast
+    + num::Num
+    + num::Bounded
+    + std::fmt::Debug
+    + num::traits::NumAssignOps
+    + std::string::ToString
 {
     fn add_nodata_aware(self, other: Self) -> Self;
     fn sub_nodata_aware(self, other: Self) -> Self;
