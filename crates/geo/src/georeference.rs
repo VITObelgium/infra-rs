@@ -1,4 +1,4 @@
-use std::{fs, path::Path};
+use std::path::Path;
 
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};

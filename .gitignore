@@ -2,3 +2,4 @@ target
 .DS_Store
 .cargo/config.toml
 Cargo.lock
+.pixi
