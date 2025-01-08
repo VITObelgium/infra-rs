@@ -40,8 +40,7 @@ python      = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 serde       = ["dep:serde"]
 
 [package.metadata.vcpkg]
-dependencies = [
-    "gdal[core,iconv,geos,sqlite3]",
-    "proj[core]",
-    "tiff[core,lzma,zip]",
-]
+dependencies = ["gdal[core,geos,sqlite3]", "proj[core]", "tiff[core,lzma,zip]"]
+
+[package.metadata.vcpkg.target]
+x86_64-unknown-linux-gnu = { dependencies = ["gdal[iconv]"] }
