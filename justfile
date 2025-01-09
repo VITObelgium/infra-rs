@@ -27,8 +27,6 @@ bootstrap: cargo-config-gen
 
 # on mac symlinks need to be created to avoid python lib errors
 # see: https://github.com/PyO3/pyo3/issues/4155
-
-# on mac: copy the python library to the debug/release folder for rust-analyzer to work
 pybootstrap:
   pixi install
   -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/debug/libpython3.12.dylib

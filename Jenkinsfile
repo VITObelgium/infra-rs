@@ -4,14 +4,14 @@ pipeline {
             filename "Dockerfile"
             dir "docker"
             additionalBuildArgs '--build-arg USER_ID=$(id -u) --build-arg GROUP_ID=$(id -g)'
-            args '-v /home/jenkins/.cache/vcpkg:/home/jenkins/.cache/vcpkg'
+            args '-v /home/jenkins/.cache/vcpkg:/home/jenkins/.cache/vcpkg -v /home/jenkins/.cache/rattler:/home/jenkins/.cache/rattler'
         }
     }
 
     environment {
-        //VCPKG_DOWNLOADS = '/home/jenkins/.cache/vcpkg/downloads'
-        //VCPKG_DEFAULT_BINARY_CACHE = '/home/jenkins/.cache/vcpkg'
         VCPKG_FORCE_SYSTEM_BINARIES = '1'
+        PATH = "/home/jenkins/.pixi/bin:${env.PATH}"
+        LD_LIBRARY_PATH = "${env.WORKSPACE}/.pixi/envs/default/lib"
     }
 
     options {
@@ -35,6 +35,7 @@ pipeline {
                     sh 'curl -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash'
                     sh 'cargo binstall -y just fd-find sd cargo-vcpkg cargo-nextest'
                     sh 'curl -fsSL https://pixi.sh/install.sh | bash'
+                    sh '/home/jenkins/.pixi/bin/pixi install'
                     sh 'just bootstrap'
                 }
             }
@@ -67,11 +68,12 @@ pipeline {
                         }
                     }
 
-                    stage('Test python environment') {
+                    // A build with python feature enabled, needs te be run in a pixi environment
+                    stage('Test python interop') {
                         steps {
                             script {
                                 echo "Python test '${BUILD_CONFIG}'"
-                                sh 'just test_${BUILD_CONFIG}_py'
+                                sh "${env.HOME}/.pixi/bin/pixi run test_${BUILD_CONFIG}"
                             }
                         }
                     }

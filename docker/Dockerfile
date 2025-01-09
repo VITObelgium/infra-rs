@@ -10,8 +10,6 @@ RUN apt update && apt install -y \
     cmake \
     ninja-build \
     pkgconf \
-    libpython3-dev \
-    python3-pip \
     curl \
     zip \
     unzip \
@@ -20,7 +18,8 @@ RUN apt update && apt install -y \
     flex \
     bison \
     git \
-    nodejs
+    nodejs \
+    sudo
 
 ENV CURL_HOME=/etc
 RUN echo "-k" > $CURL_HOME/.curlrc
