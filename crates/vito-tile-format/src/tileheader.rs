@@ -23,7 +23,7 @@ pub struct TileHeader {
     pub signature: u32,
     /// The version of the file format (currently 1)
     pub version: u16,
-    /// The data type of the tile data represented by a `TileDataType` as u16
+    /// The data type of the tile data represented by a `TileDataType` as u8
     pub data_type: RasterTileDataType,
     /// The compression algorithm used for the tile data
     pub compression: CompressionAlgorithm,

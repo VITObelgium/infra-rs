@@ -11,6 +11,7 @@ pub struct RasterTile<T> {
     pub data: Vec<T>,
 }
 
+/// Type erased `RasterTile`
 pub enum AnyRasterTile {
     U8(RasterTile<u8>),
     U16(RasterTile<u16>),
@@ -25,6 +26,8 @@ pub enum AnyRasterTile {
 }
 
 impl AnyRasterTile {
+    /// Create an untyped raster tile from the raw data
+    /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         if data.len() < std::mem::size_of::<TileHeader>() {
             return Err(Error::InvalidArgument("Tile data is too short".into()));
@@ -67,6 +70,7 @@ impl AnyRasterTile {
 }
 
 impl<T: TileDataType> RasterTile<T> {
+    // Create a raster tile from the header data structure and the raw compressed data
     pub fn from_header_and_data(header: &TileHeader, data: &[u8]) -> Result<Self> {
         if data.len() != header.data_size as usize {
             return Err(Error::InvalidArgument("Tile data size mismatch".into()));
@@ -85,6 +89,8 @@ impl<T: TileDataType> RasterTile<T> {
         })
     }
 
+    /// Create a raster tile from the raw data
+    /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         if data.len() < std::mem::size_of::<TileHeader>() {
             return Err(Error::InvalidArgument("Tile data is too short".into()));
@@ -95,21 +101,10 @@ impl<T: TileDataType> RasterTile<T> {
             return Err(Error::InvalidArgument("Tile data size mismatch".into()));
         }
 
-        let data = match header.compression {
-            CompressionAlgorithm::Lz4 => lz4::decompress_tile_data(
-                header.tile_width as usize * header.tile_height as usize,
-                &data[std::mem::size_of::<TileHeader>()..],
-            )?,
-        };
-
-        Ok(Self {
-            width: header.tile_width as usize,
-            height: header.tile_height as usize,
-            data,
-        })
+        Self::from_header_and_data(&header, &data[std::mem::size_of::<TileHeader>()..])
     }
 
-    // Create an encoded tile from the data
+    // Encode this tile, the output will be a byte vector containing the `TileHeader` followed by the compressed tile data
     pub fn encode(&self, algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
         let compressed_data = match algorithm {
             CompressionAlgorithm::Lz4 => lz4::compress_tile_data(&self.data)?,
