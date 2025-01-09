@@ -6,6 +6,7 @@ use thiserror::Error;
 
 pub use datatype::RasterTileDataType;
 pub use datatype::TileDataType;
+pub use rastertile::AnyRasterTile;
 pub use rastertile::RasterTile;
 pub use tileheader::CompressionAlgorithm;
 pub use tileheader::TileHeader;

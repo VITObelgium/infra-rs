@@ -1,7 +1,7 @@
 use bytemuck::bytes_of;
 
 use crate::datatype::TileDataType;
-use crate::lz4;
+use crate::{lz4, RasterTileDataType};
 use crate::{CompressionAlgorithm, Error, Result, TileHeader};
 
 /// Struct containing the tile dimensions and pixel data
@@ -11,7 +11,80 @@ pub struct RasterTile<T> {
     pub data: Vec<T>,
 }
 
+pub enum AnyRasterTile {
+    U8(RasterTile<u8>),
+    U16(RasterTile<u16>),
+    U32(RasterTile<u32>),
+    U64(RasterTile<u64>),
+    F32(RasterTile<f32>),
+    F64(RasterTile<f64>),
+    I8(RasterTile<i8>),
+    I16(RasterTile<i16>),
+    I32(RasterTile<i32>),
+    I64(RasterTile<i64>),
+}
+
+impl AnyRasterTile {
+    pub fn from_bytes(data: &[u8]) -> Result<Self> {
+        if data.len() < std::mem::size_of::<TileHeader>() {
+            return Err(Error::InvalidArgument("Tile data is too short".into()));
+        }
+
+        let header = TileHeader::from_bytes(data)?;
+        let data_slice = &data[std::mem::size_of::<TileHeader>()..];
+
+        Ok(match header.data_type {
+            RasterTileDataType::Int8 => AnyRasterTile::I8(RasterTile::<i8>::from_header_and_data(&header, data_slice)?),
+            RasterTileDataType::Uint8 => {
+                AnyRasterTile::U8(RasterTile::<u8>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Int16 => {
+                AnyRasterTile::I16(RasterTile::<i16>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Uint16 => {
+                AnyRasterTile::U16(RasterTile::<u16>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Int32 => {
+                AnyRasterTile::I32(RasterTile::<i32>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Uint32 => {
+                AnyRasterTile::U32(RasterTile::<u32>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Int64 => {
+                AnyRasterTile::I64(RasterTile::<i64>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Uint64 => {
+                AnyRasterTile::U64(RasterTile::<u64>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Float32 => {
+                AnyRasterTile::F32(RasterTile::<f32>::from_header_and_data(&header, data_slice)?)
+            }
+            RasterTileDataType::Float64 => {
+                AnyRasterTile::F64(RasterTile::<f64>::from_header_and_data(&header, data_slice)?)
+            }
+        })
+    }
+}
+
 impl<T: TileDataType> RasterTile<T> {
+    pub fn from_header_and_data(header: &TileHeader, data: &[u8]) -> Result<Self> {
+        if data.len() != header.data_size as usize {
+            return Err(Error::InvalidArgument("Tile data size mismatch".into()));
+        }
+
+        let data = match header.compression {
+            CompressionAlgorithm::Lz4 => {
+                lz4::decompress_tile_data(header.tile_width as usize * header.tile_height as usize, data)?
+            }
+        };
+
+        Ok(Self {
+            width: header.tile_width as usize,
+            height: header.tile_height as usize,
+            data,
+        })
+    }
+
     pub fn from_bytes(data: &[u8]) -> Result<Self> {
         if data.len() < std::mem::size_of::<TileHeader>() {
             return Err(Error::InvalidArgument("Tile data is too short".into()));
@@ -76,11 +149,17 @@ mod tests {
         };
 
         let encoded = tile.encode(CompressionAlgorithm::Lz4).unwrap();
-        let decoded = RasterTile::<u32>::from_bytes(&encoded).unwrap();
 
-        assert_eq!(tile.width, decoded.width);
-        assert_eq!(tile.height, decoded.height);
-        assert_eq!(tile.data, decoded.data);
+        let decoded = AnyRasterTile::from_bytes(&encoded).unwrap();
+        assert!(matches!(decoded, AnyRasterTile::U32(_)));
+
+        let AnyRasterTile::U32(decoded_tile) = decoded else {
+            panic!("Expected U32 tile");
+        };
+
+        assert_eq!(tile.width, decoded_tile.width);
+        assert_eq!(tile.height, decoded_tile.height);
+        assert_eq!(tile.data, decoded_tile.data);
     }
 
     #[test]
