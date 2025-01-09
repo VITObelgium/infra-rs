@@ -489,6 +489,7 @@ mod tests {
     use approx::assert_relative_eq;
     use geo::Tile;
     use path_macro::path;
+    use vito_tile_format::RasterTile;
 
     use crate::{
         tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider,
@@ -539,6 +540,26 @@ mod tests {
         // The transparent pixel count should be more than 80% of the total pixel count, otherwise there is an issue with the nodata handling
         assert!(transparent_count > (raw_data.pixels().count() as f64 * 0.8) as usize);
         assert!(transparent_count < (raw_data.pixels().count() as f64 * 0.9) as usize);
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_vito_tile_format() -> Result<(), Error> {
+        let provider = WarpingTileProvider::new(&test_raster(), &TileProviderOptions { calculate_stats: false })?;
+        let layer_id = provider.layers().first().unwrap().id;
+
+        let req = TileRequest {
+            tile: Tile { x: 264, y: 171, z: 9 },
+            dpi_ratio: 1,
+            tile_format: TileFormat::VitoTileFormat,
+        };
+
+        let tile_data = provider.get_tile(layer_id, &req)?;
+
+        let raster_tile = RasterTile::<u8>::from_bytes(&tile_data.data)?;
+        assert_eq!(raster_tile.width, 256);
+        assert_eq!(raster_tile.height, 256);
 
         Ok(())
     }

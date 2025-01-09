@@ -24,7 +24,7 @@ impl<T: TileDataType> RasterTile<T> {
 
         let data = match header.compression {
             CompressionAlgorithm::Lz4 => lz4::decompress_tile_data(
-                (header.tile_width * header.tile_height) as usize * std::mem::size_of::<T>(),
+                header.tile_width as usize * header.tile_height as usize,
                 &data[std::mem::size_of::<TileHeader>()..],
             )?,
         };
@@ -55,5 +55,51 @@ impl<T: TileDataType> RasterTile<T> {
         data.extend_from_slice(&compressed_data);
 
         Ok(data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+
+    use super::*;
+
+    #[test]
+    fn encode_decode_u32() {
+        // fill data with iota
+        const TILE_WIDTH: usize = 256;
+        const TILE_HEIGHT: usize = 256;
+
+        let tile = RasterTile {
+            width: TILE_WIDTH,
+            height: TILE_HEIGHT,
+            data: (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
+        };
+
+        let encoded = tile.encode(CompressionAlgorithm::Lz4).unwrap();
+        let decoded = RasterTile::<u32>::from_bytes(&encoded).unwrap();
+
+        assert_eq!(tile.width, decoded.width);
+        assert_eq!(tile.height, decoded.height);
+        assert_eq!(tile.data, decoded.data);
+    }
+
+    #[test]
+    fn encode_decode_u8() {
+        // fill data with iota
+        const TILE_WIDTH: usize = 10;
+        const TILE_HEIGHT: usize = 10;
+
+        let tile = RasterTile {
+            width: TILE_WIDTH,
+            height: TILE_HEIGHT,
+            data: (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>(),
+        };
+
+        let encoded = tile.encode(CompressionAlgorithm::Lz4).unwrap();
+        let decoded = RasterTile::<u8>::from_bytes(&encoded).unwrap();
+
+        assert_eq!(tile.width, decoded.width);
+        assert_eq!(tile.height, decoded.height);
+        assert_eq!(tile.data, decoded.data);
     }
 }

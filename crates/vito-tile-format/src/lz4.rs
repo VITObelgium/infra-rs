@@ -22,8 +22,8 @@ pub(crate) fn compress_tile_data<T: NoUninit + AnyBitPattern>(source: &[T]) -> R
     Ok(data)
 }
 
-pub(crate) fn decompress_tile_data<T: NoUninit + AnyBitPattern>(data_size: usize, source: &[u8]) -> Result<Vec<T>> {
-    let mut data: Vec<T> = Vec::with_capacity(data_size);
+pub(crate) fn decompress_tile_data<T: NoUninit + AnyBitPattern>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
+    let mut data: Vec<T> = vec![T::zeroed(); element_count];
 
     {
         let mut dest_writer = std::io::BufWriter::new(must_cast_slice_mut(&mut data));
