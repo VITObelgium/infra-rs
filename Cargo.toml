@@ -42,7 +42,5 @@ dependencies = [
 #x86_64-pc-windows-msvc = { triplet = "x64-windows-static-debugsymbols" }
 
 [patch.crates-io]
-# version of geos that contains our pull request to transform geometry, remove on next geos release
-geos = { git = "https://github.com/georust/geos.git", rev = "bac564a845893cb9be799b2373ff496f5e8859cf" }
-# patched geozero to avoid multiple gdal copies
-geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "a5ef06a055affa8816e743ac12834414eebd87aa" }
+# more recent geozero to avoid multiple gdal copies
+geozero = { git = "https://github.com/georust/geozero.git", rev = "97b143716dcb6331ba259f9c98b1af9a6c325739" }
