@@ -43,4 +43,8 @@ serde       = ["dep:serde"]
 dependencies = ["gdal[core,geos,sqlite3]", "proj[core]", "tiff[core,lzma,zip]"]
 
 [package.metadata.vcpkg.target]
-x86_64-unknown-linux-gnu = { dependencies = ["gdal[iconv]"] }
+x86_64-unknown-linux-gnu = { dependencies = [
+    "gdal[core,geos,iconv,sqlite3]",
+    "proj[core]",
+    "tiff[core,lzma,zip]",
+] }
