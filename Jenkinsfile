@@ -66,6 +66,15 @@ pipeline {
                             }
                         }
                     }
+
+                    stage('Test python environment') {
+                        steps {
+                            script {
+                                echo "Python test '${BUILD_CONFIG}'"
+                                sh 'just test_${BUILD_CONFIG}_py'
+                            }
+                        }
+                    }
                 }
             }
         }
