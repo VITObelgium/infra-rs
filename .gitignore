@@ -3,3 +3,4 @@ target
 .cargo/config.toml
 Cargo.lock
 .pixi
+*.aux.xml
