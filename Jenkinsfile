@@ -35,7 +35,6 @@ pipeline {
                     sh 'curl -sSf https://raw.githubusercontent.com/cargo-bins/cargo-binstall/main/install-from-binstall-release.sh | bash'
                     sh 'cargo binstall -y just fd-find sd cargo-vcpkg cargo-nextest'
                     sh 'curl -fsSL https://pixi.sh/install.sh | bash'
-                    sh 'pip3 install pyarrow --break-system-packages'
                     sh 'just bootstrap'
                 }
             }

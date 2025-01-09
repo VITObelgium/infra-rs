@@ -6,13 +6,6 @@ name        = "test_env"
 platforms   = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 version     = "0.1.0"
 
-# on mac symlinks need to be created to avoid python lib errors
-# see: https://github.com/PyO3/pyo3/issues/4155
-# in target/debug
-# ln -s ../../.pixi/envs/default/lib/libpython3.12.dylib libpython3.12.dylib
-# in target/release
-# ln -s ../../.pixi/envs/default/lib/libpython3.12.dylib libpython3.12.dylib
-
 [tasks]
 test_release = { cmd = "cargo nextest run --profile ci --workspace --all-features --release" }
 test_debug   = "cargo nextest run --profile ci  --workspace --all-features"

@@ -25,13 +25,14 @@ bootstrap: cargo-config-gen
   cp ./target/data/proj.db ./target/debug/
   cp ./target/data/proj.db ./target/release/
 
-# last line: copy the python library to the debug folder for rust-analyzer to work
+# on mac symlinks need to be created to avoid python lib errors
+# see: https://github.com/PyO3/pyo3/issues/4155
+
+# on mac: copy the python library to the debug/release folder for rust-analyzer to work
 pybootstrap:
-  #!/usr/bin/env fish
-  conda create -y -p ./target/conda python=3.12
-  conda init fish
-  conda activate ./target/conda && conda install -y maturin pyarrow
-  cp ./target/conda/lib/libpython3.12.dylib ./target/debug/
+  pixi install
+  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/debug/libpython3.12.dylib
+  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/release/libpython3.12.dylib
 
 build_py:
   #!/usr/bin/env fish
@@ -59,10 +60,10 @@ test_debug:
 test_release:
   cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,arrow,derive
 
-test_debug_py:
+test_debug_py: pybootstrap
   pixi run test_debug
 
-test_release_py:
+test_release_py: pybootstrap
   pixi run test_release
 
 build: build_release
