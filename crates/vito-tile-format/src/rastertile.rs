@@ -5,6 +5,7 @@ use crate::{lz4, RasterTileDataType};
 use crate::{CompressionAlgorithm, Error, Result, TileHeader};
 
 /// Struct containing the tile dimensions and pixel data
+#[derive(Clone)]
 pub struct RasterTile<T> {
     pub width: usize,
     pub height: usize,
@@ -12,6 +13,7 @@ pub struct RasterTile<T> {
 }
 
 /// Type erased `RasterTile`
+#[derive(Clone)]
 pub enum AnyRasterTile {
     U8(RasterTile<u8>),
     U16(RasterTile<u16>),
@@ -126,6 +128,36 @@ impl<T: TileDataType> RasterTile<T> {
     }
 }
 
+#[macro_export]
+macro_rules! impl_try_from_raster_tile {
+    ( $tile_type:path, $tile_type_enum:ident ) => {
+        impl TryFrom<AnyRasterTile> for RasterTile<$tile_type> {
+            type Error = Error;
+
+            fn try_from(value: AnyRasterTile) -> Result<Self> {
+                match value {
+                    AnyRasterTile::$tile_type_enum(tile) => Ok(tile),
+                    _ => Err(Error::InvalidArgument(format!(
+                        "Expected {} tile",
+                        stringify!($tile_type),
+                    ))),
+                }
+            }
+        }
+    };
+}
+
+impl_try_from_raster_tile!(u8, U8);
+impl_try_from_raster_tile!(i8, I8);
+impl_try_from_raster_tile!(u16, U16);
+impl_try_from_raster_tile!(i16, I16);
+impl_try_from_raster_tile!(u32, U32);
+impl_try_from_raster_tile!(i32, I32);
+impl_try_from_raster_tile!(u64, U64);
+impl_try_from_raster_tile!(i64, I64);
+impl_try_from_raster_tile!(f32, F32);
+impl_try_from_raster_tile!(f64, F64);
+
 #[cfg(test)]
 mod tests {
 
@@ -148,10 +180,7 @@ mod tests {
         let decoded = AnyRasterTile::from_bytes(&encoded).unwrap();
         assert!(matches!(decoded, AnyRasterTile::U32(_)));
 
-        let AnyRasterTile::U32(decoded_tile) = decoded else {
-            panic!("Expected U32 tile");
-        };
-
+        let decoded_tile: RasterTile<u32> = decoded.try_into().expect("Expected U32 tile");
         assert_eq!(tile.width, decoded_tile.width);
         assert_eq!(tile.height, decoded_tile.height);
         assert_eq!(tile.data, decoded_tile.data);
@@ -175,5 +204,30 @@ mod tests {
         assert_eq!(tile.width, decoded.width);
         assert_eq!(tile.height, decoded.height);
         assert_eq!(tile.data, decoded.data);
+    }
+
+    #[test]
+    fn try_from() {
+        let tile = RasterTile {
+            width: 10,
+            height: 10,
+            data: (0..100).collect::<Vec<u32>>(),
+        };
+
+        let encoded = tile.encode(CompressionAlgorithm::Lz4).unwrap();
+        let decoded = AnyRasterTile::from_bytes(&encoded).unwrap();
+
+        let _: RasterTile<u32> = decoded.clone().try_into().expect("Cast failed");
+
+        assert!(TryInto::<RasterTile<u8>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<i8>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<u16>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<i16>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<u32>>::try_into(decoded.clone()).is_ok());
+        assert!(TryInto::<RasterTile<i32>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<u64>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<i64>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<f32>>::try_into(decoded.clone()).is_err());
+        assert!(TryInto::<RasterTile<f64>>::try_into(decoded.clone()).is_err());
     }
 }
