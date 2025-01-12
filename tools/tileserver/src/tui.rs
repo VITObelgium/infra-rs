@@ -49,8 +49,7 @@ pub async fn launch(
             match ev {
               Ok(Event::Tick) => app.tick(),
               Ok(Event::Key(key_event)) => handler::handle_key_events(key_event, &mut app)?,
-              Ok(Event::Mouse(_)) => {}
-              Ok(Event::Resize(_, _)) => {}
+              Ok(Event::Mouse(_) | Event::Resize(_, _)) => {}
               Err(err) => panic!("Error: {:?}", err),
             }
           }
