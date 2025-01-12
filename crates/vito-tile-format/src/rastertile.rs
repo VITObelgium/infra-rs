@@ -169,6 +169,12 @@ impl<T: TileDataType> RasterTile<T> {
     }
 }
 
+impl<T: TileDataType> From<RasterTile<T>> for Vec<T> {
+    fn from(val: RasterTile<T>) -> Self {
+        val.data
+    }
+}
+
 #[macro_export]
 macro_rules! impl_try_from_raster_tile {
     ( $tile_type:path, $tile_type_enum:ident ) => {
