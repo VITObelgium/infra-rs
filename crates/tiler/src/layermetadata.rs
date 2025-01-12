@@ -100,7 +100,7 @@ impl LayerMetadata {
 
     pub fn url(&self, server_root: &str) -> String {
         format!(
-            "http://{}/api/{}/{{z}}/{{x}}/{{y}}{}.{}",
+            "{}/api/{}/{{z}}/{{x}}/{{y}}{}.{}",
             server_root,
             self.id,
             if self.supports_dpi_ratio { "{ratio}" } else { "" },
