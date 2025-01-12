@@ -18,13 +18,11 @@ pub enum AnyRasterTile {
     U8(RasterTile<u8>),
     U16(RasterTile<u16>),
     U32(RasterTile<u32>),
-    U64(RasterTile<u64>),
-    F32(RasterTile<f32>),
-    F64(RasterTile<f64>),
     I8(RasterTile<i8>),
     I16(RasterTile<i16>),
     I32(RasterTile<i32>),
-    I64(RasterTile<i64>),
+    F32(RasterTile<f32>),
+    F64(RasterTile<f64>),
 }
 
 impl AnyRasterTile {
@@ -55,12 +53,6 @@ impl AnyRasterTile {
             RasterTileDataType::Uint32 => {
                 AnyRasterTile::U32(RasterTile::<u32>::from_header_and_data(&header, data_slice)?)
             }
-            RasterTileDataType::Int64 => {
-                AnyRasterTile::I64(RasterTile::<i64>::from_header_and_data(&header, data_slice)?)
-            }
-            RasterTileDataType::Uint64 => {
-                AnyRasterTile::U64(RasterTile::<u64>::from_header_and_data(&header, data_slice)?)
-            }
             RasterTileDataType::Float32 => {
                 AnyRasterTile::F32(RasterTile::<f32>::from_header_and_data(&header, data_slice)?)
             }
@@ -68,6 +60,16 @@ impl AnyRasterTile {
                 AnyRasterTile::F64(RasterTile::<f64>::from_header_and_data(&header, data_slice)?)
             }
         })
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn from_array_buffer(array_buffer: &js_sys::ArrayBuffer) -> Result<Self> {
+        if array_buffer.byte_length() == 0 {
+            return Err(Error::InvalidArgument("Empty tile data buffer provided".into()));
+        }
+
+        let u8_array = js_sys::Uint8Array::new(array_buffer);
+        Self::from_bytes(&u8_array.to_vec())
     }
 }
 
@@ -153,8 +155,6 @@ impl_try_from_raster_tile!(u16, U16);
 impl_try_from_raster_tile!(i16, I16);
 impl_try_from_raster_tile!(u32, U32);
 impl_try_from_raster_tile!(i32, I32);
-impl_try_from_raster_tile!(u64, U64);
-impl_try_from_raster_tile!(i64, I64);
 impl_try_from_raster_tile!(f32, F32);
 impl_try_from_raster_tile!(f64, F64);
 
@@ -225,8 +225,6 @@ mod tests {
         assert!(TryInto::<RasterTile<i16>>::try_into(decoded.clone()).is_err());
         assert!(TryInto::<RasterTile<u32>>::try_into(decoded.clone()).is_ok());
         assert!(TryInto::<RasterTile<i32>>::try_into(decoded.clone()).is_err());
-        assert!(TryInto::<RasterTile<u64>>::try_into(decoded.clone()).is_err());
-        assert!(TryInto::<RasterTile<i64>>::try_into(decoded.clone()).is_err());
         assert!(TryInto::<RasterTile<f32>>::try_into(decoded.clone()).is_err());
         assert!(TryInto::<RasterTile<f64>>::try_into(decoded.clone()).is_err());
     }

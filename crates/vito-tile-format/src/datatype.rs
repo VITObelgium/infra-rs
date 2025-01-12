@@ -30,14 +30,6 @@ impl TileDataType for u32 {
     const TYPE: RasterTileDataType = RasterTileDataType::Uint32;
 }
 
-impl TileDataType for i64 {
-    const TYPE: RasterTileDataType = RasterTileDataType::Int64;
-}
-
-impl TileDataType for u64 {
-    const TYPE: RasterTileDataType = RasterTileDataType::Uint64;
-}
-
 impl TileDataType for f32 {
     const TYPE: RasterTileDataType = RasterTileDataType::Float32;
 }
@@ -56,8 +48,6 @@ pub enum RasterTileDataType {
     Uint16 = 3,
     Int32 = 4,
     Uint32 = 5,
-    Int64 = 6,
-    Uint64 = 7,
-    Float32 = 8,
-    Float64 = 9,
+    Float32 = 6,
+    Float64 = 7,
 }
