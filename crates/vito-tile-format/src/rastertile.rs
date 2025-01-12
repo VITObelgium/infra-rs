@@ -62,6 +62,45 @@ impl AnyRasterTile {
         })
     }
 
+    pub fn width(&self) -> usize {
+        match self {
+            AnyRasterTile::U8(tile) => tile.width,
+            AnyRasterTile::U16(tile) => tile.width,
+            AnyRasterTile::U32(tile) => tile.width,
+            AnyRasterTile::I8(tile) => tile.width,
+            AnyRasterTile::I16(tile) => tile.width,
+            AnyRasterTile::I32(tile) => tile.width,
+            AnyRasterTile::F32(tile) => tile.width,
+            AnyRasterTile::F64(tile) => tile.width,
+        }
+    }
+
+    pub fn height(&self) -> usize {
+        match self {
+            AnyRasterTile::U8(tile) => tile.height,
+            AnyRasterTile::U16(tile) => tile.height,
+            AnyRasterTile::U32(tile) => tile.height,
+            AnyRasterTile::I8(tile) => tile.height,
+            AnyRasterTile::I16(tile) => tile.height,
+            AnyRasterTile::I32(tile) => tile.height,
+            AnyRasterTile::F32(tile) => tile.height,
+            AnyRasterTile::F64(tile) => tile.height,
+        }
+    }
+
+    pub fn data_type(&self) -> RasterTileDataType {
+        match self {
+            AnyRasterTile::U8(_) => RasterTileDataType::Uint8,
+            AnyRasterTile::U16(_) => RasterTileDataType::Uint16,
+            AnyRasterTile::U32(_) => RasterTileDataType::Uint32,
+            AnyRasterTile::I8(_) => RasterTileDataType::Int8,
+            AnyRasterTile::I16(_) => RasterTileDataType::Int16,
+            AnyRasterTile::I32(_) => RasterTileDataType::Int32,
+            AnyRasterTile::F32(_) => RasterTileDataType::Float32,
+            AnyRasterTile::F64(_) => RasterTileDataType::Float64,
+        }
+    }
+
     #[cfg(target_arch = "wasm32")]
     pub fn from_array_buffer(array_buffer: &js_sys::ArrayBuffer) -> Result<Self> {
         if array_buffer.byte_length() == 0 {
