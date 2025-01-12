@@ -46,6 +46,7 @@ impl From<&str> for TileFormat {
     fn from(s: &str) -> Self {
         match s {
             "png" => TileFormat::Png,
+            "float_png" => TileFormat::FloatEncodedPng,
             "jpeg" => TileFormat::Jpeg,
             "pbf" => TileFormat::Protobuf,
             "vtf" => TileFormat::VitoTileFormat,
