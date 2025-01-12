@@ -1,35 +1,30 @@
-use std::io::Write;
+use crate::Error;
 
 use bytemuck::{must_cast_slice, must_cast_slice_mut, AnyBitPattern, NoUninit};
-use lz4::EncoderBuilder;
 
 use crate::Result;
 
 pub(crate) fn compress_tile_data<T: NoUninit + AnyBitPattern>(source: &[T]) -> Result<Vec<u8>> {
-    let mut data: Vec<u8> = Vec::new();
-
-    {
-        let dest_writer = std::io::BufWriter::new(&mut data);
-        let mut encoder = EncoderBuilder::new().level(4).build(dest_writer)?;
-        encoder.write_all(must_cast_slice(source))?;
-
-        let (_output, result) = encoder.finish();
-        if let Err(err) = result {
-            return Err(err.into());
-        }
-    }
-
-    Ok(data)
+    Ok(lz4_flex::compress(must_cast_slice(source)))
 }
 
 pub(crate) fn decompress_tile_data<T: NoUninit + AnyBitPattern>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
     let mut data: Vec<T> = vec![T::zeroed(); element_count];
 
-    {
-        let mut dest_writer = std::io::BufWriter::new(must_cast_slice_mut(&mut data));
-        let mut decoder = lz4::Decoder::new(source)?;
-        std::io::copy(&mut decoder, &mut dest_writer)?;
+    match lz4_flex::decompress_into(source, must_cast_slice_mut(&mut data)) {
+        Ok(size) => {
+            if size != element_count * std::mem::size_of::<T>() {
+                return Err(Error::InvalidArgument(format!(
+                    "Decompressed tile data size mismatch: expected {}, got {}",
+                    element_count * std::mem::size_of::<T>(),
+                    size
+                )));
+            }
+            Ok(data)
+        }
+        Err(err) => Err(Error::InvalidArgument(format!(
+            "Failed to decompress tile data: {}",
+            err
+        ))),
     }
-
-    Ok(data)
 }
