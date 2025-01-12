@@ -219,7 +219,7 @@ fn host_header(headers: &axum::http::HeaderMap) -> Result<&str> {
 impl axum::response::IntoResponse for TileResponse {
     fn into_response(self) -> axum::response::Response {
         if self.data.is_empty() {
-            return (StatusCode::NOT_FOUND, "Tile not found").into_response();
+            return (StatusCode::OK, "").into_response();
         }
 
         let mut response = axum::response::Response::builder()
