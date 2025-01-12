@@ -7,7 +7,7 @@ const SIGNATURE: u32 = u32::from_le_bytes([b'T', b'I', b'L', b'E']);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, NoUninit)]
 #[repr(u8)]
 pub enum CompressionAlgorithm {
-    Lz4 = 0,
+    Lz4Block = 0,
 }
 
 /// Binary header format for the tile data.
@@ -73,7 +73,7 @@ impl TileHeader {
             return Err(Error::InvalidArgument("Invalid tile data type".into()));
         }
 
-        if header.compression as u8 > CompressionAlgorithm::Lz4 as u8 {
+        if header.compression as u8 > CompressionAlgorithm::Lz4Block as u8 {
             return Err(Error::InvalidArgument("Invalid compression algorithm".into()));
         }
 

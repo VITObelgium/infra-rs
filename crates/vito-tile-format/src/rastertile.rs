@@ -120,7 +120,7 @@ impl<T: TileDataType> RasterTile<T> {
         }
 
         let data = match header.compression {
-            CompressionAlgorithm::Lz4 => {
+            CompressionAlgorithm::Lz4Block => {
                 lz4::decompress_tile_data(header.tile_width as usize * header.tile_height as usize, data)?
             }
         };
@@ -150,7 +150,7 @@ impl<T: TileDataType> RasterTile<T> {
     // Encode this tile, the output will be a byte vector containing the `TileHeader` followed by the compressed tile data
     pub fn encode(&self, algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
         let compressed_data = match algorithm {
-            CompressionAlgorithm::Lz4 => lz4::compress_tile_data(&self.data)?,
+            CompressionAlgorithm::Lz4Block => crate::lz4::compress_tile_data(&self.data)?,
         };
 
         let header = TileHeader::new(
@@ -220,7 +220,7 @@ mod tests {
             data: (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
         };
 
-        let encoded = tile.encode(CompressionAlgorithm::Lz4).unwrap();
+        let encoded = tile.encode(CompressionAlgorithm::Lz4Block).unwrap();
 
         let decoded = AnyRasterTile::from_bytes(&encoded).unwrap();
         assert!(matches!(decoded, AnyRasterTile::U32(_)));
@@ -243,7 +243,7 @@ mod tests {
             data: (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>(),
         };
 
-        let encoded = tile.encode(CompressionAlgorithm::Lz4).unwrap();
+        let encoded = tile.encode(CompressionAlgorithm::Lz4Block).unwrap();
         let decoded = RasterTile::<u8>::from_bytes(&encoded).unwrap();
 
         assert_eq!(tile.width, decoded.width);
@@ -259,7 +259,7 @@ mod tests {
             data: (0..100).collect::<Vec<u32>>(),
         };
 
-        let encoded = tile.encode(CompressionAlgorithm::Lz4).unwrap();
+        let encoded = tile.encode(CompressionAlgorithm::Lz4Block).unwrap();
         let decoded = AnyRasterTile::from_bytes(&encoded).unwrap();
 
         let _: RasterTile<u32> = decoded.clone().try_into().expect("Cast failed");
