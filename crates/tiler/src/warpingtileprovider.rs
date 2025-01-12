@@ -177,7 +177,7 @@ fn raw_tile_to_vito_tile_format<T: RasterNum<T> + TileDataType>(
     Ok(TileData::new(
         TileFormat::VitoTileFormat,
         PixelFormat::Native,
-        raster_tile.encode(CompressionAlgorithm::Lz4)?,
+        raster_tile.encode(CompressionAlgorithm::Lz4Block)?,
     ))
 }
 

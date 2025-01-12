@@ -38,6 +38,9 @@ build_py:
   cd ruster && maturin develop && python ./test.py
 
 serve_tiles dir:
+  cargo run -p tileserver --release -- --gis-dir {{dir}}
+
+serve_tiles_tui dir:
   cargo run -p tileserver --features=tui --release -- --tui --gis-dir {{dir}}
 
 doc:

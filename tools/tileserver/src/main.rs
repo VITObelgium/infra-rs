@@ -33,7 +33,13 @@ async fn main() -> Result<()> {
 
     let opt = Opt::parse();
 
-    if !opt.tui {
+    let mut tui = false;
+    #[cfg(feature = "tui")]
+    {
+        tui = opt.tui;
+    }
+
+    if !tui {
         env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
             .format_timestamp(Some(TimestampPrecision::Millis))
             .init();
