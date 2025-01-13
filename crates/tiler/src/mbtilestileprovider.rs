@@ -107,13 +107,9 @@ impl MbtilesTileProvider {
 
 impl TileProvider for MbtilesTileProvider {
     fn extent_value_range(&self, _layer_id: LayerId, _extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
-        if self.meta.tile_format == TileFormat::Protobuf {
-            Err(Error::Runtime(
-                "Extent value range not supported for vector tiles".to_string(),
-            ))
-        } else {
-            unimplemented!("Extent value range not implemented for raster tiles");
-        }
+        Err(Error::Runtime(
+            "Extent value range not supported for mbtiles".to_string(),
+        ))
     }
 
     fn get_raster_value(&self, _layer_id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
