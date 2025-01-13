@@ -27,19 +27,25 @@ pub struct Opt {
     pub tui: bool,
 }
 
+fn tui_enabled(opt: &Opt) -> bool {
+    #[cfg(feature = "tui")]
+    {
+        opt.tui
+    }
+
+    #[cfg(not(feature = "tui"))]
+    {
+        false
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     use std::{path::PathBuf, str::FromStr};
 
     let opt = Opt::parse();
 
-    let mut tui = false;
-    #[cfg(feature = "tui")]
-    {
-        tui = opt.tui;
-    }
-
-    if !tui {
+    if !tui_enabled(&opt) {
         env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
             .format_timestamp(Some(TimestampPrecision::Millis))
             .init();

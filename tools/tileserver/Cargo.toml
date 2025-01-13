@@ -21,14 +21,14 @@ tokio = { version = "1.40", features = [
     "time",
 ] }
 tower-http = { version = "0.6", features = ["trace"] }
-thiserror = "1.0"
+thiserror = "2.0"
 serde_json = { version = "1.0" }
 serde = { version = "1.0", features = ["derive"] }
 
-ratatui    = { version = "0.28", features = ["crossterm"], optional = true }
+ratatui    = { version = "0.29", features = ["crossterm"], optional = true }
 crossterm  = { version = "0.28", features = ["event-stream"], optional = true }
 futures    = { version = "0.3.30", optional = true }
-tui-logger = { version = "0.13", optional = true }
+tui-logger = { version = "0.14", optional = true }
 
 [features]
 tui = ["dep:crossterm", "dep:futures", "dep:ratatui", "dep:tui-logger"]

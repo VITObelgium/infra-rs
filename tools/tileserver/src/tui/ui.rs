@@ -75,7 +75,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     .title_alignment(Alignment::Left)
                     .border_type(BorderType::Rounded),
             )
-            .highlight_style(Style::new().reversed()),
+            .row_highlight_style(Style::new().reversed()),
         layer_layout[0],
         &mut app.layer_table_state,
     );
@@ -90,7 +90,7 @@ pub fn render(app: &mut App, frame: &mut Frame) {
                     .title_alignment(Alignment::Left)
                     .border_type(BorderType::Rounded),
             )
-            .highlight_style(Style::new().reversed()),
+            .row_highlight_style(Style::new().reversed()),
         layer_layout[1],
     );
 
