@@ -1,17 +1,24 @@
-use crate::Error;
+use raster::RasterNum;
 
-use bytemuck::{must_cast_slice, must_cast_slice_mut, AnyBitPattern, NoUninit};
+use crate::{Error, Result};
 
-use crate::Result;
+pub(crate) fn compress_tile_data<T: RasterNum<T>>(source: &[T]) -> Result<Vec<u8>> {
+    // Safety: The T type is a RasterNum, so it is safe to transmute the slice to a byte slice
+    let source_bytes =
+        unsafe { std::slice::from_raw_parts(source.as_ptr().cast::<u8>(), std::mem::size_of_val(source)) };
 
-pub(crate) fn compress_tile_data<T: NoUninit + AnyBitPattern>(source: &[T]) -> Result<Vec<u8>> {
-    Ok(lz4_flex::compress(must_cast_slice(source)))
+    Ok(lz4_flex::compress(source_bytes))
 }
 
-pub(crate) fn decompress_tile_data<T: NoUninit + AnyBitPattern>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
-    let mut data: Vec<T> = vec![T::zeroed(); element_count];
+pub(crate) fn decompress_tile_data<T: RasterNum<T>>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
+    let mut data = Vec::<T>::with_capacity(element_count);
 
-    match lz4_flex::decompress_into(source, must_cast_slice_mut(&mut data)) {
+    // Safety: The T array is initialized with the capacity of element_count, so it is safe to transmute the slice to a byte slice
+    let data_bytes = unsafe {
+        std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<u8>(), element_count * std::mem::size_of::<T>())
+    };
+
+    match lz4_flex::decompress_into(source, data_bytes) {
         Ok(size) => {
             if size != element_count * std::mem::size_of::<T>() {
                 return Err(Error::InvalidArgument(format!(
@@ -19,6 +26,11 @@ pub(crate) fn decompress_tile_data<T: NoUninit + AnyBitPattern>(element_count: u
                     element_count * std::mem::size_of::<T>(),
                     size
                 )));
+            }
+
+            // Safety: The decompression size was checked so it is safe to set the length of the data vector
+            unsafe {
+                data.set_len(element_count);
             }
             Ok(data)
         }

@@ -1,13 +1,11 @@
-mod datatype;
 mod lz4;
 mod rastertile;
 mod tileheader;
 use thiserror::Error;
 
-pub use datatype::RasterTileDataType;
-pub use datatype::TileDataType;
-pub use rastertile::AnyRasterTile;
-pub use rastertile::RasterTile;
+pub use raster::AnyDenseRaster as AnyRasterTile;
+pub use raster::DenseRaster as RasterTile;
+pub use rastertile::RasterTileIO;
 pub use tileheader::CompressionAlgorithm;
 pub use tileheader::TileHeader;
 

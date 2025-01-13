@@ -1,16 +1,17 @@
 #[cfg(all(feature = "python", feature = "arrow"))]
-use super::{DenseRaster, Raster, RasterNum};
-#[cfg(all(feature = "python", feature = "arrow"))]
-use crate::GeoReference;
-#[cfg(all(feature = "python", feature = "arrow"))]
-use crate::{RasterSize, Result};
-#[cfg(all(feature = "python", feature = "arrow"))]
-use num::NumCast;
+use {
+    super::{DenseGeoRaster, RasterNum},
+    crate::georaster::GeoRasterCreation,
+    crate::GeoReference,
+    crate::Result,
+    num::NumCast,
+    raster::RasterSize,
+};
 
 /// Try to convert a python arrow object to a `DenseRaster`.
 /// This will only convert the raster data, so no projection information will be available
 #[cfg(all(feature = "python", feature = "arrow"))]
-impl<T> TryFrom<pyo3::Py<pyo3::PyAny>> for DenseRaster<T>
+impl<T> TryFrom<pyo3::Py<pyo3::PyAny>> for DenseGeoRaster<T>
 where
     T: RasterNum<T> + super::arrow::arrowutil::ArrowType + Send + Sync + arrow::datatypes::ArrowNativeType,
     T::TArrow: arrow::array::ArrowPrimitiveType<Native = T>,
@@ -41,9 +42,9 @@ where
 
                     if arrow_array.is_nullable() {
                         let data = arrow_array.iter().map(|v| v.unwrap_or(T::nodata_value())).collect();
-                        Ok(DenseRaster::new(geo_reference, data))
+                        Ok(DenseGeoRaster::new(geo_reference, data))
                     } else {
-                        Ok(DenseRaster::new(geo_reference, arrow_array.values().to_vec()))
+                        Ok(DenseGeoRaster::new(geo_reference, arrow_array.values().to_vec()))
                     }
                 }
                 Err(e) => Err(crate::Error::InvalidArgument(format!(
@@ -60,8 +61,10 @@ where
 mod tests {
     use arrow::{array::Array, pyarrow::PyArrowType};
     use pyo3::{IntoPyObject, PyObject};
+    use raster::Nodata;
+    use raster::Raster;
 
-    use crate::raster::{DenseRaster, Nodata, Raster};
+    use crate::georaster::DenseGeoRaster;
 
     #[ctor::ctor]
     fn init() {
@@ -81,7 +84,7 @@ mod tests {
             PyArrowType(array.into_data()).into_pyobject(py).unwrap().into()
         });
 
-        let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
+        let raster = DenseGeoRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 
         // no shape information is present in the arrow array, so the raster will have a single row
         assert_eq!(raster.width(), 4);
@@ -96,7 +99,7 @@ mod tests {
             PyArrowType(array.into_data()).into_pyobject(py).unwrap().into()
         });
 
-        let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
+        let raster = DenseGeoRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 
         // no shape information is present in the arrow array, so the raster will have a single row
         assert_eq!(raster.width(), 4);

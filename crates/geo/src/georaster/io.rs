@@ -7,7 +7,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{gdalinterop::*, GeoReference, RasterSize};
+use crate::{gdalinterop::*, GeoReference};
 use crate::{Error, Result};
 use approx::relative_eq;
 use gdal::{
@@ -93,8 +93,7 @@ struct CutOut {
 
 pub mod dataset {
     use gdal::Metadata;
-
-    use crate::raster::{Nodata, RasterNum};
+    use raster::{Nodata, RasterNum, RasterSize};
 
     use super::*;
 
@@ -505,7 +504,7 @@ pub mod dataset {
 
     #[cfg(test)]
     mod tests {
-        use crate::{crs, raster::Cell, CellSize, Point};
+        use crate::{crs, georaster::Cell, CellSize, Point};
 
         use super::*;
         use approx::assert_relative_eq;

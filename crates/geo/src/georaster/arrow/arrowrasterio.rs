@@ -2,7 +2,7 @@ use arrow::datatypes::ArrowPrimitiveType;
 use gdal::raster::GdalType;
 
 use crate::{
-    raster::{io, ArrowRaster, ArrowRasterNum, Raster, RasterIO},
+    georaster::{io, ArrowRaster, ArrowRasterNum, GeoRaster, GeoRasterCreation, Raster, RasterIO},
     GeoReference, Result,
 };
 

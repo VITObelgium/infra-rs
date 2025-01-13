@@ -5,8 +5,9 @@ use gdal::{
     raster::GdalType,
     vector::{FieldValue, LayerAccess},
 };
+use raster::RasterNum;
 
-use crate::{raster, Error, Result};
+use crate::{georaster, Error, Result};
 
 use super::{geometrytype::GeometryType, io, BurnValue};
 
@@ -132,7 +133,7 @@ impl<T: num::One + ToString> From<RasterizeOptions<T>> for Vec<String> {
     }
 }
 
-pub fn rasterize<T: raster::RasterNum<T> + GdalType + ToString>(
+pub fn rasterize<T: RasterNum<T> + GdalType + ToString>(
     ds: &gdal::Dataset,
     meta: &GeoReference,
     options: RasterizeOptions<T>,
@@ -155,7 +156,7 @@ pub fn rasterize<T: raster::RasterNum<T> + GdalType + ToString>(
 /// The options are passed as a list of strings in the form `["-option1", "value1", "-option2", "value2"]`
 /// and match the options of the gdal `gdal_rasterize` command line tool
 /// The rasterized dataset is returned
-pub fn rasterize_with_cli_options<T: raster::RasterNum<T> + GdalType>(
+pub fn rasterize_with_cli_options<T: RasterNum<T> + GdalType>(
     ds: &gdal::Dataset,
     meta: &GeoReference,
     options: &[String],
@@ -163,9 +164,9 @@ pub fn rasterize_with_cli_options<T: raster::RasterNum<T> + GdalType>(
     let gdal_options = RasterizeOptionsWrapper::new(options)?;
 
     let data = vec![meta.nodata_as::<T>()?.unwrap_or(T::zero()); meta.rows() * meta.columns()];
-    let mut mem_ds = raster::io::dataset::create_in_memory_with_data::<T>(meta, &data)?;
+    let mut mem_ds = georaster::io::dataset::create_in_memory_with_data::<T>(meta, &data)?;
 
-    raster::io::dataset::metadata_to_dataset_band(&mut mem_ds, meta, 1)?;
+    georaster::io::dataset::metadata_to_dataset_band(&mut mem_ds, meta, 1)?;
 
     let mut usage_error: std::ffi::c_int = gdal_sys::CPLErr::CE_None as std::ffi::c_int;
     unsafe {
@@ -184,7 +185,7 @@ pub fn rasterize_with_cli_options<T: raster::RasterNum<T> + GdalType>(
         ));
     }
 
-    let meta = raster::io::dataset::read_band_metadata(&mem_ds, 1)?;
+    let meta = georaster::io::dataset::read_band_metadata(&mem_ds, 1)?;
     Ok((meta, data))
 }
 

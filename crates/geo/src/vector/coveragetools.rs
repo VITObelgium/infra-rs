@@ -1,5 +1,5 @@
 use crate::gdalinterop;
-use crate::raster::Cell;
+use crate::georaster::Cell;
 use gdal::vector::LayerAccess;
 
 use crate::Error;

@@ -4,12 +4,13 @@ mod tests {
     use approx::assert_relative_eq;
     use geo::{
         crs::Epsg,
-        raster::Cell,
+        georaster::Cell,
         vector::{self, BurnValue},
-        CellSize, GeoReference, RasterSize, SpatialReference,
+        CellSize, GeoReference, SpatialReference,
     };
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
+    use raster::RasterSize;
     use vector::polygoncoverage::CoverageConfiguration;
 
     #[cfg(feature = "derive")]

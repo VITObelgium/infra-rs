@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 inf              = { path = "../inf", features = ["serde"] }
+raster           = { path = "../raster" }
 geo              = { path = "../geo", features = ["gdal", "serde"] }
 sqlite           = { path = "../sqlite" }
 vito-tile-format = { path = "../vito-tile-format" }

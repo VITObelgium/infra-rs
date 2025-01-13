@@ -1,3 +1,5 @@
+use raster::RasterSize;
+
 /// Represents a point in the raster using row, col coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -90,7 +92,7 @@ impl CellIterator {
         }
     }
 
-    pub fn for_raster_with_size(size: crate::RasterSize) -> Self {
+    pub fn for_raster_with_size(size: RasterSize) -> Self {
         CellIterator {
             cols: size.cols as i32,
             rows: size.rows as i32,

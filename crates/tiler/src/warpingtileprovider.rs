@@ -7,10 +7,11 @@ use gdal::{
 
 use inf::legend::Legend;
 
-use geo::raster::{io::RasterFormat, RasterNum};
-use geo::{crs, raster, CellSize, Coordinate, GeoReference, LatLonBounds, RasterSize, SpatialReference, Tile};
+use geo::georaster::{self, io::RasterFormat};
+use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
-use vito_tile_format::{CompressionAlgorithm, RasterTile, TileDataType};
+use raster::{RasterCreation, RasterNum, RasterSize};
+use vito_tile_format::{CompressionAlgorithm, RasterTile, RasterTileIO};
 
 use crate::{
     imageprocessing::{self},
@@ -68,7 +69,7 @@ fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: LatL
         timestamp
     ));
 
-    if let Ok(ds) = raster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
+    if let Ok(ds) = georaster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
         if let Ok(Some(stats)) = ds.rasterband(band_nr)?.get_statistics(true, true) {
             log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
             return Ok(Range {
@@ -113,8 +114,8 @@ fn read_raster_tile<T: RasterNum<T> + GdalType>(
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
     let mut data = vec![T::zero(); scaled_size as usize * scaled_size as usize];
-    let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
-    raster::io::dataset::read_band(&ds, 1, &mut data)?;
+    let ds = georaster::algo::translate_file(raster_path, &output_path, &options)?;
+    georaster::io::dataset::read_band(&ds, 1, &mut data)?;
     Ok(data)
 }
 
@@ -142,7 +143,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     let src_ds = gdal::Dataset::open(raster_path)?;
 
     let mut data = vec![T::nodata_value(); scaled_size * scaled_size];
-    let mut dest_ds = raster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
+    let mut dest_ds = georaster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
 
     let options = vec![
         "-b".to_string(),
@@ -158,7 +159,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         ("NUM_THREADS".to_string(), "ALL_CPUS".to_string()),
     ];
 
-    raster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
+    georaster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
 
     // Avoid returning tiles containing only nodata values
     if data.iter().all(|&val| T::is_nodata(val)) {
@@ -167,17 +168,14 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
 
     Ok(data)
 }
-fn raw_tile_to_vito_tile_format<T: RasterNum<T> + TileDataType>(
-    data: Vec<T>,
-    width: usize,
-    height: usize,
-) -> Result<TileData> {
-    let raster_tile = RasterTile { width, height, data };
+
+fn raw_tile_to_vito_tile_format<T: RasterNum<T>>(data: Vec<T>, width: usize, height: usize) -> Result<TileData> {
+    let raster_tile = RasterTile::new(RasterSize::with_rows_cols(height, width), data);
 
     Ok(TileData::new(
         TileFormat::VitoTileFormat,
         PixelFormat::Native,
-        raster_tile.encode(CompressionAlgorithm::Lz4Block)?,
+        RasterTileIO::encode_raster_tile(&raster_tile, CompressionAlgorithm::Lz4Block)?,
     ))
 }
 
@@ -193,13 +191,13 @@ impl WarpingTileProvider {
     }
 
     fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<Vec<LayerMetadata>> {
-        let ds = raster::io::dataset::open_read_only(path)?;
+        let ds = georaster::io::dataset::open_read_only(path)?;
 
         let raster_count = ds.raster_count();
         let mut result = Vec::with_capacity(raster_count);
 
         for band_nr in 1..=raster_count {
-            let meta = raster::io::dataset::read_band_metadata(&ds, band_nr)?;
+            let meta = georaster::io::dataset::read_band_metadata(&ds, band_nr)?;
             let raster_band = ds.rasterband(band_nr)?;
             let over_view_count = raster_band.overview_count()?;
 
@@ -325,7 +323,7 @@ impl WarpingTileProvider {
 
     fn process_tile_request<T>(meta: &LayerMetadata, band_nr: usize, req: &TileRequest) -> Result<TileData>
     where
-        T: RasterNum<T> + Num + GdalType + TileDataType,
+        T: RasterNum<T> + Num + GdalType,
     {
         let (raw_tile_data, nodata) = WarpingTileProvider::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
         if raw_tile_data.is_empty() {
@@ -489,7 +487,8 @@ mod tests {
     use approx::assert_relative_eq;
     use geo::Tile;
     use path_macro::path;
-    use vito_tile_format::RasterTile;
+    use raster::Raster;
+    use vito_tile_format::{RasterTile, RasterTileIO};
 
     use crate::{
         tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider,
@@ -557,9 +556,9 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_id, &req)?;
 
-        let raster_tile = RasterTile::<u8>::from_bytes(&tile_data.data)?;
-        assert_eq!(raster_tile.width, 256);
-        assert_eq!(raster_tile.height, 256);
+        let raster_tile = RasterTile::<u8>::from_tile_bytes(&tile_data.data)?;
+        assert_eq!(raster_tile.width(), 256);
+        assert_eq!(raster_tile.height(), 256);
 
         Ok(())
     }

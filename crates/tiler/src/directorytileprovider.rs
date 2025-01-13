@@ -1,4 +1,4 @@
-use geo::raster::io::RasterFormat;
+use geo::georaster::io::RasterFormat;
 use geo::{Coordinate, LatLonBounds};
 
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};

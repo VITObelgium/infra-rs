@@ -5,9 +5,10 @@ use arrow::{
 };
 
 use num::NumCast;
+use raster::{Raster, RasterNum};
 
 use crate::{
-    raster::{Raster, RasterNum},
+    georaster::{GeoRaster, GeoRasterCreation},
     GeoReference,
 };
 
@@ -52,6 +53,56 @@ impl<T: ArrowRasterNum<T>> Default for ArrowRaster<T> {
         ArrowRaster {
             metadata: GeoReference::default(),
             data: PrimitiveArray::<T::TArrow>::new_null(0),
+        }
+    }
+}
+
+impl<T: ArrowRasterNum<T>> GeoRaster<T> for ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    fn geo_metadata(&self) -> &GeoReference {
+        &self.metadata
+    }
+}
+
+impl<T: ArrowRasterNum<T>> GeoRasterCreation<T> for ArrowRaster<T>
+where
+    T::TArrow: ArrowPrimitiveType<Native = T>,
+{
+    fn new(metadata: GeoReference, data: Vec<T>) -> Self {
+        let nod = metadata.nodata();
+        let data: PrimitiveArray<T::TArrow> = data.iter().map(|&v| (v.to_f64() != nod).then_some(v)).collect();
+        ArrowRaster { metadata, data }
+    }
+
+    fn from_iter<Iter>(metadata: GeoReference, iter: Iter) -> Self
+    where
+        Self: Sized,
+        Iter: Iterator<Item = Option<T>>,
+    {
+        ArrowRaster {
+            metadata,
+            data: iter.collect(),
+        }
+    }
+
+    fn zeros(meta: GeoReference) -> Self {
+        ArrowRaster::filled_with(T::zero(), meta)
+    }
+
+    fn filled_with(val: T, meta: GeoReference) -> Self {
+        let data_size = meta.rows() * meta.columns();
+        ArrowRaster::new(meta, vec![val; data_size])
+    }
+
+    fn filled_with_nodata(metadata: GeoReference) -> Self {
+        let mut builder = PrimitiveBuilder::<T::TArrow>::new();
+        builder.append_nulls(metadata.rows() * metadata.columns());
+
+        ArrowRaster {
+            metadata,
+            data: builder.finish(),
         }
     }
 }
@@ -136,7 +187,7 @@ where
     }
 
     pub fn binary<F: Fn(T, T) -> T>(&self, other: &Self, op: F) -> Self {
-        crate::raster::assert_dimensions(self, other);
+        raster::algo::assert_dimensions(self, other);
 
         let data = match arrow::compute::binary(&self.data, &other.data, op) {
             Ok(data) => data,
@@ -150,7 +201,7 @@ where
     }
 
     pub fn binary_inplace<F: Fn(&mut T, T)>(&mut self, other: &Self, op: F) {
-        crate::raster::assert_dimensions(self, other);
+        raster::algo::assert_dimensions(self, other);
 
         let mut temp_array = PrimitiveBuilder::<T::TArrow>::new().finish();
         std::mem::swap(&mut self.data, &mut temp_array);
@@ -178,7 +229,7 @@ where
     }
 
     pub fn binary_mut<F: Fn(T, T) -> T>(mut self, other: &Self, op: F) -> Self {
-        crate::raster::assert_dimensions(&self, other);
+        raster::algo::assert_dimensions(&self, other);
 
         let data = match arrow::compute::binary_mut(self.data, &other.data, &op) {
             Ok(data) => data.expect("Binary operations should be infallible"),
@@ -200,46 +251,6 @@ impl<T: ArrowRasterNum<T>> Raster<T> for ArrowRaster<T>
 where
     T::TArrow: ArrowPrimitiveType<Native = T>,
 {
-    fn new(metadata: GeoReference, data: Vec<T>) -> Self {
-        let nod = metadata.nodata();
-        let data: PrimitiveArray<T::TArrow> = data.iter().map(|&v| (v.to_f64() != nod).then_some(v)).collect();
-        ArrowRaster { metadata, data }
-    }
-
-    fn from_iter<Iter>(metadata: GeoReference, iter: Iter) -> Self
-    where
-        Self: Sized,
-        Iter: Iterator<Item = Option<T>>,
-    {
-        ArrowRaster {
-            metadata,
-            data: iter.collect(),
-        }
-    }
-
-    fn zeros(meta: GeoReference) -> Self {
-        ArrowRaster::filled_with(T::zero(), meta)
-    }
-
-    fn filled_with(val: T, meta: GeoReference) -> Self {
-        let data_size = meta.rows() * meta.columns();
-        ArrowRaster::new(meta, vec![val; data_size])
-    }
-
-    fn filled_with_nodata(metadata: GeoReference) -> Self {
-        let mut builder = PrimitiveBuilder::<T::TArrow>::new();
-        builder.append_nulls(metadata.rows() * metadata.columns());
-
-        ArrowRaster {
-            metadata,
-            data: builder.finish(),
-        }
-    }
-
-    fn geo_metadata(&self) -> &GeoReference {
-        &self.metadata
-    }
-
     fn width(&self) -> usize {
         self.metadata.columns()
     }
@@ -292,8 +303,16 @@ where
             .fold(0.0, |acc, x| acc + x)
     }
 
-    fn iter(&self) -> impl Iterator<Item = Option<T>> {
+    fn iter_opt(&self) -> impl Iterator<Item = Option<T>> {
         self.data.iter()
+    }
+
+    fn iter(&self) -> std::slice::Iter<T> {
+        todo!()
+    }
+
+    fn iter_mut(&mut self) -> std::slice::IterMut<T> {
+        todo!()
     }
 }
 
@@ -351,17 +370,16 @@ where
 
 #[cfg(test)]
 mod tests {
+    use raster::{Nodata, RasterSize};
+
     use super::*;
-    use crate::{
-        raster::{self, testutils::*, Nodata},
-        RasterSize,
-    };
+    use crate::georaster::{algo, testutils::*};
 
     #[test]
     fn cast_arrow_raster() {
         let ras = ArrowRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
 
-        let f64_ras = raster::cast::<f64, _, ArrowRaster<f64>, _>(&ras);
+        let f64_ras = algo::cast::<f64, _, ArrowRaster<f64>, _>(&ras);
         compare_fp_vectors(
             f64_ras.as_slice(),
             &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0],

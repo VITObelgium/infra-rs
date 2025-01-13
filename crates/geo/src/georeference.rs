@@ -2,27 +2,12 @@ use std::path::Path;
 
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
+use raster::RasterSize;
 
-use crate::{crs::Epsg, raster::Cell, Error, LatLonBounds, Point, Rect, Result};
+use crate::{crs::Epsg, georaster::Cell, Error, LatLonBounds, Point, Rect, Result};
 
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-pub struct RasterSize {
-    pub rows: usize,
-    pub cols: usize,
-}
-
-impl RasterSize {
-    pub const fn with_rows_cols(rows: usize, cols: usize) -> Self {
-        RasterSize { rows, cols }
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.rows == 0 || self.cols == 0
-    }
-}
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub struct CellSize {
@@ -115,7 +100,7 @@ impl GeoReference {
 
     #[cfg(feature = "gdal")]
     pub fn from_file(path: &Path) -> Result<Self> {
-        crate::raster::io::dataset::read_file_metadata(path)
+        crate::georaster::io::dataset::read_file_metadata(path)
     }
 
     pub fn raster_size(&self) -> RasterSize {

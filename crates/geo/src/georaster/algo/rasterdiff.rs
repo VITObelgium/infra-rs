@@ -1,5 +1,9 @@
-use crate::raster::{Cell, DenseRaster, Raster, RasterNum};
-use crate::{Error, Result};
+use raster::RasterNum;
+
+use crate::{
+    georaster::{Cell, GeoRaster},
+    Error, Result,
+};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -40,18 +44,18 @@ pub fn raster_files_intersection_diff<T: RasterNum<T> + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,
 ) -> Result<RasterDiffResult<T>> {
-    use crate::raster::RasterIO;
+    use crate::georaster::{DenseGeoRaster, RasterIO};
 
-    let lhs_ras = DenseRaster::<T>::read(lhs)?;
-    let rhs_ras = DenseRaster::<T>::read(rhs)?;
+    let lhs_ras = DenseGeoRaster::<T>::read(lhs)?;
+    let rhs_ras = DenseGeoRaster::<T>::read(rhs)?;
 
     let intersection = lhs_ras.geo_metadata().intersection(rhs_ras.geo_metadata())?;
     if intersection.raster_size().is_empty() {
         return Ok(RasterDiffResult::new());
     }
 
-    let lhs_ras = DenseRaster::<T>::read_bounds(lhs, &intersection, 1)?;
-    let rhs_ras = DenseRaster::<T>::read_bounds(rhs, &intersection, 1)?;
+    let lhs_ras = DenseGeoRaster::<T>::read_bounds(lhs, &intersection, 1)?;
+    let rhs_ras = DenseGeoRaster::<T>::read_bounds(rhs, &intersection, 1)?;
 
     raster_diff(&lhs_ras, &rhs_ras)
 }
@@ -63,17 +67,17 @@ pub fn raster_files_diff<T: RasterNum<T> + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,
 ) -> Result<RasterDiffResult<T>> {
-    use crate::raster::RasterIO;
+    use crate::georaster::{DenseGeoRaster, RasterIO};
 
-    let lhs_ras = DenseRaster::<T>::read(lhs)?;
-    let rhs_ras = DenseRaster::<T>::read(rhs)?;
+    let lhs_ras = DenseGeoRaster::<T>::read(lhs)?;
+    let rhs_ras = DenseGeoRaster::<T>::read(rhs)?;
 
     raster_diff(&lhs_ras, &rhs_ras)
 }
 
 /// Compare two rasters and return a list of cell mismatches
 /// The two rasters must have the same extent, size, cell size and be aligned
-pub fn raster_diff<T: RasterNum<T>>(lhs: &impl Raster<T>, rhs: &impl Raster<T>) -> Result<RasterDiffResult<T>> {
+pub fn raster_diff<T: RasterNum<T>>(lhs: &impl GeoRaster<T>, rhs: &impl GeoRaster<T>) -> Result<RasterDiffResult<T>> {
     let left_meta = lhs.geo_metadata();
     let right_meta = rhs.geo_metadata();
 
@@ -96,8 +100,8 @@ pub fn raster_diff<T: RasterNum<T>>(lhs: &impl Raster<T>, rhs: &impl Raster<T>) 
     }
 
     let mut raster_diff = RasterDiffResult::new();
-    lhs.iter()
-        .zip(rhs.iter())
+    lhs.iter_opt()
+        .zip(rhs.iter_opt())
         .enumerate()
         .for_each(|(idx, (l, r))| match (l, r) {
             (Some(l), Some(r)) => {

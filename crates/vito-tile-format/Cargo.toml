@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+raster = { path = "../raster" }
 thiserror = "2.0"
 lz4_flex = "0.11"
 bytemuck = { version = "1.21", features = [

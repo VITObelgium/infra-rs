@@ -3,13 +3,14 @@ use geos::Geom;
 use geozero::ToGeos;
 use inf::duration;
 use inf::progressinfo::AsyncProgressNotification;
+use raster::RasterSize;
 use rayon::prelude::*;
 use std::ffi::CString;
 use std::path::Path;
 
-use crate::raster::{Cell, CellIterator};
+use crate::georaster::{Cell, CellIterator};
 use crate::spatialreference::CoordinateWarpTransformer;
-use crate::{Error, GeoReference, Point, RasterSize, Rect, Result, SpatialReference};
+use crate::{Error, GeoReference, Point, Rect, Result, SpatialReference};
 
 use super::coveragetools::VectorBuilder;
 use super::BurnValue;

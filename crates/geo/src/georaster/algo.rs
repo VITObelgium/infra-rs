@@ -1,11 +1,15 @@
 //! Algorithms for raster data processing (translate, warp, ...).
 
+mod cast;
 mod rasterdiff;
 
+use raster::Nodata;
 #[cfg(feature = "gdal")]
 pub use rasterdiff::raster_files_diff;
 #[cfg(feature = "gdal")]
 pub use rasterdiff::raster_files_intersection_diff;
+
+pub use cast::cast;
 
 pub use rasterdiff::raster_diff;
 pub use rasterdiff::RasterCellMismatch;
@@ -21,7 +25,7 @@ use std::path::Path;
 
 use crate::{Error, Result};
 
-use super::{io, Nodata};
+use super::io;
 
 struct TranslateOptionsWrapper {
     options: *mut gdal_sys::GDALTranslateOptions,

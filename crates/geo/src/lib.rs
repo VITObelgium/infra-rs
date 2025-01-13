@@ -18,7 +18,7 @@ mod runtimeconfiguration;
 mod spatialreference;
 mod tile;
 
-pub mod raster;
+pub mod georaster;
 pub mod vector;
 
 pub use coordinate::Coordinate;
@@ -30,8 +30,6 @@ pub use error::Error;
 pub use georeference::CellSize;
 #[doc(inline)]
 pub use georeference::GeoReference;
-#[doc(inline)]
-pub use georeference::RasterSize;
 #[doc(inline)]
 pub use latlonbounds::LatLonBounds;
 #[doc(inline)]

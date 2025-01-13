@@ -1,42 +1,23 @@
-use crate::{
-    crs,
-    raster::algo::{self, WarpOptions},
-    GeoReference, Result,
-};
-use gdal::raster::GdalType;
 use num::NumCast;
 
-use super::{Raster, RasterNum};
+use crate::{algo, raster::RasterCreation, Raster, RasterNum, RasterSize};
 
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::nodata_value`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
 #[derive(Debug, Clone)]
 pub struct DenseRaster<T: RasterNum<T>> {
-    pub(super) metadata: GeoReference,
+    pub(super) size: RasterSize,
     pub(super) data: Vec<T>,
 }
 
 impl<T: RasterNum<T>> DenseRaster<T> {
-    #[allow(dead_code)] // this function is not used when gdal support is disabled
-    pub(super) fn flatten_nodata(&mut self) {
-        if self.nodata_value().is_none() {
-            return;
-        }
-
-        self.data.iter_mut().for_each(|x| {
-            if x.is_nodata() {
-                *x = T::nodata_value();
-            }
-        });
-    }
-
-    pub fn to_raw_parts(self) -> (GeoReference, Vec<T>) {
-        (self.metadata, self.data)
+    pub fn to_raw_parts(self) -> (RasterSize, Vec<T>) {
+        (self.size, self.data)
     }
 
     pub fn unary<F: Fn(T) -> T>(&self, op: F) -> Self {
-        DenseRaster::new(self.metadata.clone(), self.data.iter().map(|&a| op(a)).collect())
+        DenseRaster::new(self.size, self.data.iter().map(|&a| op(a)).collect())
     }
 
     pub fn unary_inplace<F: Fn(&mut T)>(&mut self, op: F) {
@@ -49,7 +30,7 @@ impl<T: RasterNum<T>> DenseRaster<T> {
     }
 
     pub fn binary<F: Fn(T, T) -> T>(&self, other: &Self, op: F) -> Self {
-        crate::raster::assert_dimensions(self, other);
+        algo::assert_dimensions(self, other);
 
         let data = self
             .data
@@ -58,16 +39,16 @@ impl<T: RasterNum<T>> DenseRaster<T> {
             .map(|(&a, &b)| op(a, b))
             .collect();
 
-        DenseRaster::new(self.metadata.clone(), data)
+        DenseRaster::new(self.size, data)
     }
 
     pub fn binary_inplace<F: Fn(&mut T, T)>(&mut self, other: &Self, op: F) {
-        crate::raster::assert_dimensions(self, other);
+        algo::assert_dimensions(self, other);
         self.data.iter_mut().zip(other.data.iter()).for_each(|(a, &b)| op(a, b));
     }
 
     pub fn binary_mut<F: Fn(T, T) -> T>(mut self, other: &Self, op: F) -> Self {
-        crate::raster::assert_dimensions(&self, other);
+        algo::assert_dimensions(&self, other);
 
         self.data
             .iter_mut()
@@ -77,66 +58,48 @@ impl<T: RasterNum<T>> DenseRaster<T> {
     }
 }
 
-#[cfg(feature = "gdal")]
-impl<T: RasterNum<T> + GdalType> DenseRaster<T> {
-    pub fn warped_to_epsg(&self, epsg: crs::Epsg) -> Result<Self> {
-        use super::io;
-
-        let dest_meta = self.metadata.warped_to_epsg(epsg)?;
-        let result = DenseRaster::filled_with_nodata(dest_meta);
-
-        let src_ds = io::dataset::create_in_memory_with_data(&self.metadata, self.data.as_slice())?;
-        let dst_ds = io::dataset::create_in_memory_with_data(&result.metadata, result.data.as_slice())?;
-
-        algo::warp(&src_ds, &dst_ds, &WarpOptions::default())?;
-
-        Ok(result)
-    }
-}
-
-impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
-    fn new(metadata: GeoReference, mut data: Vec<T>) -> Self {
-        process_nodata(&mut data, metadata.nodata());
-        DenseRaster { metadata, data }
+impl<T: RasterNum<T>> RasterCreation<T> for DenseRaster<T> {
+    fn new(size: RasterSize, data: Vec<T>) -> Self {
+        DenseRaster { size, data }
     }
 
-    fn from_iter<Iter>(metadata: GeoReference, iter: Iter) -> Self
+    fn from_iter<Iter>(size: RasterSize, iter: Iter) -> Self
     where
         Self: Sized,
         Iter: Iterator<Item = Option<T>>,
     {
-        let mut data = Vec::with_capacity(metadata.rows() * metadata.columns());
+        let mut data = Vec::with_capacity(size.cell_count());
         for val in iter {
             data.push(val.unwrap_or(T::nodata_value()));
         }
 
-        DenseRaster { metadata, data }
+        DenseRaster { size, data }
     }
 
-    fn zeros(meta: GeoReference) -> Self {
-        DenseRaster::filled_with(T::zero(), meta)
+    fn zeros(size: RasterSize) -> Self {
+        DenseRaster::filled_with(T::zero(), size)
     }
 
-    fn filled_with(val: T, meta: GeoReference) -> Self {
-        let data_size = meta.rows() * meta.columns();
-        DenseRaster::new(meta, vec![val; data_size])
+    fn filled_with(val: T, size: RasterSize) -> Self {
+        DenseRaster::new(size, vec![val; size.cell_count()])
     }
 
-    fn filled_with_nodata(meta: GeoReference) -> Self {
-        let data_size = meta.rows() * meta.columns();
-        DenseRaster::new(meta, vec![T::nodata_value(); data_size])
+    fn filled_with_nodata(size: RasterSize) -> Self {
+        DenseRaster::new(size, vec![T::nodata_value(); size.cell_count()])
     }
+}
 
-    fn geo_metadata(&self) -> &GeoReference {
-        &self.metadata
-    }
-
+impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
     fn width(&self) -> usize {
-        self.metadata.columns()
+        self.size.cols
     }
 
     fn height(&self) -> usize {
-        self.metadata.rows()
+        self.size.rows
+    }
+
+    fn size(&self) -> RasterSize {
+        self.size
     }
 
     fn len(&self) -> usize {
@@ -152,22 +115,18 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
     }
 
     fn nodata_value(&self) -> Option<T> {
-        match self.metadata.nodata() {
-            Some(nodata) => NumCast::from(nodata),
-            None => None,
-        }
+        Some(T::nodata_value())
     }
 
     fn nodata_count(&self) -> usize {
-        if self.nodata_value().is_none() {
-            return 0;
-        }
-
         self.data.iter().filter(|x| x.is_nodata()).count()
     }
 
     fn value(&self, index: usize) -> Option<T> {
         assert!(index < self.len());
+        if index >= self.len() {
+            return None;
+        }
 
         let val = self.data[index];
         if T::is_nodata(val) {
@@ -195,7 +154,15 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
             .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
     }
 
-    fn iter(&self) -> impl Iterator<Item = Option<T>> {
+    fn iter(&self) -> std::slice::Iter<T> {
+        self.data.iter()
+    }
+
+    fn iter_mut(&mut self) -> std::slice::IterMut<T> {
+        self.data.iter_mut()
+    }
+
+    fn iter_opt(&self) -> impl Iterator<Item = Option<T>> {
         DenserRasterIterator::new(self)
     }
 }
@@ -239,7 +206,7 @@ where
 
 impl<T: RasterNum<T>> PartialEq for DenseRaster<T> {
     fn eq(&self, other: &Self) -> bool {
-        if self.metadata != other.metadata {
+        if self.size != other.size {
             return false;
         }
 
@@ -254,37 +221,20 @@ impl<T: RasterNum<T>> PartialEq for DenseRaster<T> {
     }
 }
 
-fn process_nodata<T: RasterNum<T>>(data: &mut [T], nodata: Option<f64>) {
-    if let Some(nodata) = nodata {
-        if nodata.is_nan() || NumCast::from(nodata) == Some(T::nodata_value()) {
-            // the nodata value for floats is also nan, so no processing required
-            // or the nodata value matches the default nodata value for the type
-            return;
-        }
-
-        let nodata = NumCast::from(nodata).unwrap_or(T::nodata_value());
-        for v in data.iter_mut() {
-            if *v == nodata {
-                *v = T::nodata_value();
-            }
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::{testutils::compare_fp_vectors, Nodata};
+
     use super::*;
-    use crate::raster::{
-        self,
-        testutils::{compare_fp_vectors, test_metadata_2x2},
-        Nodata,
-    };
 
     #[test]
     fn cast_dense_raster() {
-        let ras = DenseRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
+        let ras = DenseRaster::new(
+            RasterSize::with_rows_cols(2, 2),
+            vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4],
+        );
 
-        let f64_ras = raster::cast::<f64, _, DenseRaster<f64>, _>(&ras);
+        let f64_ras = algo::cast::<f64, _, DenseRaster<f64>, _>(&ras);
         compare_fp_vectors(
             f64_ras.as_slice(),
             &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0],

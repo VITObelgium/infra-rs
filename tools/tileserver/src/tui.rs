@@ -47,9 +47,8 @@ pub async fn launch(
         tokio::select! {
           ev = tui.events.next() => {
             match ev {
-              Ok(Event::Tick) => app.tick(),
               Ok(Event::Key(key_event)) => handler::handle_key_events(key_event, &mut app)?,
-              Ok(Event::Mouse(_) | Event::Resize(_, _)) => {}
+              Ok(Event::Mouse(_) | Event::Resize(_, _) | Event::Tick) => {}
               Err(err) => panic!("Error: {:?}", err),
             }
           }

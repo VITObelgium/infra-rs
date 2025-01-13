@@ -1,6 +1,7 @@
 use bytemuck::NoUninit;
+use raster::RasterDataType;
 
-use crate::{Error, RasterTileDataType, Result};
+use crate::{Error, Result};
 
 const SIGNATURE: u32 = u32::from_le_bytes([b'T', b'I', b'L', b'E']);
 
@@ -16,7 +17,7 @@ pub enum CompressionAlgorithm {
 /// The data blob following the header is stored in the format specified by the `data_type` field
 /// and is compressed using the zstd data compression algorithm. The decompressed data should always be
 /// `tile_width` * `tile_height` * sizeof(`data_type`) bytes long.
-#[derive(Clone, Copy, NoUninit)]
+#[derive(Clone, Copy)]
 #[repr(packed, C)]
 pub struct TileHeader {
     /// signature to recognize the file format (always ['T', 'I', 'L', 'E'"] or 0x454C4954)
@@ -24,7 +25,7 @@ pub struct TileHeader {
     /// The version of the file format (currently 1)
     pub version: u16,
     /// The data type of the tile data represented by a `TileDataType` as u8
-    pub data_type: RasterTileDataType,
+    pub data_type: RasterDataType,
     /// The compression algorithm used for the tile data
     pub compression: CompressionAlgorithm,
     /// The width of the tile in pixels
@@ -37,7 +38,7 @@ pub struct TileHeader {
 
 impl TileHeader {
     pub fn new(
-        data_type: RasterTileDataType,
+        data_type: RasterDataType,
         compression: CompressionAlgorithm,
         tile_width: u16,
         tile_height: u16,
@@ -69,7 +70,7 @@ impl TileHeader {
             return Err(Error::InvalidArgument("Unsupported tile version".into()));
         }
 
-        if header.data_type as u8 > RasterTileDataType::Float64 as u8 {
+        if header.data_type as u8 > RasterDataType::Float64 as u8 {
             return Err(Error::InvalidArgument("Invalid tile data type".into()));
         }
 

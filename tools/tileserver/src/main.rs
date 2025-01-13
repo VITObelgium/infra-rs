@@ -27,6 +27,7 @@ pub struct Opt {
     pub tui: bool,
 }
 
+#[allow(unused_variables)]
 fn tui_enabled(opt: &Opt) -> bool {
     #[cfg(feature = "tui")]
     {
@@ -70,14 +71,14 @@ async fn main() -> Result<()> {
     };
 
     let sock_addr = std::net::SocketAddr::from((ip_addr, opt.port));
-    let (router, status_rx) = tileapihandler::create_router(&opt.gis_dir);
+    let (router, _status_rx) = tileapihandler::create_router(&opt.gis_dir);
     let listener = tokio::net::TcpListener::bind(&sock_addr)
         .await
         .expect("Unable to bind to address");
 
     #[cfg(feature = "tui")]
     if opt.tui {
-        tileserver::tui::launch(router, listener, status_rx).await?;
+        tileserver::tui::launch(router, listener, _status_rx).await?;
         return Ok(());
     }
 

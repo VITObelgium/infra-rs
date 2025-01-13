@@ -5,10 +5,11 @@ use arrow::{
 };
 
 use pyo3::{pyclass, pymethods};
+use raster::RasterSize;
 
 use crate::{
-    raster::{ArrowRaster, ArrowRasterNum, Raster},
-    GeoReference, RasterSize,
+    georaster::{ArrowRaster, ArrowRasterNum, GeoRaster},
+    GeoReference,
 };
 
 #[derive(Clone)]

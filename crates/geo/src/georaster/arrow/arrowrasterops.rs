@@ -1,6 +1,6 @@
 use arrow::datatypes::ArrowPrimitiveType;
 
-use crate::raster::{ArrowRaster, ArrowRasterNum};
+use crate::georaster::{ArrowRaster, ArrowRasterNum};
 
 /// Macro to generate numeric raster operations.
 macro_rules! arrow_raster_op {

@@ -8,12 +8,12 @@ mod tests {
 
     use crate::{
         gdalinterop,
-        raster::{testutils::NOD, DenseRaster, Raster, RasterIO, RasterNum},
+        georaster::{testutils::NOD, DenseGeoRaster, GeoRaster, RasterIO, RasterNum},
         Point,
     };
 
     #[cfg(feature = "arrow")]
-    use crate::raster::ArrowRaster;
+    use crate::georaster::ArrowRaster;
 
     #[ctor::ctor]
     fn init() {
@@ -37,7 +37,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_dense_raster<T: RasterNum<T> + fmt::Debug, R: Raster<T> + RasterIO<T, R>>() {
+    fn test_read_dense_raster<T: RasterNum<T> + fmt::Debug, R: GeoRaster<T> + RasterIO<T, R>>() {
         let path: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"]
             .iter()
             .collect();
@@ -57,19 +57,19 @@ mod tests {
         assert_eq!(meta.bottom_left(), Point::new(22000.0, 153000.0));
     }
 
-    #[instantiate_tests(<u8, DenseRaster<u8>>)]
+    #[instantiate_tests(<u8, DenseGeoRaster<u8>>)]
     mod denserasteru8 {}
 
-    #[instantiate_tests(<i32, DenseRaster<i32>>)]
+    #[instantiate_tests(<i32, DenseGeoRaster<i32>>)]
     mod denserasteri32 {}
 
-    #[instantiate_tests(<u32, DenseRaster<u32>>)]
+    #[instantiate_tests(<u32, DenseGeoRaster<u32>>)]
     mod denserasteru32 {}
 
-    #[instantiate_tests(<f32, DenseRaster<f32>>)]
+    #[instantiate_tests(<f32, DenseGeoRaster<f32>>)]
     mod denserasterf32 {}
 
-    #[instantiate_tests(<f64, DenseRaster<f64>>)]
+    #[instantiate_tests(<f64, DenseGeoRaster<f64>>)]
     mod denseraster64 {}
 
     #[cfg(feature = "arrow")]

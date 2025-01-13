@@ -160,10 +160,10 @@ pub fn create_router(
     (
         axum::Router::new()
             .route("/api/layers", get(list_layers))
-            .route("/api/:layer", get(layer_json))
-            .route("/api/:layer/:z/:x/:y", get(layer_tile))
-            .route("/api/:layer/valuerange", get(layer_value_range))
-            .route("/api/:layer/rastervalue", get(layer_raster_value))
+            .route("/api/{layer}", get(layer_json))
+            .route("/api/{layer}/{z}/{x}/{y}", get(layer_tile))
+            .route("/api/{layer}/valuerange", get(layer_value_range))
+            .route("/api/{layer}/rastervalue", get(layer_raster_value))
             .layer(axum::Extension(Arc::new(State::new(gis_dir, status_tx))))
             .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http())),
         status_rx,

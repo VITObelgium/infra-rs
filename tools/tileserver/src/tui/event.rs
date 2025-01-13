@@ -62,11 +62,7 @@ impl EventHandler {
                       CrosstermEvent::Resize(x, y) => {
                         _sender.send(Event::Resize(x, y)).unwrap();
                       },
-                      CrosstermEvent::FocusLost => {
-                      },
-                      CrosstermEvent::FocusGained => {
-                      },
-                      CrosstermEvent::Paste(_) => {
+                      CrosstermEvent::FocusLost | CrosstermEvent::FocusGained | CrosstermEvent::Paste(_) => {
                       },
                     }
                   }

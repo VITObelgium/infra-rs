@@ -27,9 +27,6 @@ impl App {
         Self::default()
     }
 
-    /// Handles the tick event of the terminal.
-    pub fn tick(&self) {}
-
     /// Set running to false to quit the application.
     pub fn quit(&mut self) {
         self.running = false;

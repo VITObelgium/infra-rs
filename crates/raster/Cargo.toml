@@ -1,0 +1,13 @@
+[package]
+name        = "raster"
+version     = "0.1.0"
+edition     = "2021"
+description = "Nodata aware raster operations without any of the geospatial dependencies"
+
+[dependencies]
+num       = "0.4"
+thiserror = "2.0"
+
+[dev-dependencies]
+approx        = "0.5"
+generic-tests = "0.1"
