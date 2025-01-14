@@ -15,7 +15,14 @@ cargo-config-gen:
   cp .cargo/config.toml.in .cargo/config.toml
   sd @CARGO_VCPKG_TRIPLET@ {{VCPKG_DEFAULT_TRIPLET}} .cargo/config.toml
 
-bootstrap: cargo-config-gen
+# on mac symlinks need to be created to avoid python lib errors
+# see: https://github.com/PyO3/pyo3/issues/4155
+pybootstrap:
+  pixi install
+  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/debug/libpython3.12.dylib
+  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/release/libpython3.12.dylib
+
+bootstrap: cargo-config-gen pybootstrap
   echo "Bootstrapping vcpkg:{{VCPKG_DEFAULT_TRIPLET}}..."
   cargo vcpkg -v build
   -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
@@ -24,13 +31,6 @@ bootstrap: cargo-config-gen
   fd -g proj.db ./target/vcpkg/installed --exec cp "{}" ./target/data/
   cp ./target/data/proj.db ./target/debug/
   cp ./target/data/proj.db ./target/release/
-
-# on mac symlinks need to be created to avoid python lib errors
-# see: https://github.com/PyO3/pyo3/issues/4155
-pybootstrap:
-  pixi install
-  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/debug/libpython3.12.dylib
-  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/release/libpython3.12.dylib
 
 build_py:
   #!/usr/bin/env fish
