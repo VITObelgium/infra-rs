@@ -1,5 +1,3 @@
-use num::NumCast;
-
 use crate::{algo, raster::RasterCreation, Raster, RasterNum, RasterSize};
 
 /// Raster implementation using a dense data structure.
@@ -151,7 +149,7 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
         self.data
             .iter()
             .filter(|&&x| !x.is_nodata())
-            .fold(0.0, |acc, x| acc + NumCast::from(*x).unwrap_or(0.0))
+            .fold(0.0, |acc, x| acc + x.to_f64().unwrap_or(0.0))
     }
 
     fn iter(&self) -> std::slice::Iter<T> {
