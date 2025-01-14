@@ -43,6 +43,41 @@ mod tests {
     }
 
     #[test]
+    fn test_add_raster_with_nodata_inclusive<T: RasterNum<T>, R: Raster<T> + RasterCreation<T>>()
+    where
+        for<'a> &'a R: crate::ops::AddInclusive<&'a R, Output = R>,
+    {
+        use crate::ops::AddInclusive;
+
+        let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 2.0]));
+        let raster2 = R::new(SIZE, create_vec(&[1.0, 3.0, 4.0, 5.0, NOD, 3.0, 3.0, 3.0, NOD]));
+        let expected = R::new(SIZE, create_vec(&[1.0, 5.0, 6.0, 8.0, NOD, 6.0, 4.0, 4.0, 2.0]));
+
+        {
+            let result = (&raster1).add_inclusive(&raster2);
+            assert_eq!(result, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1.add_assign_inclusive(&raster2);
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            let raster2 = raster2.clone();
+            raster1.add_assign_inclusive(raster2);
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let result = raster1.add_inclusive(raster2);
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
     fn test_add_scalar_with_nodata<T: RasterNum<T>, R: Raster<T> + RasterCreation<T>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
         let expected = R::new(SIZE, create_vec(&[NOD, 6.0, 6.0, 7.0, NOD, 7.0, 5.0, 5.0, 4.0]));
@@ -90,6 +125,41 @@ mod tests {
 
         {
             let result = raster1 - raster2;
+            assert_eq!(result, expected);
+        }
+    }
+
+    #[test]
+    fn test_subtract_raster_with_nodata_inclusive<T: RasterNum<T>, R: Raster<T> + RasterCreation<T>>()
+    where
+        for<'a> &'a R: crate::ops::SubInclusive<&'a R, Output = R>,
+    {
+        use crate::ops::SubInclusive;
+
+        let raster1 = R::new(SIZE, create_vec(&[NOD, 5.0, 9.0, 3.0, NOD, 13.0, 3.0, 4.0, 8.0]));
+        let raster2 = R::new(SIZE, create_vec(&[NOD, 3.0, 4.0, 3.0, NOD, 3.0, 1.0, 3.0, NOD]));
+        let expected = R::new(SIZE, create_vec(&[NOD, 2.0, 5.0, 0.0, NOD, 10.0, 2.0, 1.0, 8.0]));
+
+        {
+            let result = (&raster1).sub_inclusive(&raster2);
+            assert_eq!(result, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            raster1.sub_assign_inclusive(&raster2);
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let mut raster1 = raster1.clone();
+            let raster2 = raster2.clone();
+            raster1.sub_assign_inclusive(raster2);
+            assert_eq!(raster1, expected);
+        }
+
+        {
+            let result = raster1.sub_inclusive(raster2);
             assert_eq!(result, expected);
         }
     }

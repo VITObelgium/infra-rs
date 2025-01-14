@@ -30,6 +30,5 @@ pub use denseraster::DenseRaster;
 pub use nodata::Nodata;
 pub use raster::Raster;
 pub use raster::RasterCreation;
-pub use raster::RasterOpsInclusive;
 pub use raster::RasterSize;
 pub use rasternum::RasterNum;

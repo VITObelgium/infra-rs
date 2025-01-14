@@ -45,6 +45,12 @@ pub trait Raster<T: RasterNum<T>>:
     + for<'a> std::ops::SubAssign<&'a Self>
     + for<'a> std::ops::MulAssign<&'a Self>
     + for<'a> std::ops::DivAssign<&'a Self>
+    + crate::ops::AddInclusive<Self, Output = Self>
+    + crate::ops::SubInclusive<Self, Output = Self>
+    + crate::ops::AddAssignInclusive<Self>
+    + crate::ops::SubAssignInclusive<Self>
+    + for<'a> crate::ops::AddAssignInclusive<&'a Self>
+    + for<'a> crate::ops::SubAssignInclusive<&'a Self>
 // + for<'a> std::ops::Add<&'a Self, Output = Self>
 // + for<'a> std::ops::Sub<&'a Self, Output = Self>
 // + for<'a> std::ops::Mul<&'a Self, Output = Self>
@@ -124,9 +130,4 @@ pub trait RasterCreation<T: RasterNum<T>> {
 
     /// Create a new raster filled with nodata.
     fn filled_with_nodata(size: RasterSize) -> Self;
-}
-
-pub trait RasterOpsInclusive<T: RasterNum<T>> {
-    fn add_inclusive(self, other: &Self);
-    fn subtract_inclusive(self, other: &Self);
 }

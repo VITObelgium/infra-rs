@@ -14,10 +14,7 @@ macro_rules! dense_raster_op {
         $op_nodata_fn:ident, // name of the operation function with nodata handling e.g. add_nodata_aware
         $op_assign_nodata_fn:ident // name of the assignment function with nodata handling e.g. add_assign_nodata_aware
     ) => {
-        impl<T> $op_trait for DenseRaster<T>
-        where
-            T: RasterNum<T>,
-        {
+        impl<T: RasterNum<T>> $op_trait for DenseRaster<T> {
             type Output = DenseRaster<T>;
 
             fn $op_fn(self, other: DenseRaster<T>) -> DenseRaster<T> {
@@ -25,10 +22,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T> $op_trait for &DenseRaster<T>
-        where
-            T: RasterNum<T>,
-        {
+        impl<T: RasterNum<T>> $op_trait for &DenseRaster<T> {
             type Output = DenseRaster<T>;
 
             fn $op_fn(self, other: &DenseRaster<T>) -> DenseRaster<T> {
@@ -36,10 +30,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T> $op_assign_trait for DenseRaster<T>
-        where
-            T: RasterNum<T>,
-        {
+        impl<T: RasterNum<T>> $op_assign_trait for DenseRaster<T> {
             fn $op_assign_fn(&mut self, other: DenseRaster<T>) {
                 self.binary_inplace(&other, |x, y| {
                     x.$op_assign_nodata_fn(y);
@@ -47,10 +38,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T> $op_assign_scalar_trait for DenseRaster<T>
-        where
-            T: RasterNum<T>,
-        {
+        impl<T: RasterNum<T>> $op_assign_scalar_trait for DenseRaster<T> {
             fn $op_assign_fn(&mut self, scalar: T) {
                 self.unary_inplace(|x| {
                     x.$op_assign_nodata_fn(scalar);
@@ -58,10 +46,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T> $op_assign_ref_trait for DenseRaster<T>
-        where
-            T: RasterNum<T>,
-        {
+        impl<T: RasterNum<T>> $op_assign_ref_trait for DenseRaster<T> {
             fn $op_assign_fn(&mut self, other: &DenseRaster<T>) {
                 self.binary_inplace(&other, |x, y| {
                     x.$op_assign_nodata_fn(y);
@@ -69,10 +54,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T> $scalar_op_trait for DenseRaster<T>
-        where
-            T: RasterNum<T>,
-        {
+        impl<T: RasterNum<T>> $scalar_op_trait for DenseRaster<T> {
             type Output = DenseRaster<T>;
 
             fn $op_fn(self, scalar: T) -> DenseRaster<T> {
@@ -80,10 +62,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T> $scalar_op_trait for &DenseRaster<T>
-        where
-            T: RasterNum<T>,
-        {
+        impl<T: RasterNum<T>> $scalar_op_trait for &DenseRaster<T> {
             type Output = DenseRaster<T>;
 
             fn $op_fn(self, scalar: T) -> DenseRaster<T> {
@@ -138,60 +117,63 @@ dense_raster_op!(
     div_assign_nodata_aware
 );
 
-impl<T: RasterNum<T>> ops::AddInclusive for DenseRaster<T> {
-    type Output = DenseRaster<T>;
+/// Macro to generate numeric inclusive raster operations.
+macro_rules! dense_raster_op_inclusive {
+    (   $op_trait:path, // name of the trait e.g. std::ops::Add
+        $op_assign_trait:path, // name of the trait with assignment e.g. std::ops::AddAssign
+        $op_assign_ref_trait:path, // name of the trait with reference assignment e.g. std::ops::AddAssign<&DenseRaster<T>>
+        $op_fn:ident, // name of the operation function inside the trait e.g. add
+        $op_assign_fn:ident, // name of the assignment function inside the trait e.g. add_assign
+        $op_nodata_fn:ident, // name of the operation function with nodata handling e.g. add_nodata_aware
+        $op_assign_nodata_fn:ident // name of the assignment function with nodata handling e.g. add_assign_nodata_aware
+    ) => {
+        impl<T: RasterNum<T>> $op_trait for DenseRaster<T> {
+            type Output = DenseRaster<T>;
 
-    fn add_inclusive(mut self, rhs: Self) -> Self::Output {
-        self.binary_inplace(&rhs, |x, y| x.add_assign_inclusive_nodata_aware(y));
-        self
-    }
+            fn $op_fn(mut self, rhs: Self) -> DenseRaster<T> {
+                self.binary_inplace(&rhs, |x, y| x.$op_assign_nodata_fn(y));
+                self
+            }
+        }
+
+        impl<T: RasterNum<T>> $op_trait for &DenseRaster<T> {
+            type Output = DenseRaster<T>;
+
+            fn $op_fn(self, rhs: Self) -> DenseRaster<T> {
+                self.binary(rhs, |x, y| x.$op_nodata_fn(y))
+            }
+        }
+
+        impl<T: RasterNum<T>> $op_assign_trait for DenseRaster<T> {
+            fn $op_assign_fn(&mut self, rhs: Self) {
+                self.binary_inplace(&rhs, |x, y| x.$op_assign_nodata_fn(y));
+            }
+        }
+
+        impl<T: RasterNum<T>> $op_assign_ref_trait for DenseRaster<T> {
+            fn $op_assign_fn(&mut self, rhs: &DenseRaster<T>) {
+                self.binary_inplace(rhs, |x, y| x.$op_assign_nodata_fn(y));
+            }
+        }
+    };
 }
 
-impl<T: RasterNum<T>> ops::AddInclusive for &DenseRaster<T> {
-    type Output = DenseRaster<T>;
+dense_raster_op_inclusive!(
+    ops::AddInclusive,
+    ops::AddAssignInclusive,
+    ops::AddAssignInclusive<&DenseRaster<T>>,
+    add_inclusive,
+    add_assign_inclusive,
+    add_inclusive_nodata_aware,
+    add_assign_inclusive_nodata_aware
+);
 
-    fn add_inclusive(self, rhs: Self) -> Self::Output {
-        self.binary(rhs, |x, y| x.add_inclusive_nodata_aware(y))
-    }
-}
-
-impl<T: RasterNum<T>> ops::AddAssignInclusive for DenseRaster<T> {
-    fn add_assign_inclusive(&mut self, rhs: Self) {
-        self.binary_inplace(&rhs, |x, y| x.add_assign_inclusive_nodata_aware(y))
-    }
-}
-
-impl<T: RasterNum<T>> ops::AddAssignInclusive<&DenseRaster<T>> for DenseRaster<T> {
-    fn add_assign_inclusive(&mut self, rhs: &DenseRaster<T>) {
-        self.binary_inplace(rhs, |x, y| x.add_assign_inclusive_nodata_aware(y))
-    }
-}
-
-impl<T: RasterNum<T>> ops::SubInclusive for DenseRaster<T> {
-    type Output = DenseRaster<T>;
-
-    fn sub_inclusive(mut self, rhs: Self) -> Self::Output {
-        self.binary_inplace(&rhs, |x, y| x.sub_assign_inclusive_nodata_aware(y));
-        self
-    }
-}
-
-impl<T: RasterNum<T>> ops::SubInclusive for &DenseRaster<T> {
-    type Output = DenseRaster<T>;
-
-    fn sub_inclusive(self, rhs: Self) -> Self::Output {
-        self.binary(rhs, |x, y| x.sub_inclusive_nodata_aware(y))
-    }
-}
-
-impl<T: RasterNum<T>> ops::SubAssignInclusive for DenseRaster<T> {
-    fn sub_assign_inclusive(&mut self, rhs: Self) {
-        self.binary_inplace(&rhs, |x, y| x.sub_assign_inclusive_nodata_aware(y))
-    }
-}
-
-impl<T: RasterNum<T>> ops::SubAssignInclusive<&DenseRaster<T>> for DenseRaster<T> {
-    fn sub_assign_inclusive(&mut self, rhs: &DenseRaster<T>) {
-        self.binary_inplace(rhs, |x, y| x.sub_assign_inclusive_nodata_aware(y))
-    }
-}
+dense_raster_op_inclusive!(
+    ops::SubInclusive,
+    ops::SubAssignInclusive,
+    ops::SubAssignInclusive<&DenseRaster<T>>,
+    sub_inclusive,
+    sub_assign_inclusive,
+    sub_inclusive_nodata_aware,
+    sub_assign_inclusive_nodata_aware
+);
