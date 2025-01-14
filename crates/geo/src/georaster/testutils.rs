@@ -30,3 +30,12 @@ pub fn test_metadata_2x2() -> GeoReference {
         Some(NOD),
     )
 }
+
+pub fn test_metadata_3x3() -> GeoReference {
+    GeoReference::new(
+        "EPSG:4326".to_string(),
+        RasterSize { rows: 3, cols: 3 },
+        [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        Some(NOD),
+    )
+}
