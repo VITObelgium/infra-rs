@@ -10,7 +10,7 @@ where
     for<'a> &'a RSrc: IntoIterator<Item = Option<TSrc>>,
 {
     RDest::from_iter(
-        src.geo_metadata().clone(),
+        src.geo_reference().clone(),
         src.into_iter().map(|x| x.and_then(|x| NumCast::from(x))),
     )
 }

@@ -26,7 +26,7 @@ impl<T: RasterNum<T>> DenseGeoRaster<T> {
 }
 
 impl<T: RasterNum<T>> GeoRaster<T> for DenseGeoRaster<T> {
-    fn geo_metadata(&self) -> &GeoReference {
+    fn geo_reference(&self) -> &GeoReference {
         &self.metadata
     }
 }

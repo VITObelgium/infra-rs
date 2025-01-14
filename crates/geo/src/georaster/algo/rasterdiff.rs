@@ -49,7 +49,7 @@ pub fn raster_files_intersection_diff<T: RasterNum<T> + gdal::raster::GdalType>(
     let lhs_ras = DenseGeoRaster::<T>::read(lhs)?;
     let rhs_ras = DenseGeoRaster::<T>::read(rhs)?;
 
-    let intersection = lhs_ras.geo_metadata().intersection(rhs_ras.geo_metadata())?;
+    let intersection = lhs_ras.geo_reference().intersection(rhs_ras.geo_reference())?;
     if intersection.raster_size().is_empty() {
         return Ok(RasterDiffResult::new());
     }
@@ -78,8 +78,8 @@ pub fn raster_files_diff<T: RasterNum<T> + gdal::raster::GdalType>(
 /// Compare two rasters and return a list of cell mismatches
 /// The two rasters must have the same extent, size, cell size and be aligned
 pub fn raster_diff<T: RasterNum<T>>(lhs: &impl GeoRaster<T>, rhs: &impl GeoRaster<T>) -> Result<RasterDiffResult<T>> {
-    let left_meta = lhs.geo_metadata();
-    let right_meta = rhs.geo_metadata();
+    let left_meta = lhs.geo_reference();
+    let right_meta = rhs.geo_reference();
 
     if left_meta.raster_size() != right_meta.raster_size() {
         return Err(Error::InvalidArgument(

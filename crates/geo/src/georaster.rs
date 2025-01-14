@@ -51,13 +51,13 @@ where
     for<'a> &'a RSrc: IntoIterator<Item = Option<TSrc>>,
 {
     RDest::from_iter(
-        src.geo_metadata().copy_with_nodata(Some(TDest::nodata_value())),
+        src.geo_reference().copy_with_nodata(Some(TDest::nodata_value())),
         src.into_iter().map(|x| x.and_then(|x| NumCast::from(x))),
     )
 }
 
 pub trait GeoRaster<T: RasterNum<T>>: Raster<T> {
-    fn geo_metadata(&self) -> &GeoReference;
+    fn geo_reference(&self) -> &GeoReference;
 }
 
 pub trait GeoRasterCreation<T: RasterNum<T>> {

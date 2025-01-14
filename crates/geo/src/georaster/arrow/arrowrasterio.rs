@@ -52,6 +52,6 @@ where
         T::TArrow: ArrowPrimitiveType<Native = T>,
     {
         self.flatten_nodata();
-        io::dataset::write(self.as_slice(), self.geo_metadata(), path, &[])
+        io::dataset::write(self.as_slice(), self.geo_reference(), path, &[])
     }
 }

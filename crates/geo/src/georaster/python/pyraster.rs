@@ -89,7 +89,7 @@ impl PyRaster {
         let array: &PrimitiveArray<T::TArrow> = arr.as_any().downcast_ref().expect("Failed to downcast arrow array");
 
         PyRaster {
-            meta: arrow_raster.geo_metadata().into(),
+            meta: arrow_raster.geo_reference().into(),
             data: array.into_data(),
         }
     }

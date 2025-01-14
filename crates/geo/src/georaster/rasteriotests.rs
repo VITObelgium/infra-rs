@@ -20,13 +20,6 @@ mod tests {
         let data_dir = [env!("CARGO_MANIFEST_DIR"), "..", "..", "target", "data"]
             .iter()
             .collect();
-        // if !data_dir.exists() {
-        //     // Infra used a s subcrate, try the parent directory
-
-        //     if !data_dir.exists() {
-        //         panic!("Proj.db data directory not found");
-        //     }
-        // }
 
         let gdal_config = gdalinterop::Config {
             debug_logging: false,
@@ -43,7 +36,7 @@ mod tests {
             .collect();
 
         let ras = R::read(path.as_path()).unwrap();
-        let meta = ras.geo_metadata();
+        let meta = ras.geo_reference();
 
         assert_eq!(ras.width(), 2370);
         assert_eq!(ras.height(), 920);

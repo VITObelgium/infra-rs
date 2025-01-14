@@ -61,7 +61,7 @@ impl<T: ArrowRasterNum<T>> GeoRaster<T> for ArrowRaster<T>
 where
     T::TArrow: ArrowPrimitiveType<Native = T>,
 {
-    fn geo_metadata(&self) -> &GeoReference {
+    fn geo_reference(&self) -> &GeoReference {
         &self.metadata
     }
 }
