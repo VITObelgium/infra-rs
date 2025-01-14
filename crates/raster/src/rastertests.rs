@@ -203,6 +203,9 @@ mod tests {
         assert_eq!(ras.sum(), 7.0);
     }
 
+    #[instantiate_tests(<i8, DenseRaster<i8>>)]
+    mod denserasteri8 {}
+
     #[instantiate_tests(<u8, DenseRaster<u8>>)]
     mod denserasteru8 {}
 
@@ -211,6 +214,12 @@ mod tests {
 
     #[instantiate_tests(<u32, DenseRaster<u32>>)]
     mod denserasteru32 {}
+
+    #[instantiate_tests(<i64, DenseRaster<i64>>)]
+    mod denserasteri64 {}
+
+    #[instantiate_tests(<u64, DenseRaster<u64>>)]
+    mod denserasteru64 {}
 
     #[instantiate_tests(<f32, DenseRaster<f32>>)]
     mod denserasterf32 {}

@@ -4,11 +4,11 @@ use crate::{Nodata, RasterDataType};
 pub trait RasterNum<T>:
     Copy
     + Nodata<T>
-    + num::NumCast
     + num::Num
+    + num::NumCast
     + num::Bounded
-    + std::fmt::Debug
     + num::traits::NumAssignOps
+    + std::fmt::Debug
     + std::string::ToString
 {
     const TYPE: RasterDataType;
