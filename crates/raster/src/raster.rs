@@ -125,3 +125,8 @@ pub trait RasterCreation<T: RasterNum<T>> {
     /// Create a new raster filled with nodata.
     fn filled_with_nodata(size: RasterSize) -> Self;
 }
+
+pub trait RasterOpsInclusive<T: RasterNum<T>> {
+    fn add_inclusive(self, other: &Self);
+    fn subtract_inclusive(self, other: &Self);
+}

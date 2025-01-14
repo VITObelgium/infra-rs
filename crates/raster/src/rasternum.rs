@@ -7,7 +7,9 @@ pub trait RasterNum<T>:
     + num::Num
     + num::NumCast
     + num::Bounded
+    + num::ToPrimitive
     + num::traits::NumAssignOps
+    + std::cmp::PartialOrd
     + std::fmt::Debug
     + std::string::ToString
 {
@@ -18,6 +20,9 @@ pub trait RasterNum<T>:
     fn mul_nodata_aware(self, other: Self) -> Self;
     fn div_nodata_aware(self, other: Self) -> Self;
 
+    fn add_inclusive_nodata_aware(self, other: Self) -> Self;
+    fn sub_inclusive_nodata_aware(self, other: Self) -> Self;
+
     fn div_nodata_aware_opt(self, other: Self) -> Option<Self>;
 
     #[inline]
@@ -26,8 +31,18 @@ pub trait RasterNum<T>:
     }
 
     #[inline]
+    fn add_assign_inclusive_nodata_aware(&mut self, other: Self) {
+        *self = self.add_inclusive_nodata_aware(other);
+    }
+
+    #[inline]
     fn sub_assign_nodata_aware(&mut self, other: Self) {
         *self = self.sub_nodata_aware(other);
+    }
+
+    #[inline]
+    fn sub_assign_inclusive_nodata_aware(&mut self, other: Self) {
+        *self = self.sub_inclusive_nodata_aware(other);
     }
 
     #[inline]
@@ -56,11 +71,31 @@ macro_rules! rasternum_impl {
             }
 
             #[inline]
+            fn add_inclusive_nodata_aware(self, other: Self) -> Self {
+                match (self.is_nodata(), other.is_nodata()) {
+                    (true, true) => Self::nodata_value(),
+                    (false, true) => self,
+                    (true, false) => other,
+                    (false, false) => self + other,
+                }
+            }
+
+            #[inline]
             fn sub_nodata_aware(self, other: Self) -> Self {
                 if self.is_nodata() || other.is_nodata() {
                     Self::nodata_value()
                 } else {
                     self.wrapping_sub(other)
+                }
+            }
+
+            #[inline]
+            fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
+                match (self.is_nodata(), other.is_nodata()) {
+                    (true, true) => Self::nodata_value(),
+                    (false, true) => self,
+                    (true, false) => other,
+                    (false, false) => self - other,
                 }
             }
 
@@ -109,11 +144,31 @@ macro_rules! rasternum_fp_impl {
             }
 
             #[inline]
+            fn add_inclusive_nodata_aware(self, other: Self) -> Self {
+                match (self.is_nodata(), other.is_nodata()) {
+                    (true, true) => Self::nodata_value(),
+                    (false, true) => self,
+                    (true, false) => other,
+                    (false, false) => self + other,
+                }
+            }
+
+            #[inline]
             fn sub_nodata_aware(self, other: Self) -> Self {
                 if self.is_nodata() || other.is_nodata() {
                     Self::nodata_value()
                 } else {
                     self - other
+                }
+            }
+
+            #[inline]
+            fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
+                match (self.is_nodata(), other.is_nodata()) {
+                    (true, true) => Self::nodata_value(),
+                    (false, true) => self,
+                    (true, false) => other,
+                    (false, false) => self - other,
                 }
             }
 

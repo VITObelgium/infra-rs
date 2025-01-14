@@ -1,3 +1,5 @@
+use crate::ops::{self};
+
 use super::{DenseRaster, RasterNum};
 
 /// Macro to generate numeric raster operations.
@@ -135,3 +137,61 @@ dense_raster_op!(
     div_nodata_aware,
     div_assign_nodata_aware
 );
+
+impl<T: RasterNum<T>> ops::AddInclusive for DenseRaster<T> {
+    type Output = DenseRaster<T>;
+
+    fn add_inclusive(mut self, rhs: Self) -> Self::Output {
+        self.binary_inplace(&rhs, |x, y| x.add_assign_inclusive_nodata_aware(y));
+        self
+    }
+}
+
+impl<T: RasterNum<T>> ops::AddInclusive for &DenseRaster<T> {
+    type Output = DenseRaster<T>;
+
+    fn add_inclusive(self, rhs: Self) -> Self::Output {
+        self.binary(rhs, |x, y| x.add_inclusive_nodata_aware(y))
+    }
+}
+
+impl<T: RasterNum<T>> ops::AddAssignInclusive for DenseRaster<T> {
+    fn add_assign_inclusive(&mut self, rhs: Self) {
+        self.binary_inplace(&rhs, |x, y| x.add_assign_inclusive_nodata_aware(y))
+    }
+}
+
+impl<T: RasterNum<T>> ops::AddAssignInclusive<&DenseRaster<T>> for DenseRaster<T> {
+    fn add_assign_inclusive(&mut self, rhs: &DenseRaster<T>) {
+        self.binary_inplace(rhs, |x, y| x.add_assign_inclusive_nodata_aware(y))
+    }
+}
+
+impl<T: RasterNum<T>> ops::SubInclusive for DenseRaster<T> {
+    type Output = DenseRaster<T>;
+
+    fn sub_inclusive(mut self, rhs: Self) -> Self::Output {
+        self.binary_inplace(&rhs, |x, y| x.sub_assign_inclusive_nodata_aware(y));
+        self
+    }
+}
+
+impl<T: RasterNum<T>> ops::SubInclusive for &DenseRaster<T> {
+    type Output = DenseRaster<T>;
+
+    fn sub_inclusive(self, rhs: Self) -> Self::Output {
+        self.binary(rhs, |x, y| x.sub_inclusive_nodata_aware(y))
+    }
+}
+
+impl<T: RasterNum<T>> ops::SubAssignInclusive for DenseRaster<T> {
+    fn sub_assign_inclusive(&mut self, rhs: Self) {
+        self.binary_inplace(&rhs, |x, y| x.sub_assign_inclusive_nodata_aware(y))
+    }
+}
+
+impl<T: RasterNum<T>> ops::SubAssignInclusive<&DenseRaster<T>> for DenseRaster<T> {
+    fn sub_assign_inclusive(&mut self, rhs: &DenseRaster<T>) {
+        self.binary_inplace(rhs, |x, y| x.sub_assign_inclusive_nodata_aware(y))
+    }
+}

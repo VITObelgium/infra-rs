@@ -1,7 +1,6 @@
 use crate::{DenseRaster, Error, Raster, RasterDataType, Result};
 
 /// Type erased `RasterTile`
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen)]
 #[derive(Clone)]
 pub enum AnyDenseRaster {
     U8(DenseRaster<u8>),
@@ -74,6 +73,24 @@ macro_rules! impl_try_from_dense_raster {
     };
 }
 
+macro_rules! impl_try_from_dense_raster_ref {
+    ( $data_type:path, $data_type_enum:ident ) => {
+        impl<'a> TryFrom<&'a AnyDenseRaster> for &'a DenseRaster<$data_type> {
+            type Error = Error;
+
+            fn try_from(value: &'a AnyDenseRaster) -> Result<Self> {
+                match value {
+                    AnyDenseRaster::$data_type_enum(raster) => Ok(&raster),
+                    _ => Err(Error::InvalidArgument(format!(
+                        "Expected {} raster",
+                        stringify!($data_type),
+                    ))),
+                }
+            }
+        }
+    };
+}
+
 impl_try_from_dense_raster!(u8, U8);
 impl_try_from_dense_raster!(i8, I8);
 impl_try_from_dense_raster!(u16, U16);
@@ -84,6 +101,17 @@ impl_try_from_dense_raster!(u64, U64);
 impl_try_from_dense_raster!(i64, I64);
 impl_try_from_dense_raster!(f32, F32);
 impl_try_from_dense_raster!(f64, F64);
+
+impl_try_from_dense_raster_ref!(u8, U8);
+impl_try_from_dense_raster_ref!(i8, I8);
+impl_try_from_dense_raster_ref!(u16, U16);
+impl_try_from_dense_raster_ref!(i16, I16);
+impl_try_from_dense_raster_ref!(u32, U32);
+impl_try_from_dense_raster_ref!(i32, I32);
+impl_try_from_dense_raster_ref!(u64, U64);
+impl_try_from_dense_raster_ref!(i64, I64);
+impl_try_from_dense_raster_ref!(f32, F32);
+impl_try_from_dense_raster_ref!(f64, F64);
 
 #[cfg(test)]
 mod tests {

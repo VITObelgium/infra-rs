@@ -1,9 +1,11 @@
 pub mod algo;
 mod anydenseraster;
+mod anydenserasterops;
 mod datatype;
 mod denseraster;
 mod denserasterops;
 mod nodata;
+pub mod ops;
 mod raster;
 mod rasternum;
 
@@ -28,5 +30,6 @@ pub use denseraster::DenseRaster;
 pub use nodata::Nodata;
 pub use raster::Raster;
 pub use raster::RasterCreation;
+pub use raster::RasterOpsInclusive;
 pub use raster::RasterSize;
 pub use rasternum::RasterNum;

@@ -19,7 +19,7 @@ pub trait RasterTileIO {
     fn encode_raster_tile(&self, algorithm: CompressionAlgorithm) -> Result<Vec<u8>>;
 
     #[cfg(target_arch = "wasm32")]
-    pub fn from_array_buffer(array_buffer: &js_sys::ArrayBuffer) -> Result<Self>
+    fn from_array_buffer(array_buffer: &js_sys::ArrayBuffer) -> Result<Self>
     where
         Self: std::marker::Sized;
 }
@@ -86,6 +86,19 @@ impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
             data,
         ))
     }
+
+    #[cfg(target_arch = "wasm32")]
+    fn from_array_buffer(array_buffer: &js_sys::ArrayBuffer) -> Result<Self>
+    where
+        Self: std::marker::Sized,
+    {
+        if array_buffer.byte_length() == 0 {
+            return Err(Error::InvalidArgument("Empty tile data buffer provided".into()));
+        }
+
+        let u8_array = js_sys::Uint8Array::new(array_buffer);
+        Self::from_tile_bytes(&u8_array.to_vec())
+    }
 }
 
 impl RasterTileIO for AnyDenseRaster {
@@ -148,7 +161,7 @@ impl RasterTileIO for AnyDenseRaster {
         }
 
         let u8_array = js_sys::Uint8Array::new(array_buffer);
-        Self::from_bytes(&u8_array.to_vec())
+        Self::from_tile_bytes(&u8_array.to_vec())
     }
 }
 
