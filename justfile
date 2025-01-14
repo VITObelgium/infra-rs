@@ -22,7 +22,7 @@ pybootstrap:
   -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/debug/libpython3.12.dylib
   -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/release/libpython3.12.dylib
 
-bootstrap: cargo-config-gen pybootstrap
+bootstrap: cargo-config-gen
   echo "Bootstrapping vcpkg:{{VCPKG_DEFAULT_TRIPLET}}..."
   cargo vcpkg -v build
   -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
