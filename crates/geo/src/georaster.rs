@@ -2,10 +2,10 @@
 pub mod algo;
 mod cell;
 mod densegeoraster;
+mod densegeorasterops;
 mod denserasterconversions;
 #[cfg(feature = "gdal")]
 mod denserasterio;
-mod denserasterops;
 #[cfg(feature = "gdal")]
 pub mod io;
 #[cfg(feature = "gdal")]

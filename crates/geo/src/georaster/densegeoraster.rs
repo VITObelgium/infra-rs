@@ -18,6 +18,13 @@ pub struct DenseGeoRaster<T: RasterNum<T>> {
     pub(super) data: DenseRaster<T>,
 }
 
+impl<T: RasterNum<T>> DenseGeoRaster<T> {
+    pub fn from_dense_raster(metadata: GeoReference, data: DenseRaster<T>) -> Self {
+        assert!(metadata.raster_size().cell_count() == data.len());
+        DenseGeoRaster { metadata, data }
+    }
+}
+
 impl<T: RasterNum<T>> GeoRaster<T> for DenseGeoRaster<T> {
     fn geo_metadata(&self) -> &GeoReference {
         &self.metadata
@@ -39,30 +46,26 @@ impl<T: RasterNum<T>> GeoRasterCreation<T> for DenseGeoRaster<T> {
         Self: Sized,
         Iter: Iterator<Item = Option<T>>,
     {
-        let mut data = Vec::with_capacity(metadata.rows() * metadata.columns());
-        for val in iter {
-            data.push(val.unwrap_or(T::nodata_value()));
-        }
-
         let raster_size = metadata.raster_size();
         DenseGeoRaster {
             metadata,
-            data: DenseRaster::new(raster_size, data),
+            data: DenseRaster::from_iter(raster_size, iter),
         }
     }
 
     fn zeros(meta: GeoReference) -> Self {
-        DenseGeoRaster::filled_with(T::zero(), meta)
+        let raster_size = meta.raster_size();
+        DenseGeoRaster::from_dense_raster(meta, DenseRaster::zeros(raster_size))
     }
 
     fn filled_with(val: T, meta: GeoReference) -> Self {
-        let data_size = meta.rows() * meta.columns();
-        DenseGeoRaster::new(meta, vec![val; data_size])
+        let raster_size = meta.raster_size();
+        DenseGeoRaster::from_dense_raster(meta, DenseRaster::filled_with(val, raster_size))
     }
 
     fn filled_with_nodata(meta: GeoReference) -> Self {
-        let data_size = meta.rows() * meta.columns();
-        DenseGeoRaster::new(meta, vec![T::nodata_value(); data_size])
+        let raster_size = meta.raster_size();
+        DenseGeoRaster::from_dense_raster(meta, DenseRaster::filled_with_nodata(raster_size))
     }
 }
 
@@ -269,6 +272,9 @@ impl<T: RasterNum<T>> PartialEq for DenseGeoRaster<T> {
     }
 }
 
+/// Process nodata values in the data array
+/// This means replacing all the values that match the nodata value with the default nodata value for the type T
+/// as defined by the [`crate::Nodata`] trait
 fn process_nodata<T: RasterNum<T>>(data: &mut [T], nodata: Option<f64>) {
     if let Some(nodata) = nodata {
         if nodata.is_nan() || NumCast::from(nodata) == Some(T::nodata_value()) {
@@ -297,7 +303,7 @@ mod tests {
     fn cast_dense_raster() {
         let ras = DenseGeoRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
 
-        let f64_ras = algo::cast::<f64, _, DenseGeoRaster<f64>, _>(&ras);
+        let f64_ras: DenseGeoRaster<f64> = algo::cast(&ras);
         compare_fp_vectors(
             f64_ras.as_slice(),
             &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0],
