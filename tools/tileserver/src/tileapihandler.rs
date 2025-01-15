@@ -59,7 +59,7 @@ impl IntoResponse for AppError {
                 Error::TimeError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::IOError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::InfError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::VitoTileError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+                Error::RasterTileError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::InvalidArgument(err) => (http::StatusCode::BAD_REQUEST, err),
                 Error::GeoError(_) | Error::SqliteError(_) => {
                     (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string())

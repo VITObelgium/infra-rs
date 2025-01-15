@@ -11,7 +11,7 @@ use geo::georaster::{self, io::RasterFormat};
 use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
 use raster::{RasterCreation, RasterNum, RasterSize};
-use vito_tile_format::{CompressionAlgorithm, RasterTile, RasterTileIO};
+use raster_tile::{CompressionAlgorithm, RasterTile, RasterTileIO};
 
 use crate::{
     imageprocessing::{self},
@@ -488,7 +488,7 @@ mod tests {
     use geo::Tile;
     use path_macro::path;
     use raster::Raster;
-    use vito_tile_format::{RasterTile, RasterTileIO};
+    use raster_tile::{RasterTile, RasterTileIO};
 
     use crate::{
         tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider,

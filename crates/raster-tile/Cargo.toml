@@ -1,5 +1,5 @@
 [package]
-name    = "vito-tile-format"
+name    = "raster-tile"
 version = "0.1.0"
 edition = "2021"
 
