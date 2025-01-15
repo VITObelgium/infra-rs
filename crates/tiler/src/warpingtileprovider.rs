@@ -10,8 +10,8 @@ use inf::legend::Legend;
 use geo::georaster::{self, io::RasterFormat};
 use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
-use raster::{RasterCreation, RasterNum, RasterSize};
-use raster_tile::{CompressionAlgorithm, RasterTile, RasterTileIO};
+use raster::{DenseRaster, RasterCreation, RasterNum, RasterSize};
+use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{
     imageprocessing::{self},
@@ -170,7 +170,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
 }
 
 fn raw_tile_to_vito_tile_format<T: RasterNum<T>>(data: Vec<T>, width: usize, height: usize) -> Result<TileData> {
-    let raster_tile = RasterTile::new(RasterSize::with_rows_cols(height, width), data);
+    let raster_tile = DenseRaster::new(RasterSize::with_rows_cols(height, width), data);
 
     Ok(TileData::new(
         TileFormat::VitoTileFormat,
@@ -487,8 +487,8 @@ mod tests {
     use approx::assert_relative_eq;
     use geo::Tile;
     use path_macro::path;
-    use raster::Raster;
-    use raster_tile::{RasterTile, RasterTileIO};
+    use raster::{DenseRaster, Raster};
+    use raster_tile::RasterTileIO;
 
     use crate::{
         tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider,
@@ -556,7 +556,7 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_id, &req)?;
 
-        let raster_tile = RasterTile::<u8>::from_tile_bytes(&tile_data.data)?;
+        let raster_tile = DenseRaster::<u8>::from_tile_bytes(&tile_data.data)?;
         assert_eq!(raster_tile.width(), 256);
         assert_eq!(raster_tile.height(), 256);
 

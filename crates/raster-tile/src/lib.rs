@@ -3,8 +3,6 @@ mod rastertile;
 mod tileheader;
 use thiserror::Error;
 
-pub use raster::AnyDenseRaster as AnyRasterTile;
-pub use raster::DenseRaster as RasterTile;
 pub use rastertile::RasterTileIO;
 pub use tileheader::CompressionAlgorithm;
 pub use tileheader::TileHeader;
