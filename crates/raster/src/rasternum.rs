@@ -7,7 +7,6 @@ pub trait RasterNum<T>:
     + num::Num
     + num::NumCast
     + num::Bounded
-    + num::ToPrimitive
     + num::traits::NumAssignOps
     + std::cmp::PartialOrd
     + std::fmt::Debug
@@ -56,75 +55,177 @@ pub trait RasterNum<T>:
     }
 }
 
+macro_rules! add_nodata_impl {
+    () => {
+        #[inline]
+        fn add_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() {
+                Self::nodata_value()
+            } else {
+                self.wrapping_add(other)
+            }
+        }
+
+        #[inline]
+        fn add_inclusive_nodata_aware(self, other: Self) -> Self {
+            match (self.is_nodata(), other.is_nodata()) {
+                (true, true) => Self::nodata_value(),
+                (false, true) => self,
+                (true, false) => other,
+                (false, false) => self.wrapping_add(other),
+            }
+        }
+    };
+}
+
+macro_rules! add_fp_nodata_impl {
+    () => {
+        #[inline]
+        fn add_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() {
+                Self::nodata_value()
+            } else {
+                self + other
+            }
+        }
+
+        #[inline]
+        fn add_inclusive_nodata_aware(self, other: Self) -> Self {
+            match (self.is_nodata(), other.is_nodata()) {
+                (true, true) => Self::nodata_value(),
+                (false, true) => self,
+                (true, false) => other,
+                (false, false) => self + other,
+            }
+        }
+    };
+}
+
+macro_rules! sub_nodata_impl {
+    () => {
+        #[inline]
+        fn sub_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() {
+                Self::nodata_value()
+            } else {
+                self.wrapping_sub(other)
+            }
+        }
+
+        #[inline]
+        fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
+            match (self.is_nodata(), other.is_nodata()) {
+                (true, true) => Self::nodata_value(),
+                (false, true) => self,
+                (true, false) => other,
+                (false, false) => self.wrapping_sub(other),
+            }
+        }
+    };
+}
+
+macro_rules! sub_fp_nodata_impl {
+    () => {
+        #[inline]
+        fn sub_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() {
+                Self::nodata_value()
+            } else {
+                self - other
+            }
+        }
+
+        #[inline]
+        fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
+            match (self.is_nodata(), other.is_nodata()) {
+                (true, true) => Self::nodata_value(),
+                (false, true) => self,
+                (true, false) => other,
+                (false, false) => self - other,
+            }
+        }
+    };
+}
+
+macro_rules! mul_nodata_impl {
+    () => {
+        #[inline]
+        fn mul_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() {
+                Self::nodata_value()
+            } else {
+                self.wrapping_mul(other)
+            }
+        }
+    };
+}
+
+macro_rules! mul_fp_nodata_impl {
+    () => {
+        #[inline]
+        fn mul_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() {
+                Self::nodata_value()
+            } else {
+                self * other
+            }
+        }
+    };
+}
+
+macro_rules! div_nodata_impl {
+    () => {
+        #[inline]
+        fn div_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() || other == 0 {
+                Self::nodata_value()
+            } else {
+                self / other
+            }
+        }
+
+        #[inline]
+        fn div_nodata_aware_opt(self, other: Self) -> Option<Self> {
+            if self.is_nodata() || other.is_nodata() {
+                None
+            } else {
+                self.checked_div(other)
+            }
+        }
+    };
+}
+
+macro_rules! div_fp_nodata_impl {
+    () => {
+        #[inline]
+        fn div_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() || other == 0.0 {
+                Self::nodata_value()
+            } else {
+                self / other
+            }
+        }
+
+        #[inline]
+        fn div_nodata_aware_opt(self, other: Self) -> Option<Self> {
+            if self.is_nodata() || other.is_nodata() || other == 0.0 {
+                None
+            } else {
+                Some(self / other)
+            }
+        }
+    };
+}
+
 macro_rules! rasternum_impl {
     ($trait_name:path, $t:ty, $raster_type:ident) => {
         impl $trait_name for $t {
             const TYPE: RasterDataType = RasterDataType::$raster_type;
 
-            #[inline]
-            fn add_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() {
-                    Self::nodata_value()
-                } else {
-                    self.wrapping_add(other)
-                }
-            }
-
-            #[inline]
-            fn add_inclusive_nodata_aware(self, other: Self) -> Self {
-                match (self.is_nodata(), other.is_nodata()) {
-                    (true, true) => Self::nodata_value(),
-                    (false, true) => self,
-                    (true, false) => other,
-                    (false, false) => self + other,
-                }
-            }
-
-            #[inline]
-            fn sub_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() {
-                    Self::nodata_value()
-                } else {
-                    self.wrapping_sub(other)
-                }
-            }
-
-            #[inline]
-            fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
-                match (self.is_nodata(), other.is_nodata()) {
-                    (true, true) => Self::nodata_value(),
-                    (false, true) => self,
-                    (true, false) => other,
-                    (false, false) => self - other,
-                }
-            }
-
-            #[inline]
-            fn mul_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() {
-                    Self::nodata_value()
-                } else {
-                    self.wrapping_mul(other)
-                }
-            }
-
-            #[inline]
-            fn div_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() || other == 0 {
-                    Self::nodata_value()
-                } else {
-                    self / other
-                }
-            }
-
-            #[inline]
-            fn div_nodata_aware_opt(self, other: Self) -> Option<Self> {
-                if self.is_nodata() || other.is_nodata() {
-                    None
-                } else {
-                    self.checked_div(other)
-                }
-            }
+            add_nodata_impl!();
+            sub_nodata_impl!();
+            mul_nodata_impl!();
+            div_nodata_impl!();
         }
     };
 }
@@ -134,70 +235,10 @@ macro_rules! rasternum_fp_impl {
         impl $trait_name for $t {
             const TYPE: RasterDataType = RasterDataType::$raster_type;
 
-            #[inline]
-            fn add_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() {
-                    Self::nodata_value()
-                } else {
-                    self + other
-                }
-            }
-
-            #[inline]
-            fn add_inclusive_nodata_aware(self, other: Self) -> Self {
-                match (self.is_nodata(), other.is_nodata()) {
-                    (true, true) => Self::nodata_value(),
-                    (false, true) => self,
-                    (true, false) => other,
-                    (false, false) => self + other,
-                }
-            }
-
-            #[inline]
-            fn sub_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() {
-                    Self::nodata_value()
-                } else {
-                    self - other
-                }
-            }
-
-            #[inline]
-            fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
-                match (self.is_nodata(), other.is_nodata()) {
-                    (true, true) => Self::nodata_value(),
-                    (false, true) => self,
-                    (true, false) => other,
-                    (false, false) => self - other,
-                }
-            }
-
-            #[inline]
-            fn mul_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() {
-                    Self::nodata_value()
-                } else {
-                    self * other
-                }
-            }
-
-            #[inline]
-            fn div_nodata_aware(self, other: Self) -> Self {
-                if self.is_nodata() || other.is_nodata() || other == 0.0 {
-                    Self::nodata_value()
-                } else {
-                    self / other
-                }
-            }
-
-            #[inline]
-            fn div_nodata_aware_opt(self, other: Self) -> Option<Self> {
-                if self.is_nodata() || other.is_nodata() || other == 0.0 {
-                    None
-                } else {
-                    Some(self / other)
-                }
-            }
+            add_fp_nodata_impl!();
+            sub_fp_nodata_impl!();
+            mul_fp_nodata_impl!();
+            div_fp_nodata_impl!();
         }
     };
 }
