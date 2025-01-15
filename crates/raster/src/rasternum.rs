@@ -13,6 +13,7 @@ pub trait RasterNum<T>:
     + std::string::ToString
 {
     const TYPE: RasterDataType;
+    const IS_SIGNED: bool;
 
     fn add_nodata_aware(self, other: Self) -> Self;
     fn sub_nodata_aware(self, other: Self) -> Self;
@@ -72,7 +73,7 @@ macro_rules! add_nodata_impl {
                 (true, true) => Self::nodata_value(),
                 (false, true) => self,
                 (true, false) => other,
-                (false, false) => self.wrapping_add(other),
+                (false, false) => self.saturating_add(other),
             }
         }
     };
@@ -113,7 +114,30 @@ macro_rules! sub_nodata_impl {
             match (self.is_nodata(), other.is_nodata()) {
                 (true, true) => Self::nodata_value(),
                 (false, true) => self,
-                (true, false) => other,
+                (true, false) => -other,
+                (false, false) => self.wrapping_sub(other),
+            }
+        }
+    };
+}
+
+macro_rules! sub_nodata_unsigned_impl {
+    () => {
+        #[inline]
+        fn sub_nodata_aware(self, other: Self) -> Self {
+            if self.is_nodata() || other.is_nodata() {
+                Self::nodata_value()
+            } else {
+                self.wrapping_sub(other)
+            }
+        }
+
+        #[inline]
+        fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
+            match (self.is_nodata(), other.is_nodata()) {
+                (true, true) => Self::nodata_value(),
+                (false, true) => self,
+                (true, false) => Self::nodata_value(),
                 (false, false) => self.wrapping_sub(other),
             }
         }
@@ -136,7 +160,7 @@ macro_rules! sub_fp_nodata_impl {
             match (self.is_nodata(), other.is_nodata()) {
                 (true, true) => Self::nodata_value(),
                 (false, true) => self,
-                (true, false) => other,
+                (true, false) => -other,
                 (false, false) => self - other,
             }
         }
@@ -209,13 +233,28 @@ macro_rules! div_fp_nodata_impl {
     };
 }
 
-macro_rules! rasternum_impl {
+macro_rules! rasternum_signed_impl {
     ($trait_name:path, $t:ty, $raster_type:ident) => {
         impl $trait_name for $t {
             const TYPE: RasterDataType = RasterDataType::$raster_type;
+            const IS_SIGNED: bool = true;
 
             add_nodata_impl!();
             sub_nodata_impl!();
+            mul_nodata_impl!();
+            div_nodata_impl!();
+        }
+    };
+}
+
+macro_rules! rasternum_unsigned_impl {
+    ($trait_name:path, $t:ty, $raster_type:ident) => {
+        impl $trait_name for $t {
+            const TYPE: RasterDataType = RasterDataType::$raster_type;
+            const IS_SIGNED: bool = false;
+
+            add_nodata_impl!();
+            sub_nodata_unsigned_impl!();
             mul_nodata_impl!();
             div_nodata_impl!();
         }
@@ -226,6 +265,7 @@ macro_rules! rasternum_fp_impl {
     ($trait_name:path, $t:ty, $raster_type:ident) => {
         impl $trait_name for $t {
             const TYPE: RasterDataType = RasterDataType::$raster_type;
+            const IS_SIGNED: bool = true;
 
             add_fp_nodata_impl!();
             sub_fp_nodata_impl!();
@@ -235,14 +275,14 @@ macro_rules! rasternum_fp_impl {
     };
 }
 
-rasternum_impl!(RasterNum<i8>, i8, Int8);
-rasternum_impl!(RasterNum<u8>, u8, Uint8);
-rasternum_impl!(RasterNum<i16>, i16, Int16);
-rasternum_impl!(RasterNum<u16>, u16, Uint16);
-rasternum_impl!(RasterNum<i32>, i32, Int32);
-rasternum_impl!(RasterNum<u32>, u32, Uint32);
-rasternum_impl!(RasterNum<i64>, i64, Int64);
-rasternum_impl!(RasterNum<u64>, u64, Uint64);
+rasternum_signed_impl!(RasterNum<i8>, i8, Int8);
+rasternum_signed_impl!(RasterNum<i16>, i16, Int16);
+rasternum_signed_impl!(RasterNum<i32>, i32, Int32);
+rasternum_signed_impl!(RasterNum<i64>, i64, Int64);
+rasternum_unsigned_impl!(RasterNum<u8>, u8, Uint8);
+rasternum_unsigned_impl!(RasterNum<u16>, u16, Uint16);
+rasternum_unsigned_impl!(RasterNum<u32>, u32, Uint32);
+rasternum_unsigned_impl!(RasterNum<u64>, u64, Uint64);
 
 rasternum_fp_impl!(RasterNum<f32>, f32, Float32);
 rasternum_fp_impl!(RasterNum<f64>, f64, Float64);

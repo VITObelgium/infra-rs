@@ -137,8 +137,12 @@ mod tests {
         use crate::ops::SubInclusive;
 
         let raster1 = R::new(SIZE, create_vec(&[NOD, 5.0, 9.0, 3.0, NOD, 13.0, 3.0, 4.0, 8.0]));
-        let raster2 = R::new(SIZE, create_vec(&[NOD, 3.0, 4.0, 3.0, NOD, 3.0, 1.0, 3.0, NOD]));
-        let expected = R::new(SIZE, create_vec(&[NOD, 2.0, 5.0, 0.0, NOD, 10.0, 2.0, 1.0, 8.0]));
+        let raster2 = R::new(SIZE, create_vec(&[1.0, 3.0, 4.0, 3.0, NOD, 3.0, 1.0, 3.0, NOD]));
+        let expected = if T::IS_SIGNED {
+            R::new(SIZE, create_vec(&[-1.0, 2.0, 5.0, 0.0, NOD, 10.0, 2.0, 1.0, 8.0]))
+        } else {
+            R::new(SIZE, create_vec(&[NOD, 2.0, 5.0, 0.0, NOD, 10.0, 2.0, 1.0, 8.0]))
+        };
 
         {
             let result = (&raster1).sub_inclusive(&raster2);
