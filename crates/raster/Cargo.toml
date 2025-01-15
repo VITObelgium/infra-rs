@@ -14,3 +14,10 @@ wasm-bindgen = "0.2"
 [dev-dependencies]
 approx        = "0.5"
 generic-tests = "0.1"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name    = "rasterops"
+harness = false

@@ -69,3 +69,9 @@ test_release_py: pybootstrap
 
 build: build_release
 test: test_release
+
+rasterbench:
+  cargo bench --bench rasterops --package=raster
+
+rasterbenchbaseline name:
+  cargo bench --bench rasterops --package=raster -- --save-baseline {{name}}
