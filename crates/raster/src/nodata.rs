@@ -3,6 +3,7 @@ use num::ToPrimitive;
 pub trait Nodata<T>: ToPrimitive + PartialEq + Sized + Copy {
     fn nodata_value() -> Self;
 
+    #[inline]
     fn is_nodata(self) -> bool {
         self == Self::nodata_value()
     }

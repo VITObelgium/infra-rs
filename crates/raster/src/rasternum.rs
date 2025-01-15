@@ -82,11 +82,7 @@ macro_rules! add_fp_nodata_impl {
     () => {
         #[inline]
         fn add_nodata_aware(self, other: Self) -> Self {
-            if self.is_nodata() || other.is_nodata() {
-                Self::nodata_value()
-            } else {
-                self + other
-            }
+            self + other
         }
 
         #[inline]
@@ -164,11 +160,7 @@ macro_rules! mul_fp_nodata_impl {
     () => {
         #[inline]
         fn mul_nodata_aware(self, other: Self) -> Self {
-            if self.is_nodata() || other.is_nodata() {
-                Self::nodata_value()
-            } else {
-                self * other
-            }
+            self * other
         }
     };
 }
