@@ -1,5 +1,3 @@
-use std::path::Path;
-
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
 use raster::RasterSize;
@@ -99,7 +97,7 @@ impl GeoReference {
     }
 
     #[cfg(feature = "gdal")]
-    pub fn from_file(path: &Path) -> Result<Self> {
+    pub fn from_file(path: &std::path::Path) -> Result<Self> {
         crate::georaster::io::dataset::read_file_metadata(path)
     }
 

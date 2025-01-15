@@ -1,9 +1,4 @@
-use crate::{
-    crs,
-    georaster::algo::{self, WarpOptions},
-    GeoReference, Result,
-};
-use gdal::raster::GdalType;
+use crate::GeoReference;
 use num::NumCast;
 use raster::{DenseRaster, Raster, RasterCreation, RasterNum};
 
@@ -131,8 +126,9 @@ impl<T: RasterNum<T>> DenseGeoRaster<T> {
 }
 
 #[cfg(feature = "gdal")]
-impl<T: RasterNum<T> + GdalType> DenseGeoRaster<T> {
-    pub fn warped_to_epsg(&self, epsg: crs::Epsg) -> Result<Self> {
+impl<T: RasterNum<T> + gdal::raster::GdalType> DenseGeoRaster<T> {
+    pub fn warped_to_epsg(&self, epsg: crate::crs::Epsg) -> crate::Result<Self> {
+        use super::algo;
         use super::io;
 
         let dest_meta = self.metadata.warped_to_epsg(epsg)?;
@@ -141,7 +137,7 @@ impl<T: RasterNum<T> + GdalType> DenseGeoRaster<T> {
         let src_ds = io::dataset::create_in_memory_with_data(&self.metadata, self.data.as_slice())?;
         let dst_ds = io::dataset::create_in_memory_with_data(&result.metadata, result.data.as_slice())?;
 
-        algo::warp(&src_ds, &dst_ds, &WarpOptions::default())?;
+        algo::warp(&src_ds, &dst_ds, &algo::WarpOptions::default())?;
 
         Ok(result)
     }
@@ -297,7 +293,10 @@ mod tests {
     use raster::Nodata;
 
     use super::*;
-    use crate::georaster::testutils::{compare_fp_vectors, test_metadata_2x2};
+    use crate::georaster::{
+        algo,
+        testutils::{compare_fp_vectors, test_metadata_2x2},
+    };
 
     #[test]
     fn cast_dense_raster() {

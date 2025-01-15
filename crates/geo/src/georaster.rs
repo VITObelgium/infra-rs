@@ -1,4 +1,3 @@
-#[cfg(feature = "gdal")]
 pub mod algo;
 mod cell;
 mod densegeoraster;
