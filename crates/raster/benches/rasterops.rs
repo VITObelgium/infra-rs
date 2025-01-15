@@ -46,6 +46,7 @@ pub fn bench_addition<T: RasterNum<T>>(c: &mut Criterion) {
     });
 }
 
+criterion::criterion_group!(benches_u8, bench_addition<u8>);
 criterion::criterion_group!(benches_i32, bench_addition<i32>);
 criterion::criterion_group!(benches_f32, bench_addition<f32>);
-criterion::criterion_main!(benches_i32, benches_f32);
+criterion::criterion_main!(benches_u8, benches_i32, benches_f32);
