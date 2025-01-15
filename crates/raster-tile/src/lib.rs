@@ -6,6 +6,7 @@ use thiserror::Error;
 pub use rastertile::RasterTileIO;
 pub use tileheader::CompressionAlgorithm;
 pub use tileheader::TileHeader;
+pub use tileheader::RASTER_TILE_SIGNATURE;
 
 #[derive(Error, Debug)]
 pub enum Error {

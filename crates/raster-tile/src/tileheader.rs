@@ -3,7 +3,7 @@ use raster::RasterDataType;
 
 use crate::{Error, Result};
 
-const SIGNATURE: u32 = u32::from_le_bytes([b'T', b'I', b'L', b'E']);
+pub const RASTER_TILE_SIGNATURE: u32 = u32::from_le_bytes([b'T', b'I', b'L', b'E']);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, NoUninit)]
 #[repr(u8)]
@@ -45,7 +45,7 @@ impl TileHeader {
         data_size: u32,
     ) -> Self {
         Self {
-            signature: SIGNATURE,
+            signature: RASTER_TILE_SIGNATURE,
             version: 1,
             data_type,
             compression,
@@ -62,7 +62,7 @@ impl TileHeader {
         }
 
         let header: TileHeader = unsafe { std::ptr::read(data.as_ptr().cast()) };
-        if header.signature != SIGNATURE {
+        if header.signature != RASTER_TILE_SIGNATURE {
             return Err(Error::InvalidArgument("Invalid tile signature".into()));
         }
 
