@@ -7,7 +7,7 @@ use std::{collections::HashMap, path::PathBuf};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
-pub struct LayerId(u32);
+pub struct LayerId(u64);
 
 impl std::fmt::Display for LayerId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -16,13 +16,13 @@ impl std::fmt::Display for LayerId {
 }
 
 impl LayerId {
-    pub fn new(id: u32) -> Self {
+    pub fn new(id: u64) -> Self {
         Self(id)
     }
 }
 
-impl From<u32> for LayerId {
-    fn from(val: u32) -> LayerId {
+impl From<u64> for LayerId {
+    fn from(val: u64) -> LayerId {
         LayerId::new(val)
     }
 }
