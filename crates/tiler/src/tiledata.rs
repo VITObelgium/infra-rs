@@ -2,6 +2,7 @@ use crate::{tileformat::TileFormat, PixelFormat};
 
 #[derive(Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct TileData {
     pub format: TileFormat,
     pub pixel_format: PixelFormat,

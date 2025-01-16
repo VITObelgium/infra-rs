@@ -1,6 +1,6 @@
 use geo::{Coordinate, LatLonBounds, Tile};
 use inf::Legend;
-use std::{ops::Range, sync::atomic::AtomicU64};
+use std::{ops::Range, sync::atomic::AtomicU32};
 
 use crate::{
     layermetadata::{LayerId, LayerMetadata},
@@ -39,7 +39,7 @@ pub trait TileProvider {
     fn get_tile_color_mapped(&self, id: LayerId, req: &ColorMappedTileRequest) -> Result<TileData>;
 }
 
-static LAYER_ID: AtomicU64 = AtomicU64::new(0);
+static LAYER_ID: AtomicU32 = AtomicU32::new(0);
 
 pub fn unique_layer_id() -> LayerId {
     LayerId::from(LAYER_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1)

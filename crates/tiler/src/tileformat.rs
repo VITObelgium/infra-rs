@@ -3,6 +3,7 @@ use core::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "serde", serde(rename_all = "lowercase"))]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub enum TileFormat {
     #[default]
     Unknown,

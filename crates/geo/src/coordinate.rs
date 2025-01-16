@@ -4,6 +4,7 @@ use geo_types::Point;
 /// Represents a wgs84 point in the raster (lat, lon)
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct Coordinate {
     pub latitude: f64,
     pub longitude: f64,
