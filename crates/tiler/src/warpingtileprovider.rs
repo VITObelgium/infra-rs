@@ -173,7 +173,7 @@ fn raw_tile_to_vito_tile_format<T: RasterNum<T>>(data: Vec<T>, width: usize, hei
     let raster_tile = DenseRaster::new(RasterSize::with_rows_cols(height, width), data);
 
     Ok(TileData::new(
-        TileFormat::VitoTileFormat,
+        TileFormat::RasterTile,
         PixelFormat::Native,
         RasterTileIO::encode_raster_tile(&raster_tile, CompressionAlgorithm::Lz4Block)?,
     ))
@@ -347,7 +347,7 @@ impl WarpingTileProvider {
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
                 Some(nodata),
             ),
-            TileFormat::VitoTileFormat => raw_tile_to_vito_tile_format::<T>(
+            TileFormat::RasterTile => raw_tile_to_vito_tile_format::<T>(
                 raw_tile_data,
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
@@ -551,7 +551,7 @@ mod tests {
         let req = TileRequest {
             tile: Tile { x: 264, y: 171, z: 9 },
             dpi_ratio: 1,
-            tile_format: TileFormat::VitoTileFormat,
+            tile_format: TileFormat::RasterTile,
         };
 
         let tile_data = provider.get_tile(layer_id, &req)?;

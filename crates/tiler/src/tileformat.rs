@@ -10,7 +10,7 @@ pub enum TileFormat {
     FloatEncodedPng,
     Jpeg,
     Protobuf,
-    VitoTileFormat,
+    RasterTile,
 }
 
 impl TileFormat {
@@ -19,7 +19,7 @@ impl TileFormat {
             TileFormat::Protobuf => "pbf",
             TileFormat::Png | TileFormat::FloatEncodedPng => "png",
             TileFormat::Jpeg => "jpg",
-            TileFormat::VitoTileFormat => "vtf",
+            TileFormat::RasterTile => "vrt",
             TileFormat::Unknown => "",
         }
     }
@@ -35,7 +35,7 @@ impl fmt::Display for TileFormat {
                 TileFormat::Png => "png",
                 TileFormat::FloatEncodedPng => "float_png",
                 TileFormat::Jpeg => "jpeg",
-                TileFormat::VitoTileFormat => "vtf",
+                TileFormat::RasterTile => "vrt",
                 TileFormat::Unknown => "",
             }
         )
@@ -49,7 +49,7 @@ impl From<&str> for TileFormat {
             "float_png" => TileFormat::FloatEncodedPng,
             "jpeg" => TileFormat::Jpeg,
             "pbf" => TileFormat::Protobuf,
-            "vtf" => TileFormat::VitoTileFormat,
+            "vrt" => TileFormat::RasterTile,
             _ => TileFormat::Unknown,
         }
     }

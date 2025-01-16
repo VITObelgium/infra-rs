@@ -175,7 +175,7 @@ const fn tile_format_content_type(tile_format: TileFormat) -> &'static str {
         TileFormat::Protobuf => "application/protobuf",
         TileFormat::Png | TileFormat::FloatEncodedPng => "image/png",
         TileFormat::Jpeg => "image/jpeg",
-        TileFormat::VitoTileFormat | TileFormat::Unknown => "application/octet-stream",
+        TileFormat::RasterTile | TileFormat::Unknown => "application/octet-stream",
     }
 }
 
@@ -441,7 +441,7 @@ impl TileApiHandler {
         let layer_id = parse_layer_id(layer)?;
         let layer_meta = self.tile_provider.layer(layer_id)?;
         let tile = match tile_format {
-            Some(TileFormat::FloatEncodedPng | TileFormat::VitoTileFormat) => {
+            Some(TileFormat::FloatEncodedPng | TileFormat::RasterTile) => {
                 Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, tile_format.unwrap()).await?
             }
             _ => {
