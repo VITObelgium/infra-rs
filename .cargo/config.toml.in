@@ -22,7 +22,6 @@ rustflags = [
     "-Wclippy::doc_markdown",
     "-Wclippy::empty_enum",
     "-Wclippy::enum_glob_use",
-    "-Wclippy::exit",
     "-Wclippy::expl_impl_clone_on_copy",
     "-Wclippy::explicit_deref_methods",
     "-Wclippy::explicit_into_iter_loop",
