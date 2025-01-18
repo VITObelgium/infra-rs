@@ -357,6 +357,7 @@ pub type CategoricStringLegend = MappedLegend<mapper::CategoricString>;
 /// Use this when you need to store a legend that can be of any mapping type
 #[derive(Clone, Debug)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[allow(clippy::large_enum_variant)]
 pub enum Legend {
     Linear(LinearLegend),
     Banded(BandedLegend),
