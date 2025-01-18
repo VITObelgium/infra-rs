@@ -30,6 +30,10 @@ impl DynamicTileProvider {
             .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
     }
 
+    pub fn reset(&mut self) {
+        self.layers.clear();
+    }
+
     pub fn add_dir(input: &std::path::Path) -> Result<HashMap<LayerId, LayerMetadata>> {
         let mut layers = HashMap::new();
 
