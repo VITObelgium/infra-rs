@@ -1,4 +1,4 @@
-use crate::{algo, raster::RasterCreation, Raster, RasterNum, RasterSize};
+use crate::{algo, raster::RasterCreation, Cell, Raster, RasterNum, RasterSize};
 
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::nodata_value`] for the type T in the same array data structure
@@ -162,6 +162,10 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
 
     fn iter_opt(&self) -> impl Iterator<Item = Option<T>> {
         DenserRasterIterator::new(self)
+    }
+
+    fn set_cell_value(&mut self, cell: Cell, val: T) {
+        self.data[cell.row as usize * self.size.cols + cell.col as usize] = val;
     }
 }
 

@@ -1,6 +1,7 @@
 pub mod algo;
 mod anydenseraster;
 mod anydenserasterops;
+mod cell;
 mod datatype;
 mod denseraster;
 mod denserasterops;
@@ -25,6 +26,8 @@ pub enum Error {
 }
 
 pub use anydenseraster::AnyDenseRaster;
+pub use cell::Cell;
+pub use cell::CellIterator;
 pub use datatype::RasterDataType;
 pub use denseraster::DenseRaster;
 pub use nodata::Nodata;

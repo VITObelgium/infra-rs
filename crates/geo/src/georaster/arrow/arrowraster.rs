@@ -314,6 +314,10 @@ where
     fn iter_mut(&mut self) -> std::slice::IterMut<T> {
         todo!()
     }
+
+    fn set_cell_value(&mut self, cell: raster::Cell, val: T) {
+        todo!()
+    }
 }
 
 impl<'a, T: ArrowRasterNum<T>> IntoIterator for &'a ArrowRaster<T>

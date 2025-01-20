@@ -1,8 +1,8 @@
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
-use raster::RasterSize;
+use raster::{Cell, RasterSize};
 
-use crate::{crs::Epsg, georaster::Cell, Error, LatLonBounds, Point, Rect, Result};
+use crate::{crs::Epsg, Error, LatLonBounds, Point, Rect, Result};
 
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};

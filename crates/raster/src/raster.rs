@@ -1,4 +1,4 @@
-use crate::RasterNum;
+use crate::{Cell, RasterNum};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct RasterSize {
@@ -112,6 +112,8 @@ where
 
     /// Return a mutable iterator over the raster data
     fn iter_mut(&mut self) -> std::slice::IterMut<T>;
+
+    fn set_cell_value(&mut self, cell: Cell, val: T);
 }
 
 pub trait RasterCreation<T: RasterNum<T>> {

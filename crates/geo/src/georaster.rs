@@ -1,5 +1,4 @@
 pub mod algo;
-mod cell;
 mod densegeoraster;
 mod densegeorasterops;
 mod denserasterconversions;
@@ -30,8 +29,6 @@ pub mod arrow {
 pub use arrow::arrowraster::ArrowRaster;
 #[cfg(feature = "arrow")]
 pub use arrow::arrowraster::ArrowRasterNum;
-pub use cell::Cell;
-pub use cell::CellIterator;
 #[doc(inline)]
 pub use densegeoraster::DenseGeoRaster;
 

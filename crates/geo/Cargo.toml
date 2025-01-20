@@ -40,7 +40,7 @@ gdal        = ["dep:gdal", "dep:gdal-sys"]
 gdal-static = ["gdal"]
 arrow       = ["dep:arrow"]
 python      = ["arrow", "arrow/pyarrow", "dep:pyo3"]
-serde       = ["dep:serde"]
+serde       = ["dep:serde", "raster/serde"]
 specta      = ["dep:specta"]
 
 [package.metadata.vcpkg]

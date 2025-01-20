@@ -504,10 +504,11 @@ pub mod dataset {
 
     #[cfg(test)]
     mod tests {
-        use crate::{crs, georaster::Cell, CellSize, Point};
+        use crate::{crs, CellSize, Point};
 
         use super::*;
         use approx::assert_relative_eq;
+        use raster::Cell;
 
         #[test]
         fn test_intersect_metadata() {

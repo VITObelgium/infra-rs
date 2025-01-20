@@ -1,9 +1,6 @@
-use raster::RasterNum;
+use raster::{Cell, RasterNum};
 
-use crate::{
-    georaster::{Cell, GeoRaster},
-    Error, Result,
-};
+use crate::{georaster::GeoRaster, Error, Result};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

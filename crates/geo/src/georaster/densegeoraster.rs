@@ -212,6 +212,10 @@ impl<T: RasterNum<T>> Raster<T> for DenseGeoRaster<T> {
     fn iter_opt(&self) -> impl Iterator<Item = Option<T>> {
         self.data.into_iter()
     }
+
+    fn set_cell_value(&mut self, cell: raster::Cell, val: T) {
+        self.data.set_cell_value(cell, val);
+    }
 }
 
 impl<'a, T: RasterNum<T>> IntoIterator for &'a DenseGeoRaster<T> {

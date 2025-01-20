@@ -1,6 +1,6 @@
 use crate::gdalinterop;
-use crate::georaster::Cell;
 use gdal::vector::LayerAccess;
+use raster::Cell;
 
 use crate::Error;
 use crate::Result;
