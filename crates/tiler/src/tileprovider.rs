@@ -32,7 +32,7 @@ pub trait TileProvider {
     /// If zoom is provided, the range is calculated for the given zoom level (can improve performance for large rasters)
     fn extent_value_range(&self, id: LayerId, extent: LatLonBounds, zoom: Option<i32>) -> Result<Range<f64>>;
     /// For a given layer, returns the pixel vlalue at the provided coordinate
-    fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>>;
+    fn get_raster_value(&self, id: LayerId, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>>;
     /// For a given layer, get the raw tile data
     fn get_tile(&self, id: LayerId, req: &TileRequest) -> Result<TileData>;
     /// For a given layer, get the tile data, the coloring is done using the provided legend

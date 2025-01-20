@@ -10,13 +10,13 @@ use inf::legend::Legend;
 use geo::georaster::{self, io::RasterFormat};
 use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
-use raster::{DenseRaster, RasterCreation, RasterNum, RasterSize};
+use raster::{DenseRaster, Nodata, RasterCreation, RasterNum, RasterSize};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{
     imageprocessing::{self},
     layermetadata::{to_raster_data_type, LayerId, LayerMetadata, RasterDataType},
-    rasterprocessing::{metadata_bounds_wgs84, raster_pixel, source_type_for_path},
+    rasterprocessing::{metadata_bounds_wgs84, source_type_for_path},
     tiledata::TileData,
     tileformat::TileFormat,
     tileprovider::{self, ColorMappedTileRequest, TileProvider, TileRequest},
@@ -202,7 +202,7 @@ impl WarpingTileProvider {
             let over_view_count = raster_band.overview_count()?;
 
             let mut srs = SpatialReference::from_proj(meta.projection())?;
-            let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), true);
+            let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), opts.max_zoom_round_up);
 
             let mut name = path
                 .file_stem()
@@ -321,6 +321,40 @@ impl WarpingTileProvider {
         Ok((raw_tile_data, nodata))
     }
 
+    fn process_pixel_request<T>(
+        meta: &LayerMetadata,
+        band_nr: usize,
+        tile: Tile,
+        dpi_ratio: u8,
+        coord: Coordinate,
+    ) -> Result<Option<f32>>
+    where
+        T: RasterNum<T> + Num + GdalType,
+    {
+        let (raw_tile_data, nodata) = WarpingTileProvider::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
+        if raw_tile_data.is_empty() {
+            return Ok(None);
+        }
+
+        let tile_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
+        let raster_size = RasterSize::with_rows_cols(tile_size, tile_size);
+        let pixel_size = Tile::pixel_size_at_zoom_level(tile.z) / dpi_ratio as f64;
+        let tile_meta = GeoReference::with_origin(
+            "",
+            raster_size,
+            crs::lat_lon_to_web_mercator(tile.bounds().southwest()),
+            CellSize::square(pixel_size),
+            Option::<f32>::Some(Nodata::nodata_value()),
+        );
+        let cell = tile_meta.point_to_cell(crs::lat_lon_to_web_mercator(coord));
+
+        match raw_tile_data.get(cell.row as usize * tile_size + cell.col as usize) {
+            Some(&v) if v.is_nan() || v == nodata => Ok(None),
+            Some(&v) => Ok(v.to_f32()),
+            None => Ok(None),
+        }
+    }
+
     fn process_tile_request<T>(meta: &LayerMetadata, band_nr: usize, req: &TileRequest) -> Result<TileData>
     where
         T: RasterNum<T> + Num + GdalType,
@@ -428,8 +462,30 @@ impl WarpingTileProvider {
         }
     }
 
-    pub fn raster_pixel(layer_meta: &LayerMetadata, coord: Coordinate) -> Result<Option<f32>> {
-        raster_pixel(&layer_meta.path, layer_meta.band_nr.unwrap_or(1), coord, None)
+    pub fn raster_pixel(meta: &LayerMetadata, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
+        // We read the entire tile for the corresponding coordinate
+        // This is not ideal from a performance perspective, but is needed to get accurate values
+        // The result of the gdal warp algorithm is not the same for individual pixels probably due
+        // to the resampling algorithm used
+        // It is advised that clients perform the value lookop on the tiles themselves when a lot of
+        // pixel values will be queried
+
+        let band_nr = meta.band_nr.unwrap_or(1);
+        let tile = Tile::for_coordinate(coord, meta.max_zoom);
+        match meta.data_type {
+            RasterDataType::Byte => {
+                WarpingTileProvider::process_pixel_request::<u8>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Int32 => {
+                WarpingTileProvider::process_pixel_request::<i32>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::UInt32 => {
+                WarpingTileProvider::process_pixel_request::<u32>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Float => {
+                WarpingTileProvider::process_pixel_request::<f32>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+        }
     }
 
     pub fn value_range_for_extent(
@@ -466,9 +522,9 @@ impl TileProvider for WarpingTileProvider {
         WarpingTileProvider::value_range_for_extent(layer_meta, extent, zoom)
     }
 
-    fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
+    fn get_raster_value(&self, id: LayerId, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
         let layer_meta = self.layer_ref(id)?;
-        WarpingTileProvider::raster_pixel(layer_meta, coord)
+        WarpingTileProvider::raster_pixel(layer_meta, coord, dpi_ratio)
     }
 
     fn get_tile(&self, id: LayerId, tile_req: &TileRequest) -> Result<TileData> {
@@ -485,9 +541,10 @@ impl TileProvider for WarpingTileProvider {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use geo::Tile;
+    use geo::{crs, Coordinate, Point, Tile};
+    use inf::cast;
     use path_macro::path;
-    use raster::{DenseRaster, Raster};
+    use raster::{Cell, DenseRaster, Raster, RasterCreation, RasterSize};
     use raster_tile::RasterTileIO;
 
     use crate::{
@@ -496,16 +553,21 @@ mod tests {
     };
 
     fn test_raster() -> std::path::PathBuf {
-        path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "landusebyte.tif")
+        path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "landusebyte.tif")
+    }
+
+    fn test_raster_web_mercator() -> std::path::PathBuf {
+        path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "landusebyte_3857.tif")
     }
 
     #[test]
     fn test_layer_metadata() -> Result<(), Error> {
-        let provider = WarpingTileProvider::new(&test_raster(), &TileProviderOptions { calculate_stats: false })?;
+        let provider = WarpingTileProvider::new(&test_raster(), &TileProviderOptions::default())?;
         let layer_id = provider.layers().first().unwrap().id;
 
         let meta = provider.layer(layer_id)?;
         assert_eq!(meta.nodata::<u8>(), Some(255));
+        assert_eq!(meta.max_zoom, 10);
         assert_relative_eq!(meta.bounds[0], 2.52542882367258, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[1], 50.6774001192389, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[2], 5.91103418055685, epsilon = 1e-6);
@@ -515,9 +577,136 @@ mod tests {
     }
 
     #[test]
+    fn test_provider_option_max_zoom() -> Result<(), Error> {
+        {
+            let provider = WarpingTileProvider::new(
+                &test_raster(),
+                &TileProviderOptions {
+                    calculate_stats: false,
+                    max_zoom_round_up: false,
+                },
+            )?;
+
+            assert_eq!(10, provider.layers().first().unwrap().max_zoom);
+        }
+        {
+            let provider = WarpingTileProvider::new(
+                &test_raster(),
+                &TileProviderOptions {
+                    calculate_stats: false,
+                    max_zoom_round_up: true,
+                },
+            )?;
+
+            assert_eq!(11, provider.layers().first().unwrap().max_zoom);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(not(feature = "slow_tests"), ignore)] // This test is very slow but usefull when debugging the pixel values
+    fn read_raster_pixel() -> Result<(), Error> {
+        let provider = WarpingTileProvider::new(
+            &test_raster(),
+            &TileProviderOptions {
+                calculate_stats: false,
+                max_zoom_round_up: true,
+            },
+        )?;
+        let layer_meta = provider.layers().first().unwrap().clone();
+
+        let zoom = layer_meta.max_zoom;
+
+        let tile = Tile::for_coordinate(Coordinate::latlon(51.046575, 4.344067), zoom);
+        let tile_bounds = tile.web_mercator_bounds();
+        let cell_size = Tile::pixel_size_at_zoom_level(zoom);
+
+        let request = TileRequest {
+            tile,
+            dpi_ratio: 1,
+            tile_format: TileFormat::RasterTile,
+        };
+
+        let tile_data = provider.get_tile(layer_meta.id, &request)?;
+        let raster_tile = DenseRaster::<u8>::from_tile_bytes(&tile_data.data)?;
+        let mut raster_tile_per_pixel = DenseRaster::<u8>::zeros(RasterSize::with_rows_cols(
+            Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
+            Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
+        ));
+
+        let current_coord = tile_bounds.top_left();
+
+        for y in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
+            for x in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
+                let coord = Point::from((
+                    current_coord.x() + (x as f64 * cell_size) + (cell_size / 2.0),
+                    current_coord.y() - (y as f64 * cell_size) - (cell_size / 2.0),
+                ));
+
+                let val = provider.get_raster_value(layer_meta.id, crs::web_mercator_to_lat_lon(coord), 1)?;
+                raster_tile_per_pixel.set_cell_value(Cell::from_row_col(y as i32, x as i32), cast::option(val));
+            }
+        }
+
+        assert_eq!(raster_tile, raster_tile_per_pixel);
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg_attr(not(feature = "slow_tests"), ignore)] // This test is very slow but usefull when debugging the pixel values
+    fn read_raster_pixel_web_mercator() -> Result<(), Error> {
+        let provider = WarpingTileProvider::new(
+            &test_raster_web_mercator(),
+            &TileProviderOptions {
+                calculate_stats: false,
+                max_zoom_round_up: true,
+            },
+        )?;
+        let layer_meta = provider.layers().first().unwrap().clone();
+
+        let zoom = layer_meta.max_zoom;
+
+        let tile = Tile::for_coordinate(Coordinate::latlon(51.046575, 4.344067), zoom);
+        let tile_bounds = tile.web_mercator_bounds();
+        let cell_size = Tile::pixel_size_at_zoom_level(zoom);
+
+        let request = TileRequest {
+            tile,
+            dpi_ratio: 1,
+            tile_format: TileFormat::RasterTile,
+        };
+
+        let tile_data = provider.get_tile(layer_meta.id, &request)?;
+        let raster_tile = DenseRaster::<u8>::from_tile_bytes(&tile_data.data)?;
+        let mut raster_tile_per_pixel = DenseRaster::<u8>::zeros(RasterSize::with_rows_cols(
+            Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
+            Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
+        ));
+
+        let current_coord = tile_bounds.top_left();
+
+        for y in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
+            for x in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
+                let coord = Point::from((
+                    current_coord.x() + (x as f64 * cell_size) + (cell_size / 2.0),
+                    current_coord.y() - (y as f64 * cell_size) - (cell_size / 2.0),
+                ));
+
+                let val = provider.get_raster_value(layer_meta.id, crs::web_mercator_to_lat_lon(coord), 1)?;
+                raster_tile_per_pixel.set_cell_value(Cell::from_row_col(y as i32, x as i32), cast::option(val));
+            }
+        }
+
+        assert_eq!(raster_tile, raster_tile_per_pixel);
+
+        Ok(())
+    }
+
+    #[test]
     fn test_nodata_outside_of_raster() -> Result<(), Error> {
-        let provider =
-            WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions { calculate_stats: false })?;
+        let provider = WarpingTileProvider::new(test_raster().as_path(), &TileProviderOptions::default())?;
         let layer_id = provider.layers().first().unwrap().id;
 
         assert_eq!(provider.meta[0].nodata::<u8>(), Some(255));
@@ -545,7 +734,7 @@ mod tests {
 
     #[test]
     fn test_vito_tile_format() -> Result<(), Error> {
-        let provider = WarpingTileProvider::new(&test_raster(), &TileProviderOptions { calculate_stats: false })?;
+        let provider = WarpingTileProvider::new(&test_raster(), &TileProviderOptions::default())?;
         let layer_id = provider.layers().first().unwrap().id;
 
         let req = TileRequest {
@@ -566,13 +755,19 @@ mod tests {
     #[test]
     fn test_netcdf_tile() -> Result<(), Error> {
         let netcdf_path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "winddata.nc");
-        let provider = WarpingTileProvider::new(&netcdf_path, &TileProviderOptions { calculate_stats: true })?;
+        let provider = WarpingTileProvider::new(
+            &netcdf_path,
+            &TileProviderOptions {
+                calculate_stats: false,
+                max_zoom_round_up: false,
+            },
+        )?;
         let layer_id = provider.layers().first().unwrap().id;
 
         let meta = provider.layer(layer_id)?;
         assert_eq!(meta.nodata::<f32>(), Some(1e+20));
         assert_eq!(meta.min_zoom, 0);
-        assert_eq!(meta.max_zoom, 19);
+        assert_eq!(meta.max_zoom, 18);
         assert_relative_eq!(meta.bounds[0], -180.0, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[1], -90.0, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[2], 180.0, epsilon = 1e-6);

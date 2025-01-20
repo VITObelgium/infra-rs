@@ -100,9 +100,7 @@ mod tests {
     use path_macro::path;
 
     fn test_raster() -> std::path::PathBuf {
-        [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"]
-            .iter()
-            .collect()
+        path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "landusebyte.tif")
     }
 
     #[ctor::ctor]

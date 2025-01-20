@@ -112,7 +112,7 @@ impl TileProvider for MbtilesTileProvider {
         ))
     }
 
-    fn get_raster_value(&self, _layer_id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
+    fn get_raster_value(&self, _layer_id: LayerId, coord: Coordinate, _dpi_ratio: u8) -> Result<Option<f32>> {
         raster_pixel(
             &self.db_path,
             1,

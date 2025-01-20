@@ -13,8 +13,8 @@ use inf::{legend, Color, Legend};
 use serde_json::json;
 use std::ops::Range;
 use tiler::{
-    ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata, TileData, TileFormat, TileJson,
-    TileProvider, TileRequest,
+    tileproviderfactory::TileProviderOptions, ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata,
+    TileData, TileFormat, TileJson, TileProvider, TileRequest,
 };
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -243,7 +243,13 @@ pub struct TileApiHandler {
 
 impl TileApiHandler {
     pub fn new(gis_dir: &std::path::Path, status_tx: tokio::sync::broadcast::Sender<StatusEvent>) -> Result<Self> {
-        let tile_provider = DirectoryTileProvider::new(gis_dir)?;
+        let tile_provider = DirectoryTileProvider::new(
+            gis_dir,
+            TileProviderOptions {
+                calculate_stats: true,
+                max_zoom_round_up: true,
+            },
+        )?;
         let _ = status_tx.send(StatusEvent::Layers(tile_provider.layers().clone()));
         Ok(TileApiHandler {
             tile_provider,
@@ -380,7 +386,7 @@ impl TileApiHandler {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
-            let _ = send.send(DirectoryTileProvider::get_raster_value_for_layer(&layer_meta, coord));
+            let _ = send.send(DirectoryTileProvider::get_raster_value_for_layer(&layer_meta, coord, 1));
         });
 
         recv.await.expect("Panic in rayon::spawn")

@@ -61,6 +61,9 @@ test_debug:
 test_release:
   cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,arrow,derive
 
+test_release_slow:
+  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,arrow,derive,slow_tests
+
 test_debug_py: pybootstrap
   pixi run test_debug
 

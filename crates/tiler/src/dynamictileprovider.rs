@@ -6,7 +6,7 @@ use crate::tiledata::TileData;
 use crate::tileprovider::{ColorMappedTileRequest, TileRequest};
 use crate::tileproviderfactory::{create_single_file_tile_provider, TileProviderOptions};
 use crate::warpingtileprovider::WarpingTileProvider;
-use crate::{Error, Result, TileProvider};
+use crate::{DirectoryTileProvider, Error, Result, TileProvider};
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -15,12 +15,14 @@ use std::ops::Range;
 #[derive(Clone)]
 pub struct DynamicTileProvider {
     layers: HashMap<LayerId, LayerMetadata>,
+    opts: TileProviderOptions,
 }
 
 impl DynamicTileProvider {
-    pub fn new() -> Self {
+    pub fn new(opts: TileProviderOptions) -> Self {
         DynamicTileProvider {
             layers: HashMap::default(),
+            opts,
         }
     }
 
@@ -34,15 +36,14 @@ impl DynamicTileProvider {
         self.layers.clear();
     }
 
-    pub fn add_dir(input: &std::path::Path) -> Result<HashMap<LayerId, LayerMetadata>> {
-        let mut layers = HashMap::new();
-
-        let dir_provider = crate::DirectoryTileProvider::new(input)?;
-        dir_provider.layers().into_iter().for_each(|layer| {
-            layers.insert(layer.id, layer.clone());
+    pub fn add_dir(&mut self, input: &std::path::Path) -> Result<Vec<LayerMetadata>> {
+        let dir_provider = DirectoryTileProvider::new(input, self.opts.clone())?;
+        let dir_layers = dir_provider.layers();
+        dir_provider.layers().iter().for_each(|layer| {
+            self.layers.insert(layer.id, layer.clone());
         });
 
-        Ok(layers)
+        Ok(dir_layers)
     }
 
     pub fn add_file(&mut self, input: &std::path::Path) -> Result<Vec<LayerMetadata>> {
@@ -57,7 +58,7 @@ impl DynamicTileProvider {
             )));
         }
 
-        let provider = create_single_file_tile_provider(input, TileProviderOptions { calculate_stats: true })?;
+        let provider = create_single_file_tile_provider(input, &self.opts)?;
         let layers = provider.layers();
         provider.layers().iter().for_each(|layer| {
             self.layers.insert(layer.id, layer.clone());
@@ -81,12 +82,12 @@ impl DynamicTileProvider {
         }
     }
 
-    pub fn get_raster_value_for_layer(layer: &LayerMetadata, coord: Coordinate) -> Result<Option<f32>> {
+    pub fn get_raster_value_for_layer(layer: &LayerMetadata, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
         match layer.source_format {
             LayerSourceType::GeoTiff
             | LayerSourceType::GeoPackage
             | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord),
+            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord, dpi_ratio),
             LayerSourceType::Mbtiles => MbtilesTileProvider::raster_pixel(layer, coord),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
@@ -120,7 +121,7 @@ impl DynamicTileProvider {
 
 impl Default for DynamicTileProvider {
     fn default() -> Self {
-        Self::new()
+        Self::new(TileProviderOptions::default())
     }
 }
 
@@ -137,8 +138,8 @@ impl TileProvider for DynamicTileProvider {
         Self::extent_value_range_for_layer(self.layer_data(id)?, extent, zoom)
     }
 
-    fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
-        Self::get_raster_value_for_layer(self.layer_data(id)?, coord)
+    fn get_raster_value(&self, id: LayerId, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
+        Self::get_raster_value_for_layer(self.layer_data(id)?, coord, dpi_ratio)
     }
 
     fn get_tile(&self, id: LayerId, tile_req: &TileRequest) -> Result<TileData> {

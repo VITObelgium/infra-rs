@@ -19,9 +19,9 @@ pub struct DirectoryTileProvider {
 }
 
 impl DirectoryTileProvider {
-    pub fn new(input_path: &std::path::Path) -> Result<Self> {
+    pub fn new(input_path: &std::path::Path, opts: TileProviderOptions) -> Result<Self> {
         Ok(DirectoryTileProvider {
-            layers: DirectoryTileProvider::build_metadata_list(input_path)?,
+            layers: DirectoryTileProvider::build_metadata_list(input_path, &opts)?,
         })
     }
 
@@ -31,7 +31,10 @@ impl DirectoryTileProvider {
             .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
     }
 
-    fn build_metadata_list(input_dir: &std::path::Path) -> Result<HashMap<LayerId, LayerMetadata>> {
+    fn build_metadata_list(
+        input_dir: &std::path::Path,
+        opts: &TileProviderOptions,
+    ) -> Result<HashMap<LayerId, LayerMetadata>> {
         let mut layers = HashMap::new();
 
         for file_entry in std::fs::read_dir(input_dir)?.flatten() {
@@ -41,7 +44,7 @@ impl DirectoryTileProvider {
                 continue;
             }
 
-            match create_single_file_tile_provider(&file_entry.path(), TileProviderOptions { calculate_stats: true }) {
+            match create_single_file_tile_provider(&file_entry.path(), opts) {
                 Ok(provider) => {
                     let file_layers = provider.layers();
                     let layer_count = file_layers.len();
@@ -83,12 +86,12 @@ impl DirectoryTileProvider {
         }
     }
 
-    pub fn get_raster_value_for_layer(layer: &LayerMetadata, coord: Coordinate) -> Result<Option<f32>> {
+    pub fn get_raster_value_for_layer(layer: &LayerMetadata, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
         match layer.source_format {
             LayerSourceType::GeoTiff
             | LayerSourceType::GeoPackage
             | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord),
+            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord, dpi_ratio),
             LayerSourceType::Mbtiles => MbtilesTileProvider::raster_pixel(layer, coord),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
@@ -133,8 +136,8 @@ impl TileProvider for DirectoryTileProvider {
         Self::extent_value_range_for_layer(self.layer_data(id)?, extent, zoom)
     }
 
-    fn get_raster_value(&self, id: LayerId, coord: Coordinate) -> Result<Option<f32>> {
-        Self::get_raster_value_for_layer(self.layer_data(id)?, coord)
+    fn get_raster_value(&self, id: LayerId, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
+        Self::get_raster_value_for_layer(self.layer_data(id)?, coord, dpi_ratio)
     }
 
     fn get_tile(&self, id: LayerId, tile_req: &TileRequest) -> Result<TileData> {
