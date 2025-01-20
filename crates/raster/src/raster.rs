@@ -113,7 +113,17 @@ where
     /// Return a mutable iterator over the raster data
     fn iter_mut(&mut self) -> std::slice::IterMut<T>;
 
-    fn set_cell_value(&mut self, cell: Cell, val: T);
+    /// Return the value at the given cell or None if the cell contains nodata
+    /// Use this for cases where a single cell value is needed not in a loop to
+    /// to process the entire raster
+    fn cell_value(&self, cell: Cell) -> Option<T> {
+        self.value(cell.row as usize * self.width() + cell.col as usize)
+    }
+
+    /// Set the value at the given cell, if the value is None the cell will be set to nodata
+    /// Use this for cases where a single cell value is needed not in a loop to
+    /// to process the entire raster
+    fn set_cell_value(&mut self, cell: Cell, val: Option<T>);
 }
 
 pub trait RasterCreation<T: RasterNum<T>> {

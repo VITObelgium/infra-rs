@@ -164,8 +164,12 @@ impl<T: RasterNum<T>> Raster<T> for DenseRaster<T> {
         DenserRasterIterator::new(self)
     }
 
-    fn set_cell_value(&mut self, cell: Cell, val: T) {
-        self.data[cell.row as usize * self.size.cols + cell.col as usize] = val;
+    fn cell_value(&self, cell: Cell) -> Option<T> {
+        self.value(cell.row as usize * self.size.cols + cell.col as usize)
+    }
+
+    fn set_cell_value(&mut self, cell: Cell, val: Option<T>) {
+        self.data[cell.row as usize * self.size.cols + cell.col as usize] = val.unwrap_or(T::nodata_value());
     }
 }
 

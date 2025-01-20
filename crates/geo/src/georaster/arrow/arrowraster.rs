@@ -315,7 +315,7 @@ where
         todo!()
     }
 
-    fn set_cell_value(&mut self, cell: raster::Cell, val: T) {
+    fn set_cell_value(&mut self, cell: raster::Cell, val: Option<T>) {
         todo!()
     }
 }
