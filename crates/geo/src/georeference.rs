@@ -496,6 +496,43 @@ impl GeoReference {
         self.warped(&crate::SpatialReference::from_epsg(epsg)?)
     }
 
+    #[cfg(feature = "gdal")]
+    pub fn aligned_to_xyz_tiles(&self, zoom_level: Option<i32>) -> Result<GeoReference> {
+        /// Create a new `GeoReference` that is aligned to the XYZ tile grid used for serving tiles.
+        /// Such an aligned grid is used as a warping target for rasters from which tiles can be extracted
+        /// and served as XYZ tiles.
+        use crate::{crs, Tile};
+
+        if self.projection.is_empty() {
+            return Err(Error::InvalidArgument(
+                "Cannot align metadata without projection information".to_string(),
+            ));
+        }
+
+        let prefer_higher = self.rows() * self.columns() < (5000 * 5000);
+
+        let wgs84_meta = self.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
+        let zoom_level = zoom_level.unwrap_or_else(|| zoom_level_for_pixel_size(self.cell_size_x(), prefer_higher));
+
+        let top_left = crs::web_mercator_to_lat_lon(wgs84_meta.top_left());
+        let bottom_right = crs::web_mercator_to_lat_lon(wgs84_meta.bottom_right());
+
+        let top_left_tile = crate::Tile::for_coordinate(top_left, zoom_level).web_mercator_bounds();
+        let bottom_right_tile = crate::Tile::for_coordinate(bottom_right, zoom_level).web_mercator_bounds();
+
+        let cell_size = (top_left_tile.bottom_right().x() - top_left_tile.top_left().x()) / Tile::TILE_SIZE as f64;
+        let raster_size = RasterSize {
+            rows: ((top_left_tile.top_left().y() - bottom_right_tile.bottom_right().y()) / cell_size).ceil() as usize,
+            cols: ((bottom_right_tile.bottom_right().x() - top_left_tile.top_left().x()) / cell_size).ceil() as usize,
+        };
+
+        let mut result = GeoReference::default();
+        result.set_extent(top_left_tile.bottom_left(), raster_size, CellSize::square(cell_size));
+        result.set_projection_from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
+        result.set_nodata(self.nodata);
+        Ok(result)
+    }
+
     pub fn intersection(&self, other: &GeoReference) -> Result<GeoReference> {
         if self.projection() != other.projection() {
             return Err(Error::InvalidArgument(
@@ -538,6 +575,33 @@ impl GeoReference {
 fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
     let diff = (val1 - val2).abs();
     diff % cellsize < 1e-12
+}
+
+#[cfg(feature = "gdal")]
+fn pixel_size_at_zoom_level(zoom_level: i32) -> f64 {
+    use crate::{constants, Tile};
+
+    let tiles_per_row = 2i32.pow(zoom_level as u32);
+    let meters_per_tile = constants::EARTH_CIRCUMFERENCE_M / tiles_per_row as f64;
+
+    meters_per_tile / Tile::TILE_SIZE as f64
+}
+
+#[cfg(feature = "gdal")]
+fn zoom_level_for_pixel_size(pixel_size: f64, prefer_higher: bool) -> i32 {
+    let mut zoom_level = 20;
+    while zoom_level > 0 {
+        let zoom_level_pixel_size = pixel_size_at_zoom_level(zoom_level);
+        if pixel_size <= zoom_level_pixel_size {
+            if pixel_size != zoom_level_pixel_size && prefer_higher {
+                // Prefer the higher zoom level
+                zoom_level += 1;
+            }
+            break;
+        }
+        zoom_level -= 1;
+    }
+    zoom_level
 }
 
 #[cfg(test)]
@@ -852,5 +916,38 @@ mod tests {
             CellSize::square(0.062023851850733745),
             epsilon = 1e-10
         );
+    }
+
+    #[test]
+    #[cfg(feature = "gdal")]
+    fn test_tile_for_coordinate() {
+        use core::f32;
+
+        use crate::{crs, Coordinate, SpatialReference, Tile};
+
+        let coord = Coordinate::latlon(51.0, 4.0);
+        let tile = Tile::for_coordinate(coord, 9);
+
+        let raster_size = RasterSize::with_rows_cols(Tile::TILE_SIZE as usize, Tile::TILE_SIZE as usize);
+        let pixel_size = Tile::pixel_size_at_zoom_level(tile.z);
+        let srs = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)
+            .unwrap()
+            .to_wkt()
+            .unwrap();
+
+        let mut tile_meta = GeoReference::with_origin(
+            srs,
+            raster_size,
+            tile.bounds().southwest().into(),
+            CellSize::square(pixel_size),
+            Some(f32::NAN),
+        );
+
+        println!("{:?} {:?}", tile_meta, coord);
+        let cell = tile_meta.point_to_cell(coord.into());
+        println!("{:?}", cell);
+        let ll = tile_meta.cell_lower_left(cell);
+        println!("{:?}", ll);
+        tile_meta.set_extent(ll, RasterSize::with_rows_cols(1, 1), tile_meta.cell_size());
     }
 }
