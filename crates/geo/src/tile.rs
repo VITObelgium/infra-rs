@@ -5,7 +5,7 @@ use crate::{
 use std::f64::consts::PI;
 
 /// An XYZ web mercator tile
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Tile {
     pub x: i32,
     pub y: i32,
@@ -209,6 +209,29 @@ impl Tile {
         }
 
         zoom_level
+    }
+
+    /// Returns the neighboring tiles of the current tile including the current tile
+    pub fn surrounding_tiles_including_self(&self) -> Vec<Tile> {
+        let mut tiles = Vec::with_capacity(9);
+
+        for y in -1..=1 {
+            for x in -1..=1 {
+                let tile_x = self.x + x;
+                let tile_y = self.y + y;
+                if tile_x < 0 || tile_y < 0 {
+                    continue;
+                }
+
+                tiles.push(Tile {
+                    x: self.x + x,
+                    y: self.y + y,
+                    z: self.z,
+                });
+            }
+        }
+
+        tiles
     }
 }
 
