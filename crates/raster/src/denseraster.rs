@@ -10,6 +10,13 @@ pub struct DenseRaster<T: RasterNum<T>> {
 }
 
 impl<T: RasterNum<T>> DenseRaster<T> {
+    pub fn empty() -> Self {
+        DenseRaster {
+            size: RasterSize::with_rows_cols(0, 0),
+            data: Vec::new(),
+        }
+    }
+
     pub fn to_raw_parts(self) -> (RasterSize, Vec<T>) {
         (self.size, self.data)
     }
