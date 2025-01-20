@@ -2,7 +2,10 @@ use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
 use raster::{Cell, RasterSize};
 
-use crate::{crs::Epsg, Error, LatLonBounds, Point, Rect, Result};
+use crate::{
+    crs::{self, Epsg},
+    Error, LatLonBounds, Point, Rect, Result, Tile,
+};
 
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
@@ -141,6 +144,19 @@ impl GeoReference {
             geo_transform,
             nodata,
         }
+    }
+
+    pub fn from_tile(tile: &Tile, tile_size: usize, dpi_ratio: u8) -> Self {
+        let tile_size = tile_size * dpi_ratio as usize;
+        let raster_size = RasterSize::with_rows_cols(tile_size, tile_size);
+        let pixel_size = Tile::pixel_size_at_zoom_level(tile.z) / dpi_ratio as f64;
+        GeoReference::with_origin(
+            "",
+            raster_size,
+            crs::lat_lon_to_web_mercator(tile.bounds().southwest()),
+            CellSize::square(pixel_size),
+            Some(f64::NAN),
+        )
     }
 
     pub fn set_extent(&mut self, lower_left_coordintate: Point, size: RasterSize, cell_size: CellSize) {
