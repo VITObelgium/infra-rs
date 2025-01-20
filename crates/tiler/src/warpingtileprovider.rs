@@ -10,12 +10,12 @@ use inf::legend::Legend;
 use geo::georaster::{self, io::RasterFormat};
 use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
-use raster::{DenseRaster, Nodata, RasterCreation, RasterNum, RasterSize};
+use raster::{DenseRaster, RasterCreation, RasterDataType, RasterNum, RasterSize};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{
     imageprocessing::{self},
-    layermetadata::{to_raster_data_type, LayerId, LayerMetadata, RasterDataType},
+    layermetadata::{to_raster_data_type, LayerId, LayerMetadata},
     rasterprocessing::{metadata_bounds_wgs84, source_type_for_path},
     tiledata::TileData,
     tileformat::TileFormat,
@@ -337,15 +337,7 @@ impl WarpingTileProvider {
         }
 
         let tile_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
-        let raster_size = RasterSize::with_rows_cols(tile_size, tile_size);
-        let pixel_size = Tile::pixel_size_at_zoom_level(tile.z) / dpi_ratio as f64;
-        let tile_meta = GeoReference::with_origin(
-            "",
-            raster_size,
-            crs::lat_lon_to_web_mercator(tile.bounds().southwest()),
-            CellSize::square(pixel_size),
-            Option::<f32>::Some(Nodata::nodata_value()),
-        );
+        let tile_meta = GeoReference::from_tile(&tile, tile_size, dpi_ratio);
         let cell = tile_meta.point_to_cell(crs::lat_lon_to_web_mercator(coord));
 
         match raw_tile_data.get(cell.row as usize * tile_size + cell.col as usize) {
@@ -430,10 +422,16 @@ impl WarpingTileProvider {
 
         let band_nr = layer_meta.band_nr.unwrap_or(1);
         match layer_meta.data_type {
-            RasterDataType::Byte => WarpingTileProvider::process_tile_request::<u8>(layer_meta, band_nr, tile_req),
+            RasterDataType::Int8 => WarpingTileProvider::process_tile_request::<i8>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint8 => WarpingTileProvider::process_tile_request::<u8>(layer_meta, band_nr, tile_req),
+            RasterDataType::Int16 => WarpingTileProvider::process_tile_request::<i16>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint16 => WarpingTileProvider::process_tile_request::<u16>(layer_meta, band_nr, tile_req),
             RasterDataType::Int32 => WarpingTileProvider::process_tile_request::<i32>(layer_meta, band_nr, tile_req),
-            RasterDataType::UInt32 => WarpingTileProvider::process_tile_request::<u32>(layer_meta, band_nr, tile_req),
-            RasterDataType::Float => WarpingTileProvider::process_tile_request::<f32>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint32 => WarpingTileProvider::process_tile_request::<u32>(layer_meta, band_nr, tile_req),
+            RasterDataType::Int64 => WarpingTileProvider::process_tile_request::<i64>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint64 => WarpingTileProvider::process_tile_request::<u64>(layer_meta, band_nr, tile_req),
+            RasterDataType::Float32 => WarpingTileProvider::process_tile_request::<f32>(layer_meta, band_nr, tile_req),
+            RasterDataType::Float64 => WarpingTileProvider::process_tile_request::<f64>(layer_meta, band_nr, tile_req),
         }
     }
 
@@ -447,17 +445,35 @@ impl WarpingTileProvider {
 
         let band_nr = layer_meta.band_nr.unwrap_or(1);
         match layer_meta.data_type {
-            RasterDataType::Byte => {
+            RasterDataType::Int8 => {
+                WarpingTileProvider::read_color_mapped_tile_as_png::<i8>(layer_meta, band_nr, tile_req)
+            }
+            RasterDataType::Uint8 => {
                 WarpingTileProvider::read_color_mapped_tile_as_png::<u8>(layer_meta, band_nr, tile_req)
+            }
+            RasterDataType::Int16 => {
+                WarpingTileProvider::read_color_mapped_tile_as_png::<i16>(layer_meta, band_nr, tile_req)
+            }
+            RasterDataType::Uint16 => {
+                WarpingTileProvider::read_color_mapped_tile_as_png::<u16>(layer_meta, band_nr, tile_req)
             }
             RasterDataType::Int32 => {
                 WarpingTileProvider::read_color_mapped_tile_as_png::<i32>(layer_meta, band_nr, tile_req)
             }
-            RasterDataType::UInt32 => {
+            RasterDataType::Uint32 => {
                 WarpingTileProvider::read_color_mapped_tile_as_png::<u32>(layer_meta, band_nr, tile_req)
             }
-            RasterDataType::Float => {
+            RasterDataType::Int64 => {
+                WarpingTileProvider::read_color_mapped_tile_as_png::<i64>(layer_meta, band_nr, tile_req)
+            }
+            RasterDataType::Uint64 => {
+                WarpingTileProvider::read_color_mapped_tile_as_png::<u64>(layer_meta, band_nr, tile_req)
+            }
+            RasterDataType::Float32 => {
                 WarpingTileProvider::read_color_mapped_tile_as_png::<f32>(layer_meta, band_nr, tile_req)
+            }
+            RasterDataType::Float64 => {
+                WarpingTileProvider::read_color_mapped_tile_as_png::<f64>(layer_meta, band_nr, tile_req)
             }
         }
     }
@@ -473,17 +489,35 @@ impl WarpingTileProvider {
         let band_nr = meta.band_nr.unwrap_or(1);
         let tile = Tile::for_coordinate(coord, meta.max_zoom);
         match meta.data_type {
-            RasterDataType::Byte => {
+            RasterDataType::Int8 => {
+                WarpingTileProvider::process_pixel_request::<i8>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Uint8 => {
                 WarpingTileProvider::process_pixel_request::<u8>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Int16 => {
+                WarpingTileProvider::process_pixel_request::<i16>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Uint16 => {
+                WarpingTileProvider::process_pixel_request::<u16>(meta, band_nr, tile, dpi_ratio, coord)
             }
             RasterDataType::Int32 => {
                 WarpingTileProvider::process_pixel_request::<i32>(meta, band_nr, tile, dpi_ratio, coord)
             }
-            RasterDataType::UInt32 => {
+            RasterDataType::Uint32 => {
                 WarpingTileProvider::process_pixel_request::<u32>(meta, band_nr, tile, dpi_ratio, coord)
             }
-            RasterDataType::Float => {
+            RasterDataType::Int64 => {
+                WarpingTileProvider::process_pixel_request::<i64>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Uint64 => {
+                WarpingTileProvider::process_pixel_request::<u64>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Float32 => {
                 WarpingTileProvider::process_pixel_request::<f32>(meta, band_nr, tile, dpi_ratio, coord)
+            }
+            RasterDataType::Float64 => {
+                WarpingTileProvider::process_pixel_request::<f64>(meta, band_nr, tile, dpi_ratio, coord)
             }
         }
     }

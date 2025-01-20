@@ -27,5 +27,5 @@ path_macro = "1.0"
 
 [features]
 serde      = ["dep:serde", "dep:serde_json", "inf/serde"]
-specta     = ["dep:specta", "geo/specta", "inf/specta"]
+specta     = ["dep:specta", "geo/specta", "inf/specta", "raster/specta"]
 slow_tests = []

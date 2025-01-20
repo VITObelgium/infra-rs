@@ -2,6 +2,7 @@ use crate::tileformat::TileFormat;
 use gdal::raster::GdalDataType;
 use geo::{crs::Epsg, Coordinate, LatLonBounds};
 use num::NumCast;
+use raster::RasterDataType;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
@@ -25,16 +26,6 @@ impl From<u64> for LayerId {
     fn from(val: u64) -> LayerId {
         LayerId::new(val)
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
-pub enum RasterDataType {
-    Byte,
-    Int32,
-    UInt32,
-    Float,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -142,10 +133,16 @@ impl LayerMetadata {
 
 pub fn to_raster_data_type(type_info: GdalDataType) -> RasterDataType {
     match type_info {
-        GdalDataType::UInt8 => RasterDataType::Byte,
+        GdalDataType::Int8 => RasterDataType::Int8,
+        GdalDataType::UInt8 => RasterDataType::Uint8,
+        GdalDataType::Int16 => RasterDataType::Int16,
+        GdalDataType::UInt16 => RasterDataType::Uint16,
         GdalDataType::Int32 => RasterDataType::Int32,
-        GdalDataType::UInt32 => RasterDataType::UInt32,
-        _ => RasterDataType::Float,
+        GdalDataType::UInt32 => RasterDataType::Uint32,
+        GdalDataType::Int64 => RasterDataType::Int64,
+        GdalDataType::UInt64 => RasterDataType::Uint64,
+        GdalDataType::Float64 => RasterDataType::Float64,
+        GdalDataType::Float32 | GdalDataType::Unknown => RasterDataType::Float32,
     }
 }
 

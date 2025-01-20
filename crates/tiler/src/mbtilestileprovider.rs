@@ -6,9 +6,10 @@ use std::{
 
 use geo::{crs, Coordinate, LatLonBounds, Tile};
 use mbtilesdb::MbtilesDb;
+use raster::RasterDataType;
 
 use crate::{
-    layermetadata::{LayerId, LayerMetadata, LayerSourceType, RasterDataType},
+    layermetadata::{LayerId, LayerMetadata, LayerSourceType},
     rasterprocessing::raster_pixel,
     tiledata::TileData,
     tileformat::TileFormat,
@@ -57,7 +58,7 @@ impl MbtilesTileProvider {
             nodata: None,
             min_value: 0.0,
             max_value: 0.0,
-            data_type: RasterDataType::Float,
+            data_type: RasterDataType::Float32,
             source_format: LayerSourceType::Mbtiles,
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
             additional_data: HashMap::new(),
