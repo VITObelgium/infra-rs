@@ -270,4 +270,19 @@ mod tests {
         assert_eq!(Tile::zoom_level_for_pixel_size(10.0, false), 13);
         assert_eq!(Tile::zoom_level_for_pixel_size(100.0, false), 10);
     }
+
+    #[test]
+    fn test_tile_for_coordinate() {
+        let coord = Coordinate::latlon(51.0, 4.0);
+        let tile = Tile::for_coordinate(coord, 9);
+        assert_eq!(tile.x, 261);
+        assert_eq!(tile.y, 171);
+        assert_eq!(tile.z, 9);
+
+        let coord = Coordinate::latlon(51.0, 4.0);
+        let tile = Tile::for_coordinate(coord, 10);
+        assert_eq!(tile.x, 523);
+        assert_eq!(tile.y, 342);
+        assert_eq!(tile.z, 10);
+    }
 }
