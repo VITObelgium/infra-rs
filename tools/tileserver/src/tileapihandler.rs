@@ -428,7 +428,7 @@ impl TileApiHandler {
         }
 
         let (y, dpi_ratio, extension) = Self::parse_tile_filename(&y)?;
-        if extension != "png" && extension != "pbf" {
+        if extension != "png" && extension != "pbf" && extension != "vrt" {
             return Err(Error::InvalidArgument("Invalid tile extension".to_string()));
         }
 
