@@ -56,13 +56,13 @@ build_release:
   cargo build --workspace --release
 
 test_debug:
-  cargo nextest run --profile ci --workspace --features=serde,gdal-static,arrow,derive
+  cargo nextest run --profile ci --workspace --features=serde,gdal-static,arrow,derive,vector
 
 test_release:
-  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,arrow,derive
+  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,arrow,derive,vector
 
 test_release_slow:
-  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,arrow,derive,slow_tests
+  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,vector,arrow,derive,slow_tests
 
 test_debug_py: pybootstrap
   pixi run test_debug

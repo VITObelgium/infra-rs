@@ -1,4 +1,4 @@
-#[cfg(feature = "gdal")]
+#[cfg(all(feature = "gdal", feature = "vector"))]
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;

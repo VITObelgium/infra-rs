@@ -33,10 +33,11 @@ pub enum Error {
     PythonError(#[from] pyo3::PyErr),
     #[error("Geozero error: {0}")]
     GeoZeroError(#[from] geozero::error::GeozeroError),
+    #[cfg(feature = "vector")]
     #[error("Geos error: {0}")]
     GeosError(#[from] geos::Error),
-    #[error("Proj error: {0}")]
-    ProjError(#[from] proj4rs::errors::Error),
+    //#[error("Proj error: {0}")]
+    //ProjError(#[from] proj4rs::errors::Error),
     #[error("Error: {0}")]
     Infra(#[from] inf::Error),
 }

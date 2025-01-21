@@ -19,6 +19,8 @@ mod spatialreference;
 mod tile;
 
 pub mod georaster;
+
+#[cfg(feature = "vector")]
 pub mod vector;
 
 pub use coordinate::Coordinate;

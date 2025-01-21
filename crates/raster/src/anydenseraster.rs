@@ -1,4 +1,4 @@
-use crate::{DenseRaster, Error, Raster, RasterDataType, Result};
+use crate::{Cell, DenseRaster, Error, Raster, RasterDataType, RasterNum, Result};
 
 /// Type erased `RasterTile`
 #[derive(Clone)]
@@ -51,6 +51,21 @@ impl AnyDenseRaster {
             AnyDenseRaster::I64(_) => RasterDataType::Int64,
             AnyDenseRaster::F32(_) => RasterDataType::Float32,
             AnyDenseRaster::F64(_) => RasterDataType::Float64,
+        }
+    }
+
+    pub fn cell_value<T: RasterNum<T>>(&self, cell: Cell) -> Option<T> {
+        match self {
+            AnyDenseRaster::U8(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::U16(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::U32(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::U64(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::I8(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::I16(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::I32(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::I64(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::F32(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
+            AnyDenseRaster::F64(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
         }
     }
 }

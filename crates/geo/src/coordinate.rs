@@ -5,11 +5,13 @@ use geo_types::Point;
 #[derive(Debug, PartialEq, Clone, Copy)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct Coordinate {
     pub latitude: f64,
     pub longitude: f64,
 }
 
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 impl Coordinate {
     pub fn latlon(lat: f64, lon: f64) -> Self {
         Coordinate {
