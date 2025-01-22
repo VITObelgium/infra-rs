@@ -1,3 +1,5 @@
+use specta::datatype::{self, DataType};
+
 use crate::{Cell, DenseRaster, Error, Raster, RasterDataType, RasterNum, Result};
 
 /// Type erased `RasterTile`
@@ -38,6 +40,21 @@ macro_rules! unerase_raster_type_op {
 impl AnyDenseRaster {
     unerase_raster_type_op!(width);
     unerase_raster_type_op!(height);
+
+    pub fn empty(datatype: RasterDataType) -> Self {
+        match datatype {
+            RasterDataType::Uint8 => AnyDenseRaster::U8(DenseRaster::empty()),
+            RasterDataType::Uint16 => AnyDenseRaster::U16(DenseRaster::empty()),
+            RasterDataType::Uint32 => AnyDenseRaster::U32(DenseRaster::empty()),
+            RasterDataType::Uint64 => AnyDenseRaster::U64(DenseRaster::empty()),
+            RasterDataType::Int8 => AnyDenseRaster::I8(DenseRaster::empty()),
+            RasterDataType::Int16 => AnyDenseRaster::I16(DenseRaster::empty()),
+            RasterDataType::Int32 => AnyDenseRaster::I32(DenseRaster::empty()),
+            RasterDataType::Int64 => AnyDenseRaster::I64(DenseRaster::empty()),
+            RasterDataType::Float32 => AnyDenseRaster::F32(DenseRaster::empty()),
+            RasterDataType::Float64 => AnyDenseRaster::F64(DenseRaster::empty()),
+        }
+    }
 
     pub fn data_type(&self) -> RasterDataType {
         match self {
