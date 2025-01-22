@@ -2,7 +2,7 @@
 
 use gdal::spatial_ref::AxisMappingStrategy;
 
-use crate::{crs::Epsg, Point, Result};
+use crate::{crs::Epsg, Error, Point, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpatialReference {
@@ -15,6 +15,10 @@ impl SpatialReference {
     }
 
     pub fn from_proj(projection: &str) -> Result<Self> {
+        if projection.is_empty() {
+            return Err(Error::InvalidArgument("Empty projection string".into()));
+        }
+
         let mut srs = gdal::spatial_ref::SpatialRef::from_proj4(projection)?;
         srs.set_axis_mapping_strategy(AxisMappingStrategy::TraditionalGisOrder);
         Ok(SpatialReference { srs })

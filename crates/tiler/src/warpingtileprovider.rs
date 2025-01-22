@@ -7,8 +7,11 @@ use gdal::{
 
 use inf::legend::Legend;
 
-use geo::georaster::{self, io::RasterFormat};
 use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
+use geo::{
+    georaster::{self, io::RasterFormat},
+    vector::io::DataframeIterator,
+};
 use num::Num;
 use raster::{DenseRaster, RasterCreation, RasterDataType, RasterNum, RasterSize};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
@@ -140,7 +143,12 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         Some(T::nodata_value()),
     );
 
-    let src_ds = gdal::Dataset::open(raster_path)?;
+    let src_ds = if raster_path.extension().is_some_and(|ext| ext == "nc") {
+        let opts = vec!["PRESERVE_AXIS_UNIT_IN_CRS=YES"];
+        geo::georaster::io::dataset::open_read_only_with_options(raster_path, &opts)?
+    } else {
+        geo::georaster::io::dataset::open_read_only(raster_path)?
+    };
 
     let mut data = vec![T::nodata_value(); scaled_size * scaled_size];
     let mut dest_ds = georaster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
@@ -153,6 +161,7 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         "-r".to_string(),
         "near".to_string(),
     ];
+
     let key_value_options: Vec<(String, String)> = vec![
         ("INIT_DEST".to_string(), "NO_DATA".to_string()),
         ("SKIP_NOSOURCE".to_string(), "YES".to_string()),
@@ -201,7 +210,16 @@ impl WarpingTileProvider {
             let raster_band = ds.rasterband(band_nr)?;
             let over_view_count = raster_band.overview_count()?;
 
-            let mut srs = SpatialReference::from_proj(meta.projection())?;
+            let (epsg, source_is_web_mercator) = {
+                if let Ok(mut srs) = SpatialReference::from_proj(meta.projection()) {
+                    (
+                        srs.epsg_cs().unwrap_or(0.into()),
+                        srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
+                    )
+                } else {
+                    (0.into(), false)
+                }
+            };
             let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), opts.max_zoom_round_up);
 
             let mut name = path
@@ -211,7 +229,7 @@ impl WarpingTileProvider {
                 .to_string();
 
             if raster_count > 1 {
-                name.push_str(&format!(" - Band {}", band_nr));
+                name.push_str(&format!(" - Band {:05}", band_nr));
             }
 
             let mut layer_meta = LayerMetadata {
@@ -229,9 +247,9 @@ impl WarpingTileProvider {
                 nodata: meta.nodata(),
                 supports_dpi_ratio: true,
                 tile_format: TileFormat::Png,
-                source_is_web_mercator: srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
-                epsg: srs.epsg_cs().unwrap_or(0.into()),
-                bounds: metadata_bounds_wgs84(meta)?.array(),
+                source_is_web_mercator,
+                epsg,
+                bounds: metadata_bounds_wgs84(meta).unwrap_or(LatLonBounds::world()).array(),
                 description: String::new(),
                 min_value: f64::NAN,
                 max_value: f64::NAN,
