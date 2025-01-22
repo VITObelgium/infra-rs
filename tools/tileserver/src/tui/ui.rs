@@ -14,7 +14,10 @@ fn layer_metadata_rows(layer: Option<&LayerMetadata>) -> Vec<Row> {
         Some(layer) => vec![
             Row::new(vec!["Id".to_string(), layer.id.to_string()]),
             Row::new(vec!["Name".to_string(), layer.name.clone()]),
-            Row::new(vec!["EPSG".to_string(), layer.epsg.to_string()]),
+            Row::new(vec![
+                "EPSG".to_string(),
+                layer.epsg.map_or("Unknown".to_string(), |v| v.to_string()),
+            ]),
             Row::new(vec!["Format".to_string(), format!("{:?}", layer.source_format)]),
             Row::new(vec!["Tile format".to_string(), format!("{}", layer.tile_format)]),
             Row::new(vec!["Nodata".to_string(), format!("{:?}", layer.nodata::<f64>())]),

@@ -58,7 +58,7 @@ pub struct LayerMetadata {
     pub nodata: Option<f64>,
     pub bounds: [f64; 4], // left bottom right top
     pub data_type: RasterDataType,
-    pub epsg: Epsg,
+    pub epsg: Option<Epsg>,
     pub tile_format: TileFormat,
     pub supports_dpi_ratio: bool,
     pub source_format: LayerSourceType,

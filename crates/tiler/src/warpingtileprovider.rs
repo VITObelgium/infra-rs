@@ -210,11 +210,11 @@ impl WarpingTileProvider {
             let (epsg, source_is_web_mercator) = {
                 if let Ok(mut srs) = SpatialReference::from_proj(meta.projection()) {
                     (
-                        srs.epsg_cs().unwrap_or(0.into()),
+                        srs.epsg_cs(),
                         srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
                     )
                 } else {
-                    (0.into(), false)
+                    (None, false)
                 }
             };
             let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), opts.max_zoom_round_up);

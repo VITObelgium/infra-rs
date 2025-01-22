@@ -50,7 +50,7 @@ impl MbtilesTileProvider {
                 .remove("name")
                 .unwrap_or(meta_map.remove("basename").unwrap_or_default()),
             description: meta_map.remove("description").unwrap_or_default(),
-            epsg: crs::epsg::WGS84_WEB_MERCATOR,
+            epsg: Some(crs::epsg::WGS84_WEB_MERCATOR),
             bounds: parse_bounds(meta_map.remove("bounds").unwrap_or_default().as_str())?,
             url: "".to_string(),
             source_is_web_mercator: true,
