@@ -1,4 +1,7 @@
-use geo::georaster::{self, io::RasterFormat};
+use geo::{
+    georaster::{self, io::RasterFormat},
+    RuntimeConfiguration,
+};
 use raster::RasterSize;
 use std::path::Path;
 
@@ -7,7 +10,7 @@ use geo::{
     Coordinate, CoordinateTransformer, GeoReference, LatLonBounds, Point, SpatialReference,
 };
 
-use crate::{layermetadata::LayerSourceType, Result};
+use crate::{layermetadata::LayerSourceType, Error, Result};
 
 fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -> Result<Option<f32>> {
     let ds = georaster::io::dataset::open_read_only(raster_path)?;
@@ -55,31 +58,41 @@ pub fn raster_pixel(
 }
 
 pub fn metadata_bounds_wgs84(meta: GeoReference) -> Result<LatLonBounds> {
-    let mut srs = SpatialReference::from_proj(meta.projection())?;
-    let mut result = LatLonBounds::hull(meta.top_left().into(), meta.bottom_right().into());
-
-    if srs.is_projected() {
-        if srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR) {
-            result = LatLonBounds::hull(
-                web_mercator_to_lat_lon(meta.top_left()),
-                web_mercator_to_lat_lon(meta.bottom_right()),
-            );
+    if meta.projection().is_empty() {
+        let top_left: Coordinate = meta.top_left().into();
+        let bottom_right: Coordinate = meta.bottom_right().into();
+        if top_left.is_valid() && bottom_right.is_valid() {
+            Ok(LatLonBounds::hull(meta.top_left().into(), meta.bottom_right().into()))
         } else {
+            Err(Error::Runtime("Could not calculate bounds".to_string()))
+        }
+    } else {
+        let mut srs = SpatialReference::from_proj(meta.projection())?;
+        let mut result = LatLonBounds::hull(meta.top_left().into(), meta.bottom_right().into());
+
+        if srs.is_projected() {
+            if srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR) {
+                result = LatLonBounds::hull(
+                    web_mercator_to_lat_lon(meta.top_left()),
+                    web_mercator_to_lat_lon(meta.bottom_right()),
+                );
+            } else {
+                let transformer = CoordinateTransformer::new(srs, SpatialReference::from_epsg(crs::epsg::WGS84)?)?;
+                result = LatLonBounds::hull(
+                    transformer.transform_point(meta.top_left())?.into(),
+                    transformer.transform_point(meta.bottom_right())?.into(),
+                );
+            }
+        } else if srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
             let transformer = CoordinateTransformer::new(srs, SpatialReference::from_epsg(crs::epsg::WGS84)?)?;
             result = LatLonBounds::hull(
                 transformer.transform_point(meta.top_left())?.into(),
                 transformer.transform_point(meta.bottom_right())?.into(),
             );
         }
-    } else if srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
-        let transformer = CoordinateTransformer::new(srs, SpatialReference::from_epsg(crs::epsg::WGS84)?)?;
-        result = LatLonBounds::hull(
-            transformer.transform_point(meta.top_left())?.into(),
-            transformer.transform_point(meta.bottom_right())?.into(),
-        );
-    }
 
-    Ok(result)
+        Ok(result)
+    }
 }
 
 pub fn source_type_for_path(path: &std::path::Path) -> LayerSourceType {

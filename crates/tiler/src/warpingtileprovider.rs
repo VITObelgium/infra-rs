@@ -803,7 +803,7 @@ mod tests {
 
     #[test]
     fn test_netcdf_tile() -> Result<(), Error> {
-        let netcdf_path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "winddata.nc");
+        let netcdf_path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "winddata.nc");
         let provider = WarpingTileProvider::new(
             &netcdf_path,
             &TileProviderOptions {
