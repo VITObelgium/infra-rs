@@ -9,11 +9,17 @@ VCPKG_DEFAULT_TRIPLET := if os_family() == "windows" {
   } else {
     "x64-linux"
   }
+PYTHON_EXE := if os_family() == "windows" {
+    "python.exe"
+  } else {
+    "bin/python3"
+  }
 VCPKG_DEFAULT_HOST_TRIPLET := VCPKG_DEFAULT_TRIPLET
 
 cargo-config-gen:
   cp .cargo/config.toml.in .cargo/config.toml
   sd @CARGO_VCPKG_TRIPLET@ {{VCPKG_DEFAULT_TRIPLET}} .cargo/config.toml
+  sd @PYTHON_EXE@ {{PYTHON_EXE}} .cargo/config.toml
 
 # on mac symlinks need to be created to avoid python lib errors
 # see: https://github.com/PyO3/pyo3/issues/4155
