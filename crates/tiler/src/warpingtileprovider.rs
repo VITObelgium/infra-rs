@@ -7,11 +7,8 @@ use gdal::{
 
 use inf::legend::Legend;
 
+use geo::georaster::{self, io::RasterFormat};
 use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
-use geo::{
-    georaster::{self, io::RasterFormat},
-    vector::io::DataframeIterator,
-};
 use num::Num;
 use raster::{DenseRaster, RasterCreation, RasterDataType, RasterNum, RasterSize};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
