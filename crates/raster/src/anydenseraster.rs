@@ -1,5 +1,3 @@
-use specta::datatype::{self, DataType};
-
 use crate::{Cell, DenseRaster, Error, Raster, RasterDataType, RasterNum, Result};
 
 /// Type erased `RasterTile`

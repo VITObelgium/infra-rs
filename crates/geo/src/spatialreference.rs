@@ -1,8 +1,6 @@
-//use gdal::spatial_ref::AxisMappingStrategy;
-
 use gdal::spatial_ref::AxisMappingStrategy;
 
-use crate::{crs::Epsg, Error, Point, Result};
+use crate::{crs::Epsg, Error, Result};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpatialReference {
@@ -97,33 +95,6 @@ pub fn projection_to_geo_epsg(projection: &str) -> Option<Epsg> {
 pub fn projection_to_epsg(projection: &str) -> Option<Epsg> {
     let mut spatial_ref = SpatialReference::from_definition(projection).ok()?;
     spatial_ref.epsg_cs()
-}
-
-pub struct CoordinateWarpTransformer {
-    transformer: gdal::spatial_ref::CoordTransform,
-}
-
-impl CoordinateWarpTransformer {
-    pub fn new(src: &SpatialReference, dst: &SpatialReference) -> Result<Self> {
-        let transformer = gdal::spatial_ref::CoordTransform::new(&src.srs, &dst.srs)?;
-        Ok(CoordinateWarpTransformer { transformer })
-    }
-
-    #[allow(dead_code)]
-    pub fn for_epsgs(src: Epsg, dst: Epsg) -> Result<Self> {
-        let src = SpatialReference::from_epsg(src)?;
-        let dst = SpatialReference::from_epsg(dst)?;
-        let transformer = gdal::spatial_ref::CoordTransform::new(&src.srs, &dst.srs)?;
-        Ok(CoordinateWarpTransformer { transformer })
-    }
-
-    pub fn transform_point(&self, point: Point) -> Result<Point> {
-        let mut x = [point.x(); 1];
-        let mut y = [point.y(); 1];
-        let mut z = [0.0; 1];
-        self.transformer.transform_coords(&mut x, &mut y, &mut z)?;
-        Ok((x[0], y[0]).into())
-    }
 }
 
 #[cfg(test)]

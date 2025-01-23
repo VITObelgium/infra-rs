@@ -8,7 +8,7 @@ mod coordinatetransformer;
 pub mod crs;
 mod error;
 #[cfg(feature = "gdal")]
-mod gdalinterop;
+pub mod gdalinterop;
 mod georeference;
 mod latlonbounds;
 pub mod rect;
