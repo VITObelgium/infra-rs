@@ -7,7 +7,10 @@ use gdal::{
 
 use inf::legend::Legend;
 
-use geo::georaster::{self, io::RasterFormat};
+use geo::{
+    constants,
+    georaster::{self, io::RasterFormat},
+};
 use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
 use raster::{DenseRaster, RasterCreation, RasterDataType, RasterNum, RasterSize};
@@ -128,6 +131,9 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     let bounds = tile.web_mercator_bounds();
     let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
 
+    log::debug!("Warp tile: {:?}", tile);
+    gdal::config::set_config_option("CPL_DEBUG", "ON")?;
+
     let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
     let dest_extent = GeoReference::with_origin(
         projection.to_wkt()?,
@@ -165,10 +171,12 @@ fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         ("NUM_THREADS".to_string(), "ALL_CPUS".to_string()),
     ];
 
+    log::debug!("Invoke warp: {:?}", tile);
     georaster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
 
     // Avoid returning tiles containing only nodata values
     if data.iter().all(|&val| T::is_nodata(val)) {
+        log::debug!("All nodata");
         return Ok(vec![]);
     }
 
@@ -207,17 +215,32 @@ impl WarpingTileProvider {
             let raster_band = ds.rasterband(band_nr)?;
             let over_view_count = raster_band.overview_count()?;
 
-            let (epsg, source_is_web_mercator) = {
+            let (epsg, source_is_web_mercator, cell_size) = {
                 if let Ok(mut srs) = SpatialReference::from_proj(meta.projection()) {
+                    let cell_size = if srs.is_projected() {
+                        meta.cell_size_x()
+                    } else {
+                        meta.cell_size_x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
+                    };
+
                     (
                         srs.epsg_cs(),
                         srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
+                        cell_size,
                     )
                 } else {
-                    (None, false)
+                    let cell_size = if meta.cell_size().x() < 1.0 {
+                        // This is probably in degrees and not in meter
+                        meta.cell_size().x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
+                    } else {
+                        meta.cell_size().x()
+                    };
+
+                    (None, false, cell_size)
                 }
             };
-            let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), opts.max_zoom_round_up);
+
+            let zoom_level = Tile::zoom_level_for_pixel_size(cell_size, opts.max_zoom_round_up);
 
             let mut name = path
                 .file_stem()
@@ -816,7 +839,7 @@ mod tests {
         let meta = provider.layer(layer_id)?;
         assert_eq!(meta.nodata::<f32>(), Some(1e+20));
         assert_eq!(meta.min_zoom, 0);
-        assert_eq!(meta.max_zoom, 18);
+        assert_eq!(meta.max_zoom, 1);
         assert_relative_eq!(meta.bounds[0], -180.0, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[1], -90.0, epsilon = 1e-6);
         assert_relative_eq!(meta.bounds[2], 180.0, epsilon = 1e-6);

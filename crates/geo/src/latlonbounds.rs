@@ -141,6 +141,10 @@ impl LatLonBounds {
         longitude >= self.west() && longitude <= self.east()
     }
 
+    pub fn contains_coordinate(&self, coordinate: &Coordinate) -> bool {
+        self.contains_latitude(coordinate.latitude) && self.contains_longitude(coordinate.longitude)
+    }
+
     pub fn extend(&mut self, point: Coordinate) {
         self.sw.latitude = self.sw.latitude.min(point.latitude);
         self.sw.longitude = self.sw.longitude.min(point.longitude);
@@ -239,6 +243,22 @@ impl RelativeEq for LatLonBounds {
     ) -> bool {
         Coordinate::relative_eq(&self.ne, &other.ne, epsilon, max_relative)
             && Coordinate::relative_eq(&self.sw, &other.sw, epsilon, max_relative)
+    }
+}
+
+impl From<[f64; 4]> for LatLonBounds {
+    fn from(array: [f64; 4]) -> Self {
+        LatLonBounds {
+            sw: Coordinate {
+                latitude: array[1],
+                longitude: array[0],
+            },
+            ne: Coordinate {
+                latitude: array[3],
+                longitude: array[2],
+            },
+            bounded: true,
+        }
     }
 }
 
