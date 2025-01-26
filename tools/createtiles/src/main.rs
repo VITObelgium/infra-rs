@@ -52,7 +52,13 @@ fn main() -> Result<()> {
     LogWrapper::new(multi.clone(), logger).try_init().unwrap();
     log::set_max_level(level);
 
-    let gdal_config = geo::RuntimeConfiguration::builder().proj_db(&exe_dir).build();
+    let gdal_config = geo::RuntimeConfiguration::builder()
+        .proj_db(&exe_dir)
+        .config_options(vec![
+            ("GDAL_DISABLE_READDIR_ON_OPEN".into(), "YES".into()),
+            ("GDAL_PAM_ENABLED".into(), "NO".into()),
+        ])
+        .build();
     gdal_config.apply().expect("Failed to configure GDAL");
 
     let tile_opts = TileCreationOptions {

@@ -13,8 +13,8 @@ pub struct TileCreationOptions {
     pub zoom_level_strategy: ZoomLevelStrategy,
 }
 
+use std::sync::mpsc;
 use std::sync::mpsc::{Receiver, Sender};
-use std::sync::{mpsc, Mutex};
 
 use crate::mbtilesdb;
 
@@ -95,8 +95,8 @@ pub fn create_mbtiles(
     let mut tiles = vec![Tile { x: 0, y: 0, z: 0 }];
     let mut current_zoom = 0;
     while current_zoom <= max_zoom {
-        let child_tiles = Mutex::new(Vec::new());
-        tiles.into_par_iter().for_each(|tile| {
+        let mut child_tiles = Vec::new();
+        child_tiles.par_extend(tiles.into_par_iter().flat_map(|tile| {
             let tile_request = tiler::TileRequest {
                 tile,
                 dpi_ratio: 1,
@@ -105,25 +105,24 @@ pub fn create_mbtiles(
 
             match tiler.get_tile(layer.id, &tile_request) {
                 Ok(tile_data) => {
-                    if tile_data.data.is_empty() {
-                        return;
-                    }
-
-                    match tx.send((tile, tile_data)) {
-                        Ok(_) => {}
-                        Err(e) => {
-                            log::error!("Error sending tile data: {:?}", e);
+                    if !tile_data.data.is_empty() {
+                        match tx.send((tile, tile_data)) {
+                            Ok(_) => {}
+                            Err(e) => {
+                                log::error!("Error sending tile data: {:?}", e);
+                            }
                         }
-                    }
 
-                    child_tiles.lock().unwrap().extend(tile.direct_children());
+                        return tile.direct_children().to_vec();
+                    }
                 }
                 Err(e) => log::error!("Error getting tile data for {:?}", e),
             }
-        });
 
-        tiles = child_tiles.lock().unwrap().clone();
+            Vec::default()
+        }));
 
+        tiles = child_tiles;
         current_zoom += 1;
     }
 
