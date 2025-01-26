@@ -36,6 +36,19 @@ impl Statement {
         Ok(())
     }
 
+    pub fn bind_blob(&self, index: c_int, value: &[u8]) -> Result<()> {
+        self.check_rc(unsafe {
+            libsqlite3_sys::sqlite3_bind_blob(
+                self.stmt,
+                index,
+                value.as_ptr().cast::<std::ffi::c_void>(),
+                value.len() as c_int,
+                libsqlite3_sys::SQLITE_STATIC(),
+            )
+        })?;
+        Ok(())
+    }
+
     pub fn reset(&self) -> Result<()> {
         self.check_rc(unsafe { libsqlite3_sys::sqlite3_reset(self.stmt) })?;
         Ok(())
