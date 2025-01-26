@@ -8,8 +8,7 @@ use rayon::prelude::*;
 use std::ffi::CString;
 use std::path::Path;
 
-use crate::spatialreference::CoordinateWarpTransformer;
-use crate::{Error, GeoReference, Point, Rect, Result, SpatialReference};
+use crate::{CoordinateTransformer, Error, GeoReference, Point, Rect, Result, SpatialReference};
 
 use super::coveragetools::VectorBuilder;
 use super::BurnValue;
@@ -43,10 +42,10 @@ pub enum BorderHandling {
 
 fn warp_geometry(
     geom: &geos::Geometry,
-    source_projection: &SpatialReference,
-    dest_projection: &SpatialReference,
+    source_projection: SpatialReference,
+    dest_projection: SpatialReference,
 ) -> Result<geos::Geometry> {
-    let transfomer = CoordinateWarpTransformer::new(source_projection, dest_projection)?;
+    let transfomer = CoordinateTransformer::new(source_projection, dest_projection)?;
 
     let warped = geom.transform_xy(|x, y| match transfomer.transform_point((x, y).into()) {
         Ok(coord) => Some((coord.x(), coord.y())),
@@ -114,7 +113,7 @@ fn create_geometry_extent_for_srs(
     let mut dest_proj = SpatialReference::from_proj(grid_extent.projection())?;
 
     if source_projection.epsg_cs() != dest_proj.epsg_cs() {
-        let warped_geom = warp_geometry(geom, &source_projection, &dest_proj)?;
+        let warped_geom = warp_geometry(geom, source_projection, dest_proj)?;
         create_geometry_extent(&warped_geom, grid_extent)
     } else {
         create_geometry_extent(geom, grid_extent)
@@ -185,8 +184,8 @@ fn create_polygon_coverage(
     if geometry_projection.epsg_cs() != output_extent.projected_epsg() {
         geometry = warp_geometry(
             &geometry,
-            &geometry_projection,
-            &SpatialReference::from_proj(output_extent.projection())?,
+            geometry_projection.clone(),
+            SpatialReference::from_proj(output_extent.projection())?,
         )?;
     }
 
