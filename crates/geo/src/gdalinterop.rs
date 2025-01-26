@@ -13,6 +13,7 @@ pub const TRUE: std::ffi::c_int = 1;
 pub struct Config {
     pub debug_logging: bool,
     pub proj_db_search_location: PathBuf,
+    pub config_options: Vec<(String, String)>,
 }
 
 impl Config {
@@ -27,6 +28,10 @@ impl Config {
             if std::env::var_os("PROJ_DATA").is_none() {
                 std::env::set_var("PROJ_DATA", proj_db_path.as_str());
             }
+        }
+
+        for (key, value) in &self.config_options {
+            gdal::config::set_config_option(key, value)?;
         }
 
         Ok(())

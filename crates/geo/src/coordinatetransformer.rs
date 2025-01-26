@@ -91,6 +91,7 @@ mod tests {
         let gdal_config = gdalinterop::Config {
             debug_logging: false,
             proj_db_search_location: data_dir,
+            config_options: Vec::default(),
         };
 
         gdal_config.apply().expect("Failed to configure GDAL");
