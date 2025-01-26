@@ -1,7 +1,7 @@
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
-use geo::{GeoReference, Tile, ZoomLevelStrategy};
+use geo::{crs, GeoReference, Tile, ZoomLevelStrategy};
 use inf::progressinfo::AsyncProgressNotification;
 use tiler::{tileproviderfactory, TileData, TileProvider, WarpingTileProvider};
 
@@ -14,7 +14,7 @@ pub struct TileCreationOptions {
 }
 
 use std::sync::mpsc;
-use std::sync::mpsc::{Receiver, Sender};
+use std::sync::mpsc::Receiver;
 
 use crate::mbtilesdb;
 
@@ -59,7 +59,7 @@ pub fn create_mbtiles(
         std::fs::remove_file(&output)?;
     }
 
-    //let min_zoom = opts.min_zoom.unwrap_or(0);
+    let min_zoom = opts.min_zoom.unwrap_or(0);
     if let Some(zoom) = opts.max_zoom {
         if zoom < 0 {
             return Err(tiler::Error::Runtime(
@@ -73,7 +73,6 @@ pub fn create_mbtiles(
         .max_zoom
         .unwrap_or_else(|| Tile::zoom_level_for_pixel_size(meta.cell_size_x(), opts.zoom_level_strategy));
     progress.reset(2u64.pow(max_zoom as u32));
-    //let tile_extent = meta.aligned_to_xyz_tiles_for_zoom_level(opts.min_zoom);
 
     let tiler_options = tileproviderfactory::TileProviderOptions {
         calculate_stats: true,
@@ -83,7 +82,7 @@ pub fn create_mbtiles(
     let tiler = WarpingTileProvider::new(input, &tiler_options)?;
     let layer = tiler.layers().into_iter().next().unwrap();
 
-    let (tx, rx): (Sender<(Tile, TileData)>, Receiver<(Tile, TileData)>) = mpsc::channel();
+    let (tx, rx) = mpsc::channel();
 
     let storage_thread = std::thread::spawn(|| match write_tiles_to_mbtiles(output, rx, progress) {
         Ok(_) => {}
@@ -92,7 +91,23 @@ pub fn create_mbtiles(
         }
     });
 
-    let mut tiles = vec![Tile { x: 0, y: 0, z: 0 }];
+    let mut tiles = if min_zoom == 0 {
+        vec![Tile { x: 0, y: 0, z: 0 }]
+    } else {
+        let meta = meta.warped_to_epsg(crs::epsg::WGS84)?;
+        let top_left = Tile::for_coordinate(meta.top_left().into(), min_zoom);
+        let bottom_right = Tile::for_coordinate(meta.bottom_right().into(), min_zoom);
+
+        let mut tiles = Vec::new();
+        for x in top_left.x..=bottom_right.x {
+            for y in top_left.y..=bottom_right.y {
+                tiles.push(Tile { x, y, z: min_zoom });
+            }
+        }
+
+        tiles
+    };
+
     let mut current_zoom = 0;
     while current_zoom <= max_zoom {
         let mut child_tiles = Vec::new();
