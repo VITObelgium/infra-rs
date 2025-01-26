@@ -12,6 +12,7 @@ members = [
     "crates/raster-tile",
     "crates/sqlite",
     "crates/tiler",
+    "tools/createtiles",
     "tools/tileserver",
 ]
 

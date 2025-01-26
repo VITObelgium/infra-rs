@@ -27,6 +27,8 @@ pub use tileprovider::ColorMappedTileRequest;
 pub use tileprovider::TileProvider;
 pub use tileprovider::TileRequest;
 
+pub use warpingtileprovider::WarpingTileProvider;
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Runtime error: {0}")]

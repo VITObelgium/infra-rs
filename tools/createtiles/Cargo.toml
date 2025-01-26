@@ -1,0 +1,22 @@
+[package]
+name    = "createtiles"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+inf                  = { path = "../../crates/inf", features = [] }
+geo                  = { path = "../../crates/geo", features = ["gdal-static"] }
+tiler                = { path = "../../crates/tiler", features = [] }
+sqlite               = { path = "../../crates/sqlite", features = [] }
+clap                 = { version = "4.5", features = ["derive", "env"] }
+log                  = "0.4"
+env_logger           = { version = "0.11" }
+rayon                = "1.10"
+thiserror            = "2.0"
+indicatif            = "0.17"
+indicatif-log-bridge = "0.2"
+
+[features]
+
+[package.metadata.vcpkg]
+dependencies = ["gdal[core,netcdf]"]
