@@ -72,7 +72,7 @@ impl Connection {
         Ok(())
     }
 
-    pub fn execute_sql_file(&self, sql_path: &str) -> Result<()> {
+    pub fn execute_sql_file(&self, sql_path: &Path) -> Result<()> {
         let sql_contents =
             std::fs::read_to_string(sql_path).map_err(|e| Error::Runtime(format!("Failed to open sql file: {}", e)))?;
         self.execute_sql_statements(&sql_contents)

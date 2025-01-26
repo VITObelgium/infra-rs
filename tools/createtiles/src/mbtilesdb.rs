@@ -12,9 +12,7 @@ pub struct MbtilesDb {
 impl MbtilesDb {
     pub fn new(db_path: &Path) -> Result<Self> {
         let conn = sqlite::Connection::new(db_path, sqlite::AccessMode::Create)?;
-        conn.execute("CREATE TABLE metadata(name text, value text);")?;
-        conn.execute("CREATE TABLE tiles(zoom_level INTEGER, tile_column INTEGER, tile_row INTEGER, tile_data BLOB);")?;
-        conn.execute("CREATE UNIQUE INDEX tile_index on tiles (zoom_level, tile_column, tile_row);")?;
+        conn.execute_sql_statements(include_str!("mbtiles-schema.sql"))?;
 
         let tile_query = conn.prepare_statement("INSERT INTO tiles values (?1, ?2, ?3, ?4)")?;
 
