@@ -4,6 +4,15 @@ use crate::{
 };
 use std::f64::consts::PI;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ZoomLevelStrategy {
+    PreferHigher,
+    #[default]
+    PreferLower,
+    Closest,
+    Manual(i32),
+}
+
 /// An XYZ web mercator tile
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub struct Tile {
@@ -193,21 +202,41 @@ impl Tile {
         meters_per_tile / Tile::TILE_SIZE as f64
     }
 
-    pub fn zoom_level_for_pixel_size(pixel_size: f64, prefer_higher: bool) -> i32 {
+    pub fn zoom_level_for_pixel_size(pixel_size: f64, stragegy: ZoomLevelStrategy) -> i32 {
         let mut zoom_level = 20;
         while zoom_level > 0 {
-            let zoom_level_pixel_size = Self::pixel_size_at_zoom_level(zoom_level);
+            let zoom_level_pixel_size = pixel_size_at_zoom_level(zoom_level);
             if pixel_size <= zoom_level_pixel_size {
-                if pixel_size != zoom_level_pixel_size && prefer_higher {
-                    // Prefer the higher zoom level
-                    zoom_level += 1;
+                if pixel_size == zoom_level_pixel_size {
+                    // Exact match, strategy does not matter
+                    break;
                 }
+
+                match stragegy {
+                    ZoomLevelStrategy::PreferHigher => {
+                        // Prefer the higher zoom level
+                        zoom_level += 1;
+                    }
+                    ZoomLevelStrategy::PreferLower => {
+                        // No adjustment needed
+                    }
+                    ZoomLevelStrategy::Closest => {
+                        let diff_higher = (pixel_size - zoom_level_pixel_size).abs();
+                        let diff_lower = (pixel_size - pixel_size_at_zoom_level(zoom_level - 1)).abs();
+
+                        if diff_higher < diff_lower {
+                            zoom_level += 1;
+                        }
+                    }
+                    ZoomLevelStrategy::Manual(z) => {
+                        return z;
+                    }
+                }
+
                 break;
             }
-
             zoom_level -= 1;
         }
-
         zoom_level
     }
 
@@ -233,6 +262,15 @@ impl Tile {
 
         tiles
     }
+}
+
+fn pixel_size_at_zoom_level(zoom_level: i32) -> f64 {
+    use crate::{constants, Tile};
+
+    let tiles_per_row = 2i32.pow(zoom_level as u32);
+    let meters_per_tile = constants::EARTH_CIRCUMFERENCE_M / tiles_per_row as f64;
+
+    meters_per_tile / Tile::TILE_SIZE as f64
 }
 
 #[cfg(test)]
@@ -287,11 +325,23 @@ mod tests {
 
     #[test]
     fn calculate_zoom_level() {
-        assert_eq!(Tile::zoom_level_for_pixel_size(10.0, true), 14);
-        assert_eq!(Tile::zoom_level_for_pixel_size(100.0, true), 11);
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferHigher),
+            14
+        );
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferHigher),
+            11
+        );
 
-        assert_eq!(Tile::zoom_level_for_pixel_size(10.0, false), 13);
-        assert_eq!(Tile::zoom_level_for_pixel_size(100.0, false), 10);
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferLower),
+            13
+        );
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferLower),
+            10
+        );
     }
 
     #[test]

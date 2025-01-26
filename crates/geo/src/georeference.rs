@@ -1,3 +1,4 @@
+use crate::tile::ZoomLevelStrategy;
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
 use raster::{Cell, RasterSize};
@@ -513,7 +514,7 @@ impl GeoReference {
     }
 
     #[cfg(feature = "gdal")]
-    pub fn aligned_to_xyz_tiles(&self, zoom_level: Option<i32>) -> Result<GeoReference> {
+    pub fn aligned_to_xyz_tiles_for_zoom_level(&self, zoom_level: i32) -> Result<GeoReference> {
         /// Create a new `GeoReference` that is aligned to the XYZ tile grid used for serving tiles.
         /// Such an aligned grid is used as a warping target for rasters from which tiles can be extracted
         /// and served as XYZ tiles.
@@ -525,10 +526,7 @@ impl GeoReference {
             ));
         }
 
-        let prefer_higher = self.rows() * self.columns() < (5000 * 5000);
-
         let wgs84_meta = self.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-        let zoom_level = zoom_level.unwrap_or_else(|| zoom_level_for_pixel_size(self.cell_size_x(), prefer_higher));
 
         let top_left = crs::web_mercator_to_lat_lon(wgs84_meta.top_left());
         let bottom_right = crs::web_mercator_to_lat_lon(wgs84_meta.bottom_right());
@@ -547,6 +545,15 @@ impl GeoReference {
         result.set_projection_from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
         result.set_nodata(self.nodata);
         Ok(result)
+    }
+
+    #[cfg(feature = "gdal")]
+    /// Create a new `GeoReference` that is aligned to the XYZ tile grid used for serving tiles.
+    /// Such an aligned grid is used as a warping target for rasters from which tiles can be extracted
+    /// and served as XYZ tiles.
+    pub fn aligned_to_xyz_tiles_auto_detect_zoom_level(&self, strategy: ZoomLevelStrategy) -> Result<GeoReference> {
+        let zoom = Tile::zoom_level_for_pixel_size(self.cell_size_x(), strategy);
+        self.aligned_to_xyz_tiles_for_zoom_level(zoom)
     }
 
     pub fn intersection(&self, other: &GeoReference) -> Result<GeoReference> {
@@ -591,33 +598,6 @@ impl GeoReference {
 fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
     let diff = (val1 - val2).abs();
     diff % cellsize < 1e-12
-}
-
-#[cfg(feature = "gdal")]
-fn pixel_size_at_zoom_level(zoom_level: i32) -> f64 {
-    use crate::{constants, Tile};
-
-    let tiles_per_row = 2i32.pow(zoom_level as u32);
-    let meters_per_tile = constants::EARTH_CIRCUMFERENCE_M / tiles_per_row as f64;
-
-    meters_per_tile / Tile::TILE_SIZE as f64
-}
-
-#[cfg(feature = "gdal")]
-fn zoom_level_for_pixel_size(pixel_size: f64, prefer_higher: bool) -> i32 {
-    let mut zoom_level = 20;
-    while zoom_level > 0 {
-        let zoom_level_pixel_size = pixel_size_at_zoom_level(zoom_level);
-        if pixel_size <= zoom_level_pixel_size {
-            if pixel_size != zoom_level_pixel_size && prefer_higher {
-                // Prefer the higher zoom level
-                zoom_level += 1;
-            }
-            break;
-        }
-        zoom_level -= 1;
-    }
-    zoom_level
 }
 
 #[cfg(test)]

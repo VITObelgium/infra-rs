@@ -44,5 +44,7 @@ pub use spatialreference::SpatialReference;
 use thiserror::Error;
 #[doc(inline)]
 pub use tile::Tile;
+#[doc(inline)]
+pub use tile::ZoomLevelStrategy;
 
 pub type Point<T = f64> = geo_types::Point<T>;

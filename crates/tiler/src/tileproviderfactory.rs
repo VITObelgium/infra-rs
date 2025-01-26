@@ -1,4 +1,4 @@
-use geo::georaster::io::RasterFormat;
+use geo::{georaster::io::RasterFormat, ZoomLevelStrategy};
 
 use crate::Result;
 use std::path::Path;
@@ -12,7 +12,7 @@ use crate::{
 pub struct TileProviderOptions {
     pub calculate_stats: bool,
     // when calculating the max zoom levelm prefer the higher value when the cellsize is between two zoom levels
-    pub max_zoom_round_up: bool,
+    pub zoom_level_strategy: ZoomLevelStrategy,
 }
 
 /// Create a tile provider for hosting a single file

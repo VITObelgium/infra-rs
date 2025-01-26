@@ -8,7 +8,7 @@ use axum::{
     Json,
 };
 
-use geo::{Coordinate, LatLonBounds, Tile};
+use geo::{Coordinate, LatLonBounds, Tile, ZoomLevelStrategy};
 use inf::{legend, Color, Legend};
 use serde_json::json;
 use std::ops::Range;
@@ -247,7 +247,7 @@ impl TileApiHandler {
             gis_dir,
             TileProviderOptions {
                 calculate_stats: true,
-                max_zoom_round_up: true,
+                zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
             },
         )?;
         let _ = status_tx.send(StatusEvent::Layers(tile_provider.layers().clone()));

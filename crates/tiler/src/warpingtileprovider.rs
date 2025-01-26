@@ -240,7 +240,7 @@ impl WarpingTileProvider {
                 }
             };
 
-            let zoom_level = Tile::zoom_level_for_pixel_size(cell_size, opts.max_zoom_round_up);
+            let zoom_level = Tile::zoom_level_for_pixel_size(cell_size, opts.zoom_level_strategy);
 
             let mut name = path
                 .file_stem()
@@ -613,7 +613,7 @@ impl TileProvider for WarpingTileProvider {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use geo::{crs, Coordinate, Point, Tile};
+    use geo::{crs, Coordinate, Point, Tile, ZoomLevelStrategy};
     use inf::cast;
     use path_macro::path;
     use raster::{Cell, DenseRaster, Raster, RasterCreation, RasterSize};
@@ -655,7 +655,7 @@ mod tests {
                 &test_raster(),
                 &TileProviderOptions {
                     calculate_stats: false,
-                    max_zoom_round_up: false,
+                    zoom_level_strategy: ZoomLevelStrategy::PreferLower,
                 },
             )?;
 
@@ -666,7 +666,7 @@ mod tests {
                 &test_raster(),
                 &TileProviderOptions {
                     calculate_stats: false,
-                    max_zoom_round_up: true,
+                    zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
                 },
             )?;
 
@@ -683,7 +683,7 @@ mod tests {
             &test_raster(),
             &TileProviderOptions {
                 calculate_stats: false,
-                max_zoom_round_up: true,
+                zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
             },
         )?;
         let layer_meta = provider.layers().first().unwrap().clone();
@@ -733,7 +733,7 @@ mod tests {
             &test_raster_web_mercator(),
             &TileProviderOptions {
                 calculate_stats: false,
-                max_zoom_round_up: true,
+                zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
             },
         )?;
         let layer_meta = provider.layers().first().unwrap().clone();
@@ -831,7 +831,7 @@ mod tests {
             &netcdf_path,
             &TileProviderOptions {
                 calculate_stats: false,
-                max_zoom_round_up: false,
+                zoom_level_strategy: ZoomLevelStrategy::PreferLower,
             },
         )?;
         let layer_id = provider.layers().first().unwrap().id;
