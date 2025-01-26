@@ -68,8 +68,6 @@ impl Statement {
             let rc = self.step();
             if rc == libsqlite3_sys::SQLITE_ROW {
                 return true;
-            } else {
-                self.stmt = std::ptr::null_mut();
             }
         }
 
@@ -89,6 +87,12 @@ impl Statement {
         }
 
         Ok(rc)
+    }
+}
+
+impl Drop for Statement {
+    fn drop(&mut self) {
+        unsafe { libsqlite3_sys::sqlite3_finalize(self.stmt) };
     }
 }
 
