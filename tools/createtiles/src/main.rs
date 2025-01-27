@@ -13,6 +13,7 @@ pub type Result<T> = tiler::Result<T>;
 
 mod createtiles;
 mod mbtilesdb;
+mod mbtilesmetadata;
 
 #[derive(Parser, Debug)]
 #[clap(name = "createtiles", about = "Preprocess raster tiles")]

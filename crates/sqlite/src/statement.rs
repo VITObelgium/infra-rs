@@ -27,7 +27,9 @@ impl Statement {
 
     pub fn bind_text(&self, index: c_int, value: &str) -> Result<()> {
         let c_str = std::ffi::CString::new(value)?;
-        self.check_rc(unsafe { libsqlite3_sys::sqlite3_bind_text(self.stmt, index, c_str.as_ptr(), -1, None) })?;
+        self.check_rc(unsafe {
+            libsqlite3_sys::sqlite3_bind_text(self.stmt, index, c_str.as_ptr(), -1, libsqlite3_sys::SQLITE_TRANSIENT())
+        })?;
         Ok(())
     }
 

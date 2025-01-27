@@ -17,8 +17,10 @@ use std::sync::mpsc;
 use std::sync::mpsc::Receiver;
 
 use crate::mbtilesdb;
+use crate::mbtilesmetadata::Metadata;
 
 pub fn write_tiles_to_mbtiles(
+    mbtiles_meta: Metadata,
     db_path: PathBuf,
     rx: Receiver<(Tile, TileData)>,
     progress: impl AsyncProgressNotification,
@@ -26,9 +28,11 @@ pub fn write_tiles_to_mbtiles(
     let mut mbtiles = mbtilesdb::MbtilesDb::new(&db_path)?;
     mbtiles.start_transaction()?;
 
+    let mbtiles_meta: Vec<(String, String)> = mbtiles_meta.into();
+    mbtiles.insert_metadata(&mbtiles_meta)?;
+
     for (tile, tile_data) in rx {
         mbtiles.insert_tile_data(&tile, tile_data.data)?;
-        log::debug!("Stored tile: {:?}", tile);
         match progress.tick() {
             Ok(_) => {}
             Err(inf::Error::Cancelled) => {
@@ -53,7 +57,7 @@ pub fn create_mbtiles(
     mut opts: TileCreationOptions,
     progress: impl AsyncProgressNotification,
 ) -> Result<()> {
-    let meta = GeoReference::from_file(input)?;
+    let georef = GeoReference::from_file(input)?;
 
     if output.exists() {
         std::fs::remove_file(&output)?;
@@ -71,7 +75,7 @@ pub fn create_mbtiles(
     }
     let max_zoom = opts
         .max_zoom
-        .unwrap_or_else(|| Tile::zoom_level_for_pixel_size(meta.cell_size_x(), opts.zoom_level_strategy));
+        .unwrap_or_else(|| Tile::zoom_level_for_pixel_size(georef.cell_size_x(), opts.zoom_level_strategy));
     progress.reset(2u64.pow(max_zoom as u32));
 
     let tiler_options = tileproviderfactory::TileProviderOptions {
@@ -82,9 +86,11 @@ pub fn create_mbtiles(
     let tiler = WarpingTileProvider::new(input, &tiler_options)?;
     let layer = tiler.layers().into_iter().next().unwrap();
 
+    let mbtiles_meta = Metadata::new(&layer, min_zoom, max_zoom, Vec::default());
+
     let (tx, rx) = mpsc::channel();
 
-    let storage_thread = std::thread::spawn(|| match write_tiles_to_mbtiles(output, rx, progress) {
+    let storage_thread = std::thread::spawn(|| match write_tiles_to_mbtiles(mbtiles_meta, output, rx, progress) {
         Ok(_) => {}
         Err(e) => {
             log::error!("Error writing tiles to mbtiles: {:?}", e);
@@ -94,7 +100,7 @@ pub fn create_mbtiles(
     let mut tiles = if min_zoom == 0 {
         vec![Tile { x: 0, y: 0, z: 0 }]
     } else {
-        let meta = meta.warped_to_epsg(crs::epsg::WGS84)?;
+        let meta = georef.warped_to_epsg(crs::epsg::WGS84)?;
         let top_left = Tile::for_coordinate(meta.top_left().into(), min_zoom);
         let bottom_right = Tile::for_coordinate(meta.bottom_right().into(), min_zoom);
 

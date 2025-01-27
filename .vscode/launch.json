@@ -141,6 +141,27 @@
         {
             "type": "lldb",
             "request": "launch",
+            "name": "Create tiles",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=createtiles",
+                    "--package=createtiles"
+                ],
+                "filter": {
+                    "name": "createtiles",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "--input=${workspaceFolder}/tests/data/landusebyte.tif",
+                "--output=${workspaceFolder}/target/output.db"
+            ],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
             "name": "Debug unit tests in executable 'tileserver'",
             "cargo": {
                 "args": [

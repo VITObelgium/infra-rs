@@ -29,6 +29,18 @@ impl MbtilesDb {
         Ok(())
     }
 
+    pub fn insert_metadata(&mut self, metadata: &[(String, String)]) -> Result<()> {
+        let query = self.conn.prepare_statement("INSERT INTO metadata values (?1, ?2)")?;
+        for (key, value) in metadata {
+            query.bind_text(1, key)?;
+            query.bind_text(2, value)?;
+            query.step();
+            query.reset()?;
+        }
+
+        Ok(())
+    }
+
     pub fn insert_tile_data(&mut self, tile: &Tile, tile_data: Vec<u8>) -> Result<()> {
         self.tile_query.reset()?;
 
@@ -37,7 +49,7 @@ impl MbtilesDb {
         self.tile_query.bind(3, tile.y())?;
         self.tile_query.bind_blob(4, &tile_data)?;
 
-        self.tile_query.next();
+        self.tile_query.step();
 
         Ok(())
     }

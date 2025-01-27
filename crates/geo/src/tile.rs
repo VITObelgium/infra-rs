@@ -205,7 +205,7 @@ impl Tile {
     pub fn zoom_level_for_pixel_size(pixel_size: f64, stragegy: ZoomLevelStrategy) -> i32 {
         let mut zoom_level = 20;
         while zoom_level > 0 {
-            let zoom_level_pixel_size = pixel_size_at_zoom_level(zoom_level);
+            let zoom_level_pixel_size = Self::pixel_size_at_zoom_level(zoom_level);
             if pixel_size <= zoom_level_pixel_size {
                 if pixel_size == zoom_level_pixel_size {
                     // Exact match, strategy does not matter
@@ -222,7 +222,7 @@ impl Tile {
                     }
                     ZoomLevelStrategy::Closest => {
                         let diff_higher = (pixel_size - zoom_level_pixel_size).abs();
-                        let diff_lower = (pixel_size - pixel_size_at_zoom_level(zoom_level - 1)).abs();
+                        let diff_lower = (pixel_size - Self::pixel_size_at_zoom_level(zoom_level - 1)).abs();
 
                         if diff_higher < diff_lower {
                             zoom_level += 1;
@@ -262,15 +262,6 @@ impl Tile {
 
         tiles
     }
-}
-
-fn pixel_size_at_zoom_level(zoom_level: i32) -> f64 {
-    use crate::{constants, Tile};
-
-    let tiles_per_row = 2i32.pow(zoom_level as u32);
-    let meters_per_tile = constants::EARTH_CIRCUMFERENCE_M / tiles_per_row as f64;
-
-    meters_per_tile / Tile::TILE_SIZE as f64
 }
 
 #[cfg(test)]

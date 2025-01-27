@@ -37,7 +37,7 @@ impl fmt::Display for TileFormat {
                 TileFormat::FloatEncodedPng => "float_png",
                 TileFormat::Jpeg => "jpeg",
                 TileFormat::RasterTile => "vrt",
-                TileFormat::Unknown => "",
+                TileFormat::Unknown => "unknown",
             }
         )
     }
