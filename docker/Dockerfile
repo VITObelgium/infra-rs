@@ -1,4 +1,4 @@
-FROM rust:1.81.0-bookworm
+FROM rust:1.84.0-bookworm
 
 ARG USER_ID
 ARG GROUP_ID
