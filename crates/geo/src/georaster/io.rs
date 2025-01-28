@@ -65,7 +65,7 @@ impl RasterFormat {
                 "png" => return RasterFormat::Png,
                 "map" => return RasterFormat::PcRaster,
                 "nc" => return RasterFormat::Netcdf,
-                "mbtiles" => return RasterFormat::MBTiles,
+                "mbtiles" | "db" => return RasterFormat::MBTiles,
                 "gpkg" => return RasterFormat::GeoPackage,
                 "grib" => return RasterFormat::Grib,
                 _ => {}
