@@ -53,8 +53,13 @@ impl Metadata {
         layer_meta: &LayerMetadata,
         min_zoom: i32,
         max_zoom: i32,
-        additional_data: Vec<(String, String)>,
+        mut additional_data: Vec<(String, String)>,
     ) -> Self {
+        if layer_meta.min_value.is_finite() && layer_meta.max_value.is_finite() {
+            additional_data.push(("min_value".into(), layer_meta.min_value.to_string()));
+            additional_data.push(("max_value".into(), layer_meta.max_value.to_string()));
+        }
+
         Metadata {
             name: layer_meta.name.clone(),
             format: layer_meta.tile_format.to_string(),

@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     ops::Range,
     path::{Path, PathBuf},
+    str::FromStr,
 };
 
 use geo::{crs, Coordinate, LatLonBounds, Tile};
@@ -56,8 +57,14 @@ impl MbtilesTileProvider {
             source_is_web_mercator: true,
             supports_dpi_ratio: false,
             nodata: None,
-            min_value: 0.0,
-            max_value: 0.0,
+            min_value: meta_map
+                .remove("min_value")
+                .and_then(|s| f64::from_str(&s).ok())
+                .unwrap_or(0.0),
+            max_value: meta_map
+                .remove("max_value")
+                .and_then(|s| f64::from_str(&s).ok())
+                .unwrap_or(0.0),
             data_type: RasterDataType::Float32,
             source_format: LayerSourceType::Mbtiles,
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
