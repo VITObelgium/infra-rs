@@ -7,23 +7,17 @@ use axum::{
     Json,
 };
 
-use geo::{Coordinate, LatLonBounds, Tile, ZoomLevelStrategy};
+use geo::{Coordinate, LatLonBounds, Tile};
 use inf::{legend, Color, Legend};
 use std::ops::Range;
 use tiler::{
-    tileproviderfactory::TileProviderOptions, ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata,
-    TileData, TileFormat, TileJson, TileProvider, TileRequest,
+    tileproviderfactory::TileProviderOptions, ColorMappedTileRequest, DiffTileProvider, LayerId, LayerMetadata,
+    LayerSourceType, PixelFormat, TileData, TileFormat, TileJson, TileProvider, TileRequest,
 };
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 
-use crate::{Error, Result};
-
-#[derive(Clone)]
-pub enum StatusEvent {
-    Layers(Vec<LayerMetadata>),
-    TileServed(LayerId),
-}
+use crate::{AppError, Error, Result};
 
 #[derive(serde::Serialize)]
 pub struct RasterValueResponse {
@@ -33,44 +27,6 @@ pub struct RasterValueResponse {
 #[derive(serde::Serialize)]
 pub struct LayersResponse {
     layers: Vec<LayerMetadata>,
-}
-
-/// Our app's top level error type.
-#[derive(Debug)]
-enum AppError {
-    /// Something went wrong when calling the user repo.
-    Error(Error),
-}
-
-impl From<crate::Error> for AppError {
-    fn from(inner: crate::Error) -> Self {
-        AppError::Error(inner)
-    }
-}
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> Response {
-        let (status, error_message) = match self {
-            AppError::Error(err) => match err {
-                Error::Runtime(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err),
-                Error::GdalError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::TimeError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::IOError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::InfError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::RasterTileError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::InvalidArgument(err) => (http::StatusCode::BAD_REQUEST, err),
-                Error::GeoError(_) | Error::SqliteError(_) => {
-                    (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
-                }
-            },
-        };
-
-        let body = Json(json!({
-            "error": error_message,
-        }));
-
-        (status, body).into_response()
-    }
 }
 
 struct State {
@@ -88,8 +44,8 @@ impl From<TileData> for TileResponse {
 }
 
 impl State {
-    fn new(gis_dir: &std::path::Path, status_tx: tokio::sync::broadcast::Sender<StatusEvent>) -> Self {
-        match TileApiHandler::new(gis_dir, status_tx) {
+    fn new(raster1: &std::path::Path, raster2: &std::path::Path) -> Self {
+        match TileApiHandler::new(raster1, raster2) {
             Ok(api) => Self { api },
             Err(err) => {
                 log::error!("Failed to create tile server api handler: {err}");
@@ -150,30 +106,23 @@ async fn layer_raster_value(
     Ok(state.api.get_raster_value(layer.as_str(), params).await?)
 }
 
-pub fn create_router(
-    gis_dir: &std::path::Path,
-) -> (axum::routing::Router, tokio::sync::broadcast::Receiver<StatusEvent>) {
-    let (status_tx, status_rx) = tokio::sync::broadcast::channel(100);
-
-    (
-        axum::Router::new()
-            .route("/api/layers", get(list_layers))
-            .route("/api/{layer}", get(layer_json))
-            .route("/api/{layer}/{z}/{x}/{y}", get(layer_tile))
-            .route("/api/{layer}/valuerange", get(layer_value_range))
-            .route("/api/{layer}/rastervalue", get(layer_raster_value))
-            .layer(axum::Extension(Arc::new(State::new(gis_dir, status_tx))))
-            .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http())),
-        status_rx,
-    )
+pub fn create_router(raster1: &std::path::Path, raster2: &std::path::Path) -> axum::routing::Router {
+    axum::Router::new()
+        .route("/api/layers", get(list_layers))
+        .route("/api/:layer", get(layer_json))
+        .route("/api/:layer/:z/:x/:y", get(layer_tile))
+        .route("/api/:layer/valuerange", get(layer_value_range))
+        .route("/api/:layer/rastervalue", get(layer_raster_value))
+        .layer(axum::Extension(Arc::new(State::new(raster1, raster2))))
+        .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http()))
 }
 
 const fn tile_format_content_type(tile_format: TileFormat) -> &'static str {
     match tile_format {
         TileFormat::Protobuf => "application/protobuf",
-        TileFormat::Png | TileFormat::FloatEncodedPng => "image/png",
+        TileFormat::Png => "image/png",
         TileFormat::Jpeg => "image/jpeg",
-        TileFormat::RasterTile | TileFormat::Unknown => "application/octet-stream",
+        TileFormat::Unknown => "application/octet-stream",
     }
 }
 
@@ -217,7 +166,7 @@ fn host_header(headers: &axum::http::HeaderMap) -> Result<&str> {
 impl axum::response::IntoResponse for TileResponse {
     fn into_response(self) -> axum::response::Response {
         if self.data.is_empty() {
-            return (StatusCode::OK, "").into_response();
+            return (StatusCode::NOT_FOUND, "Tile not found").into_response();
         }
 
         let mut response = axum::response::Response::builder()
@@ -235,23 +184,13 @@ impl axum::response::IntoResponse for TileResponse {
 }
 
 pub struct TileApiHandler {
-    tile_provider: DirectoryTileProvider,
-    status_tx: tokio::sync::broadcast::Sender<StatusEvent>,
+    tile_provider: DiffTileProvider,
 }
 
 impl TileApiHandler {
-    pub fn new(gis_dir: &std::path::Path, status_tx: tokio::sync::broadcast::Sender<StatusEvent>) -> Result<Self> {
-        let tile_provider = DirectoryTileProvider::new(
-            gis_dir,
-            TileProviderOptions {
-                calculate_stats: true,
-                zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
-            },
-        )?;
-        let _ = status_tx.send(StatusEvent::Layers(tile_provider.layers().clone()));
+    pub fn new(raster1: &std::path::Path, raster2: &std::path::Path) -> Result<Self> {
         Ok(TileApiHandler {
-            tile_provider,
-            status_tx,
+            tile_provider: DiffTileProvider::new(raster1, raster2, &TileProviderOptions::default())?,
         })
     }
 
@@ -308,17 +247,17 @@ impl TileApiHandler {
         Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
     }
 
-    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat) -> Result<TileData> {
+    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, pixel_format: PixelFormat) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
             let tile_request = TileRequest {
                 tile,
                 dpi_ratio: dpi,
-                tile_format,
+                pixel_format,
             };
 
-            let tile = DirectoryTileProvider::get_tile_for_layer(&layer_meta, &tile_request);
+            let tile = DiffTileProvider::tile(&layer_meta, &tile_request);
             let _ = send.send(tile);
         });
 
@@ -349,7 +288,7 @@ impl TileApiHandler {
                         legend: &legend,
                     };
 
-                    let tile = DirectoryTileProvider::get_tile_color_mapped_for_layer(&layer_meta, &tile_request);
+                    let tile = DiffTileProvider::color_mapped_tile(&layer_meta, &tile_request);
                     let _ = send.send(tile);
                 }
                 Err(err) => {
@@ -370,7 +309,7 @@ impl TileApiHandler {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
-            let _ = send.send(DirectoryTileProvider::extent_value_range_for_layer(
+            let _ = send.send(DiffTileProvider::value_range_for_extent(
                 &layer_meta,
                 LatLonBounds::hull(top_left, bottom_right),
                 zoom,
@@ -384,7 +323,7 @@ impl TileApiHandler {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
-            let _ = send.send(DirectoryTileProvider::get_raster_value_for_layer(&layer_meta, coord, 1));
+            let _ = send.send(DiffTileProvider::raster_pixel(&layer_meta, coord));
         });
 
         recv.await.expect("Panic in rayon::spawn")
@@ -402,7 +341,7 @@ impl TileApiHandler {
         let mut cmap = String::from("gray");
         let mut min_value = Option::<f64>::None;
         let mut max_value = Option::<f64>::None;
-        let mut tile_format = Option::<TileFormat>::None;
+        let mut pixel_format = Option::<PixelFormat>::None;
 
         if let Some(cmap_str) = params.get("cmap") {
             cmap = cmap_str.to_string();
@@ -416,17 +355,13 @@ impl TileApiHandler {
             max_value = max_str.parse::<f64>().ok();
         }
 
-        if let Some(format) = params.get("tile_format") {
-            tile_format = Some(TileFormat::from(format.as_str()));
-        }
-
         let splitted: Vec<&str> = y.split('.').collect();
         if splitted.len() != 2 {
             return Err(Error::InvalidArgument("Invalid tile coordinates".to_string()));
         }
 
         let (y, dpi_ratio, extension) = Self::parse_tile_filename(&y)?;
-        if extension != "png" && extension != "pbf" && extension != "vrt" {
+        if extension != "png" && extension != "pbf" {
             return Err(Error::InvalidArgument("Invalid tile extension".to_string()));
         }
 
@@ -439,19 +374,15 @@ impl TileApiHandler {
             cmap,
             min_value,
             max_value,
-            tile_format,
+            pixel_format,
         );
 
-        let layer_id = parse_layer_id(layer)?;
-        let layer_meta = self.tile_provider.layer(layer_id)?;
-        let tile = match tile_format {
-            Some(TileFormat::FloatEncodedPng | TileFormat::RasterTile) => {
-                Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, tile_format.unwrap()).await?
-            }
-            _ => {
-                Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, Tile { x, y, z }, dpi_ratio)
-                    .await?
-            }
+        let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
+
+        let tile = if layer_meta.tile_format == TileFormat::Protobuf {
+            Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, PixelFormat::Rgba).await?
+        } else {
+            Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, Tile { x, y, z }, dpi_ratio).await?
         };
 
         if tile.format == TileFormat::Protobuf {
@@ -462,7 +393,6 @@ impl TileApiHandler {
             }
         }
 
-        let _ = self.status_tx.send(StatusEvent::TileServed(layer_id));
         Ok(tile)
     }
 

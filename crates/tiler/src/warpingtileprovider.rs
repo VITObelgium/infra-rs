@@ -277,6 +277,7 @@ impl WarpingTileProvider {
                 scheme: "xyz".to_string(),
                 additional_data: Default::default(),
                 band_nr: Some(band_nr),
+                provider_data: None,
             };
 
             if opts.calculate_stats {

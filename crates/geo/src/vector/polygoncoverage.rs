@@ -110,7 +110,7 @@ fn create_geometry_extent_for_srs(
     grid_extent: &GeoReference,
     mut source_projection: SpatialReference,
 ) -> Result<GeoReference> {
-    let mut dest_proj = SpatialReference::from_proj(grid_extent.projection())?;
+    let mut dest_proj = SpatialReference::from_definition(grid_extent.projection())?;
 
     if source_projection.epsg_cs() != dest_proj.epsg_cs() {
         let warped_geom = warp_geometry(geom, source_projection, dest_proj)?;
@@ -185,7 +185,7 @@ fn create_polygon_coverage(
         geometry = warp_geometry(
             &geometry,
             geometry_projection.clone(),
-            SpatialReference::from_proj(output_extent.projection())?,
+            SpatialReference::from_definition(output_extent.projection())?,
         )?;
     }
 
@@ -436,7 +436,7 @@ pub fn create_polygon_coverages(
             let mut cov = create_polygon_coverage(
                 id_geom.0,
                 id_geom.3,
-                SpatialReference::from_proj(&projection)?,
+                SpatialReference::from_definition(&projection)?,
                 output_extent,
             )?;
             cov.value = id_geom.1;

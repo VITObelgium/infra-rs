@@ -4,9 +4,12 @@ mod layermetadata;
 mod pixelformat;
 mod tiledata;
 mod tileformat;
+mod tileio;
 mod tileprovider;
 pub mod tileproviderfactory;
 
+#[cfg(feature = "vector-tiles")]
+mod difftileprovider;
 mod directorytileprovider;
 mod dynamictileprovider;
 mod imageprocessing;
@@ -14,10 +17,13 @@ mod mbtilestileprovider;
 mod rasterprocessing;
 mod warpingtileprovider;
 
+#[cfg(feature = "vector-tiles")]
+pub use difftileprovider::DiffTileProvider;
 pub use directorytileprovider::DirectoryTileProvider;
 pub use dynamictileprovider::DynamicTileProvider;
 pub use layermetadata::LayerId;
 pub use layermetadata::LayerMetadata;
+pub use layermetadata::LayerSourceType;
 pub use layermetadata::TileJson;
 pub use pixelformat::PixelFormat;
 use thiserror::Error;
@@ -47,6 +53,9 @@ pub enum Error {
     TimeError(#[from] std::time::SystemTimeError),
     #[error("IO error: {0}")]
     IOError(#[from] std::io::Error),
+    #[cfg(feature = "vector-tiles")]
+    #[error("MVT error: {0}")]
+    MvtError(#[from] mvt::Error),
     #[error("Raster tile error: {0}")]
     RasterTileError(#[from] raster_tile::Error),
 }

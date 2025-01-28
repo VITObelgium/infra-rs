@@ -398,9 +398,9 @@ pub mod dataset {
     }
 
     /// Creates an in-memory dataset without any bands
-    pub fn create_in_memory(meta: &GeoReference) -> Result<gdal::Dataset> {
+    pub fn create_in_memory(size: RasterSize) -> Result<gdal::Dataset> {
         let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
-        Ok(mem_driver.create(PathBuf::from("in_mem"), meta.columns(), meta.rows(), 0)?)
+        Ok(mem_driver.create(PathBuf::from("in_mem"), size.cols, size.rows, 0)?)
     }
 
     /// Creates an in-memory dataset with the provided metadata.
@@ -410,7 +410,7 @@ pub mod dataset {
         meta: &GeoReference,
         data: &[T],
     ) -> Result<gdal::Dataset> {
-        let mut ds = create_in_memory(meta)?;
+        let mut ds = create_in_memory(meta.raster_size())?;
         add_band_from_data_ptr(&mut ds, data)?;
         metadata_to_dataset_band(&mut ds, meta, 1)?;
         Ok(ds)

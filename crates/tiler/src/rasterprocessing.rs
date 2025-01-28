@@ -42,11 +42,11 @@ pub fn raster_pixel(
     }
 
     let meta = georaster::io::dataset::read_file_metadata_with_options(raster_path, &open_opt)?;
-    let srs = SpatialReference::from_proj(meta.projection())?;
+    let srs = SpatialReference::from_definition(meta.projection())?;
     if !srs.is_geographic() || srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
         let transformer = CoordinateTransformer::new(
             SpatialReference::from_epsg(crs::epsg::WGS84)?,
-            SpatialReference::from_proj(meta.projection())?,
+            SpatialReference::from_definition(meta.projection())?,
         )?;
         transformer.transform_coordinate_in_place(&mut coord)?;
     }
