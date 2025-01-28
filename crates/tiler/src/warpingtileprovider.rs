@@ -1,9 +1,6 @@
-use std::{ops::Range, path::PathBuf};
+use std::ops::Range;
 
-use gdal::{
-    raster::{GdalDataType, GdalType},
-    Dataset,
-};
+use gdal::raster::GdalType;
 
 use inf::legend::Legend;
 
@@ -11,7 +8,7 @@ use geo::{
     constants,
     georaster::{self, io::RasterFormat},
 };
-use geo::{crs, CellSize, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
+use geo::{crs, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
 use raster::{DenseRaster, RasterCreation, RasterDataType, RasterNum, RasterSize};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
@@ -22,166 +19,11 @@ use crate::{
     rasterprocessing::{metadata_bounds_wgs84, source_type_for_path},
     tiledata::TileData,
     tileformat::TileFormat,
+    tileio::{self, detect_raster_range},
     tileprovider::{self, ColorMappedTileRequest, TileProvider, TileRequest},
     tileproviderfactory::TileProviderOptions,
     Error, PixelFormat, Result,
 };
-
-fn type_string<T: GdalType>() -> &'static str {
-    match <T as GdalType>::datatype() {
-        GdalDataType::UInt8 => "Byte",
-        GdalDataType::UInt16 => "UInt16",
-        GdalDataType::Int16 => "Int16",
-        GdalDataType::UInt32 => "UInt32",
-        GdalDataType::Int32 => "Int32",
-        GdalDataType::Float32 => "Float32",
-        GdalDataType::Float64 => "Float64",
-        _ => panic!("Invalid type provided"),
-    }
-}
-
-fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: LatLonBounds) -> Result<Range<f64>> {
-    let options: Vec<String> = vec![
-        "-b".to_string(),
-        band_nr.to_string(),
-        "-stats".to_string(),
-        "-ot".to_string(),
-        "Float32".to_string(),
-        "-of".to_string(),
-        "MEM".to_string(),
-        "-ovr".to_string(),
-        "AUTO".to_string(),
-        "-projwin".to_string(),
-        bbox.west().to_string(),
-        bbox.north().to_string(),
-        bbox.east().to_string(),
-        bbox.south().to_string(),
-        "-projwin_srs".to_string(),
-        "EPSG:4326".to_string(),
-    ];
-
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
-    let output_path = PathBuf::from(format!(
-        "/vsimem/range_{}_{}.mem",
-        raster_path
-            .file_stem()
-            .ok_or(Error::Runtime("No filename".to_string()))?
-            .to_string_lossy(),
-        timestamp
-    ));
-
-    if let Ok(ds) = georaster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
-        if let Ok(Some(stats)) = ds.rasterband(band_nr)?.get_statistics(true, true) {
-            log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
-            return Ok(Range {
-                start: stats.min,
-                end: stats.max,
-            });
-        }
-    }
-
-    Err(Error::Runtime(format!(
-        "Failed to obtain value range for bbox: {} - {}",
-        bbox.northwest(),
-        bbox.southeast(),
-    )))
-}
-
-fn read_raster_tile<T: RasterNum<T> + GdalType>(
-    raster_path: &std::path::Path,
-    band_nr: usize,
-    tile: Tile,
-    dpi_ratio: u8,
-) -> Result<Vec<T>> {
-    let bounds = tile.web_mercator_bounds();
-    let scaled_size = Tile::TILE_SIZE * dpi_ratio as u16;
-
-    let options: Vec<String> = vec![
-        "-b".to_string(),
-        band_nr.to_string(),
-        "-ot".to_string(),
-        type_string::<T>().to_string(),
-        "-of".to_string(),
-        "MEM".to_string(),
-        "-outsize".to_string(),
-        scaled_size.to_string(),
-        scaled_size.to_string(),
-        "-projwin".to_string(),
-        bounds.top_left().x().to_string(),
-        bounds.top_left().y().to_string(),
-        bounds.bottom_right().x().to_string(),
-        bounds.bottom_right().y().to_string(),
-    ];
-
-    let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
-    let mut data = vec![T::zero(); scaled_size as usize * scaled_size as usize];
-    let ds = georaster::algo::translate_file(raster_path, &output_path, &options)?;
-    georaster::io::dataset::read_band(&ds, 1, &mut data)?;
-    Ok(data)
-}
-
-fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
-    raster_path: &std::path::Path,
-    band_nr: usize,
-    tile: Tile,
-    dpi_ratio: u8,
-) -> Result<Vec<T>> {
-    let bounds = tile.web_mercator_bounds();
-    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
-
-    log::debug!("Warp tile: {:?}", tile);
-    gdal::config::set_config_option("CPL_DEBUG", "ON")?;
-
-    let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-    let dest_extent = GeoReference::with_origin(
-        projection.to_wkt()?,
-        RasterSize {
-            rows: scaled_size,
-            cols: scaled_size,
-        },
-        bounds.bottom_left(),
-        CellSize::square(bounds.width() / scaled_size as f64),
-        Some(T::nodata_value()),
-    );
-
-    let src_ds = if raster_path.extension().is_some_and(|ext| ext == "nc") {
-        let opts = vec!["PRESERVE_AXIS_UNIT_IN_CRS=YES"];
-        geo::georaster::io::dataset::open_read_only_with_options(raster_path, &opts)?
-    } else {
-        geo::georaster::io::dataset::open_read_only(raster_path)?
-    };
-
-    let mut data = vec![T::nodata_value(); scaled_size * scaled_size];
-    let mut dest_ds = georaster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
-
-    let options = vec![
-        "-b".to_string(),
-        band_nr.to_string(),
-        "-ovr".to_string(),
-        "AUTO".to_string(),
-        "-r".to_string(),
-        "near".to_string(),
-    ];
-
-    let key_value_options: Vec<(String, String)> = vec![
-        ("INIT_DEST".to_string(), "NO_DATA".to_string()),
-        ("SKIP_NOSOURCE".to_string(), "YES".to_string()),
-        ("NUM_THREADS".to_string(), "ALL_CPUS".to_string()),
-    ];
-
-    log::debug!("Invoke warp: {:?}", tile);
-    georaster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
-
-    // Avoid returning tiles containing only nodata values
-    if data.iter().all(|&val| T::is_nodata(val)) {
-        log::debug!("All nodata");
-        return Ok(vec![]);
-    }
-
-    Ok(data)
-}
 
 fn raw_tile_to_vito_tile_format<T: RasterNum<T>>(data: Vec<T>, width: usize, height: usize) -> Result<TileData> {
     let raster_tile = DenseRaster::new(RasterSize::with_rows_cols(height, width), data);
@@ -317,49 +159,6 @@ impl WarpingTileProvider {
         )
     }
 
-    /// Read the raw tile data, result is a tuple with the raw data and the nodata value
-    fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
-        meta: &LayerMetadata,
-        band_nr: usize,
-        tile: Tile,
-        dpi_ratio: u8,
-    ) -> Result<(Vec<T>, T)> {
-        let raw_tile_data: Vec<T>;
-        let start = std::time::Instant::now();
-
-        let mut nodata: T = meta.nodata::<T>().unwrap_or(T::nodata_value());
-
-        if !meta.source_is_web_mercator {
-            raw_tile_data = read_raster_tile_warped(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
-            nodata = T::nodata_value();
-        } else {
-            raw_tile_data = read_raster_tile(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
-        }
-
-        //[cfg(TILESERVER_VERBOSE)]
-        log::debug!(
-            "[{}/{}/{}@{}] {} took {}ms (data type: {}) [{:?}]",
-            tile.z(),
-            tile.x(),
-            tile.y(),
-            dpi_ratio,
-            if meta.source_is_web_mercator {
-                "Translate"
-            } else {
-                "Warp"
-            },
-            start.elapsed().as_millis(),
-            type_string::<T>(),
-            std::thread::current().id(),
-        );
-
-        if start.elapsed().as_secs() > 10 {
-            log::warn!("Slow tile: {}/{}/{}", tile.z(), tile.x(), tile.y());
-        }
-
-        Ok((raw_tile_data, nodata))
-    }
-
     fn process_pixel_request<T>(
         meta: &LayerMetadata,
         band_nr: usize,
@@ -370,7 +169,7 @@ impl WarpingTileProvider {
     where
         T: RasterNum<T> + Num + GdalType,
     {
-        let (raw_tile_data, nodata) = WarpingTileProvider::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
+        let (raw_tile_data, nodata) = tileio::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
         if raw_tile_data.is_empty() {
             return Ok(None);
         }
@@ -390,7 +189,7 @@ impl WarpingTileProvider {
     where
         T: RasterNum<T> + Num + GdalType,
     {
-        let (raw_tile_data, nodata) = WarpingTileProvider::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
+        let (raw_tile_data, nodata) = tileio::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
         if raw_tile_data.is_empty() {
             return Ok(TileData::default());
         }
@@ -419,28 +218,6 @@ impl WarpingTileProvider {
             ),
             _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
         }
-    }
-
-    fn read_color_mapped_tile_as_png<T>(
-        meta: &LayerMetadata,
-        band_nr: usize,
-        req: &ColorMappedTileRequest,
-    ) -> Result<TileData>
-    where
-        T: RasterNum<T> + Num + GdalType,
-    {
-        let (raw_tile_data, nodata) = WarpingTileProvider::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
-        if raw_tile_data.is_empty() {
-            return Ok(TileData::default());
-        }
-
-        imageprocessing::raw_tile_to_png_color_mapped::<T>(
-            raw_tile_data.as_slice(),
-            (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-            (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-            Some(nodata),
-            req.legend,
-        )
     }
 
     fn verify_tile_dpi(dpi: u8) -> Result<()> {
@@ -484,36 +261,16 @@ impl WarpingTileProvider {
 
         let band_nr = layer_meta.band_nr.unwrap_or(1);
         match layer_meta.data_type {
-            RasterDataType::Int8 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<i8>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Uint8 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<u8>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Int16 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<i16>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Uint16 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<u16>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Int32 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<i32>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Uint32 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<u32>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Int64 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<i64>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Uint64 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<u64>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Float32 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<f32>(layer_meta, band_nr, tile_req)
-            }
-            RasterDataType::Float64 => {
-                WarpingTileProvider::read_color_mapped_tile_as_png::<f64>(layer_meta, band_nr, tile_req)
-            }
+            RasterDataType::Int8 => tileio::read_color_mapped_tile_as_png::<i8>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint8 => tileio::read_color_mapped_tile_as_png::<u8>(layer_meta, band_nr, tile_req),
+            RasterDataType::Int16 => tileio::read_color_mapped_tile_as_png::<i16>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint16 => tileio::read_color_mapped_tile_as_png::<u16>(layer_meta, band_nr, tile_req),
+            RasterDataType::Int32 => tileio::read_color_mapped_tile_as_png::<i32>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint32 => tileio::read_color_mapped_tile_as_png::<u32>(layer_meta, band_nr, tile_req),
+            RasterDataType::Int64 => tileio::read_color_mapped_tile_as_png::<i64>(layer_meta, band_nr, tile_req),
+            RasterDataType::Uint64 => tileio::read_color_mapped_tile_as_png::<u64>(layer_meta, band_nr, tile_req),
+            RasterDataType::Float32 => tileio::read_color_mapped_tile_as_png::<f32>(layer_meta, band_nr, tile_req),
+            RasterDataType::Float64 => tileio::read_color_mapped_tile_as_png::<f64>(layer_meta, band_nr, tile_req),
         }
     }
 

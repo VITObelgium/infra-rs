@@ -12,7 +12,7 @@ use inf::{legend, Color, Legend};
 use std::ops::Range;
 use tiler::{
     tileproviderfactory::TileProviderOptions, ColorMappedTileRequest, DiffTileProvider, LayerId, LayerMetadata,
-    LayerSourceType, PixelFormat, TileData, TileFormat, TileJson, TileProvider, TileRequest,
+    TileData, TileFormat, TileJson, TileProvider, TileRequest,
 };
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -120,9 +120,9 @@ pub fn create_router(raster1: &std::path::Path, raster2: &std::path::Path) -> ax
 const fn tile_format_content_type(tile_format: TileFormat) -> &'static str {
     match tile_format {
         TileFormat::Protobuf => "application/protobuf",
-        TileFormat::Png => "image/png",
+        TileFormat::Png | TileFormat::FloatEncodedPng => "image/png",
         TileFormat::Jpeg => "image/jpeg",
-        TileFormat::Unknown => "application/octet-stream",
+        TileFormat::Unknown | TileFormat::RasterTile => "application/octet-stream",
     }
 }
 
@@ -247,14 +247,14 @@ impl TileApiHandler {
         Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
     }
 
-    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, pixel_format: PixelFormat) -> Result<TileData> {
+    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
             let tile_request = TileRequest {
                 tile,
                 dpi_ratio: dpi,
-                pixel_format,
+                tile_format,
             };
 
             let tile = DiffTileProvider::tile(&layer_meta, &tile_request);
@@ -341,7 +341,7 @@ impl TileApiHandler {
         let mut cmap = String::from("gray");
         let mut min_value = Option::<f64>::None;
         let mut max_value = Option::<f64>::None;
-        let mut pixel_format = Option::<PixelFormat>::None;
+        let mut tile_format = Option::<TileFormat>::None;
 
         if let Some(cmap_str) = params.get("cmap") {
             cmap = cmap_str.to_string();
@@ -353,6 +353,10 @@ impl TileApiHandler {
 
         if let Some(max_str) = params.get("max") {
             max_value = max_str.parse::<f64>().ok();
+        }
+
+        if let Some(format) = params.get("tile_format") {
+            tile_format = Some(TileFormat::from(format.as_str()));
         }
 
         let splitted: Vec<&str> = y.split('.').collect();
@@ -374,13 +378,13 @@ impl TileApiHandler {
             cmap,
             min_value,
             max_value,
-            pixel_format,
+            tile_format,
         );
 
         let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
 
         let tile = if layer_meta.tile_format == TileFormat::Protobuf {
-            Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, PixelFormat::Rgba).await?
+            Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, TileFormat::Protobuf).await?
         } else {
             Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, Tile { x, y, z }, dpi_ratio).await?
         };

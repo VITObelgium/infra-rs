@@ -133,7 +133,12 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         Some(T::nodata_value()),
     );
 
-    let src_ds = gdal::Dataset::open(raster_path)?;
+    let src_ds = if raster_path.extension().is_some_and(|ext| ext == "nc") {
+        let opts = vec!["PRESERVE_AXIS_UNIT_IN_CRS=YES"];
+        geo::georaster::io::dataset::open_read_only_with_options(raster_path, &opts)?
+    } else {
+        geo::georaster::io::dataset::open_read_only(raster_path)?
+    };
 
     let mut data = vec![T::nodata_value(); scaled_size * scaled_size];
     let mut dest_ds = georaster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
@@ -146,6 +151,7 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         "-r".to_string(),
         "near".to_string(),
     ];
+
     let key_value_options: Vec<(String, String)> = vec![
         ("INIT_DEST".to_string(), "NO_DATA".to_string()),
         ("SKIP_NOSOURCE".to_string(), "YES".to_string()),
