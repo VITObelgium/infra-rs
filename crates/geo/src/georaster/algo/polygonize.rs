@@ -11,10 +11,10 @@ fn polygonize_dataset(ds: &gdal::Dataset) -> Result<gdal::Dataset> {
         ));
     }
 
-    let srs = ds.spatial_ref()?;
+    let srs = ds.spatial_ref().ok();
     let layer_options = gdal::vector::LayerOptions {
         name: "Polygons",
-        srs: Some(&srs),
+        srs: srs.as_ref(),
         ..Default::default()
     };
 
