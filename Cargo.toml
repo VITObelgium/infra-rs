@@ -32,7 +32,7 @@ serde       = ["inf/serde"]
 
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
-rev = "943c5ef"
+rev = "10b7a17"
 overlay-triplets-path = "vcpkg-triplets"
 dependencies = [
     "gdal[core,netcdf]",
@@ -42,6 +42,9 @@ dependencies = [
 [package.metadata.vcpkg.target]
 #aarch64-apple-darwin = { triplet = "arm64-osx-debugsymbols" }
 #x86_64-pc-windows-msvc = { triplet = "x64-windows-static-debugsymbols" }
+x86_64-apple-darwin    = { triplet = "x64-osx-release" }
+aarch64-apple-darwin   = { triplet = "arm64-osx-release" }
+x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 
 [patch.crates-io]
 # more recent geozero to avoid multiple gdal copies

@@ -1,13 +1,13 @@
 set export
 # detect the vcpkg triplet based on the system information
 VCPKG_DEFAULT_TRIPLET := if os_family() == "windows" {
-  "x64-windows-static"
+  "x64-windows-static-release"
   } else if os() == "macos" {
     if arch() == "aarch64" {
-      "arm64-osx"
-    } else { "x64-osx" }
+      "arm64-osx-release"
+    } else { "x64-osx-release" }
   } else {
-    "x64-linux"
+    "x64-linux-release"
   }
 PYTHON_EXE := if os_family() == "windows" {
     "python.exe"

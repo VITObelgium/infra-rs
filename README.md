@@ -7,7 +7,7 @@ In your main Cargo.toml specify the vcpkg version you wish to use
 ```
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
-rev = "943c5ef"
+rev = "10b7a17"
 ```
 Optionally also select the vcpkg triplets you wish to use for your targets
 ```
