@@ -89,9 +89,10 @@ async fn layer_tile(
     headers: http::HeaderMap,
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> std::result::Result<TileResponse, AppError> {
+    let (tile, dpi) = parse_tile(z, x, &y)?;
     Ok(state
         .api
-        .get_tile(layer.as_str(), z, x, y, headers, params)
+        .get_tile(layer.as_str(), tile, dpi, headers, params)
         .await?
         .into())
 }
@@ -102,9 +103,10 @@ async fn tile_diff(
     headers: http::HeaderMap,
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> std::result::Result<TileResponse, AppError> {
+    let (tile, dpi) = parse_tile(z, x, &y)?;
     Ok(state
         .api
-        .diff_tile(layer1.as_str(), layer2.as_str(), z, x, y, headers, params)
+        .diff_tile(layer1.as_str(), layer2.as_str(), tile, dpi, headers, params)
         .await?
         .into())
 }
@@ -253,37 +255,6 @@ impl TileApiHandler {
         Ok(Json(LayersResponse { layers }))
     }
 
-    fn parse_tile_filename(filename: &str) -> Result<(i32, u8, String)> {
-        let mut dpi_ratio = 1;
-
-        let splitted: Vec<&str> = filename.split('.').collect();
-        if splitted.len() == 2 {
-            let num_ratio_split = splitted[0].split('@').collect::<Vec<&str>>();
-            if num_ratio_split.len() == 2 {
-                if num_ratio_split[1].len() == 2 && num_ratio_split[1][1..] == *"x" {
-                    dpi_ratio = num_ratio_split[1][0..1]
-                        .parse::<u8>()
-                        .map_err(|_| Error::InvalidArgument(format!("Invalid DPI ratio: {}", num_ratio_split[1])))?;
-                } else {
-                    return Err(Error::InvalidArgument(format!(
-                        "Invalid DPI ratio: {}",
-                        num_ratio_split[1]
-                    )));
-                }
-            } else if num_ratio_split.len() != 1 {
-                return Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)));
-            }
-
-            let y_index = num_ratio_split[0]
-                .parse::<i32>()
-                .map_err(|_| Error::InvalidArgument(format!("Invalid tile y index: {}", num_ratio_split[0])))?;
-            let extension = splitted[1];
-            return Ok((y_index, dpi_ratio, extension.to_string()));
-        }
-
-        Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
-    }
-
     async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
@@ -392,9 +363,8 @@ impl TileApiHandler {
     pub async fn get_tile(
         &self,
         layer: &str,
-        z: i32,
-        x: i32,
-        y: String,
+        tile: Tile,
+        dpi_ratio: u8,
         headers: axum::http::HeaderMap,
         params: HashMap<String, String>,
     ) -> Result<TileData> {
@@ -419,22 +389,12 @@ impl TileApiHandler {
             tile_format = Some(TileFormat::from(format.as_str()));
         }
 
-        let splitted: Vec<&str> = y.split('.').collect();
-        if splitted.len() != 2 {
-            return Err(Error::InvalidArgument("Invalid tile coordinates".to_string()));
-        }
-
-        let (y, dpi_ratio, extension) = Self::parse_tile_filename(&y)?;
-        if extension != "png" && extension != "pbf" && extension != "vrt" {
-            return Err(Error::InvalidArgument("Invalid tile extension".to_string()));
-        }
-
         log::debug!(
             "Tile request {}/{}/{}/{}: cmap({}) min({:?}) max({:?}) format({:?})",
             layer,
-            z,
-            x,
-            y,
+            tile.z,
+            tile.x,
+            tile.y,
             cmap,
             min_value,
             max_value,
@@ -445,12 +405,9 @@ impl TileApiHandler {
         let layer_meta = self.tile_provider.layer(layer_id)?;
         let tile = match tile_format {
             Some(TileFormat::FloatEncodedPng | TileFormat::RasterTile) => {
-                Self::fetch_tile(layer_meta, Tile { x, y, z }, dpi_ratio, tile_format.unwrap()).await?
+                Self::fetch_tile(layer_meta, tile, dpi_ratio, tile_format.unwrap()).await?
             }
-            _ => {
-                Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, Tile { x, y, z }, dpi_ratio)
-                    .await?
-            }
+            _ => Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, tile, dpi_ratio).await?,
         };
 
         if tile.format == TileFormat::Protobuf {
@@ -469,9 +426,8 @@ impl TileApiHandler {
         &self,
         layer1: &str,
         layer2: &str,
-        z: i32,
-        x: i32,
-        y: String,
+        tile: Tile,
+        dpi_ratio: u8,
         headers: axum::http::HeaderMap,
         params: HashMap<String, String>,
     ) -> Result<TileData> {
@@ -496,23 +452,13 @@ impl TileApiHandler {
             tile_format = Some(TileFormat::from(format.as_str()));
         }
 
-        let splitted: Vec<&str> = y.split('.').collect();
-        if splitted.len() != 2 {
-            return Err(Error::InvalidArgument("Invalid tile coordinates".to_string()));
-        }
-
-        let (y, dpi_ratio, extension) = Self::parse_tile_filename(&y)?;
-        if extension != "png" && extension != "pbf" && extension != "vrt" {
-            return Err(Error::InvalidArgument("Invalid tile extension".to_string()));
-        }
-
         log::debug!(
             "Diff request {}-{}/{}/{}/{}: cmap({}) min({:?}) max({:?}) format({:?})",
             layer1,
             layer2,
-            z,
-            x,
-            y,
+            tile.z,
+            tile.x,
+            tile.y,
             cmap,
             min_value,
             max_value,
@@ -526,14 +472,7 @@ impl TileApiHandler {
         let layer_meta2 = self.tile_provider.layer(layer_id2)?;
         let tile = match tile_format {
             Some(TileFormat::FloatEncodedPng | TileFormat::RasterTile) => {
-                Self::fetch_diff_tile(
-                    layer_meta1,
-                    layer_meta2,
-                    Tile { x, y, z },
-                    dpi_ratio,
-                    tile_format.unwrap(),
-                )
-                .await?
+                Self::fetch_diff_tile(layer_meta1, layer_meta2, tile, dpi_ratio, tile_format.unwrap()).await?
             }
             _ => {
                 return Err(Error::InvalidArgument(
@@ -633,6 +572,47 @@ fn parse_classified_color_map_specification(cmap_name: &str) -> Result<inf::lege
     Ok(legend)
 }
 
+fn parse_tile(z: i32, x: i32, y: &str) -> Result<(Tile, u8)> {
+    let (y, dpi, extension) = parse_tile_filename(y)?;
+
+    if extension != "png" && extension != "pbf" && extension != "vrt" {
+        return Err(Error::InvalidArgument("Invalid tile extension".to_string()));
+    }
+
+    Ok((Tile { z, x, y }, dpi))
+}
+
+fn parse_tile_filename(filename: &str) -> Result<(i32, u8, String)> {
+    let mut dpi_ratio = 1;
+
+    let splitted: Vec<&str> = filename.split('.').collect();
+    if splitted.len() == 2 {
+        let num_ratio_split = splitted[0].split('@').collect::<Vec<&str>>();
+        if num_ratio_split.len() == 2 {
+            if num_ratio_split[1].len() == 2 && num_ratio_split[1][1..] == *"x" {
+                dpi_ratio = num_ratio_split[1][0..1]
+                    .parse::<u8>()
+                    .map_err(|_| Error::InvalidArgument(format!("Invalid DPI ratio: {}", num_ratio_split[1])))?;
+            } else {
+                return Err(Error::InvalidArgument(format!(
+                    "Invalid DPI ratio: {}",
+                    num_ratio_split[1]
+                )));
+            }
+        } else if num_ratio_split.len() != 1 {
+            return Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)));
+        }
+
+        let y_index = num_ratio_split[0]
+            .parse::<i32>()
+            .map_err(|_| Error::InvalidArgument(format!("Invalid tile y index: {}", num_ratio_split[0])))?;
+        let extension = splitted[1];
+        return Ok((y_index, dpi_ratio, extension.to_string()));
+    }
+
+    Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
+}
+
 fn create_legend(cmap_name: &str, min: f64, max: f64) -> Result<Legend> {
     if min > max {
         return Err(Error::Runtime("Minimum value is bigger than maximum value".to_string()));
@@ -655,15 +635,9 @@ mod tests {
 
     #[test]
     fn test_parse_filename() -> Result<()> {
-        assert_eq!(TileApiHandler::parse_tile_filename("1.png")?, (1, 1, "png".to_string()));
-        assert_eq!(
-            TileApiHandler::parse_tile_filename("2@2x.png")?,
-            (2, 2, "png".to_string())
-        );
-        assert_eq!(
-            TileApiHandler::parse_tile_filename("5@3x.pbf")?,
-            (5, 3, "pbf".to_string())
-        );
+        assert_eq!(parse_tile_filename("1.png")?, (1, 1, "png".to_string()));
+        assert_eq!(parse_tile_filename("2@2x.png")?, (2, 2, "png".to_string()));
+        assert_eq!(parse_tile_filename("5@3x.pbf")?, (5, 3, "pbf".to_string()));
         Ok(())
     }
 }

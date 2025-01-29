@@ -1,4 +1,4 @@
-use raster::{AnyDenseRaster, RasterDataType};
+use raster::AnyDenseRaster;
 
 use crate::{Error, Result, TileData, TileFormat};
 
@@ -6,6 +6,9 @@ pub fn diff_tiles(tile1: &AnyDenseRaster, tile2: &AnyDenseRaster, format: TileFo
     if tile1.data_type() != tile2.data_type() {
         return Err(Error::InvalidArgument("Diff tile data types do not match".into()));
     }
+
+    #[cfg(feature = "vector-tiles")]
+    use raster::RasterDataType;
 
     match format {
         #[cfg(feature = "vector-tiles")]
