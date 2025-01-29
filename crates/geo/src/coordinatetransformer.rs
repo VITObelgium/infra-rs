@@ -68,25 +68,19 @@ impl CoordinateTransformer {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
-
     use approx::assert_relative_eq;
+    use path_macro::path;
 
     use crate::{crs, gdalinterop, Coordinate, CoordinateTransformer, Point};
 
     #[ctor::ctor]
     fn init() {
-        let data_dir: PathBuf = [env!("CARGO_MANIFEST_DIR"), "..", "..", "target", "data"]
-            .iter()
-            .collect();
+        let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
         if !data_dir.exists() {
             panic!("Proj.db data directory not found: {}", data_dir.display());
-
-            //     // Infra used a s subcrate, try the parent directory
-            //     if !data_dir.exists() {
-            //         panic!("Proj.db data directory not found");
-            //     }
         }
+
+        assert!(data_dir.join("proj.db").exists());
 
         let gdal_config = gdalinterop::Config {
             debug_logging: false,

@@ -508,6 +508,7 @@ pub mod dataset {
 
         use super::*;
         use approx::assert_relative_eq;
+        use path_macro::path;
         use raster::Cell;
 
         #[test]
@@ -581,9 +582,7 @@ pub mod dataset {
 
         #[test]
         fn projection_info_projected_31370() {
-            let path: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "test", "data", "epsg31370.tif"]
-                .iter()
-                .collect();
+            let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg31370.tif");
             let meta = read_file_metadata(path.as_path()).unwrap();
             assert!(!meta.projection().is_empty());
             assert!(meta.projected_epsg().is_some());
@@ -594,9 +593,7 @@ pub mod dataset {
 
         #[test]
         fn projection_info_projected_3857() {
-            let path: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "test", "data", "epsg3857.tif"]
-                .iter()
-                .collect();
+            let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg3857.tif");
             let meta = read_file_metadata(path.as_path()).unwrap();
             assert!(!meta.projection().is_empty());
             assert!(meta.projected_epsg().is_some());

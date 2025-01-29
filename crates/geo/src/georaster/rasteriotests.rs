@@ -5,6 +5,7 @@ mod tests {
     use core::fmt;
 
     use num::NumCast;
+    use path_macro::path;
 
     use crate::{
         gdalinterop,
@@ -17,9 +18,7 @@ mod tests {
 
     #[ctor::ctor]
     fn init() {
-        let data_dir = [env!("CARGO_MANIFEST_DIR"), "..", "..", "target", "data"]
-            .iter()
-            .collect();
+        let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
 
         let gdal_config = gdalinterop::Config {
             debug_logging: false,
@@ -32,9 +31,7 @@ mod tests {
 
     #[test]
     fn test_read_dense_raster<T: RasterNum<T> + fmt::Debug, R: GeoRaster<T> + RasterIO<T, R>>() {
-        let path: std::path::PathBuf = [env!("CARGO_MANIFEST_DIR"), "test", "data", "landusebyte.tif"]
-            .iter()
-            .collect();
+        let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "landusebyte.tif");
 
         let ras = R::read(path.as_path()).unwrap();
         let meta = ras.geo_reference();

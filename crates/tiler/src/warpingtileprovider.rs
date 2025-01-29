@@ -677,8 +677,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(not(feature = "slow_tests"), ignore)] // This test is very slow but usefull when debugging the pixel values
-    fn read_raster_pixel() -> Result<(), Error> {
+    // Marked as slow_test using the name convention to support filtering
+    fn slow_test_read_raster_pixel() -> Result<(), Error> {
         let provider = WarpingTileProvider::new(
             &test_raster(),
             &TileProviderOptions {
@@ -727,8 +727,8 @@ mod tests {
     }
 
     #[test]
-    #[cfg_attr(not(feature = "slow_tests"), ignore)] // This test is very slow but usefull when debugging the pixel values
-    fn read_raster_pixel_web_mercator() -> Result<(), Error> {
+    // Marked as slow_test using the name convention to support filtering
+    fn slow_test_read_raster_pixel_web_mercator() -> Result<(), Error> {
         let provider = WarpingTileProvider::new(
             &test_raster_web_mercator(),
             &TileProviderOptions {
