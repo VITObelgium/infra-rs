@@ -51,9 +51,9 @@ fn diff_tiles_as_mvt<T: raster::RasterNum<T> + gdal::raster::GdalType>(
     let diff = tile2 - tile1;
 
     let geo_ref = GeoReference::with_origin(
-        "",
+        "EPSG:4326",
         diff.size(),
-        Point::new(0.0, Tile::TILE_SIZE as f64),
+        Point::new(0.0, -(Tile::TILE_SIZE as f64)),
         CellSize::square(1.0),
         Option::<f64>::None,
     );
@@ -68,11 +68,22 @@ fn diff_tiles_as_mvt<T: raster::RasterNum<T> + gdal::raster::GdalType>(
             if let Ok(geo_types::Geometry::Polygon(geom)) = geom.to_geo() {
                 let mut cell_geom = mvt::GeomEncoder::new(mvt::GeomType::Polygon);
                 for point in geom.exterior().points() {
-                    cell_geom.add_point(point.x(), point.y())?;
+                    cell_geom.add_point(point.x(), -point.y())?;
+                }
+
+                cell_geom.complete_geom()?;
+
+                for interior in geom.interiors() {
+                    for point in interior.points() {
+                        cell_geom.add_point(point.x(), -point.y())?;
+                    }
+
+                    cell_geom.complete_geom()?;
                 }
 
                 let layer = tile.create_layer(&idx.to_string());
                 let mut mvt_feat = layer.into_feature(cell_geom.encode()?);
+                mvt_feat.set_id(idx as u64);
                 mvt_feat.add_tag_double(
                     "diff",
                     feature.field_as_double_by_name("Value")?.expect("Value not found"),
@@ -89,3 +100,55 @@ fn diff_tiles_as_mvt<T: raster::RasterNum<T> + gdal::raster::GdalType>(
         tile.to_bytes()?,
     ))
 }
+
+// #[cfg(test)]
+// mod tests {
+//     use crate::{tileio, TileRequest};
+
+//     use super::*;
+//     use geo::{crs, GeoReference, RuntimeConfiguration, Tile};
+//     use path_macro::path;
+
+//     #[ctor::ctor]
+//     fn init() {
+//         let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
+//         if !data_dir.exists() {
+//             // Infra used as a subcrate, try the parent directory
+//             data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / ".." / "target" / "data");
+//             if !data_dir.exists() {
+//                 panic!("Proj.db data directory not found");
+//             }
+//         }
+
+//         let config = RuntimeConfiguration::builder().proj_db(&data_dir).build();
+//         config.apply().expect("Failed to configure runtime");
+//     }
+
+//     #[test]
+//     fn test_diff_tile_provider() {
+//         let path1 = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "potgeo_lim_bebouwd.tif");
+//         let path2 = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "residentieel_dakopp_50m_lim.tif");
+//         assert!(path1.exists());
+//         assert!(path2.exists());
+
+//         let meta = GeoReference::from_file(&path1).unwrap();
+//         let tile = Tile::for_coordinate(
+//             meta.warped_to_epsg(crs::epsg::WGS84).unwrap().latlonbounds().center(),
+//             10,
+//         );
+
+//         let req = TileRequest {
+//             tile,
+//             dpi_ratio: 1,
+//             tile_format: TileFormat::Protobuf,
+//         };
+
+//         let tile1 = tileio::read_raster_tile_warped::<u8>(&path1, 1, req.tile, 1).unwrap();
+//         let tile2 = tileio::read_raster_tile_warped::<u8>(&path2, 1, req.tile, 1).unwrap();
+
+//         let mvt = diff_tiles_as_mvt::<u8>(&tile1, &tile2).unwrap();
+
+//         // write mvt to file for debugging
+//         std::fs::write("/Users/dirk/tile.mvt", mvt.data).unwrap();
+//     }
+// }
