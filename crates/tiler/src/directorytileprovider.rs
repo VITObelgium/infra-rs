@@ -1,5 +1,7 @@
 use geo::georaster::io::RasterFormat;
 use geo::{Coordinate, LatLonBounds};
+use raster::AnyDenseRaster;
+use raster_tile::RasterTileIO;
 
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;
@@ -7,7 +9,7 @@ use crate::tiledata::TileData;
 use crate::tileprovider::{ColorMappedTileRequest, TileRequest};
 use crate::tileproviderfactory::{create_single_file_tile_provider, TileProviderOptions};
 use crate::warpingtileprovider::WarpingTileProvider;
-use crate::{Error, Result, TileProvider};
+use crate::{tilediff, Error, Result, TileProvider};
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -123,8 +125,10 @@ impl DirectoryTileProvider {
     }
 
     pub fn diff_tile(layer1: &LayerMetadata, layer2: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
-        //DiffTileProvider::tile(layer1, layer2, tile_req);
-        Err(Error::Runtime("DiffTileProvider not implemented".to_string()))
+        let tile1 = AnyDenseRaster::from_tile_bytes(&Self::get_tile_for_layer(layer1, tile_req)?.data)?;
+        let tile2 = AnyDenseRaster::from_tile_bytes(&Self::get_tile_for_layer(layer2, tile_req)?.data)?;
+
+        tilediff::diff_tiles(&tile1, &tile2, layer1.tile_format)
     }
 }
 

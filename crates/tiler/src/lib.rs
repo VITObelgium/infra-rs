@@ -3,6 +3,7 @@
 mod layermetadata;
 mod pixelformat;
 mod tiledata;
+mod tilediff;
 mod tileformat;
 mod tileio;
 mod tileprovider;
