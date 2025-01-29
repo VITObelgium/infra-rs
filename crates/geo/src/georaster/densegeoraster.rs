@@ -79,7 +79,7 @@ impl<T: RasterNum<T>> DenseGeoRaster<T> {
     }
 
     pub fn to_raw_parts(self) -> (GeoReference, Vec<T>) {
-        let (_, vec) = self.data.to_raw_parts();
+        let (_, vec) = self.data.into_raw_parts();
         (self.metadata, vec)
     }
 

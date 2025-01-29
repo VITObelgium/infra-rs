@@ -95,6 +95,11 @@ where
     /// Returns the number of nodata values in the raster
     fn nodata_count(&self) -> usize;
 
+    /// Returns true if any of the cells in the raster contain valid data
+    fn contains_data(&self) -> bool {
+        self.iter().any(|&x| !x.is_nodata())
+    }
+
     /// Return true if the cell at the given index contains valid data
     fn index_has_data(&self, index: usize) -> bool;
 

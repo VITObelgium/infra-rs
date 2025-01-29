@@ -17,7 +17,7 @@ impl<T: RasterNum<T>> DenseRaster<T> {
         }
     }
 
-    pub fn to_raw_parts(self) -> (RasterSize, Vec<T>) {
+    pub fn into_raw_parts(self) -> (RasterSize, Vec<T>) {
         (self.size, self.data)
     }
 
@@ -60,6 +60,18 @@ impl<T: RasterNum<T>> DenseRaster<T> {
             .zip(other.data.iter())
             .for_each(|(a, &b)| *a = op(*a, b));
         self
+    }
+}
+
+impl<T: RasterNum<T>> AsRef<[T]> for DenseRaster<T> {
+    fn as_ref(&self) -> &[T] {
+        self.data.as_ref()
+    }
+}
+
+impl<T: RasterNum<T>> AsMut<[T]> for DenseRaster<T> {
+    fn as_mut(&mut self) -> &mut [T] {
+        self.data.as_mut()
     }
 }
 
