@@ -1,4 +1,5 @@
 mod apperror;
+#[cfg(feature = "diff")]
 pub mod difftileapihandler;
 pub mod tileapihandler;
 #[cfg(feature = "tui")]

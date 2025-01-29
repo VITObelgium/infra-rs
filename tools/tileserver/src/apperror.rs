@@ -30,7 +30,9 @@ impl IntoResponse for AppError {
                 Error::IOError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::InfError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::InvalidArgument(err) => (http::StatusCode::BAD_REQUEST, err),
-                Error::GeoError(_) | Error::SqliteError(_) | Error::RasterTileError(_) | Error::MvtError(_) => {
+                #[cfg(feature = "diff")]
+                Error::MvtError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
+                Error::GeoError(_) | Error::SqliteError(_) | Error::RasterTileError(_) => {
                     (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
                 }
             },
