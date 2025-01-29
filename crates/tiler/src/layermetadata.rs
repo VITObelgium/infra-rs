@@ -3,7 +3,7 @@ use gdal::raster::GdalDataType;
 use geo::{crs::Epsg, Coordinate, LatLonBounds};
 use num::NumCast;
 use raster::RasterDataType;
-use std::{any::Any, collections::HashMap, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -67,8 +67,6 @@ pub struct LayerMetadata {
     pub additional_data: HashMap<String, String>,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub band_nr: Option<usize>,
-    #[cfg_attr(feature = "serde", serde(skip))]
-    pub provider_data: Option<Arc<Box<dyn Any + Send + Sync>>>,
 }
 
 impl LayerMetadata {

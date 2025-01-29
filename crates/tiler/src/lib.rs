@@ -8,7 +8,6 @@ mod tileio;
 mod tileprovider;
 pub mod tileproviderfactory;
 
-mod difftileprovider;
 mod directorytileprovider;
 mod dynamictileprovider;
 mod imageprocessing;
@@ -16,7 +15,6 @@ mod mbtilestileprovider;
 mod rasterprocessing;
 mod warpingtileprovider;
 
-pub use difftileprovider::DiffTileProvider;
 pub use directorytileprovider::DirectoryTileProvider;
 pub use dynamictileprovider::DynamicTileProvider;
 pub use layermetadata::LayerId;

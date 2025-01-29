@@ -70,7 +70,6 @@ impl MbtilesTileProvider {
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
             additional_data: HashMap::new(),
             band_nr: None,
-            provider_data: None,
         };
 
         meta.additional_data = meta_map;

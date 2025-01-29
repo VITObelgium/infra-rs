@@ -6,14 +6,13 @@ use crate::{
     rasterprocessing::{metadata_bounds_wgs84, source_type_for_path},
     tileprovider,
     tileproviderfactory::TileProviderOptions,
-    ColorMappedTileRequest, Error, LayerMetadata, Result, TileData, TileFormat, TileRequest,
+    ColorMappedTileRequest, Error, LayerMetadata, Result, TileData, TileFormat,
 };
 use gdal::{
     raster::{GdalDataType, GdalType},
     Dataset,
 };
-use geo::{crs, georaster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
-use inf::Legend;
+use geo::{constants, crs, georaster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
 use raster::{DenseRaster, Raster, RasterCreation, RasterNum, RasterSize};
 
@@ -168,49 +167,69 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     Ok(data)
 }
 
-pub fn read_raster_tile_warped_no_resample<T: RasterNum<T> + GdalType>(
-    raster_path: &std::path::Path,
-    band_nr: usize,
+#[cfg(feature = "vector-tiles")]
+#[allow(dead_code)]
+fn diff_tiles_as_vector<T: RasterNum<T> + GdalType>(
+    layer_meta1: &LayerMetadata,
+    layer_meta2: &LayerMetadata,
     tile: Tile,
-) -> Result<(Vec<T>, RasterSize)> {
-    let bounds = tile.web_mercator_bounds();
+) -> Result<TileData> {
+    use gdal::vector::LayerAccess;
+    use geo::Point;
 
-    let src_ds = gdal::Dataset::open(raster_path)?;
-    let mut dest_ds = georaster::io::dataset::create_in_memory(RasterSize { rows: 0, cols: 0 })?;
+    use crate::PixelFormat;
 
-    let (xmin, ymin) = bounds.bottom_left().into();
-    let (xmax, ymax) = bounds.top_right().into();
+    let tile1 = read_tile_data::<T>(layer_meta1, 1, tile, 1)?;
+    let tile2 = read_tile_data::<T>(layer_meta2, 1, tile, 1)?;
 
-    let options = vec![
-        "-b".to_string(),
-        band_nr.to_string(),
-        "-ovr".to_string(),
-        "AUTO".to_string(),
-        "-r".to_string(),
-        "near".to_string(),
-        "-tr".to_string(),
-        "square".to_string(),
-        "-te".to_string(),
-        xmin.to_string(),
-        ymin.to_string(),
-        xmax.to_string(),
-        ymax.to_string(),
-    ];
-    let key_value_options: Vec<(String, String)> = vec![
-        ("INIT_DEST".to_string(), "NO_DATA".to_string()),
-        ("SKIP_NOSOURCE".to_string(), "YES".to_string()),
-        ("NUM_THREADS".to_string(), "ALL_CPUS".to_string()),
-    ];
+    if tile1.len() != tile2.len() {
+        return Err(Error::InvalidArgument("Tile data length mismatch".to_string()));
+    }
 
-    georaster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
+    if tile1.is_empty() {
+        return Ok(TileData::default());
+    }
 
-    let (shape, data) = dest_ds.rasterband(1)?.read_band_as::<T>()?.into_shape_and_vec();
-    let size = RasterSize {
-        rows: shape.0,
-        cols: shape.1,
-    };
+    let diff = tile2 - tile1;
 
-    Ok((data, size))
+    let geo_ref = GeoReference::with_origin(
+        "",
+        diff.size(),
+        Point::new(0.0, Tile::TILE_SIZE as f64),
+        CellSize::square(1.0),
+        Option::<f64>::None,
+    );
+
+    let vec_ds = georaster::algo::polygonize(&geo_ref, diff.as_ref())?;
+
+    let mut tile = mvt::Tile::new(Tile::TILE_SIZE as u32);
+
+    let mut idx = 0;
+    for feature in vec_ds.layer(0)?.features() {
+        if let Some(geom) = feature.geometry() {
+            if let Ok(geo_types::Geometry::Polygon(geom)) = geom.to_geo() {
+                let mut cell_geom = mvt::GeomEncoder::new(mvt::GeomType::Polygon);
+                for point in geom.exterior().points() {
+                    cell_geom.add_point(point.x(), point.y())?;
+                }
+
+                let layer = tile.create_layer(&idx.to_string());
+                let mut mvt_feat = layer.into_feature(cell_geom.encode()?);
+                mvt_feat.add_tag_double(
+                    "diff",
+                    feature.field_as_double_by_name("Value")?.expect("Value not found"),
+                );
+                tile.add_layer(mvt_feat.into_layer())?;
+                idx += 1;
+            }
+        }
+    }
+
+    Ok(TileData::new(
+        TileFormat::Protobuf,
+        PixelFormat::Unknown,
+        tile.to_bytes()?,
+    ))
 }
 
 /// Read the raw tile data, result is a tuple with the raw data and the nodata value
@@ -252,79 +271,6 @@ pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
     Ok(raw_tile_data)
 }
 
-/// Read the raw tile data without resampling to TILE_SIZExTILE_SIZE, result is a tuple with the raw data and the nodata value
-pub fn read_tile_data_no_resample<T: RasterNum<T> + Num + GdalType>(
-    meta: &LayerMetadata,
-    band_nr: usize,
-    tile: Tile,
-    dpi_ratio: u8,
-) -> Result<(DenseRaster<T>, T)> {
-    let raw_tile_data: DenseRaster<T>;
-    let start = std::time::Instant::now();
-
-    let mut nodata: T = meta.nodata::<T>().unwrap_or(T::nodata_value());
-
-    if !meta.source_is_web_mercator {
-        raw_tile_data = read_raster_tile_warped(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
-        nodata = T::nodata_value();
-    } else {
-        raw_tile_data = read_raster_tile(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
-    }
-
-    //[cfg(TILESERVER_VERBOSE)]
-    log::debug!(
-        "[{}/{}/{}@{}] {} took {}ms (data type: {}) [{:?}]",
-        tile.z(),
-        tile.x(),
-        tile.y(),
-        dpi_ratio,
-        if meta.source_is_web_mercator {
-            "Translate"
-        } else {
-            "Warp"
-        },
-        start.elapsed().as_millis(),
-        type_string::<T>(),
-        std::thread::current().id(),
-    );
-
-    if start.elapsed().as_secs() > 10 {
-        log::warn!("Slow tile: {}/{}/{}", tile.z(), tile.x(), tile.y());
-    }
-
-    Ok((raw_tile_data, nodata))
-}
-
-pub fn read_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, req: &TileRequest) -> Result<TileData>
-where
-    T: RasterNum<T> + Num + GdalType,
-{
-    let raw_tile_data = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
-    if raw_tile_data.is_empty() {
-        return Ok(TileData::default());
-    }
-
-    match req.tile_format {
-        TileFormat::Png => {
-            // The default legend is with grayscale colors in range 0-255
-            imageprocessing::raw_tile_to_png_color_mapped::<T>(
-                raw_tile_data.as_slice(),
-                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                Some(T::nodata_value()),
-                &Legend::default(),
-            )
-        }
-        TileFormat::FloatEncodedPng => imageprocessing::raw_tile_to_float_encoded_png::<T>(
-            raw_tile_data.as_slice(),
-            (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-            (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-            Some(T::nodata_value()),
-        ),
-        _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
-    }
-}
-
 pub fn read_color_mapped_tile_as_png<T>(
     meta: &LayerMetadata,
     band_nr: usize,
@@ -347,11 +293,7 @@ where
     )
 }
 
-pub fn create_metadata_for_file(
-    path: &std::path::Path,
-    opts: &TileProviderOptions,
-    tile_format: TileFormat,
-) -> Result<Vec<LayerMetadata>> {
+pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<Vec<LayerMetadata>> {
     let ds = georaster::io::dataset::open_read_only(path)?;
 
     let raster_count = ds.raster_count();
@@ -362,8 +304,32 @@ pub fn create_metadata_for_file(
         let raster_band = ds.rasterband(band_nr)?;
         let over_view_count = raster_band.overview_count()?;
 
-        let mut srs = SpatialReference::from_definition(meta.projection())?;
-        let zoom_level = Tile::zoom_level_for_pixel_size(meta.cell_size_x(), geo::ZoomLevelStrategy::PreferHigher);
+        let (epsg, source_is_web_mercator, cell_size) = {
+            if let Ok(mut srs) = SpatialReference::from_proj(meta.projection()) {
+                let cell_size = if srs.is_projected() {
+                    meta.cell_size_x()
+                } else {
+                    meta.cell_size_x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
+                };
+
+                (
+                    srs.epsg_cs(),
+                    srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
+                    cell_size,
+                )
+            } else {
+                let cell_size = if meta.cell_size().x() < 1.0 {
+                    // This is probably in degrees and not in meter
+                    meta.cell_size().x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
+                } else {
+                    meta.cell_size().x()
+                };
+
+                (None, false, cell_size)
+            }
+        };
+
+        let zoom_level = Tile::zoom_level_for_pixel_size(cell_size, opts.zoom_level_strategy);
 
         let mut name = path
             .file_stem()
@@ -372,7 +338,7 @@ pub fn create_metadata_for_file(
             .to_string();
 
         if raster_count > 1 {
-            name.push_str(&format!(" - Band {}", band_nr));
+            name.push_str(&format!(" - Band {:05}", band_nr));
         }
 
         let mut layer_meta = LayerMetadata {
@@ -389,18 +355,17 @@ pub fn create_metadata_for_file(
             },
             nodata: meta.nodata(),
             supports_dpi_ratio: true,
-            tile_format,
-            source_is_web_mercator: srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
-            epsg: srs.epsg_cs(),
-            bounds: metadata_bounds_wgs84(meta)?.array(),
+            tile_format: TileFormat::Png,
+            source_is_web_mercator,
+            epsg,
+            bounds: metadata_bounds_wgs84(meta).unwrap_or(LatLonBounds::world()).array(),
             description: String::new(),
-            min_value: f64::NEG_INFINITY,
-            max_value: f64::INFINITY,
+            min_value: f64::NAN,
+            max_value: f64::NAN,
             source_format: source_type_for_path(path),
             scheme: "xyz".to_string(),
             additional_data: Default::default(),
             band_nr: Some(band_nr),
-            provider_data: None,
         };
 
         if opts.calculate_stats {
