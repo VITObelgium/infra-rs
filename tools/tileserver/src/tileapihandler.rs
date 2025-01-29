@@ -96,6 +96,19 @@ async fn layer_tile(
         .into())
 }
 
+async fn tile_diff(
+    state: axum::Extension<Arc<State>>,
+    axum::extract::Path((layer1, layer2, z, x, y)): axum::extract::Path<(String, String, i32, i32, String)>,
+    headers: http::HeaderMap,
+    axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
+) -> std::result::Result<TileResponse, AppError> {
+    Ok(state
+        .api
+        .diff_tile(layer1.as_str(), layer2.as_str(), z, x, y, headers, params)
+        .await?
+        .into())
+}
+
 async fn layer_value_range(
     state: axum::Extension<Arc<State>>,
     axum::extract::Path(layer): axum::extract::Path<String>,
@@ -124,6 +137,7 @@ pub fn create_router(
             .route("/api/{layer}/{z}/{x}/{y}", get(layer_tile))
             .route("/api/{layer}/valuerange", get(layer_value_range))
             .route("/api/{layer}/rastervalue", get(layer_raster_value))
+            .route("/api/diff/{layer1}/{layer2}/{z}/{x}/{y}", get(tile_diff))
             .layer(axum::Extension(Arc::new(State::new(gis_dir, status_tx))))
             .layer(ServiceBuilder::new().layer(TraceLayer::new_for_http())),
         status_rx,
@@ -287,6 +301,29 @@ impl TileApiHandler {
         recv.await.expect("Panic in rayon::spawn")
     }
 
+    async fn fetch_diff_tile(
+        layer_meta1: LayerMetadata,
+        layer_meta2: LayerMetadata,
+        tile: Tile,
+        dpi: u8,
+        tile_format: TileFormat,
+    ) -> Result<TileData> {
+        let (send, recv) = tokio::sync::oneshot::channel();
+
+        rayon::spawn(move || {
+            let tile_request = TileRequest {
+                tile,
+                dpi_ratio: dpi,
+                tile_format,
+            };
+
+            let tile = DirectoryTileProvider::diff_tile(&layer_meta1, &layer_meta2, &tile_request);
+            let _ = send.send(tile);
+        });
+
+        recv.await.expect("Panic in rayon::spawn")
+    }
+
     async fn fetch_tile_color_mapped(
         layer_meta: LayerMetadata,
         value_range: Range<Option<f64>>,
@@ -425,6 +462,96 @@ impl TileApiHandler {
         }
 
         let _ = self.status_tx.send(StatusEvent::TileServed(layer_id));
+        Ok(tile)
+    }
+
+    pub async fn diff_tile(
+        &self,
+        layer1: &str,
+        layer2: &str,
+        z: i32,
+        x: i32,
+        y: String,
+        headers: axum::http::HeaderMap,
+        params: HashMap<String, String>,
+    ) -> Result<TileData> {
+        let mut cmap = String::from("gray");
+        let mut min_value = Option::<f64>::None;
+        let mut max_value = Option::<f64>::None;
+        let mut tile_format = Option::<TileFormat>::None;
+
+        if let Some(cmap_str) = params.get("cmap") {
+            cmap = cmap_str.to_string();
+        }
+
+        if let Some(min_str) = params.get("min") {
+            min_value = min_str.parse::<f64>().ok();
+        }
+
+        if let Some(max_str) = params.get("max") {
+            max_value = max_str.parse::<f64>().ok();
+        }
+
+        if let Some(format) = params.get("tile_format") {
+            tile_format = Some(TileFormat::from(format.as_str()));
+        }
+
+        let splitted: Vec<&str> = y.split('.').collect();
+        if splitted.len() != 2 {
+            return Err(Error::InvalidArgument("Invalid tile coordinates".to_string()));
+        }
+
+        let (y, dpi_ratio, extension) = Self::parse_tile_filename(&y)?;
+        if extension != "png" && extension != "pbf" && extension != "vrt" {
+            return Err(Error::InvalidArgument("Invalid tile extension".to_string()));
+        }
+
+        log::debug!(
+            "Diff request {}-{}/{}/{}/{}: cmap({}) min({:?}) max({:?}) format({:?})",
+            layer1,
+            layer2,
+            z,
+            x,
+            y,
+            cmap,
+            min_value,
+            max_value,
+            tile_format,
+        );
+
+        let layer_id1 = parse_layer_id(layer1)?;
+        let layer_id2 = parse_layer_id(layer2)?;
+
+        let layer_meta1 = self.tile_provider.layer(layer_id1)?;
+        let layer_meta2 = self.tile_provider.layer(layer_id2)?;
+        let tile = match tile_format {
+            Some(TileFormat::FloatEncodedPng | TileFormat::RasterTile) => {
+                Self::fetch_diff_tile(
+                    layer_meta1,
+                    layer_meta2,
+                    Tile { x, y, z },
+                    dpi_ratio,
+                    tile_format.unwrap(),
+                )
+                .await?
+            }
+            _ => {
+                return Err(Error::InvalidArgument(
+                    "Diff tile does not support color mapping".to_string(),
+                ));
+            }
+        };
+
+        if tile.format == TileFormat::Protobuf {
+            if let Some(host) = headers.get("accept-encoding") {
+                if !(host.to_str().unwrap_or_default().contains("gzip")) {
+                    log::warn!("Requester does not accept gzip compression");
+                }
+            }
+        }
+
+        let _ = self.status_tx.send(StatusEvent::TileServed(layer_id1));
+        let _ = self.status_tx.send(StatusEvent::TileServed(layer_id2));
         Ok(tile)
     }
 

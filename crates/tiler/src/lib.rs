@@ -8,7 +8,6 @@ mod tileio;
 mod tileprovider;
 pub mod tileproviderfactory;
 
-#[cfg(feature = "vector-tiles")]
 mod difftileprovider;
 mod directorytileprovider;
 mod dynamictileprovider;
@@ -17,7 +16,6 @@ mod mbtilestileprovider;
 mod rasterprocessing;
 mod warpingtileprovider;
 
-#[cfg(feature = "vector-tiles")]
 pub use difftileprovider::DiffTileProvider;
 pub use directorytileprovider::DirectoryTileProvider;
 pub use dynamictileprovider::DynamicTileProvider;

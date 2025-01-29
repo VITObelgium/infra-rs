@@ -121,6 +121,11 @@ impl DirectoryTileProvider {
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
     }
+
+    pub fn diff_tile(layer1: &LayerMetadata, layer2: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
+        //DiffTileProvider::tile(layer1, layer2, tile_req);
+        Err(Error::Runtime("DiffTileProvider not implemented".to_string()))
+    }
 }
 
 impl TileProvider for DirectoryTileProvider {

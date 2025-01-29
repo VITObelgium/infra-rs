@@ -31,7 +31,8 @@ pub struct DiffTileProvider {
     diff_layer: Option<LayerMetadata>,
 }
 
-fn diff_tiles<T: RasterNum<T> + GdalType>(
+#[cfg(feature = "vector-tiles")]
+fn diff_tiles_as_vector<T: RasterNum<T> + GdalType>(
     layer_meta1: &LayerMetadata,
     layer_meta2: &LayerMetadata,
     tile: Tile,
@@ -176,40 +177,42 @@ impl DiffTileProvider {
             return Ok(TileData::default());
         }
 
+        use RasterDataType::*;
         let tile_data = match layer_meta.tile_format {
             TileFormat::Png => {
                 let band_nr = layer_meta.band_nr.unwrap_or(1);
                 match layer_meta.data_type {
-                    RasterDataType::Int8 => tileio::read_tile_as_png::<i8>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Int16 => tileio::read_tile_as_png::<i16>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Int32 => tileio::read_tile_as_png::<i32>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Int64 => tileio::read_tile_as_png::<i64>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Uint8 => tileio::read_tile_as_png::<u8>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Uint16 => tileio::read_tile_as_png::<u16>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Uint32 => tileio::read_tile_as_png::<u32>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Uint64 => tileio::read_tile_as_png::<u64>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Float32 => tileio::read_tile_as_png::<f32>(layer_meta, band_nr, tile_req)?,
-                    RasterDataType::Float64 => tileio::read_tile_as_png::<f64>(layer_meta, band_nr, tile_req)?,
+                    Int8 => tileio::read_tile_as_png::<i8>(layer_meta, band_nr, tile_req)?,
+                    Int16 => tileio::read_tile_as_png::<i16>(layer_meta, band_nr, tile_req)?,
+                    Int32 => tileio::read_tile_as_png::<i32>(layer_meta, band_nr, tile_req)?,
+                    Int64 => tileio::read_tile_as_png::<i64>(layer_meta, band_nr, tile_req)?,
+                    Uint8 => tileio::read_tile_as_png::<u8>(layer_meta, band_nr, tile_req)?,
+                    Uint16 => tileio::read_tile_as_png::<u16>(layer_meta, band_nr, tile_req)?,
+                    Uint32 => tileio::read_tile_as_png::<u32>(layer_meta, band_nr, tile_req)?,
+                    Uint64 => tileio::read_tile_as_png::<u64>(layer_meta, band_nr, tile_req)?,
+                    Float32 => tileio::read_tile_as_png::<f32>(layer_meta, band_nr, tile_req)?,
+                    Float64 => tileio::read_tile_as_png::<f64>(layer_meta, band_nr, tile_req)?,
                 }
             }
             TileFormat::Protobuf => {
                 let layer_data = Self::extract_provider_data(layer_meta)?;
+
+                #[cfg(feature = "vector-tiles")]
                 match layer_meta.data_type {
-                    RasterDataType::Int8 => diff_tiles::<i8>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Int16 => diff_tiles::<i16>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Int32 => diff_tiles::<i32>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Int64 => diff_tiles::<i64>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Uint8 => diff_tiles::<u8>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Uint16 => diff_tiles::<u16>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Uint32 => diff_tiles::<u32>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Uint64 => diff_tiles::<u64>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
-                    RasterDataType::Float32 => {
-                        diff_tiles::<f32>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?
-                    }
-                    RasterDataType::Float64 => {
-                        diff_tiles::<f64>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?
-                    }
+                    Int8 => diff_tiles_as_vector::<i8>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Int16 => diff_tiles_as_vector::<i16>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Int32 => diff_tiles_as_vector::<i32>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Int64 => diff_tiles_as_vector::<i64>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Uint8 => diff_tiles_as_vector::<u8>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Uint16 => diff_tiles_as_vector::<u16>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Uint32 => diff_tiles_as_vector::<u32>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Uint64 => diff_tiles_as_vector::<u64>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Float32 => diff_tiles_as_vector::<f32>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
+                    Float64 => diff_tiles_as_vector::<f64>(&layer_data.layer1, &layer_data.layer2, tile_req.tile)?,
                 }
+
+                #[cfg(not(feature = "vector-tiles"))]
+                return Err(Error::Runtime("Vector tile support is not enabled".into()));
             }
             _ => return Err(Error::Runtime("Unsupported tile format".into())),
         };
@@ -223,24 +226,21 @@ impl DiffTileProvider {
             return Ok(TileData::default());
         }
 
+        use RasterDataType::*;
         let tile_data = match layer_meta.tile_format {
             TileFormat::Png => {
                 let band = layer_meta.band_nr.unwrap_or(1);
                 match layer_meta.data_type {
-                    RasterDataType::Uint8 => tileio::read_color_mapped_tile_as_png::<u8>(layer_meta, band, tile_req)?,
-                    RasterDataType::Uint16 => tileio::read_color_mapped_tile_as_png::<u16>(layer_meta, band, tile_req)?,
-                    RasterDataType::Uint32 => tileio::read_color_mapped_tile_as_png::<u32>(layer_meta, band, tile_req)?,
-                    RasterDataType::Uint64 => tileio::read_color_mapped_tile_as_png::<u64>(layer_meta, band, tile_req)?,
-                    RasterDataType::Int8 => tileio::read_color_mapped_tile_as_png::<i8>(layer_meta, band, tile_req)?,
-                    RasterDataType::Int16 => tileio::read_color_mapped_tile_as_png::<i16>(layer_meta, band, tile_req)?,
-                    RasterDataType::Int32 => tileio::read_color_mapped_tile_as_png::<i32>(layer_meta, band, tile_req)?,
-                    RasterDataType::Int64 => tileio::read_color_mapped_tile_as_png::<i64>(layer_meta, band, tile_req)?,
-                    RasterDataType::Float32 => {
-                        tileio::read_color_mapped_tile_as_png::<f32>(layer_meta, band, tile_req)?
-                    }
-                    RasterDataType::Float64 => {
-                        tileio::read_color_mapped_tile_as_png::<f64>(layer_meta, band, tile_req)?
-                    }
+                    Uint8 => tileio::read_color_mapped_tile_as_png::<u8>(layer_meta, band, tile_req)?,
+                    Uint16 => tileio::read_color_mapped_tile_as_png::<u16>(layer_meta, band, tile_req)?,
+                    Uint32 => tileio::read_color_mapped_tile_as_png::<u32>(layer_meta, band, tile_req)?,
+                    Uint64 => tileio::read_color_mapped_tile_as_png::<u64>(layer_meta, band, tile_req)?,
+                    Int8 => tileio::read_color_mapped_tile_as_png::<i8>(layer_meta, band, tile_req)?,
+                    Int16 => tileio::read_color_mapped_tile_as_png::<i16>(layer_meta, band, tile_req)?,
+                    Int32 => tileio::read_color_mapped_tile_as_png::<i32>(layer_meta, band, tile_req)?,
+                    Int64 => tileio::read_color_mapped_tile_as_png::<i64>(layer_meta, band, tile_req)?,
+                    Float32 => tileio::read_color_mapped_tile_as_png::<f32>(layer_meta, band, tile_req)?,
+                    Float64 => tileio::read_color_mapped_tile_as_png::<f64>(layer_meta, band, tile_req)?,
                 }
             }
             TileFormat::Protobuf => {

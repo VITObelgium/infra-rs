@@ -31,8 +31,8 @@ futures    = { version = "0.3.30", optional = true }
 tui-logger = { version = "0.14", optional = true }
 
 [features]
-tui  = ["dep:crossterm", "dep:futures", "dep:ratatui", "dep:tui-logger"]
-diff = ["tiler/vector-tiles"]
+tui         = ["dep:crossterm", "dep:futures", "dep:ratatui", "dep:tui-logger"]
+vector-diff = ["tiler/vector-tiles"]
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,netcdf]"]
