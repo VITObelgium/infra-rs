@@ -4,8 +4,7 @@ use crate::{Error, Result};
 
 pub(crate) fn compress_tile_data<T: RasterNum<T>>(source: &[T]) -> Result<Vec<u8>> {
     // Safety: The T type is a RasterNum, so it is safe to transmute the slice to a byte slice
-    let source_bytes =
-        unsafe { std::slice::from_raw_parts(source.as_ptr().cast::<u8>(), std::mem::size_of_val(source)) };
+    let source_bytes = unsafe { std::slice::from_raw_parts(source.as_ptr().cast::<u8>(), std::mem::size_of_val(source)) };
 
     Ok(lz4_flex::compress(source_bytes))
 }
@@ -14,9 +13,7 @@ pub(crate) fn decompress_tile_data<T: RasterNum<T>>(element_count: usize, source
     let mut data = Vec::<T>::with_capacity(element_count);
 
     // Safety: The T array is initialized with the capacity of element_count, so it is safe to transmute the slice to a byte slice
-    let data_bytes = unsafe {
-        std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<u8>(), element_count * std::mem::size_of::<T>())
-    };
+    let data_bytes = unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<u8>(), element_count * std::mem::size_of::<T>()) };
 
     match lz4_flex::decompress_into(source, data_bytes) {
         Ok(size) => {
@@ -34,9 +31,6 @@ pub(crate) fn decompress_tile_data<T: RasterNum<T>>(element_count: usize, source
             }
             Ok(data)
         }
-        Err(err) => Err(Error::InvalidArgument(format!(
-            "Failed to decompress tile data: {}",
-            err
-        ))),
+        Err(err) => Err(Error::InvalidArgument(format!("Failed to decompress tile data: {}", err))),
     }
 }

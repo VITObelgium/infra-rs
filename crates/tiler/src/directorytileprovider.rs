@@ -1,7 +1,7 @@
 use geo::georaster::io::RasterFormat;
 use geo::{Coordinate, LatLonBounds};
-use raster::AnyDenseRaster;
-use raster_tile::RasterTileIO;
+use raster::DenseRaster;
+use raster_tile::RasterTileCastIO;
 
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;
@@ -33,16 +33,11 @@ impl DirectoryTileProvider {
             .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
     }
 
-    fn build_metadata_list(
-        input_dir: &std::path::Path,
-        opts: &TileProviderOptions,
-    ) -> Result<HashMap<LayerId, LayerMetadata>> {
+    fn build_metadata_list(input_dir: &std::path::Path, opts: &TileProviderOptions) -> Result<HashMap<LayerId, LayerMetadata>> {
         let mut layers = HashMap::new();
 
         for file_entry in std::fs::read_dir(input_dir)?.flatten() {
-            if !file_entry.file_type()?.is_file()
-                || RasterFormat::guess_from_path(&file_entry.path()) == RasterFormat::Unknown
-            {
+            if !file_entry.file_type()?.is_file() || RasterFormat::guess_from_path(&file_entry.path()) == RasterFormat::Unknown {
                 continue;
             }
 
@@ -57,11 +52,7 @@ impl DirectoryTileProvider {
                             layers.insert(layer.id, layer);
                         }
 
-                        log::info!(
-                            "Serving {}, layer count: {}",
-                            &file_entry.path().to_string_lossy(),
-                            layer_count
-                        );
+                        log::info!("Serving {}, layer count: {}", &file_entry.path().to_string_lossy(), layer_count);
                     }
                 }
                 Err(e) => {
@@ -73,16 +64,11 @@ impl DirectoryTileProvider {
         Ok(layers)
     }
 
-    pub fn extent_value_range_for_layer(
-        layer: &LayerMetadata,
-        extent: LatLonBounds,
-        zoom: Option<i32>,
-    ) -> Result<Range<f64>> {
+    pub fn extent_value_range_for_layer(layer: &LayerMetadata, extent: LatLonBounds, zoom: Option<i32>) -> Result<Range<f64>> {
         match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::value_range_for_extent(layer, extent, zoom),
+            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
+                WarpingTileProvider::value_range_for_extent(layer, extent, zoom)
+            }
             LayerSourceType::Mbtiles => MbtilesTileProvider::value_range_for_extent(layer, extent, zoom),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
@@ -90,10 +76,9 @@ impl DirectoryTileProvider {
 
     pub fn get_raster_value_for_layer(layer: &LayerMetadata, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
         match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord, dpi_ratio),
+            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
+                WarpingTileProvider::raster_pixel(layer, coord, dpi_ratio)
+            }
             LayerSourceType::Mbtiles => MbtilesTileProvider::raster_pixel(layer, coord),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
@@ -101,32 +86,27 @@ impl DirectoryTileProvider {
 
     pub fn get_tile_for_layer(layer: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
         match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::tile(layer, tile_req),
+            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
+                WarpingTileProvider::tile(layer, tile_req)
+            }
             LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
     }
 
-    pub fn get_tile_color_mapped_for_layer(
-        layer: &LayerMetadata,
-        tile_req: &ColorMappedTileRequest,
-    ) -> Result<TileData> {
+    pub fn get_tile_color_mapped_for_layer(layer: &LayerMetadata, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
         match layer.source_format {
-            LayerSourceType::GeoTiff
-            | LayerSourceType::GeoPackage
-            | LayerSourceType::ArcAscii
-            | LayerSourceType::Netcdf => WarpingTileProvider::color_mapped_tile(layer, tile_req),
+            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
+                WarpingTileProvider::color_mapped_tile(layer, tile_req)
+            }
             LayerSourceType::Mbtiles => MbtilesTileProvider::tile(layer, tile_req.tile),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
     }
 
     pub fn diff_tile(layer1: &LayerMetadata, layer2: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
-        let tile1 = AnyDenseRaster::from_tile_bytes(&Self::get_tile_for_layer(layer1, tile_req)?.data)?;
-        let tile2 = AnyDenseRaster::from_tile_bytes(&Self::get_tile_for_layer(layer2, tile_req)?.data)?;
+        let tile1 = DenseRaster::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer1, tile_req)?.data)?;
+        let tile2 = DenseRaster::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer2, tile_req)?.data)?;
 
         tilediff::diff_tiles(&tile1, &tile2, layer1.tile_format)
     }

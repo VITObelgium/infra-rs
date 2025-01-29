@@ -1,32 +1,40 @@
-use raster::AnyDenseRaster;
+use gdal::raster::GdalType;
+use raster::{DenseRaster, Raster, RasterNum};
+use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{Error, Result, TileData, TileFormat};
 
-pub fn diff_tiles(tile1: &AnyDenseRaster, tile2: &AnyDenseRaster, format: TileFormat) -> Result<TileData> {
-    if tile1.data_type() != tile2.data_type() {
-        return Err(Error::InvalidArgument("Diff tile data types do not match".into()));
-    }
-
-    #[cfg(feature = "vector-tiles")]
-    use raster::RasterDataType;
-
+pub fn diff_tiles<T: RasterNum<T> + GdalType>(tile1: &DenseRaster<T>, tile2: &DenseRaster<T>, format: TileFormat) -> Result<TileData> {
     match format {
         #[cfg(feature = "vector-tiles")]
         #[allow(clippy::unwrap_used)] // Types are checked prior to unwrapping
-        TileFormat::Protobuf => match tile1.data_type() {
-            RasterDataType::Uint8 => diff_tiles_as_mvt::<u8>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Uint16 => diff_tiles_as_mvt::<u16>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Uint32 => diff_tiles_as_mvt::<u32>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Uint64 => diff_tiles_as_mvt::<u64>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Int8 => diff_tiles_as_mvt::<i8>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Int16 => diff_tiles_as_mvt::<i16>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Int32 => diff_tiles_as_mvt::<i32>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Int64 => diff_tiles_as_mvt::<i64>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Float32 => diff_tiles_as_mvt::<f32>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-            RasterDataType::Float64 => diff_tiles_as_mvt::<f64>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
-        },
+        TileFormat::Protobuf => diff_tiles_as_mvt(tile1, tile2),
+        TileFormat::RasterTile => diff_tiles_as_raster(tile1, tile2),
         _ => Err(Error::InvalidArgument("Unsupported tile format".into())),
     }
+}
+
+fn diff_tiles_as_raster<T: raster::RasterNum<T> + gdal::raster::GdalType>(
+    tile1: &raster::DenseRaster<T>,
+    tile2: &raster::DenseRaster<T>,
+) -> Result<TileData> {
+    use crate::PixelFormat;
+
+    if tile1.size() != tile2.size() {
+        return Err(Error::InvalidArgument("Tile data size mismatch".to_string()));
+    }
+
+    if tile1.is_empty() {
+        return Ok(TileData::default());
+    }
+
+    let diff = tile2 - tile1;
+
+    Ok(TileData::new(
+        TileFormat::RasterTile,
+        PixelFormat::Native,
+        diff.encode_raster_tile(CompressionAlgorithm::Lz4Block)?,
+    ))
 }
 
 #[cfg(feature = "vector-tiles")]
@@ -51,7 +59,7 @@ fn diff_tiles_as_mvt<T: raster::RasterNum<T> + gdal::raster::GdalType>(
     let diff = tile2 - tile1;
 
     let geo_ref = GeoReference::with_origin(
-        "EPSG:4326",
+        "",
         diff.size(),
         Point::new(0.0, -(Tile::TILE_SIZE as f64)),
         CellSize::square(1.0),
@@ -84,21 +92,14 @@ fn diff_tiles_as_mvt<T: raster::RasterNum<T> + gdal::raster::GdalType>(
                 let layer = tile.create_layer(&idx.to_string());
                 let mut mvt_feat = layer.into_feature(cell_geom.encode()?);
                 mvt_feat.set_id(idx as u64);
-                mvt_feat.add_tag_double(
-                    "diff",
-                    feature.field_as_double_by_name("Value")?.expect("Value not found"),
-                );
+                mvt_feat.add_tag_double("diff", feature.field_as_double_by_name("Value")?.expect("Value not found"));
                 tile.add_layer(mvt_feat.into_layer())?;
                 idx += 1;
             }
         }
     }
 
-    Ok(TileData::new(
-        TileFormat::Protobuf,
-        PixelFormat::Unknown,
-        tile.to_bytes()?,
-    ))
+    Ok(TileData::new(TileFormat::Protobuf, PixelFormat::Unknown, tile.to_bytes()?))
 }
 
 // #[cfg(test)]

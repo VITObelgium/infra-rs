@@ -24,6 +24,20 @@ pub trait RasterTileIO {
         Self: std::marker::Sized;
 }
 
+pub trait RasterTileCastIO {
+    /// Create a raster tile from the raw data
+    /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
+    fn from_tile_bytes_with_cast(data: &[u8]) -> Result<Self>
+    where
+        Self: std::marker::Sized;
+
+    // Create a raster tile from the header data structure and the raw compressed data
+    // The dataype will be cast to the correct raster type if it doesnt match
+    fn from_tile_header_and_data_with_cast(header: &TileHeader, data: &[u8]) -> Result<Self>
+    where
+        Self: std::marker::Sized;
+}
+
 impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
     /// Create a raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
@@ -56,12 +70,8 @@ impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
         let mut data = Vec::with_capacity(std::mem::size_of::<TileHeader>() + compressed_data.len());
 
         // Safety: The TileHeader struct is a plain old data struct so it is safe to transmute it to a byte slice
-        let header_bytes = unsafe {
-            ::core::slice::from_raw_parts(
-                (&header as *const TileHeader).cast::<u8>(),
-                ::core::mem::size_of::<TileHeader>(),
-            )
-        };
+        let header_bytes =
+            unsafe { ::core::slice::from_raw_parts((&header as *const TileHeader).cast::<u8>(), ::core::mem::size_of::<TileHeader>()) };
 
         data.extend_from_slice(header_bytes);
         data.extend_from_slice(&compressed_data);
@@ -70,15 +80,15 @@ impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
     }
 
     /// Create a raster tile from the header data structure and the raw compressed data
+    /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     fn from_tile_header_and_data(header: &TileHeader, data: &[u8]) -> Result<Self> {
+        assert!(header.data_type == T::TYPE, "Tile data type mismatch");
         if data.len() != header.data_size as usize {
             return Err(Error::InvalidArgument("Tile data size mismatch".into()));
         }
 
         let data = match header.compression {
-            CompressionAlgorithm::Lz4Block => {
-                lz4::decompress_tile_data(header.tile_width as usize * header.tile_height as usize, data)?
-            }
+            CompressionAlgorithm::Lz4Block => lz4::decompress_tile_data(header.tile_width as usize * header.tile_height as usize, data)?,
         };
 
         Ok(DenseRaster::new(
@@ -98,6 +108,45 @@ impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
 
         let u8_array = js_sys::Uint8Array::new(array_buffer);
         Self::from_tile_bytes(&u8_array.to_vec())
+    }
+}
+
+impl<T: RasterNum<T>> RasterTileCastIO for DenseRaster<T> {
+    /// Create a raster tile from the raw data
+    /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
+    /// The data will be cast to the correct raster type if it doesnt match
+    fn from_tile_bytes_with_cast(data: &[u8]) -> Result<Self> {
+        if data.len() < std::mem::size_of::<TileHeader>() {
+            return Err(Error::InvalidArgument("Tile data is too short".into()));
+        }
+
+        let header = TileHeader::from_bytes(data)?;
+        if data.len() != std::mem::size_of::<TileHeader>() + header.data_size as usize {
+            return Err(Error::InvalidArgument("Tile data size mismatch".into()));
+        }
+
+        Self::from_tile_header_and_data_with_cast(&header, &data[std::mem::size_of::<TileHeader>()..])
+    }
+
+    /// Create a raster tile from the header data structure and the raw compressed data
+    /// The data will be cast to the correct raster type if it doesnt match
+    fn from_tile_header_and_data_with_cast(header: &TileHeader, data: &[u8]) -> Result<Self> {
+        if data.len() != header.data_size as usize {
+            return Err(Error::InvalidArgument("Tile data size mismatch".into()));
+        }
+
+        match header.data_type {
+            RasterDataType::Int8 => DenseRaster::<i8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint8 => DenseRaster::<u8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Int16 => DenseRaster::<i16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint16 => DenseRaster::<u16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Int32 => DenseRaster::<i32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint32 => DenseRaster::<u32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Int64 => DenseRaster::<i64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint64 => DenseRaster::<u64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Float32 => DenseRaster::<f32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Float64 => DenseRaster::<f64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+        }
     }
 }
 
@@ -130,12 +179,8 @@ impl RasterTileIO for AnyDenseRaster {
             RasterDataType::Uint32 => AnyDenseRaster::U32(DenseRaster::<u32>::from_tile_header_and_data(header, data)?),
             RasterDataType::Int64 => AnyDenseRaster::I64(DenseRaster::<i64>::from_tile_header_and_data(header, data)?),
             RasterDataType::Uint64 => AnyDenseRaster::U64(DenseRaster::<u64>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Float32 => {
-                AnyDenseRaster::F32(DenseRaster::<f32>::from_tile_header_and_data(header, data)?)
-            }
-            RasterDataType::Float64 => {
-                AnyDenseRaster::F64(DenseRaster::<f64>::from_tile_header_and_data(header, data)?)
-            }
+            RasterDataType::Float32 => AnyDenseRaster::F32(DenseRaster::<f32>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Float64 => AnyDenseRaster::F64(DenseRaster::<f64>::from_tile_header_and_data(header, data)?),
         })
     }
 
