@@ -319,11 +319,11 @@ impl TileApiHandler {
         recv.await.expect("Panic in rayon::spawn")
     }
 
-    async fn fetch_raster_value(layer_meta: LayerMetadata, coord: Coordinate) -> Result<Option<f32>> {
+    async fn fetch_raster_value(layer_meta: LayerMetadata, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
-            let _ = send.send(DiffTileProvider::raster_pixel(&layer_meta, coord));
+            let _ = send.send(DiffTileProvider::raster_pixel(&layer_meta, coord, dpi_ratio));
         });
 
         recv.await.expect("Panic in rayon::spawn")
@@ -433,8 +433,9 @@ impl TileApiHandler {
     ) -> Result<Json<RasterValueResponse>> {
         let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
         let coord = parse_coordinate_param(&query_params, "lat", "lon")?;
+        let dpi_ratio = query_params.get("dpi").map_or(1, |dpi| dpi.parse::<u8>().unwrap_or(1));
 
-        let val = Self::fetch_raster_value(layer_meta, coord).await?;
+        let val = Self::fetch_raster_value(layer_meta, coord, dpi_ratio).await?;
         Ok(Json(RasterValueResponse {
             value: val.unwrap_or(f32::NAN),
         }))

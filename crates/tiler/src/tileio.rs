@@ -15,7 +15,7 @@ use gdal::{
 use geo::{crs, georaster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
 use inf::Legend;
 use num::Num;
-use raster::{RasterNum, RasterSize};
+use raster::{DenseRaster, Raster, RasterCreation, RasterNum, RasterSize};
 
 fn type_string<T: GdalType>() -> &'static str {
     match <T as GdalType>::datatype() {
@@ -84,9 +84,9 @@ pub fn read_raster_tile<T: RasterNum<T> + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-) -> Result<Vec<T>> {
+) -> Result<DenseRaster<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = Tile::TILE_SIZE * dpi_ratio as u16;
+    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
 
     let options: Vec<String> = vec![
         "-b".to_string(),
@@ -106,9 +106,9 @@ pub fn read_raster_tile<T: RasterNum<T> + GdalType>(
     ];
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
-    let mut data = vec![T::zero(); scaled_size as usize * scaled_size as usize];
+    let mut data = DenseRaster::zeros(RasterSize::with_rows_cols(scaled_size, scaled_size));
     let ds = georaster::algo::translate_file(raster_path, &output_path, &options)?;
-    georaster::io::dataset::read_band(&ds, 1, &mut data)?;
+    georaster::io::dataset::read_band(&ds, 1, data.as_mut())?;
     Ok(data)
 }
 
@@ -117,7 +117,7 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-) -> Result<Vec<T>> {
+) -> Result<DenseRaster<T>> {
     let bounds = tile.web_mercator_bounds();
     let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
 
@@ -140,8 +140,8 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         geo::georaster::io::dataset::open_read_only(raster_path)?
     };
 
-    let mut data = vec![T::nodata_value(); scaled_size * scaled_size];
-    let mut dest_ds = georaster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_mut_slice())?;
+    let data = DenseRaster::filled_with_nodata(RasterSize::with_rows_cols(scaled_size, scaled_size));
+    let mut dest_ds = georaster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_ref())?;
 
     let options = vec![
         "-b".to_string(),
@@ -161,8 +161,8 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     georaster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
 
     // Avoid returning tiles containing only nodata values
-    if data.iter().all(|&val| T::is_nodata(val)) {
-        return Ok(vec![]);
+    if !data.contains_data() {
+        return Ok(DenseRaster::empty());
     }
 
     Ok(data)
@@ -219,18 +219,14 @@ pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-) -> Result<(Vec<T>, T)> {
-    let raw_tile_data: Vec<T>;
+) -> Result<DenseRaster<T>> {
     let start = std::time::Instant::now();
 
-    let mut nodata: T = meta.nodata::<T>().unwrap_or(T::nodata_value());
-
-    if !meta.source_is_web_mercator {
-        raw_tile_data = read_raster_tile_warped(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
-        nodata = T::nodata_value();
+    let raw_tile_data = if !meta.source_is_web_mercator {
+        read_raster_tile_warped(meta.path.as_path(), band_nr, tile, dpi_ratio)?
     } else {
-        raw_tile_data = read_raster_tile(meta.path.as_path(), band_nr, tile, dpi_ratio)?;
-    }
+        read_raster_tile(meta.path.as_path(), band_nr, tile, dpi_ratio)?
+    };
 
     //[cfg(TILESERVER_VERBOSE)]
     log::debug!(
@@ -253,7 +249,7 @@ pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
         log::warn!("Slow tile: {}/{}/{}", tile.z(), tile.x(), tile.y());
     }
 
-    Ok((raw_tile_data, nodata))
+    Ok(raw_tile_data)
 }
 
 /// Read the raw tile data without resampling to TILE_SIZExTILE_SIZE, result is a tuple with the raw data and the nodata value
@@ -262,8 +258,8 @@ pub fn read_tile_data_no_resample<T: RasterNum<T> + Num + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-) -> Result<(Vec<T>, T)> {
-    let raw_tile_data: Vec<T>;
+) -> Result<(DenseRaster<T>, T)> {
+    let raw_tile_data: DenseRaster<T>;
     let start = std::time::Instant::now();
 
     let mut nodata: T = meta.nodata::<T>().unwrap_or(T::nodata_value());
@@ -303,7 +299,7 @@ pub fn read_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, req: &TileReque
 where
     T: RasterNum<T> + Num + GdalType,
 {
-    let (raw_tile_data, nodata) = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
+    let raw_tile_data = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
     if raw_tile_data.is_empty() {
         return Ok(TileData::default());
     }
@@ -315,7 +311,7 @@ where
                 raw_tile_data.as_slice(),
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                Some(nodata),
+                Some(T::nodata_value()),
                 &Legend::default(),
             )
         }
@@ -323,9 +319,8 @@ where
             raw_tile_data.as_slice(),
             (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
             (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-            Some(nodata),
+            Some(T::nodata_value()),
         ),
-        TileFormat::RasterTile => todo!(),
         _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
     }
 }
@@ -338,7 +333,7 @@ pub fn read_color_mapped_tile_as_png<T>(
 where
     T: RasterNum<T> + Num + GdalType,
 {
-    let (raw_tile_data, nodata) = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
+    let raw_tile_data = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
     if raw_tile_data.is_empty() {
         return Ok(TileData::default());
     }
@@ -347,7 +342,7 @@ where
         raw_tile_data.as_slice(),
         (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
         (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-        Some(nodata),
+        Some(T::nodata_value()),
         req.legend,
     )
 }

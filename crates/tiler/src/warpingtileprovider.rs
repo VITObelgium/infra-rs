@@ -10,7 +10,7 @@ use geo::{
 };
 use geo::{crs, Coordinate, GeoReference, LatLonBounds, SpatialReference, Tile};
 use num::Num;
-use raster::{DenseRaster, RasterCreation, RasterDataType, RasterNum, RasterSize};
+use raster::{DenseRaster, Raster, RasterCreation, RasterDataType, RasterNum, RasterSize};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{
@@ -169,7 +169,7 @@ impl WarpingTileProvider {
     where
         T: RasterNum<T> + Num + GdalType,
     {
-        let (raw_tile_data, nodata) = tileio::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
+        let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
         if raw_tile_data.is_empty() {
             return Ok(None);
         }
@@ -178,9 +178,8 @@ impl WarpingTileProvider {
         let tile_meta = GeoReference::from_tile(&tile, tile_size, dpi_ratio);
         let cell = tile_meta.point_to_cell(crs::lat_lon_to_web_mercator(coord));
 
-        match raw_tile_data.get(cell.row as usize * tile_size + cell.col as usize) {
-            Some(&v) if v.is_nan() || v == nodata => Ok(None),
-            Some(&v) => Ok(v.to_f32()),
+        match raw_tile_data.cell_value(cell) {
+            Some(v) => Ok(v.to_f32()),
             None => Ok(None),
         }
     }
@@ -189,7 +188,7 @@ impl WarpingTileProvider {
     where
         T: RasterNum<T> + Num + GdalType,
     {
-        let (raw_tile_data, nodata) = tileio::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
+        let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
         if raw_tile_data.is_empty() {
             return Ok(TileData::default());
         }
@@ -198,24 +197,23 @@ impl WarpingTileProvider {
             TileFormat::Png => {
                 // The default legend is with grayscale colors in range 0-255
                 imageprocessing::raw_tile_to_png_color_mapped::<T>(
-                    &raw_tile_data,
+                    raw_tile_data.as_ref(),
                     (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
                     (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                    Some(nodata),
+                    Some(T::nodata_value()),
                     &Legend::default(),
                 )
             }
             TileFormat::FloatEncodedPng => imageprocessing::raw_tile_to_float_encoded_png::<T>(
-                &raw_tile_data,
+                raw_tile_data.as_ref(),
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
                 (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                Some(nodata),
+                Some(T::nodata_value()),
             ),
-            TileFormat::RasterTile => raw_tile_to_vito_tile_format::<T>(
-                raw_tile_data,
-                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-            ),
+            TileFormat::RasterTile => {
+                let (size, data) = raw_tile_data.into_raw_parts();
+                raw_tile_to_vito_tile_format::<T>(data, size.cols, size.rows)
+            }
             _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
         }
     }

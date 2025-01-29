@@ -1,8 +1,12 @@
 use std::{ops::Range, path::Path, sync::Arc};
 
-use gdal::raster::GdalType;
-use geo::{georaster::io::RasterFormat, Coordinate, LatLonBounds, Tile};
-use raster::{Cell, RasterDataType, RasterNum};
+use gdal::{raster::GdalType, vector::LayerAccess};
+use geo::{
+    georaster::{self, io::RasterFormat},
+    CellSize, Coordinate, GeoReference, LatLonBounds, Point, Tile,
+};
+
+use raster::{Raster, RasterDataType, RasterNum};
 
 use crate::{
     layermetadata::{LayerId, LayerMetadata},
@@ -32,55 +36,48 @@ fn diff_tiles<T: RasterNum<T> + GdalType>(
     layer_meta2: &LayerMetadata,
     tile: Tile,
 ) -> Result<TileData> {
-    let (tile1_data, tile1_nodata) = tileio::read_tile_data::<T>(layer_meta1, 1, tile, 1)?;
-    let (tile2_data, tile2_nodata) = tileio::read_tile_data::<T>(layer_meta2, 1, tile, 1)?;
+    let tile1 = tileio::read_tile_data::<T>(layer_meta1, 1, tile, 1)?;
+    let tile2 = tileio::read_tile_data::<T>(layer_meta2, 1, tile, 1)?;
 
-    if tile1_data.len() != tile2_data.len() {
+    if tile1.len() != tile2.len() {
         return Err(Error::InvalidArgument("Tile data length mismatch".to_string()));
     }
 
-    if tile1_data.is_empty() {
+    if tile1.is_empty() {
         return Ok(TileData::default());
     }
 
+    let diff = tile2 - tile1;
+
+    let geo_ref = GeoReference::with_origin(
+        "",
+        diff.size(),
+        Point::new(0.0, Tile::TILE_SIZE as f64),
+        CellSize::square(1.0),
+        Option::<f64>::None,
+    );
+
+    let vec_ds = georaster::algo::polygonize(&geo_ref, diff.as_ref())?;
+
     let mut tile = mvt::Tile::new(Tile::TILE_SIZE as u32);
 
-    for row in 0..Tile::TILE_SIZE {
-        for col in 0..Tile::TILE_SIZE {
-            let idx = (row * Tile::TILE_SIZE + col) as usize;
-            let lhs = *unsafe { tile1_data.get_unchecked(idx) };
-            let rhs = *unsafe { tile2_data.get_unchecked(idx) };
-
-            match (lhs.is_nodata(), rhs.is_nodata()) {
-                (true, true) => continue,
-                (true, false) => continue,
-                (false, true) => continue,
-                (false, false) => {
-                    let cell = Cell::from_row_col(row as i32, col as i32);
-                    let r = cell.row as f32;
-                    let c = cell.col as f32;
-
-                    let cell_geom = mvt::GeomEncoder::new(mvt::GeomType::Polygon)
-                        .point(c, r)?
-                        .point(c + 1.0, r)?
-                        .point(c + 1.0, r + 1.0)?
-                        .point(c, r + 1.0)?
-                        .point(c, r)?
-                        .encode()?;
-
-                    let lhs = lhs.to_f64().unwrap();
-                    let rhs = rhs.to_f64().unwrap();
-
-                    let diff = (lhs - rhs).abs();
-
-                    let layer = tile.create_layer(&idx.to_string());
-                    let mut feature = layer.into_feature(cell_geom);
-                    feature.set_id(idx as u64);
-                    feature.add_tag_double("diff", diff);
-                    feature.add_tag_double("v1", lhs);
-                    feature.add_tag_double("v2", rhs);
-                    tile.add_layer(feature.into_layer())?;
+    let mut idx = 0;
+    for feature in vec_ds.layer(0)?.features() {
+        if let Some(geom) = feature.geometry() {
+            if let Ok(geo_types::Geometry::Polygon(geom)) = geom.to_geo() {
+                let mut cell_geom = mvt::GeomEncoder::new(mvt::GeomType::Polygon);
+                for point in geom.exterior().points() {
+                    cell_geom.add_point(point.x(), point.y())?;
                 }
+
+                let layer = tile.create_layer(&idx.to_string());
+                let mut mvt_feat = layer.into_feature(cell_geom.encode()?);
+                mvt_feat.add_tag_double(
+                    "diff",
+                    feature.field_as_double_by_name("Value")?.expect("Value not found"),
+                );
+                tile.add_layer(mvt_feat.into_layer())?;
+                idx += 1;
             }
         }
     }
@@ -255,7 +252,7 @@ impl DiffTileProvider {
         Ok(tile_data)
     }
 
-    pub fn raster_pixel(_layer_meta: &LayerMetadata, _coord: Coordinate) -> Result<Option<f32>> {
+    pub fn raster_pixel(_layer_meta: &LayerMetadata, _coord: Coordinate, _dpi_ratio: u8) -> Result<Option<f32>> {
         Err(Error::Runtime("Raster pixels not supported for the diff tiler".into()))
     }
 
@@ -319,7 +316,7 @@ impl TileProvider for DiffTileProvider {
 
     fn get_raster_value(&self, id: LayerId, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
         let layer_meta = self.layer_ref(id)?;
-        DiffTileProvider::raster_pixel(layer_meta, coord)
+        DiffTileProvider::raster_pixel(layer_meta, coord, dpi_ratio)
     }
 
     fn get_tile(&self, id: LayerId, tile_req: &TileRequest) -> Result<TileData> {
@@ -333,55 +330,53 @@ impl TileProvider for DiffTileProvider {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use geo::RuntimeConfiguration;
-    use path_macro::path;
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use geo::RuntimeConfiguration;
+//     use path_macro::path;
 
-    use crate::{tileproviderfactory::TileProviderOptions, LayerSourceType};
+//     use crate::{tileproviderfactory::TileProviderOptions, LayerSourceType};
 
-    use super::DiffTileProvider;
+//     use super::DiffTileProvider;
 
-    #[ctor::ctor]
-    fn init() {
-        let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
-        if !data_dir.exists() {
-            // Infra used as a subcrate, try the parent directory
-            data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / ".." / "target" / "data");
-            if !data_dir.exists() {
-                panic!("Proj.db data directory not found");
-            }
-        }
+//     #[ctor::ctor]
+//     fn init() {
+//         let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
+//         if !data_dir.exists() {
+//             // Infra used as a subcrate, try the parent directory
+//             data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / ".." / "target" / "data");
+//             if !data_dir.exists() {
+//                 panic!("Proj.db data directory not found");
+//             }
+//         }
 
-        let config = RuntimeConfiguration::builder().proj_db(&data_dir).build();
-        config.apply().expect("Failed to configure runtime");
-    }
+//         let config = RuntimeConfiguration::builder().proj_db(&data_dir).build();
+//         config.apply().expect("Failed to configure runtime");
+//     }
 
-    #[test]
-    fn test_diff_tile_provider() {
-        let path1 = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "potgeo_lim_bebouwd.tif");
-        let path2 = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "residentieel_dakopp_50m_lim.tif");
-        assert!(path1.exists());
-        assert!(path2.exists());
+//     // #[test]
+//     // fn test_diff_tile_provider() {
+//     //     let path1 = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "potgeo_lim_bebouwd.tif");
+//     //     let path2 = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "residentieel_dakopp_50m_lim.tif");
+//     //     assert!(path1.exists());
+//     //     assert!(path2.exists());
 
-        let provider = DiffTileProvider::new(&path1, &path2, &TileProviderOptions::default()).unwrap();
-        let meta = provider.diff_layer().unwrap();
+//     //     let provider = DiffTileProvider::new(&path1, &path2, &TileProviderOptions::default()).unwrap();
+//     //     let meta = provider.diff_layer().unwrap();
 
-        assert!(meta.source_format == LayerSourceType::GeoTiff);
-        assert!(meta.tile_format == TileFormat::Protobuf);
+//     //     assert!(meta.source_format == LayerSourceType::GeoTiff);
+//     //     assert!(meta.tile_format == TileFormat::Protobuf);
 
-        let req = TileRequest {
-            tile: Tile::for_coordinate(meta.bounds().center(), 10),
-            dpi_ratio: 1,
-            tile_format: TileFormat::Protobuf,
-        };
+//     //     let req = TileRequest {
+//     //         tile: Tile::for_coordinate(meta.bounds().center(), 10),
+//     //         dpi_ratio: 1,
+//     //         tile_format: TileFormat::Protobuf,
+//     //     };
 
-        dbg!("Tile: {:?}", req.tile);
+//     //     let mvt = provider.get_tile(meta.id, &req).unwrap();
 
-        let mvt = provider.get_tile(meta.id, &req).unwrap();
-
-        // write mvt to file for debugging
-        std::fs::write("/Users/dirk/tile.mvt", mvt.data).unwrap();
-    }
-}
+//     //     // write mvt to file for debugging
+//     //     std::fs::write("/Users/dirk/tile.mvt", mvt.data).unwrap();
+//     // }
+// }

@@ -8,6 +8,8 @@ inf         = { path = "../inf", features = ["serde"] }
 raster      = { path = "../raster" }
 raster-tile = { path = "../raster-tile" }
 geo         = { path = "../geo", features = ["gdal", "serde"] }
+geozero     = { version = "0.14", optional = true }
+geo-types   = "0.7"
 sqlite      = { path = "../sqlite" }
 thiserror   = "2.0"
 gdal        = "0.17"
@@ -29,5 +31,5 @@ path_macro = "1.0"
 [features]
 serde        = ["dep:serde", "dep:serde_json", "inf/serde"]
 specta       = ["dep:specta", "geo/specta", "inf/specta", "raster/specta"]
-vector-tiles = ["dep:mvt"]
+vector-tiles = ["dep:geozero", "dep:mvt", "geo/vector"]
 slow_tests   = []
