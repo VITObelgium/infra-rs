@@ -7,24 +7,23 @@ pub fn diff_tiles(tile1: &AnyDenseRaster, tile2: &AnyDenseRaster, format: TileFo
         return Err(Error::InvalidArgument("Diff tile data types do not match".into()));
     }
 
-    use RasterDataType::*;
-    Ok(match format {
+    match format {
         #[cfg(feature = "vector-tiles")]
         #[allow(clippy::unwrap_used)] // Types are checked prior to unwrapping
         TileFormat::Protobuf => match tile1.data_type() {
-            Uint8 => diff_tiles_as_mvt::<u8>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Uint16 => diff_tiles_as_mvt::<u16>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Uint32 => diff_tiles_as_mvt::<u32>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Uint64 => diff_tiles_as_mvt::<u64>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Int8 => diff_tiles_as_mvt::<i8>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Int16 => diff_tiles_as_mvt::<i16>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Int32 => diff_tiles_as_mvt::<i32>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Int64 => diff_tiles_as_mvt::<i64>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Float32 => diff_tiles_as_mvt::<f32>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
-            Float64 => diff_tiles_as_mvt::<f64>(tile1.try_into().unwrap(), tile2.try_into().unwrap())?,
+            RasterDataType::Uint8 => diff_tiles_as_mvt::<u8>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Uint16 => diff_tiles_as_mvt::<u16>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Uint32 => diff_tiles_as_mvt::<u32>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Uint64 => diff_tiles_as_mvt::<u64>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Int8 => diff_tiles_as_mvt::<i8>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Int16 => diff_tiles_as_mvt::<i16>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Int32 => diff_tiles_as_mvt::<i32>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Int64 => diff_tiles_as_mvt::<i64>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Float32 => diff_tiles_as_mvt::<f32>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
+            RasterDataType::Float64 => diff_tiles_as_mvt::<f64>(tile1.try_into().unwrap(), tile2.try_into().unwrap()),
         },
-        _ => return Err(Error::InvalidArgument("Unsupported tile format".into())),
-    })
+        _ => Err(Error::InvalidArgument("Unsupported tile format".into())),
+    }
 }
 
 #[cfg(feature = "vector-tiles")]
