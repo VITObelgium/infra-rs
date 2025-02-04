@@ -1,4 +1,4 @@
-use crate::{Array, Cell, DenseArray, ArrayNum};
+use crate::{Array, ArrayNum, Cell, DenseArray};
 
 pub const MARK_TODO: u8 = 0;
 pub const MARK_BORDER: u8 = 1;

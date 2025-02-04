@@ -1,6 +1,6 @@
 use num::Zero;
 
-use crate::{Array, ArrayCopy, ArrayNum, Cell, DenseArray, Error, GeoReference, Nodata, Result};
+use crate::{Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, GeoReference, Nodata, RasterSize, Result};
 
 use super::clusterutils::{
     handle_cell, insert_border_cell, insert_cell, show_warning_if_clustering_on_floats, visit_neighbour_cells, visit_neighbour_diag_cells,
@@ -352,6 +352,107 @@ where
     }
 
     false
+}
+
+#[allow(clippy::too_many_arguments)]
+fn compute_fuzzy_cluster_id_with_obstacles_rc(
+    cell: Cell,
+    items: &impl Array<Pixel = i32>,
+    background_id: &impl Array<Pixel = i32>,
+    obstacles: &impl Array<Pixel = u8>,
+    size: RasterSize,
+    radius: f32,
+    cluster_id: i32,
+    mark: &mut DenseArray<u8>,
+    border: &mut FiLo<Cell>,
+    result: &mut impl Array<Pixel = i32>,
+) {
+    assert_eq!(mark[cell], MARK_TODO);
+    mark[cell] = MARK_BORDER;
+    assert!(border.is_empty());
+    border.push_back(cell);
+
+    while !border.is_empty() {
+        let c = border.pop_head();
+        assert_eq!(mark[c], MARK_BORDER);
+        mark[c] = MARK_DONE;
+        assert_eq!(result[c], 0);
+        result[c] = cluster_id;
+
+        let r0 = (c.row - (radius + 0.5) as i32).max(0);
+        let c0 = (c.col - (radius + 0.5) as i32).max(0);
+        let r1 = (c.row + (radius + 0.5) as i32).min(size.rows as i32 - 1);
+        let c1 = (c.col + (radius + 0.5) as i32).min(size.cols as i32 - 1);
+
+        for rr in r0..=r1 {
+            for cc in c0..=c1 {
+                let dr = rr - c.row;
+                let dc = cc - c.col;
+                if dr * dr + dc * dc <= (radius * radius) as i32 {
+                    let clcl = Cell::from_row_col(rr, cc);
+                    if items[clcl] == items[cell]
+                        && background_id[clcl] == background_id[cell]
+                        && mark[clcl] == MARK_TODO
+                        && !is_blocked_path(c, clcl, obstacles)
+                    {
+                        assert_eq!(result[clcl], 0);
+                        mark[clcl] = MARK_BORDER;
+                        border.push_back(clcl);
+                    }
+                }
+            }
+        }
+    }
+}
+
+pub fn fuzzy_cluster_id_with_obstacles<R>(items: &R, obstacles: &impl Array<Pixel = u8>, radius_in_meter: f32) -> Result<R>
+where
+    R: Array<Pixel = i32, Metadata = GeoReference> + ArrayCopy<i32, R>,
+{
+    let background_id = cluster_id_with_obstacles(&R::new_with_dimensions_of(items, 1), obstacles)?;
+
+    let rows = items.height();
+    let cols = items.width();
+    let mut result = R::filled_with_nodata(items.metadata().clone());
+    let radius = radius_in_meter / items.metadata().cell_size_x() as f32;
+
+    let mut mark = DenseArray::<u8>::filled_with(MARK_TODO, items.size());
+    let mut border = FiLo::new(rows, cols);
+    let mut cluster_id = 1;
+
+    for r in 0..rows {
+        for c in 0..cols {
+            let cell = Cell::from_row_col(r as i32, c as i32);
+            if items.cell_is_nodata(cell) {
+                mark[cell] = MARK_DONE;
+                result.set_cell_value(cell, None);
+                continue;
+            }
+
+            if items[cell] > 0 && mark[cell] == MARK_TODO {
+                if obstacles[cell] > 0 {
+                    mark[cell] = MARK_DONE;
+                    result[cell] = cluster_id;
+                } else {
+                    compute_fuzzy_cluster_id_with_obstacles_rc(
+                        cell,
+                        items,
+                        &background_id,
+                        obstacles,
+                        items.metadata().size(),
+                        radius,
+                        cluster_id,
+                        &mut mark,
+                        &mut border,
+                        &mut result,
+                    );
+                }
+                cluster_id += 1;
+            }
+        }
+    }
+
+    Ok(result)
 }
 
 #[cfg(test)]
