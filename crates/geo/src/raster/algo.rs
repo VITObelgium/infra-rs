@@ -33,7 +33,7 @@ pub use {
     distance::value_at_closest_less_than_travel_target, distance::value_at_closest_target, distance::value_at_closest_travel_target,
 };
 
-pub use {nodata::replace_nodata, nodata::replace_nodata_in_place};
+pub use {nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::turn_value_into_nodata};
 
 pub use rasterdiff::raster_diff;
 pub use rasterdiff::RasterCellMismatch;
