@@ -1,4 +1,4 @@
-use crate::{raster::RasterSize, AnyDenseArray, DenseArray};
+use crate::{RasterSize, AnyDenseArray, DenseArray};
 
 fn assert_same_data_type(a: &AnyDenseArray, b: &AnyDenseArray) {
     assert_eq!(

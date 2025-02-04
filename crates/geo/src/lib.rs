@@ -22,6 +22,7 @@ mod latlonbounds;
 mod nodata;
 pub mod raster;
 mod rasternum;
+mod rastersize;
 pub mod rect;
 #[cfg(feature = "gdal")]
 mod runtimeconfiguration;
@@ -46,8 +47,8 @@ pub use {coordinatetransformer::CoordinateTransformer, runtimeconfiguration::Run
 pub use {
     anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayCreation, array::ArrayMetadata, cell::Cell,
     cell::CellIterator, coordinate::Coordinate, datatype::RasterDataType, densearray::DenseArray, error::Error, georeference::CellSize,
-    georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata, rasternum::RasterNum, rect::Rect, tile::Tile,
-    tile::ZoomLevelStrategy,
+    georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata, rasternum::RasterNum, rastersize::RasterSize, rect::Rect,
+    tile::Tile, tile::ZoomLevelStrategy,
 };
 
 pub type Point<T = f64> = geo_types::Point<T>;

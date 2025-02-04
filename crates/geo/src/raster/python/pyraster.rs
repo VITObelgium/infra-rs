@@ -10,9 +10,9 @@ use pyo3::{pyclass, pymethods};
 use crate::{
     raster::{
         arrow::arrowutil::{self, ArrowType},
-        DenseRaster, RasterSize,
+        DenseRaster,
     },
-    GeoReference,
+    GeoReference, RasterSize,
 };
 
 #[derive(Clone)]

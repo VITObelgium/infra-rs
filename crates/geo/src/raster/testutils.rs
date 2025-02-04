@@ -1,6 +1,6 @@
 use crate::GeoReference;
 use approx::relative_eq;
-use raster::RasterSize;
+use RasterSize;
 
 pub const NOD: f64 = 255.0;
 

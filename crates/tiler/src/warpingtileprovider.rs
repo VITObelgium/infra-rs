@@ -6,7 +6,7 @@ use inf::legend::Legend;
 
 use geo::raster::io::RasterFormat;
 use geo::{crs, Coordinate, GeoReference, LatLonBounds, Tile};
-use geo::{raster::RasterSize, Array, ArrayCreation, DenseArray, RasterDataType, RasterNum};
+use geo::{RasterSize, Array, ArrayCreation, DenseArray, RasterDataType, RasterNum};
 use num::Num;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
@@ -227,7 +227,7 @@ impl TileProvider for WarpingTileProvider {
 mod tests {
     use approx::assert_relative_eq;
     use geo::{crs, Coordinate, Point, Tile, ZoomLevelStrategy};
-    use geo::{raster::RasterSize, Array, ArrayCreation, Cell, DenseArray};
+    use geo::{RasterSize, Array, ArrayCreation, Cell, DenseArray};
     use inf::cast;
     use path_macro::path;
     use raster_tile::RasterTileIO;

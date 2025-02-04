@@ -2,9 +2,8 @@
 #[generic_tests::define]
 mod tests {
     use crate::{
-        raster::RasterSize,
         testutils::{create_vec, NOD},
-        Array, ArrayCreation, DenseArray, RasterNum,
+        Array, ArrayCreation, DenseArray, RasterNum, RasterSize,
     };
 
     const SIZE: RasterSize = RasterSize::with_rows_cols(3, 3);

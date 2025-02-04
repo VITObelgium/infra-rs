@@ -1,6 +1,6 @@
 use approx::relative_eq;
 
-use crate::{raster::RasterSize, GeoReference, RasterNum};
+use crate::{RasterSize, GeoReference, RasterNum};
 
 pub const NOD: f64 = 255.0;
 

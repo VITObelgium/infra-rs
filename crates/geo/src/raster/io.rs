@@ -94,7 +94,7 @@ struct CutOut {
 pub mod dataset {
     use gdal::Metadata;
 
-    use crate::{raster::RasterSize, Nodata, RasterNum};
+    use crate::{RasterSize, Nodata, RasterNum};
 
     use super::*;
 

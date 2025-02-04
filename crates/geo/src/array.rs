@@ -7,7 +7,7 @@ pub trait ArrayMetadata: Clone + Debug {
 
 use std::fmt::Debug;
 
-use crate::{raster::RasterSize, rasternum::RasterNum, Cell, Nodata};
+use crate::{RasterSize, rasternum::RasterNum, Cell, Nodata};
 
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.

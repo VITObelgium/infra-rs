@@ -1,4 +1,4 @@
-use crate::raster::RasterSize;
+use crate::RasterSize;
 use crate::{Cell, CellIterator};
 use gdal::vector::{LayerAccess, ToGdal};
 use geos::Geom;

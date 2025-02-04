@@ -1,4 +1,4 @@
-use crate::{raster::RasterSize, Array, ArrayMetadata, Cell, DenseArray, Error, RasterDataType, RasterNum, Result};
+use crate::{Array, ArrayMetadata, Cell, DenseArray, Error, RasterDataType, RasterNum, RasterSize, Result};
 
 /// Type erased `RasterTile`
 #[derive(Clone)]

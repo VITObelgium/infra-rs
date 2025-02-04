@@ -1,13 +1,12 @@
 pub mod algo;
 mod denseraster;
+mod denserasterconversions;
 #[cfg(feature = "gdal")]
 mod denserasterio;
-mod denserasterconversions;
 #[cfg(feature = "gdal")]
 pub mod io;
 #[cfg(feature = "gdal")]
 mod rasteriotests;
-mod rastersize;
 use crate::GeoReference;
 
 // pub mod warp;
@@ -34,8 +33,6 @@ mod python;
 
 #[cfg(all(feature = "python", feature = "arrow"))]
 pub use python::pyraster::PyRaster;
-#[doc(inline)]
-pub use rastersize::RasterSize;
 
 // pub fn cast<TDest: RasterNum<TDest>, TSrc: RasterNum<TSrc>, RDest, RSrc>(src: &RSrc) -> RDest
 // where

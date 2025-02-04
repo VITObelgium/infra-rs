@@ -357,7 +357,7 @@ where
 #[cfg(test)]
 #[generic_tests::define]
 mod generictests {
-    use crate::{raster::RasterSize, testutils::create_vec, ArrayCreation};
+    use crate::{testutils::create_vec, ArrayCreation, RasterSize};
 
     use super::*;
 

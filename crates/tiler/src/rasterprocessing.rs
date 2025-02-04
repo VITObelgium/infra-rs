@@ -1,4 +1,7 @@
-use geo::raster::{self, io::RasterFormat, RasterSize};
+use geo::{
+    raster::{self, io::RasterFormat},
+    RasterSize,
+};
 use std::path::Path;
 
 use geo::{

@@ -1,4 +1,4 @@
-use crate::{array::ArrayMetadata, raster::RasterSize, tile::ZoomLevelStrategy, Cell};
+use crate::{array::ArrayMetadata, RasterSize, tile::ZoomLevelStrategy, Cell};
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
 

@@ -1,5 +1,5 @@
 use geo::raster;
-use geo::{raster::RasterSize, AnyDenseArray, Array, ArrayCreation, DenseArray, RasterDataType, RasterNum};
+use geo::{RasterSize, AnyDenseArray, Array, ArrayCreation, DenseArray, RasterDataType, RasterNum};
 
 use crate::lz4;
 use crate::{CompressionAlgorithm, Error, Result, TileHeader};

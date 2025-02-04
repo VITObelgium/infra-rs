@@ -1,6 +1,6 @@
 use crate::{
-    raster::{self, RasterSize},
-    Array, ArrayCopy, ArrayCreation, ArrayMetadata, Cell, RasterNum,
+    raster::{self},
+    Array, ArrayCopy, ArrayCreation, ArrayMetadata, Cell, RasterNum, RasterSize,
 };
 
 /// Raster implementation using a dense data structure.

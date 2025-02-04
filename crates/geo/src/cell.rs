@@ -1,4 +1,4 @@
-use crate::raster::RasterSize;
+use crate::RasterSize;
 
 /// Represents a point in the raster using row, col coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

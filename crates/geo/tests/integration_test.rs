@@ -7,7 +7,7 @@ mod tests {
         vector::{self, BurnValue},
         CellSize, GeoReference, SpatialReference,
     };
-    use geo::{raster::RasterSize, Cell};
+    use geo::{RasterSize, Cell};
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
     use vector::polygoncoverage::CoverageConfiguration;

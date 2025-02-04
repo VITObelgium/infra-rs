@@ -12,8 +12,8 @@ where
     type Error = crate::Error;
 
     fn try_from(py_obj: pyo3::Py<pyo3::PyAny>) -> std::result::Result<Self, Self::Error> {
-        use crate::raster::RasterSize;
         use crate::ArrayCreation;
+        use crate::RasterSize;
         use arrow::array::Array;
         use arrow::pyarrow::FromPyArrow;
 
