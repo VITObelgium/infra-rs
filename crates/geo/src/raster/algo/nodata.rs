@@ -32,6 +32,20 @@ where
     });
 }
 
+pub fn is_nodata<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelType<u8> {
+    RasterType::WithPixelType::<u8>::from_iter(
+        input.metadata().clone(),
+        input.iter().map(|x| Some(if x.is_nodata() { 1 } else { 0 })),
+    )
+}
+
+pub fn is_data<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelType<u8> {
+    RasterType::WithPixelType::<u8>::from_iter(
+        input.metadata().clone(),
+        input.iter().map(|x| Some(if x.is_nodata() { 0 } else { 1 })),
+    )
+}
+
 #[cfg(test)]
 #[generic_tests::define]
 mod generictests {
@@ -103,6 +117,66 @@ mod generictests {
 
         super::turn_value_into_nodata(&mut raster, NumCast::from(4.0).unwrap());
         assert_eq!(expected, raster);
+    }
+
+    #[test]
+    fn is_nodata<R: Array<Metadata = RasterSize>>() {
+        let size = RasterSize::with_rows_cols(5, 4);
+        #[rustfmt::skip]
+        let raster = R::new(
+            size,
+            create_vec(&[
+                NOD, NOD,  4.0, 4.0,
+                4.0, 8.0,  4.0, 9.0,
+                2.0, 4.0,  NOD, 7.0,
+                4.0, 4.0,  5.0, 8.0,
+                3.0, NOD,  4.0, NOD,
+            ]),
+        );
+
+        #[rustfmt::skip]
+        let expected = R::WithPixelType::<u8>::new(
+            size,
+            vec![
+                 1,  1,  0,  0,
+                 0,  0,  0,  0,
+                 0,  0,  1,  0,
+                 0,  0,  0,  0,
+                 0,  1,  0,  1,
+            ],
+        );
+
+        assert_eq!(expected, super::is_nodata(&raster));
+    }
+
+    #[test]
+    fn is_data<R: Array<Metadata = RasterSize>>() {
+        let size = RasterSize::with_rows_cols(5, 4);
+        #[rustfmt::skip]
+        let raster = R::new(
+            size,
+            create_vec(&[
+                NOD, NOD,  4.0, 4.0,
+                4.0, 8.0,  4.0, 9.0,
+                2.0, 4.0,  NOD, 7.0,
+                4.0, 4.0,  5.0, 8.0,
+                3.0, NOD,  4.0, NOD,
+            ]),
+        );
+
+        #[rustfmt::skip]
+        let expected = R::WithPixelType::<u8>::new(
+            size,
+            vec![
+                 0,  0,  1,  1,
+                 1,  1,  1,  1,
+                 1,  1,  0,  1,
+                 1,  1,  1,  1,
+                 1,  0,  1,  0,
+            ],
+        );
+
+        assert_eq!(expected, super::is_data(&raster));
     }
 
     #[instantiate_tests(<DenseArray<i8>>)]
