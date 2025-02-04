@@ -1,8 +1,10 @@
-use crate::{Array, ArrayCopy, Cell, DenseArray, Error, Nodata, ArrayNum, Result};
+use num::Zero;
+
+use crate::{Array, ArrayCopy, ArrayNum, Cell, DenseArray, Error, GeoReference, Nodata, Result};
 
 use super::clusterutils::{
     handle_cell, insert_border_cell, insert_cell, show_warning_if_clustering_on_floats, visit_neighbour_cells, visit_neighbour_diag_cells,
-    FiLo, MARK_DONE,
+    FiLo, MARK_BORDER, MARK_DONE,
 };
 use super::clusterutils::{ClusterDiagonals, MARK_TODO};
 
@@ -72,98 +74,96 @@ where
     result
 }
 
-// pub fn fuzzy_cluster_id<R, T>(ras: &R, radius_in_meter: f32) -> R::WithPixelType<i32>
-// where
-//     R: Raster<Pixel = T>,
-//     T: RasterNum<T>,
-//     R::WithPixelType<i32>: ArrayCopy<i32, R>,
-// {
-//     let rows = ras.height();
-//     let cols = ras.width();
+pub fn fuzzy_cluster_id<R>(ras: &R, radius_in_meter: f32) -> R::WithPixelType<i32>
+where
+    R: Array<Metadata = GeoReference>,
+    R::WithPixelType<i32>: ArrayCopy<i32, R>,
+{
+    let rows = ras.height();
+    let cols = ras.width();
 
-//     let radius = radius_in_meter / ras.cell_size().x;
-//     let radius_in_cells = radius as i32;
-//     let radius2 = (radius * radius) as i32;
+    let radius = radius_in_meter / ras.metadata().cell_size_x() as f32;
+    let radius_in_cells = radius as i32;
+    let radius2 = (radius * radius) as i32;
 
-//     let mut result = R::WithPixelType::<i32>::new_with_dimensions_of(ras, -9999);
-//     let mut mark = DenseRaster::<u8>::filled_with(MARK_DONE, ras.size());
+    let mut result = R::WithPixelType::<i32>::new_with_dimensions_of(ras, -9999);
+    let mut mark = DenseArray::<u8>::filled_with(MARK_DONE, ras.size());
 
-//     for i in 0..ras.size() {
-//         let cell = Cell::from_index(i, cols);
-//         if ras.cell_is_nodata(cell) {
-//             mark[cell] = MARK_DONE;
-//             result.set_cell_value(cell, None);
-//             continue;
-//         }
+    ras.iter().zip(mark.iter_mut()).zip(result.iter_mut()).for_each(|((val, m), res)| {
+        if val.is_nodata() {
+            *m = MARK_TODO;
+            *res = i32::nodata_value();
+            return;
+        }
 
-//         if ras[cell] > T::zero() {
-//             mark[cell] = MARK_TODO;
-//         } else {
-//             result[cell] = 0;
-//         }
-//     }
+        if *val > R::Pixel::zero() {
+            *m = MARK_TODO;
+        } else {
+            *res = 0;
+        }
+    });
 
-//     let mut cluster_id = 0;
-//     let mut border = FiLo::new(rows, cols);
+    let mut cluster_id = 0;
+    let mut border = FiLo::new(rows, cols);
 
-//     for r in 0..rows {
-//         for c in 0..cols {
-//             let cell = Cell::from_row_col(r as i32, c as i32);
-//             if mark[cell] == MARK_TODO {
-//                 cluster_id += 1;
+    for r in 0..rows {
+        for c in 0..cols {
+            let cell = Cell::from_row_col(r as i32, c as i32);
+            if mark[cell] == MARK_TODO {
+                cluster_id += 1;
 
-//                 border.clear();
-//                 border.push_back(cell);
-//                 mark[cell] = MARK_BORDER;
+                border.clear();
+                border.push_back(cell);
+                mark[cell] = MARK_BORDER;
 
-//                 while !border.is_empty() {
-//                     let cell = border.pop_head();
-//                     mark[cell] = MARK_DONE;
-//                     result[cell] = cluster_id;
+                while !border.is_empty() {
+                    let cell = border.pop_head();
+                    mark[cell] = MARK_DONE;
+                    result[cell] = cluster_id;
 
-//                     let r0 = if cell.row - radius_in_cells < 0 {
-//                         0
-//                     } else {
-//                         cell.row - radius_in_cells
-//                     };
-//                     let c0 = if cell.col - radius_in_cells < 0 {
-//                         0
-//                     } else {
-//                         cell.col - radius_in_cells
-//                     };
-//                     let r1 = if cell.row + radius_in_cells > rows as i32 - 1 {
-//                         rows as i32 - 1
-//                     } else {
-//                         cell.row + radius_in_cells
-//                     };
-//                     let c1 = if cell.col + radius_in_cells > cols as i32 - 1 {
-//                         cols as i32 - 1
-//                     } else {
-//                         cell.col + radius_in_cells
-//                     };
+                    let r0 = if cell.row - radius_in_cells < 0 {
+                        0
+                    } else {
+                        cell.row - radius_in_cells
+                    };
+                    let c0 = if cell.col - radius_in_cells < 0 {
+                        0
+                    } else {
+                        cell.col - radius_in_cells
+                    };
+                    let r1 = if cell.row + radius_in_cells > rows as i32 - 1 {
+                        rows as i32 - 1
+                    } else {
+                        cell.row + radius_in_cells
+                    };
+                    let c1 = if cell.col + radius_in_cells > cols as i32 - 1 {
+                        cols as i32 - 1
+                    } else {
+                        cell.col + radius_in_cells
+                    };
 
-//                     for rr in r0..=r1 {
-//                         let dr = rr - cell.row;
-//                         let dr2 = dr * dr;
+                    for rr in r0..=r1 {
+                        let dr = rr - cell.row;
+                        let dr2 = dr * dr;
 
-//                         for cc in c0..=c1 {
-//                             let neighbour = Cell::from_row_col(rr, cc);
-//                             if mark[neighbour] == MARK_TODO {
-//                                 let dc = cc - cell.col;
-//                                 if dr2 + dc * dc <= radius2 {
-//                                     mark[neighbour] = MARK_BORDER;
-//                                     border.push_back(neighbour);
-//                                 }
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         }
-//     }
+                        for cc in c0..=c1 {
+                            let neighbour = Cell::from_row_col(rr, cc);
+                            if mark[neighbour] == MARK_TODO {
+                                let dc = cc - cell.col;
+                                if dr2 + dc * dc <= radius2 {
+                                    mark[neighbour] = MARK_BORDER;
+                                    border.push_back(neighbour);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-//     result
-// }
+    result
+}
 
 fn handle_cell_with_obstacles_straight(
     cell: Cell,
@@ -244,7 +244,7 @@ fn compute_cluster_id_of_obstacle_cell(
     }
 }
 
-pub fn cluster_id_with_obstacles<R, O>(cat_map: &R, obstacle_map: &impl Array<Pixel = u8>) -> Result<R>
+pub fn cluster_id_with_obstacles<R>(cat_map: &R, obstacle_map: &impl Array<Pixel = u8>) -> Result<R>
 where
     R: Array<Pixel = i32> + ArrayCopy<i32, R>,
 {
@@ -427,51 +427,6 @@ mod generictests {
         assert_eq!(expected, cluster_id(&raster, ClusterDiagonals::Exclude));
     }
 
-    // #[test]
-    // fn test_fuzzy_cluster_id<R: Raster<Pixel = T> + ArrayCreation<T>, T: RasterNum<T>>()
-    // where
-    //     R::WithPixelType<u32>: ArrayCreation<u32> + ArrayCopy<u32, R>,
-    // {
-    //     let size = RasterSize::with_rows_cols(10, 10);
-    //     #[rustfmt::skip]
-    //     let raster = R::new(
-    //         size,
-    //         create_vec(&[
-    //             1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    //             1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0,
-    //             1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
-    //             1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0,
-    //             1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    //             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
-    //             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    //             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
-    //             1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0,
-    //             0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-    //         ]),
-    //     );
-
-    //     #[rustfmt::skip]
-    //     let expected = R::WithPixelType::<u32>::new(
-    //         size,
-    //         vec![
-    //             1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
-    //             1, 1, 0, 1, 0, 0, 2, 0, 2, 0,
-    //             1, 0, 0, 1, 0, 0, 0, 2, 0, 0,
-    //             1, 0, 1, 1, 0, 0, 2, 0, 2, 0,
-    //             1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
-    //             0, 0, 0, 0, 0, 0, 0, 0, 0, 3,
-    //             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    //             0, 0, 0, 0, 0, 0, 0, 0, 4, 0,
-    //             5, 0, 6, 0, 7, 0, 8, 0, 0, 0,
-    //             0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    //         ]
-    //     );
-
-    //     //meta.set_cell_size(100.0);
-
-    //     assert_eq!(expected, fuzzy_cluster_id(&raster, 1.42 * meta.cell_size()));
-    // }
-
     #[instantiate_tests(<DenseArray<i8>>)]
     mod denserasteri8 {}
 
@@ -497,28 +452,105 @@ mod generictests {
     mod denserasterf64 {}
 }
 
-// #[cfg(test)]
-// #[generic_tests::define]
-// mod unspecialized_tests {
+#[cfg(test)]
+#[generic_tests::define]
+mod genericgeotests {
+    use crate::{raster::DenseRaster, testutils::create_vec, RasterSize};
 
-//     use super::*;
-//     use path_macro::path;
+    use super::*;
 
-//     #[test]
-//     fn test_cluster_id_with_obstacles<R: Raster>() {
-//         let test_data_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data");
+    #[test]
+    fn test_fuzzy_cluster_id<R: Array<Metadata = GeoReference>>()
+    where
+        R::WithPixelType<i32>: ArrayCopy<i32, R>,
+    {
+        let size = RasterSize::with_rows_cols(10, 10);
+        let mut meta = GeoReference::without_spatial_reference(size, None);
+        meta.set_cell_size(100.0);
 
-//         R::WithPixelType::<i32>::from_file(test_data_dir.join("clusteridwithobstacles_categories.tif")).unwrap();
+        #[rustfmt::skip]
+        let raster = R::new(
+            meta.clone(),
+            create_vec(&[
+                1.0, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                1.0, 1.0, 0.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0,
+                1.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0,
+                1.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 0.0, 1.0, 0.0,
+                1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0,
+                1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0,
+                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
+            ]),
+        );
 
-//         // let categories = DenseRaster::from_file("test_data/clusteridwithobstacles_categories.tif").unwrap();
-//         // let obstacles = DenseRaster::from_file("test_data/clusteridwithobstacles_obstacles.tif").unwrap();
-//         // let expected = DenseRaster::from_file("test_data/reference/clusteridwithobstacles.tif").unwrap();
+        #[rustfmt::skip]
+        let expected = R::WithPixelType::<i32>::new(
+            meta.clone(),
+            vec![
+                1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
+                1, 1, 0, 1, 0, 0, 2, 0, 2, 0,
+                1, 0, 0, 1, 0, 0, 0, 2, 0, 0,
+                1, 0, 1, 1, 0, 0, 2, 0, 2, 0,
+                1, 1, 1, 1, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 3,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 4, 0,
+                5, 0, 6, 0, 7, 0, 8, 0, 0, 0,
+                0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ]
+        );
 
-//         // let result = cluster_id_with_obstacles(&categories, &obstacles);
+        assert_eq!(expected, fuzzy_cluster_id(&raster, 1.42_f32 * meta.cell_size_x() as f32));
+    }
 
-//         // assert_eq!(expected, result);
-//     }
+    #[instantiate_tests(<DenseRaster<i8>>)]
+    mod denserasteri8 {}
 
-//     #[instantiate_tests(<DenseRaster>)]
-//     mod denseraster {}
-// }
+    #[instantiate_tests(<DenseRaster<u8>>)]
+    mod denserasteru8 {}
+
+    #[instantiate_tests(<DenseRaster<i32>>)]
+    mod denserasteri32 {}
+
+    #[instantiate_tests(<DenseRaster<u32>>)]
+    mod denserasteru32 {}
+
+    #[instantiate_tests(<DenseRaster<i64>>)]
+    mod denserasteri64 {}
+
+    #[instantiate_tests(<DenseRaster<u64>>)]
+    mod denserasteru64 {}
+
+    #[instantiate_tests(<DenseRaster<f32>>)]
+    mod denserasterf32 {}
+
+    #[instantiate_tests(<DenseRaster<f64>>)]
+    mod denserasterf64 {}
+}
+
+#[cfg(test)]
+mod tests {
+
+    use crate::raster::DenseRaster;
+
+    use super::*;
+    use path_macro::path;
+
+    #[cfg(feature = "gdal")]
+    #[test]
+    fn test_cluster_id_with_obstacles() {
+        use crate::raster::RasterIO;
+
+        let test_data_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data");
+
+        let categories = DenseRaster::<i32>::read(&test_data_dir.join("clusteridwithobstacles_categories.tif")).unwrap();
+        let obstacles = DenseRaster::<u8>::read(&test_data_dir.join("clusteridwithobstacles_obstacles.tif")).unwrap();
+        let expected = DenseRaster::<i32>::read(&test_data_dir.join("reference/clusteridwithobstacles.tif")).unwrap();
+
+        let result = cluster_id_with_obstacles(&categories, &obstacles).unwrap();
+
+        assert_eq!(expected, result);
+    }
+}

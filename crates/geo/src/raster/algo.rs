@@ -22,8 +22,8 @@ pub use {translate::translate, translate::translate_file, warp::warp, warp::warp
 #[cfg(feature = "gdal")]
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};
 
-pub use clusterid::cluster_id;
-pub use clusterid::cluster_id_with_obstacles;
+pub use {clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id};
+
 pub use rasterdiff::raster_diff;
 pub use rasterdiff::RasterCellMismatch;
 pub use rasterdiff::RasterDiffResult;
