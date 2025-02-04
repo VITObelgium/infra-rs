@@ -1,9 +1,9 @@
 use criterion::{BatchSize, Criterion};
-use geo::{Array, DenseArray, ArrayNum, RasterSize};
+use geo::{Array, ArrayNum, Columns, DenseArray, RasterSize, Rows};
 use num::NumCast;
 
-const RASTER_WIDTH: usize = 1024;
-const RASTER_HEIGHT: usize = 768;
+const RASTER_WIDTH: Columns = Columns(1024);
+const RASTER_HEIGHT: Rows = Rows(768);
 
 pub fn bench_name<T: ArrayNum<T>>(name: &str) -> String {
     format!("{}_{:?}", name, T::TYPE)

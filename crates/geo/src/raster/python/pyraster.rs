@@ -4,7 +4,10 @@ use arrow::{
     pyarrow::PyArrowType,
 };
 
-use crate::ArrayNum;
+use crate::{
+    array::{Columns, Rows},
+    ArrayNum,
+};
 use pyo3::{pyclass, pymethods};
 
 use crate::{
@@ -37,7 +40,7 @@ impl From<&GeoReference> for PyRasterMetadata {
         PyRasterMetadata {
             projection: meta.projection().to_string(),
             epsg: meta.projected_epsg().map(|crs| crs.into()),
-            size: (meta.columns(), meta.rows()),
+            size: (meta.columns().count() as usize, meta.rows().count() as usize),
             cell_size: (meta.cell_size().x(), meta.cell_size().y()),
             geo_transform: meta.geo_transform(),
             nodata: meta.nodata(),
@@ -50,8 +53,8 @@ impl From<&PyRasterMetadata> for GeoReference {
         GeoReference::new(
             val.projection.clone(),
             RasterSize {
-                rows: val.size.1,
-                cols: val.size.0,
+                rows: Rows(val.size.1 as i32),
+                cols: Columns(val.size.0 as i32),
             },
             val.geo_transform,
             val.nodata,

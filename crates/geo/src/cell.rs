@@ -1,4 +1,4 @@
-use crate::RasterSize;
+use crate::{array::Columns, array::Rows, RasterSize};
 
 /// Represents a point in the raster using row, col coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -78,24 +78,24 @@ impl Ord for Cell {
 }
 
 pub struct CellIterator {
-    rows: i32,
-    cols: i32,
+    rows: Rows,
+    cols: Columns,
     current: Cell,
 }
 
 impl CellIterator {
-    pub fn for_rows_cols(cols: i32, rows: i32) -> Self {
+    pub fn for_rows_cols(rows: Rows, cols: Columns) -> Self {
         CellIterator {
-            cols,
             rows,
+            cols,
             current: Cell::from_row_col(0, 0),
         }
     }
 
     pub fn for_raster_with_size(size: RasterSize) -> Self {
         CellIterator {
-            cols: size.cols as i32,
-            rows: size.rows as i32,
+            rows: size.rows,
+            cols: size.cols,
             current: Cell::from_row_col(0, 0),
         }
     }
@@ -105,12 +105,12 @@ impl Iterator for CellIterator {
     type Item = Cell;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.current.row >= self.rows {
+        if self.current.row >= self.rows.count() {
             return None;
         }
 
         let current = self.current;
-        self.current.increment(self.cols);
+        self.current.increment(self.cols.count());
         Some(current)
     }
 }

@@ -94,7 +94,10 @@ struct CutOut {
 pub mod dataset {
     use gdal::Metadata;
 
-    use crate::{RasterSize, Nodata, ArrayNum};
+    use crate::{
+        array::{Columns, Rows},
+        ArrayNum, Nodata, RasterSize,
+    };
 
     use super::*;
 
@@ -169,7 +172,10 @@ pub mod dataset {
         let (width, height) = ds.raster_size();
         Ok(GeoReference::new(
             ds.projection(),
-            RasterSize { rows: height, cols: width },
+            RasterSize {
+                rows: Rows(height as i32),
+                cols: Columns(width as i32),
+            },
             ds.geo_transform()?,
             rasterband.no_data_value(),
         ))
@@ -210,7 +216,7 @@ pub mod dataset {
         }
 
         if cut_out.cols * cut_out.rows > 0 {
-            read_region_from_dataset(band_nr, &cut_out, dataset, dst_data, dst_meta.columns() as i32)?;
+            read_region_from_dataset(band_nr, &cut_out, dataset, dst_data, dst_meta.columns().count())?;
         }
 
         Ok(dst_meta)
@@ -229,12 +235,12 @@ pub mod dataset {
         }
 
         let cut_out = CutOut {
-            rows: meta.rows() as i32,
-            cols: meta.columns() as i32,
+            rows: meta.rows().count(),
+            cols: meta.columns().count(),
             ..Default::default()
         };
 
-        read_region_from_dataset(band_index, &cut_out, dataset, dst_data, meta.columns() as i32)?;
+        read_region_from_dataset(band_index, &cut_out, dataset, dst_data, meta.columns().count())?;
         Ok(meta)
     }
 
@@ -379,7 +385,7 @@ pub mod dataset {
     /// Creates an in-memory dataset without any bands
     pub fn create_in_memory(size: RasterSize) -> Result<gdal::Dataset> {
         let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
-        Ok(mem_driver.create(PathBuf::from("in_mem"), size.cols, size.rows, 0)?)
+        Ok(mem_driver.create(PathBuf::from("in_mem"), size.cols.count() as usize, size.rows.count() as usize, 0)?)
     }
 
     /// Creates an in-memory dataset with the provided metadata.
@@ -485,14 +491,14 @@ pub mod dataset {
         fn test_intersect_metadata() {
             let meta1 = GeoReference::with_origin(
                 String::default(),
-                RasterSize { rows: 3, cols: 5 },
+                RasterSize::with_rows_cols(Rows(3), Columns(5)),
                 Point::new(1.0, -10.0),
                 CellSize::square(4.0),
                 Some(-10.0),
             );
             let meta2 = GeoReference::with_origin(
                 String::default(),
-                RasterSize { rows: 3, cols: 4 },
+                RasterSize::with_rows_cols(Rows(3), Columns(4)),
                 Point::new(-3.0, -6.0),
                 CellSize::square(4.0),
                 Some(-6.0),
@@ -522,7 +528,12 @@ pub mod dataset {
                 -0.049_999_998_635_984_29,
             ];
 
-            let meta = GeoReference::new("EPSG:4326".to_string(), RasterSize { rows: 840, cols: 900 }, TRANS, None);
+            let meta = GeoReference::new(
+                "EPSG:4326".to_string(),
+                RasterSize::with_rows_cols(Rows(840), Columns(900)),
+                TRANS,
+                None,
+            );
             assert_relative_eq!(
                 meta.cell_center(Cell::from_row_col(0, 0)),
                 Point::new(TRANS[0] + (TRANS[1] / 2.0), TRANS[3] + (TRANS[5] / 2.0)),

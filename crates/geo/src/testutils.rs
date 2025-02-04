@@ -1,6 +1,9 @@
 use approx::relative_eq;
 
-use crate::{RasterSize, GeoReference, ArrayNum};
+use crate::{
+    array::{Columns, Rows},
+    ArrayNum, GeoReference, RasterSize,
+};
 
 pub const NOD: f64 = 255.0;
 
@@ -34,7 +37,7 @@ pub fn compare_fp_vectors(a: &[f64], b: &[f64]) -> bool {
 pub fn test_metadata_2x2() -> GeoReference {
     GeoReference::new(
         "EPSG:4326".to_string(),
-        RasterSize { rows: 2, cols: 2 },
+        RasterSize::with_rows_cols(Rows(2), Columns(2)),
         [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
         Some(NOD),
     )
@@ -44,7 +47,7 @@ pub fn test_metadata_2x2() -> GeoReference {
 pub fn test_metadata_3x3() -> GeoReference {
     GeoReference::new(
         "EPSG:4326".to_string(),
-        RasterSize { rows: 3, cols: 3 },
+        RasterSize::with_rows_cols(Rows(3), Columns(3)),
         [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
         Some(NOD),
     )

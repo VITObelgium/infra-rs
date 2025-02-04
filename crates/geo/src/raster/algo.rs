@@ -51,6 +51,6 @@ where
 }
 
 pub fn assert_dimensions(r1: &impl Array, r2: &impl Array) {
-    assert_eq!(r1.width(), r2.width(), "Raster widths do not match");
-    assert_eq!(r1.height(), r2.height(), "Raster heights do not match");
+    assert_eq!(r1.columns(), r2.columns(), "Raster column count does not match");
+    assert_eq!(r1.rows(), r2.rows(), "Raster row count does not match");
 }

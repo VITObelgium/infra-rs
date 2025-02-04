@@ -52,6 +52,7 @@ mod generictests {
     use num::NumCast;
 
     use crate::{
+        array::{Columns, Rows},
         testutils::{create_vec, NOD},
         DenseArray, RasterSize,
     };
@@ -60,7 +61,7 @@ mod generictests {
 
     #[test]
     fn replace_nodata<R: Array<Metadata = RasterSize>>() {
-        let size = RasterSize::with_rows_cols(5, 4);
+        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
             size,
@@ -90,7 +91,7 @@ mod generictests {
 
     #[test]
     fn turn_value_into_nodata<R: Array<Metadata = RasterSize>>() {
-        let size = RasterSize::with_rows_cols(5, 4);
+        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let mut raster = R::new(
             size,
@@ -121,7 +122,7 @@ mod generictests {
 
     #[test]
     fn is_nodata<R: Array<Metadata = RasterSize>>() {
-        let size = RasterSize::with_rows_cols(5, 4);
+        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
             size,
@@ -151,7 +152,7 @@ mod generictests {
 
     #[test]
     fn is_data<R: Array<Metadata = RasterSize>>() {
-        let size = RasterSize::with_rows_cols(5, 4);
+        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
             size,

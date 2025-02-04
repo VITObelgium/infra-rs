@@ -1,5 +1,5 @@
-use geo::raster;
-use geo::{AnyDenseArray, Array, DenseArray, ArrayDataType, ArrayNum, RasterSize};
+use geo::{raster, Columns, Rows};
+use geo::{AnyDenseArray, Array, ArrayDataType, ArrayNum, DenseArray, RasterSize};
 
 use crate::lz4;
 use crate::{CompressionAlgorithm, Error, Result, TileHeader};
@@ -63,8 +63,8 @@ impl<T: ArrayNum<T>> RasterTileIO for DenseArray<T> {
         let header = TileHeader::new(
             T::TYPE,
             algorithm,
-            self.width() as u16,
-            self.height() as u16,
+            self.columns().count() as u16,
+            self.rows().count() as u16,
             compressed_data.len() as u32,
         );
 
@@ -93,7 +93,7 @@ impl<T: ArrayNum<T>> RasterTileIO for DenseArray<T> {
         };
 
         Ok(DenseArray::new(
-            RasterSize::with_rows_cols(header.tile_height as usize, header.tile_width as usize),
+            RasterSize::with_rows_cols(Rows(header.tile_height as i32), Columns(header.tile_width as i32)),
             data,
         ))
     }
@@ -215,15 +215,13 @@ impl RasterTileIO for AnyDenseArray {
 mod tests {
     use super::*;
 
+    const TILE_WIDTH: usize = 256;
+    const TILE_HEIGHT: usize = 256;
+    const TILE_SIZE: RasterSize = RasterSize::with_rows_cols(Rows(256), Columns(256));
+
     #[test]
     fn encode_decode_u32() {
-        const TILE_WIDTH: usize = 256;
-        const TILE_HEIGHT: usize = 256;
-
-        let tile = DenseArray::new(
-            RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
-            (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
-        );
+        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>());
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
 
@@ -231,8 +229,8 @@ mod tests {
         assert!(matches!(decoded, AnyDenseArray::U32(_)));
 
         let decoded_tile: DenseArray<u32> = decoded.try_into().expect("Expected U32 tile");
-        assert_eq!(tile.width(), decoded_tile.width());
-        assert_eq!(tile.height(), decoded_tile.height());
+        assert_eq!(tile.columns(), decoded_tile.columns());
+        assert_eq!(tile.rows(), decoded_tile.rows());
         assert_eq!(tile.as_slice(), decoded_tile.as_slice());
     }
 
@@ -240,17 +238,15 @@ mod tests {
     fn encode_decode_u8() {
         const TILE_WIDTH: usize = 10;
         const TILE_HEIGHT: usize = 10;
+        const TILE_SIZE: RasterSize = RasterSize::with_rows_cols(Rows(10), Columns(10));
 
-        let tile = DenseArray::new(
-            RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
-            (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>(),
-        );
+        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>());
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
         let decoded = DenseArray::<u8>::from_tile_bytes(&encoded).unwrap();
 
-        assert_eq!(tile.width(), decoded.width());
-        assert_eq!(tile.height(), decoded.height());
+        assert_eq!(tile.columns(), decoded.columns());
+        assert_eq!(tile.rows(), decoded.rows());
         assert_eq!(tile.as_slice(), decoded.as_slice());
     }
 }

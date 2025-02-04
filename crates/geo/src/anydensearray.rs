@@ -1,4 +1,7 @@
-use crate::{Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result};
+use crate::{
+    array::{Columns, Rows},
+    Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
+};
 
 /// Type erased `RasterTile`
 #[derive(Clone)]
@@ -17,8 +20,8 @@ pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterSize> {
 
 #[macro_export]
 macro_rules! unerase_raster_type_op {
-    ( $raster_op:ident ) => {
-        pub fn $raster_op(&self) -> usize {
+    ( $raster_op:ident, $ret:path ) => {
+        pub fn $raster_op(&self) -> $ret {
             match self {
                 AnyDenseArray::U8(raster) => raster.$raster_op(),
                 AnyDenseArray::U16(raster) => raster.$raster_op(),
@@ -36,8 +39,8 @@ macro_rules! unerase_raster_type_op {
 }
 
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
-    unerase_raster_type_op!(width);
-    unerase_raster_type_op!(height);
+    unerase_raster_type_op!(rows, Rows);
+    unerase_raster_type_op!(columns, Columns);
 
     pub fn empty(datatype: ArrayDataType) -> Self {
         match datatype {
@@ -139,12 +142,15 @@ impl_try_from_dense_raster_ref!(f64, F64);
 
 #[cfg(test)]
 mod tests {
+
+    use crate::array::{Columns, Rows};
+
     use super::*;
 
     #[test]
     fn try_from() {
-        const TILE_WIDTH: usize = 10;
-        const TILE_HEIGHT: usize = 10;
+        const TILE_WIDTH: Columns = Columns(10);
+        const TILE_HEIGHT: Rows = Rows(10);
 
         let raster = DenseArray::new(
             RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),

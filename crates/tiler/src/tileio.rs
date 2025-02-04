@@ -12,8 +12,8 @@ use gdal::{
     raster::{GdalDataType, GdalType},
     Dataset,
 };
-use geo::{constants, crs, raster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
-use geo::{Array, DenseArray, ArrayNum, RasterSize};
+use geo::{constants, crs, raster, CellSize, Columns, GeoReference, LatLonBounds, Rows, SpatialReference, Tile};
+use geo::{Array, ArrayNum, DenseArray, RasterSize};
 use num::Num;
 
 fn type_string<T: GdalType>() -> &'static str {
@@ -83,7 +83,7 @@ pub fn read_raster_tile<T: ArrayNum<T> + GdalType>(
     dpi_ratio: u8,
 ) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
+    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as i32;
 
     let options: Vec<String> = vec![
         "-b".to_string(),
@@ -103,7 +103,7 @@ pub fn read_raster_tile<T: ArrayNum<T> + GdalType>(
     ];
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
-    let mut data = DenseArray::zeros(RasterSize::with_rows_cols(scaled_size, scaled_size));
+    let mut data = DenseArray::zeros(RasterSize::with_rows_cols(Rows(scaled_size), Columns(scaled_size)));
     let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
     raster::io::dataset::read_band(&ds, 1, data.as_mut())?;
     Ok(data)
@@ -116,14 +116,14 @@ pub fn read_raster_tile_warped<T: ArrayNum<T> + GdalType>(
     dpi_ratio: u8,
 ) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
+    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as i32;
 
     let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
     let dest_extent = GeoReference::with_origin(
         projection.to_wkt()?,
         RasterSize {
-            rows: scaled_size,
-            cols: scaled_size,
+            rows: Rows(scaled_size),
+            cols: Columns(scaled_size),
         },
         bounds.bottom_left(),
         CellSize::square(bounds.width() / scaled_size as f64),
@@ -137,7 +137,7 @@ pub fn read_raster_tile_warped<T: ArrayNum<T> + GdalType>(
         geo::raster::io::dataset::open_read_only(raster_path)?
     };
 
-    let data = DenseArray::filled_with_nodata(RasterSize::with_rows_cols(scaled_size, scaled_size));
+    let data = DenseArray::filled_with_nodata(RasterSize::with_rows_cols(Rows(scaled_size), Columns(scaled_size)));
     let mut dest_ds = raster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_ref())?;
 
     let options = vec![

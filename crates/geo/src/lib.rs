@@ -45,10 +45,10 @@ pub use {coordinatetransformer::CoordinateTransformer, runtimeconfiguration::Run
 
 #[doc(inline)]
 pub use {
-    anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayMetadata, arraydatatype::ArrayDataType, arraynum::ArrayNum,
-    cell::Cell, cell::CellIterator, coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize,
-    georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata, rastersize::RasterSize, rect::Rect, tile::Tile,
-    tile::ZoomLevelStrategy,
+    anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayMetadata, array::Columns, array::Rows,
+    arraydatatype::ArrayDataType, arraynum::ArrayNum, cell::Cell, cell::CellIterator, coordinate::Coordinate, densearray::DenseArray,
+    error::Error, georeference::CellSize, georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata, rastersize::RasterSize,
+    rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };
 
 pub type Point<T = f64> = geo_types::Point<T>;

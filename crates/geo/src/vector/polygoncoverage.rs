@@ -90,8 +90,8 @@ fn create_geometry_extent(geom: &geos::Geometry, grid_extent: &GeoReference) -> 
     );
 
     let size = RasterSize {
-        cols: (bottom_right_cell.col - top_left_cell.col) as usize + 1,
-        rows: (bottom_right_cell.row - top_left_cell.row) as usize + 1,
+        cols: ((bottom_right_cell.col - top_left_cell.col) + 1).into(),
+        rows: ((bottom_right_cell.row - top_left_cell.row) + 1).into(),
     };
     geometry_extent.set_extent(
         Point::new(geom_rect.top_left().x(), geom_rect.bottom_right().y()),

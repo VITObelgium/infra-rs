@@ -2,16 +2,16 @@ pub trait ArrayMetadata: Clone + Debug {
     fn size(&self) -> RasterSize;
 
     fn with_size(size: RasterSize) -> Self;
-    fn with_rows_cols(rows: usize, cols: usize) -> Self;
+    fn with_rows_cols(rows: Rows, cols: Columns) -> Self;
 }
 
 use std::fmt::Debug;
 
 use crate::{arraynum::ArrayNum, Cell, Nodata, RasterSize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Rows(pub i32);
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Columns(pub i32);
 
 impl Rows {
@@ -23,6 +23,18 @@ impl Rows {
 impl Columns {
     pub fn count(&self) -> i32 {
         self.0
+    }
+}
+
+impl From<i32> for Rows {
+    fn from(val: i32) -> Self {
+        Rows(val)
+    }
+}
+
+impl From<i32> for Columns {
+    fn from(val: i32) -> Self {
+        Columns(val)
     }
 }
 
@@ -114,12 +126,6 @@ where
     /// Returns the metadata reference.
     fn metadata(&self) -> &Self::Metadata;
 
-    /// Returns the width of the raster.
-    fn width(&self) -> usize;
-
-    /// Returns the height of the raster.
-    fn height(&self) -> usize;
-
     /// Returns the number of rows in the raster (height).
     fn rows(&self) -> Rows;
 
@@ -129,13 +135,13 @@ where
     /// Returns the size data structure of the raster.
     fn size(&self) -> RasterSize {
         RasterSize {
-            cols: self.width(),
-            rows: self.height(),
+            cols: self.columns(),
+            rows: self.rows(),
         }
     }
 
     fn len(&self) -> usize {
-        self.width() * self.height()
+        self.rows() * self.columns()
     }
 
     fn is_empty(&self) -> bool {
@@ -169,7 +175,7 @@ where
 
     /// Return true if the provided cell contains nodata
     fn cell_is_nodata(&self, cell: Cell) -> bool {
-        self.index_is_nodata(cell.row as usize * self.width() + cell.col as usize)
+        self.index_is_nodata((cell.row * self.columns().count() + cell.col) as usize)
     }
 
     /// Return true if the provided cell contains nodata
@@ -196,7 +202,7 @@ where
     /// Use this for cases where a single cell value is needed not in a loop to
     /// to process the entire raster
     fn cell_value(&self, cell: Cell) -> Option<Self::Pixel> {
-        self.value(cell.row as usize * self.width() + cell.col as usize)
+        self.value((cell.row * self.columns().count() + cell.col) as usize)
     }
 
     /// Set the value at the given cell, if the value is None the cell will be set to nodata

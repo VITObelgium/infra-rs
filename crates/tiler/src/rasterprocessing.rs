@@ -1,6 +1,6 @@
 use geo::{
     raster::{self, io::RasterFormat},
-    RasterSize,
+    Columns, RasterSize, Rows,
 };
 use std::path::Path;
 
@@ -21,7 +21,7 @@ fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -
 
     // Modify the metadata to only contain the pixel at the given coordinate
     let ll = meta.cell_lower_left(cell);
-    meta.set_extent(ll, RasterSize { rows: 1, cols: 1 }, meta.cell_size());
+    meta.set_extent(ll, RasterSize::with_rows_cols(Rows(1), Columns(1)), meta.cell_size());
     let mut data = [0.0];
 
     raster::io::dataset::read_band_region(&ds, band_nr, &meta, &mut data)?;
@@ -124,7 +124,7 @@ mod tests {
 
         let meta = GeoReference::with_origin(
             projection,
-            RasterSize { rows: 3250, cols: 2700 },
+            RasterSize::with_rows_cols(Rows(3250), Columns(2700)),
             Point::new(10000.0, 300000.0),
             CellSize::square(100.0),
             Option::<f64>::None,

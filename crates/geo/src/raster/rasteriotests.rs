@@ -8,10 +8,11 @@ mod tests {
     use path_macro::path;
 
     use crate::{
+        array::{Columns, Rows},
         gdalinterop,
         raster::{DenseRaster, RasterIO},
         testutils::NOD,
-        Array, GeoReference, Point, ArrayNum,
+        Array, ArrayNum, GeoReference, Point,
     };
 
     #[ctor::ctor]
@@ -34,8 +35,8 @@ mod tests {
         let ras = R::read(path.as_path()).unwrap();
         let meta = ras.metadata();
 
-        assert_eq!(ras.width(), 2370);
-        assert_eq!(ras.height(), 920);
+        assert_eq!(ras.columns(), Columns(2370));
+        assert_eq!(ras.rows(), Rows(920));
         assert_eq!(ras.as_slice().len(), 2370 * 920);
         assert_eq!(ras.metadata().nodata(), Some(NumCast::from(NOD).unwrap()));
         assert_eq!(ras.sum(), 163654749.0);

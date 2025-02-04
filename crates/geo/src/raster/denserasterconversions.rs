@@ -12,6 +12,7 @@ where
     type Error = crate::Error;
 
     fn try_from(py_obj: pyo3::Py<pyo3::PyAny>) -> std::result::Result<Self, Self::Error> {
+        use crate::array::{Columns, Rows};
         use crate::Array;
         use crate::RasterSize;
         use arrow::array::Array as _;
@@ -31,7 +32,7 @@ where
 
                     let arrow_array: arrow::array::PrimitiveArray<T::TArrow> = array.into();
                     let geo_reference = GeoReference::without_spatial_reference(
-                        RasterSize::with_rows_cols(1, arrow_array.len()),
+                        RasterSize::with_rows_cols(Rows(1), Columns(arrow_array.len() as i32)),
                         Some(NumCast::from(T::nodata_value()).expect("Failed to cast nodata value")),
                     );
 
@@ -54,7 +55,10 @@ where
 #[cfg(all(feature = "python", feature = "arrow"))]
 #[cfg(test)]
 mod tests {
-    use crate::{Array, Nodata};
+    use crate::{
+        array::{Columns, Rows},
+        Array, Nodata,
+    };
     use arrow::{array::Array as _, pyarrow::PyArrowType};
     use pyo3::{IntoPyObject, PyObject};
 
@@ -79,8 +83,8 @@ mod tests {
         let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 
         // no shape information is present in the arrow array, so the raster will have a single row
-        assert_eq!(raster.width(), 4);
-        assert_eq!(raster.height(), 1);
+        assert_eq!(raster.columns(), Columns(4));
+        assert_eq!(raster.rows(), Rows(1));
         assert_eq!(raster.metadata().nodata_as::<i32>().unwrap(), Some(i32::nodata_value()));
     }
 
@@ -92,8 +96,8 @@ mod tests {
         let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 
         // no shape information is present in the arrow array, so the raster will have a single row
-        assert_eq!(raster.width(), 4);
-        assert_eq!(raster.height(), 1);
+        assert_eq!(raster.columns(), Columns(4));
+        assert_eq!(raster.rows(), Rows(1));
         assert_eq!(raster.metadata().nodata_as::<i32>().unwrap(), Some(i32::nodata_value()));
 
         assert_eq!(1, raster.nodata_count());

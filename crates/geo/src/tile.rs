@@ -1,6 +1,5 @@
 use crate::{
-    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, georeference::GeoReference,
-    latlonbounds::LatLonBounds, Point, Rect,
+    constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, georeference::GeoReference, latlonbounds::LatLonBounds, Point, Rect,
 };
 use std::f64::consts::PI;
 
@@ -90,10 +89,7 @@ impl Tile {
         let lon_degrees = self.x as f64 / z2 * 360.0 - 180.0;
         let lat_rad = (PI * (1.0 - 2.0 * self.y as f64 / z2)).sinh().atan();
 
-        Coordinate::latlon(
-            lat_rad.to_degrees() - degrees_per_tile / 2.0,
-            lon_degrees + degrees_per_tile / 2.0,
-        )
+        Coordinate::latlon(lat_rad.to_degrees() - degrees_per_tile / 2.0, lon_degrees + degrees_per_tile / 2.0)
     }
 
     pub fn web_mercator_bounds(&self) -> Rect<f64> {
@@ -184,7 +180,7 @@ impl Tile {
         let upper_left = crs::lat_lon_to_web_mercator(tile.center());
 
         if meta.is_point_on_map(upper_left) {
-            let tiles_per_row = (meta.columns() as f64 / Tile::TILE_SIZE as f64) as i32;
+            let tiles_per_row = (meta.columns().count() as f64 / Tile::TILE_SIZE as f64) as i32;
 
             let mut cell = meta.point_to_cell(upper_left);
             cell.row /= Tile::TILE_SIZE as i32;
@@ -316,23 +312,11 @@ mod tests {
 
     #[test]
     fn calculate_zoom_level() {
-        assert_eq!(
-            Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferHigher),
-            14
-        );
-        assert_eq!(
-            Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferHigher),
-            11
-        );
+        assert_eq!(Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferHigher), 14);
+        assert_eq!(Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferHigher), 11);
 
-        assert_eq!(
-            Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferLower),
-            13
-        );
-        assert_eq!(
-            Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferLower),
-            10
-        );
+        assert_eq!(Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferLower), 13);
+        assert_eq!(Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferLower), 10);
     }
 
     #[test]

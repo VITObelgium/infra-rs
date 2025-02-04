@@ -2,11 +2,12 @@
 #[generic_tests::define]
 mod tests {
     use crate::{
+        array::{Columns, Rows},
         testutils::{create_vec, NOD},
         Array, ArrayNum, DenseArray, RasterSize,
     };
 
-    const SIZE: RasterSize = RasterSize::with_rows_cols(3, 3);
+    const SIZE: RasterSize = RasterSize::with_rows_cols(Rows(3), Columns(3));
 
     #[test]
     fn test_add_raster_with_nodata<T: ArrayNum<T>, R: Array<Metadata = RasterSize>>()
@@ -272,7 +273,7 @@ mod tests {
 
     #[test]
     fn test_sum<T: ArrayNum<T>, R: Array<Metadata = RasterSize>>() {
-        let ras = R::new(RasterSize { rows: 2, cols: 2 }, create_vec(&[1.0, 2.0, NOD, 4.0]));
+        let ras = R::new(RasterSize::with_rows_cols(Rows(2), Columns(2)), create_vec(&[1.0, 2.0, NOD, 4.0]));
         assert_eq!(ras.sum(), 7.0);
     }
 

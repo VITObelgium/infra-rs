@@ -202,17 +202,17 @@ fn compute_cluster_id_of_obstacle_cell(
     obstacle_map: &impl Array<Pixel = u8>,
     cluster_size: &mut [i32],
 ) {
-    let rows = cluster_id_map.height();
-    let cols = cluster_id_map.width();
+    let rows = cluster_id_map.rows();
+    let cols = cluster_id_map.columns();
 
     let mut count_neighbors = std::collections::HashMap::new();
     for r in cell.row - 1..=cell.row + 1 {
         for c in cell.col - 1..=cell.col + 1 {
             let cur_cell = Cell::from_row_col(r, c);
             if r >= 0
-                && r < rows as i32
+                && r < rows.count()
                 && c >= 0
-                && c < cols as i32
+                && c < cols.count()
                 && !obstacle_map.cell_is_nodata(cur_cell)
                 && obstacle_map[cur_cell] == 0
             {
@@ -381,8 +381,8 @@ fn compute_fuzzy_cluster_id_with_obstacles_rc(
 
         let r0 = (c.row - (radius + 0.5) as i32).max(0);
         let c0 = (c.col - (radius + 0.5) as i32).max(0);
-        let r1 = (c.row + (radius + 0.5) as i32).min(size.rows as i32 - 1);
-        let c1 = (c.col + (radius + 0.5) as i32).min(size.cols as i32 - 1);
+        let r1 = (c.row + (radius + 0.5) as i32).min(size.rows.count() - 1);
+        let c1 = (c.col + (radius + 0.5) as i32).min(size.cols.count() - 1);
 
         for rr in r0..=r1 {
             for cc in c0..=c1 {
@@ -458,7 +458,11 @@ where
 #[cfg(test)]
 #[generic_tests::define]
 mod generictests {
-    use crate::{testutils::create_vec, RasterSize};
+    use crate::{
+        array::{Columns, Rows},
+        testutils::create_vec,
+        RasterSize,
+    };
 
     use super::*;
 
@@ -467,7 +471,7 @@ mod generictests {
     where
         R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
-        let size = RasterSize::with_rows_cols(5, 4);
+        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
             size,
@@ -500,7 +504,7 @@ mod generictests {
     where
         R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
-        let size = RasterSize::with_rows_cols(5, 4);
+        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
             size,
@@ -556,7 +560,12 @@ mod generictests {
 #[cfg(test)]
 #[generic_tests::define]
 mod genericgeotests {
-    use crate::{raster::DenseRaster, testutils::create_vec, RasterSize};
+    use crate::{
+        array::{Columns, Rows},
+        raster::DenseRaster,
+        testutils::create_vec,
+        RasterSize,
+    };
 
     use super::*;
 
@@ -565,7 +574,7 @@ mod genericgeotests {
     where
         R::WithPixelType<i32>: ArrayCopy<i32, R>,
     {
-        let size = RasterSize::with_rows_cols(10, 10);
+        let size = RasterSize::with_rows_cols(Rows(10), Columns(10));
         let mut meta = GeoReference::without_spatial_reference(size, None);
         meta.set_cell_size(100.0);
 

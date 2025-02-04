@@ -16,7 +16,7 @@ pub struct DenseArray<T: ArrayNum<T>, Metadata: ArrayMetadata = RasterSize> {
 impl<T: ArrayNum<T>, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     pub fn empty() -> Self {
         DenseArray {
-            meta: Metadata::with_rows_cols(0, 0),
+            meta: Metadata::with_rows_cols(Rows(0), Columns(0)),
             data: Vec::new(),
         }
     }
@@ -56,6 +56,10 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
 
         self.data.iter_mut().zip(other.data.iter()).for_each(|(a, &b)| *a = op(*a, b));
         self
+    }
+
+    fn cell_index(&self, cell: Cell) -> usize {
+        (cell.row * self.columns().count() + cell.col) as usize
     }
 }
 
@@ -118,20 +122,12 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
         &self.meta
     }
 
-    fn width(&self) -> usize {
-        self.meta.size().cols
-    }
-
-    fn height(&self) -> usize {
+    fn rows(&self) -> Rows {
         self.meta.size().rows
     }
 
-    fn rows(&self) -> Rows {
-        Rows(self.height() as i32)
-    }
-
     fn columns(&self) -> Columns {
-        Columns(self.width() as i32)
+        self.meta.size().cols
     }
 
     fn size(&self) -> RasterSize {
@@ -196,12 +192,12 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
     }
 
     fn cell_value(&self, cell: Cell) -> Option<T> {
-        self.value(cell.row as usize * self.size().cols + cell.col as usize)
+        self.value(self.cell_index(cell))
     }
 
     fn set_cell_value(&mut self, cell: Cell, val: Option<T>) {
-        let size = self.size();
-        self.data[cell.row as usize * size.cols + cell.col as usize] = val.unwrap_or(T::nodata_value());
+        let index = self.cell_index(cell);
+        self.data[index] = val.unwrap_or(T::nodata_value());
     }
 
     fn is_empty(&self) -> bool {
@@ -217,7 +213,7 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
     }
 
     fn cell_is_nodata(&self, cell: Cell) -> bool {
-        self.index_is_nodata(cell.row as usize * self.width() + cell.col as usize)
+        self.index_is_nodata(self.cell_index(cell))
     }
 
     fn fill(&mut self, val: Self::Pixel) {
@@ -286,17 +282,17 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> std::ops::Index<Cell> for DenseArr
     fn index(&self, cell: Cell) -> &Self::Output {
         unsafe {
             // SAFETY: The index is checked to be within bounds
-            self.data.get_unchecked(cell.row as usize * self.size().cols + cell.col as usize)
+            self.data.get_unchecked(self.cell_index(cell))
         }
     }
 }
 
 impl<T: ArrayNum<T>, Metadata: ArrayMetadata> std::ops::IndexMut<Cell> for DenseArray<T, Metadata> {
     fn index_mut(&mut self, cell: Cell) -> &mut Self::Output {
-        let cols = self.size().cols;
         unsafe {
             // SAFETY: The index is checked to be within bounds
-            self.data.get_unchecked_mut(cell.row as usize * cols + cell.col as usize)
+            let index = self.cell_index(cell);
+            self.data.get_unchecked_mut(index)
         }
     }
 }
@@ -310,7 +306,7 @@ mod tests {
     #[test]
     fn cast_dense_raster() {
         let ras = DenseArray::new(
-            RasterSize::with_rows_cols(2, 2),
+            RasterSize::with_rows_cols(Rows(2), Columns(2)),
             vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4],
         );
 

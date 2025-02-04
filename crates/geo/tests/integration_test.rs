@@ -5,9 +5,9 @@ mod tests {
     use geo::{
         crs::Epsg,
         vector::{self, BurnValue},
-        CellSize, GeoReference, SpatialReference,
+        CellSize, Columns, GeoReference, Rows, SpatialReference,
     };
-    use geo::{RasterSize, Cell};
+    use geo::{Cell, RasterSize};
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
     use vector::polygoncoverage::CoverageConfiguration;
@@ -128,7 +128,7 @@ mod tests {
         let ds = vector::io::dataset::open_read_only(&path).unwrap();
         let output_extent = GeoReference::with_origin(
             SpatialReference::from_epsg(Epsg::from(31370)).unwrap().to_wkt().unwrap(),
-            RasterSize { rows: 120, cols: 260 },
+            RasterSize::with_rows_cols(Rows(120), Columns(260)),
             (11000.0, 140000.0).into(),
             CellSize::square(1000.0),
             None::<f64>,
