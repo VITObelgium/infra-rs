@@ -1,6 +1,7 @@
 use crate::{
+    array::{Columns, Rows},
     raster::{self},
-    Array, ArrayCopy, ArrayMetadata, Cell, ArrayNum, RasterSize,
+    Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, RasterSize,
 };
 
 /// Raster implementation using a dense data structure.
@@ -125,6 +126,14 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
         self.meta.size().rows
     }
 
+    fn rows(&self) -> Rows {
+        Rows(self.height() as i32)
+    }
+
+    fn columns(&self) -> Columns {
+        Columns(self.width() as i32)
+    }
+
     fn size(&self) -> RasterSize {
         self.meta.size()
     }
@@ -209,6 +218,10 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
 
     fn cell_is_nodata(&self, cell: Cell) -> bool {
         self.index_is_nodata(cell.row as usize * self.width() + cell.col as usize)
+    }
+
+    fn fill(&mut self, val: Self::Pixel) {
+        self.data.iter_mut().for_each(|x| *x = val);
     }
 }
 

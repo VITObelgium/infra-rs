@@ -1,4 +1,7 @@
-use crate::{Array, ArrayNum, Cell, DenseArray};
+use crate::{
+    array::{Columns, Rows},
+    Array, ArrayNum, Cell, DenseArray,
+};
 
 pub const MARK_TODO: u8 = 0;
 pub const MARK_BORDER: u8 = 1;
@@ -10,7 +13,7 @@ pub enum ClusterDiagonals {
     Exclude,
 }
 
-fn handle_time_cell<T>(
+pub fn handle_time_cell<T>(
     delta_d: f32,
     cell: Cell,
     new_cell: Cell,
@@ -25,7 +28,7 @@ fn handle_time_cell<T>(
         return;
     }
 
-    let alternative_dist = distance_to_target[cell] + delta_d * travel_time[new_cell].to_f32().unwrap();
+    let alternative_dist = distance_to_target[cell] + delta_d * travel_time[new_cell].to_f32().expect("Invalid travel time");
     let d = &mut distance_to_target[new_cell];
     if *d > alternative_dist {
         *d = alternative_dist;
@@ -37,15 +40,15 @@ fn handle_time_cell<T>(
     }
 }
 
-pub fn visit_neighbour_cells<F>(cell: Cell, rows: i32, cols: i32, mut callable: F)
+pub fn visit_neighbour_cells<F>(cell: Cell, rows: Rows, cols: Columns, mut callable: F)
 where
     F: FnMut(Cell),
 {
     let is_left_border = cell.col == 0;
-    let is_right_border = cell.col == cols - 1;
+    let is_right_border = cell.col == cols.count() - 1;
 
     let is_top_border = cell.row == 0;
-    let is_bottom_border = cell.row == rows - 1;
+    let is_bottom_border = cell.row == rows.count() - 1;
 
     if !is_right_border {
         callable(cell.right());
@@ -64,15 +67,15 @@ where
     }
 }
 
-pub fn visit_neighbour_diag_cells<F>(cell: Cell, rows: i32, cols: i32, mut callable: F)
+pub fn visit_neighbour_diag_cells<F>(cell: Cell, rows: Rows, cols: Columns, mut callable: F)
 where
     F: FnMut(Cell),
 {
     let is_left_border = cell.col == 0;
-    let is_right_border = cell.col == cols - 1;
+    let is_right_border = cell.col == cols.count() - 1;
 
     let is_top_border = cell.row == 0;
-    let is_bottom_border = cell.row == rows - 1;
+    let is_bottom_border = cell.row == rows.count() - 1;
 
     if !(is_bottom_border || is_right_border) {
         callable(cell.below_right());
@@ -104,7 +107,7 @@ pub struct FiLo<T> {
 }
 
 impl<T: Default + Copy> FiLo<T> {
-    pub fn new(n_rows: usize, n_cols: usize) -> Self {
+    pub fn new(n_rows: Rows, n_cols: Columns) -> Self {
         Self {
             head: 0,
             tail: 0,
@@ -112,17 +115,9 @@ impl<T: Default + Copy> FiLo<T> {
         }
     }
 
-    pub fn reserve_space(&mut self, n_rows: usize, n_cols: usize) {
-        self.filo.resize(n_rows * n_cols + 1, T::default());
-    }
-
     pub fn clear(&mut self) {
         self.head = 0;
         self.tail = 0;
-    }
-
-    pub fn len(&self) -> usize {
-        (self.tail + self.filo.len() - self.head) % self.filo.len()
     }
 
     pub fn is_empty(&self) -> bool {

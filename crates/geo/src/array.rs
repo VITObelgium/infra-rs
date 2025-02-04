@@ -9,6 +9,39 @@ use std::fmt::Debug;
 
 use crate::{arraynum::ArrayNum, Cell, Nodata, RasterSize};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Rows(pub i32);
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Columns(pub i32);
+
+impl Rows {
+    pub fn count(&self) -> i32 {
+        self.0
+    }
+}
+
+impl Columns {
+    pub fn count(&self) -> i32 {
+        self.0
+    }
+}
+
+impl std::ops::Mul<Columns> for Rows {
+    type Output = usize;
+
+    fn mul(self, rhs: Columns) -> Self::Output {
+        self.0 as usize * rhs.0 as usize
+    }
+}
+
+impl std::ops::Mul<Rows> for Columns {
+    type Output = usize;
+
+    fn mul(self, rhs: Rows) -> Self::Output {
+        self.0 as usize * rhs.0 as usize
+    }
+}
+
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Array:
@@ -87,6 +120,12 @@ where
     /// Returns the height of the raster.
     fn height(&self) -> usize;
 
+    /// Returns the number of rows in the raster (height).
+    fn rows(&self) -> Rows;
+
+    /// Returns the number of columns in the raster (width).
+    fn columns(&self) -> Columns;
+
     /// Returns the size data structure of the raster.
     fn size(&self) -> RasterSize {
         RasterSize {
@@ -133,6 +172,11 @@ where
         self.index_is_nodata(cell.row as usize * self.width() + cell.col as usize)
     }
 
+    /// Return true if the provided cell contains nodata
+    fn cell_has_data(&self, cell: Cell) -> bool {
+        !self.cell_is_nodata(cell)
+    }
+
     /// Return the value at the given index or None if the index contains nodata
     fn value(&self, index: usize) -> Option<Self::Pixel>;
 
@@ -159,6 +203,9 @@ where
     /// Use this for cases where a single cell value is needed not in a loop to
     /// to process the entire raster
     fn set_cell_value(&mut self, cell: Cell, val: Option<Self::Pixel>);
+
+    /// Assigns the value to all the elements of the raster, even nodata
+    fn fill(&mut self, val: Self::Pixel);
 }
 
 pub trait ArrayCopy<T: ArrayNum<T>, Rhs = Self> {

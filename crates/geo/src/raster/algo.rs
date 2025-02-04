@@ -1,9 +1,10 @@
 //! Algorithms for raster data processing (translate, warp, ...).
 
-mod rasterdiff;
-
+mod distance;
+mod nodata;
 #[cfg(all(feature = "gdal", feature = "vector"))]
 mod polygonize;
+mod rasterdiff;
 #[cfg(feature = "gdal")]
 mod translate;
 #[cfg(feature = "gdal")]
@@ -25,6 +26,14 @@ pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_di
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
 };
+
+pub use {
+    distance::closest_target, distance::distance, distance::distance_with_obstacles, distance::sum_targets_within_travel_distance,
+    distance::sum_within_travel_distance, distance::travel_distance, distance::travel_distances_up_to,
+    distance::value_at_closest_less_than_travel_target, distance::value_at_closest_target, distance::value_at_closest_travel_target,
+};
+
+pub use {nodata::replace_nodata, nodata::replace_nodata_in_place};
 
 pub use rasterdiff::raster_diff;
 pub use rasterdiff::RasterCellMismatch;

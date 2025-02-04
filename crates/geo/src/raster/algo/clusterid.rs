@@ -16,8 +16,8 @@ where
 {
     show_warning_if_clustering_on_floats::<T>();
 
-    let rows = ras.height();
-    let cols = ras.width();
+    let rows = ras.rows();
+    let cols = ras.columns();
 
     let mut result = R::WithPixelType::<u32>::new_with_dimensions_of(ras, 0);
     let mut mark = DenseArray::<u8>::filled_with(MARK_TODO, ras.size());
@@ -25,9 +25,9 @@ where
     let mut border = FiLo::new(rows, cols);
 
     let mut cluster_id = 0;
-    for r in 0..rows {
-        for c in 0..cols {
-            let cell = Cell::from_row_col(r as i32, c as i32);
+    for r in 0..rows.count() {
+        for c in 0..cols.count() {
+            let cell = Cell::from_row_col(r, c);
 
             if ras.cell_is_nodata(cell) {
                 result.set_cell_value(cell, None);
@@ -52,12 +52,12 @@ where
                 while !border.is_empty() {
                     let cell = border.pop_head();
 
-                    visit_neighbour_cells(cell, rows as i32, cols as i32, |neighbour| {
+                    visit_neighbour_cells(cell, rows, cols, |neighbour| {
                         handle_cell(neighbour, cluster_value, &mut cluster_cells, &mut mark, &mut border, ras);
                     });
 
                     if diagonals == ClusterDiagonals::Include {
-                        visit_neighbour_diag_cells(cell, rows as i32, cols as i32, |neighbour| {
+                        visit_neighbour_diag_cells(cell, rows, cols, |neighbour| {
                             handle_cell(neighbour, cluster_value, &mut cluster_cells, &mut mark, &mut border, ras);
                         });
                     }
@@ -79,8 +79,8 @@ where
     R: Array<Metadata = GeoReference>,
     R::WithPixelType<i32>: ArrayCopy<i32, R>,
 {
-    let rows = ras.height();
-    let cols = ras.width();
+    let rows = ras.rows();
+    let cols = ras.columns();
 
     let radius = radius_in_meter / ras.metadata().cell_size_x() as f32;
     let radius_in_cells = radius as i32;
@@ -106,9 +106,9 @@ where
     let mut cluster_id = 0;
     let mut border = FiLo::new(rows, cols);
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let cell = Cell::from_row_col(r as i32, c as i32);
+    for r in 0..rows.count() {
+        for c in 0..cols.count() {
+            let cell = Cell::from_row_col(r, c);
             if mark[cell] == MARK_TODO {
                 cluster_id += 1;
 
@@ -131,13 +131,13 @@ where
                     } else {
                         cell.col - radius_in_cells
                     };
-                    let r1 = if cell.row + radius_in_cells > rows as i32 - 1 {
-                        rows as i32 - 1
+                    let r1 = if cell.row + radius_in_cells > rows.count() - 1 {
+                        rows.count() - 1
                     } else {
                         cell.row + radius_in_cells
                     };
-                    let c1 = if cell.col + radius_in_cells > cols as i32 - 1 {
-                        cols as i32 - 1
+                    let c1 = if cell.col + radius_in_cells > cols.count() - 1 {
+                        cols.count() - 1
                     } else {
                         cell.col + radius_in_cells
                     };
@@ -254,8 +254,8 @@ where
         ));
     }
 
-    let rows = cat_map.height();
-    let cols = cat_map.width();
+    let rows = cat_map.rows();
+    let cols = cat_map.columns();
 
     let mut result = R::new_with_dimensions_of(cat_map, Nodata::<i32>::nodata_value());
     let mut mark = DenseArray::<u8>::filled_with(MARK_TODO, cat_map.size());
@@ -264,9 +264,9 @@ where
     let mut border = FiLo::new(rows, cols);
 
     let mut cluster_size = vec![0; rows * cols];
-    for r in 0..rows {
-        for c in 0..cols {
-            let cell = Cell::from_row_col(r as i32, c as i32);
+    for r in 0..rows.count() {
+        for c in 0..cols.count() {
+            let cell = Cell::from_row_col(r, c);
             if !cat_map.cell_is_nodata(cell)
                 && !obstacle_map.cell_is_nodata(cell)
                 && cat_map[cell] > 0
@@ -283,11 +283,11 @@ where
                     mark[cell] = MARK_DONE;
                     result[cell] = cluster_id;
 
-                    visit_neighbour_cells(cell, rows as i32, cols as i32, |neighbour| {
+                    visit_neighbour_cells(cell, rows, cols, |neighbour| {
                         handle_cell_with_obstacles_straight(neighbour, cat_map, cluster_value, obstacle_map, &mut mark, &mut border);
                     });
 
-                    visit_neighbour_diag_cells(cell, rows as i32, cols as i32, |neighbour| {
+                    visit_neighbour_diag_cells(cell, rows, cols, |neighbour| {
                         handle_cell_with_obstacles_diag(cell, neighbour, cat_map, cluster_value, obstacle_map, &mut mark, &mut border);
                     });
                 }
@@ -295,9 +295,9 @@ where
         }
     }
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let cell = Cell::from_row_col(r as i32, c as i32);
+    for r in 0..rows.count() {
+        for c in 0..cols.count() {
+            let cell = Cell::from_row_col(r, c);
             if !cat_map.cell_is_nodata(cell) && !obstacle_map.cell_is_nodata(cell) && cat_map[cell] > 0 && obstacle_map[cell] > 0 {
                 assert_eq!(mark[cell], MARK_TODO);
                 compute_cluster_id_of_obstacle_cell(cell, &mut result, obstacle_map, &mut cluster_size);
@@ -411,8 +411,8 @@ where
 {
     let background_id = cluster_id_with_obstacles(&R::new_with_dimensions_of(items, 1), obstacles)?;
 
-    let rows = items.height();
-    let cols = items.width();
+    let rows = items.rows();
+    let cols = items.columns();
     let mut result = R::filled_with_nodata(items.metadata().clone());
     let radius = radius_in_meter / items.metadata().cell_size_x() as f32;
 
@@ -420,9 +420,9 @@ where
     let mut border = FiLo::new(rows, cols);
     let mut cluster_id = 1;
 
-    for r in 0..rows {
-        for c in 0..cols {
-            let cell = Cell::from_row_col(r as i32, c as i32);
+    for r in 0..rows.count() {
+        for c in 0..cols.count() {
+            let cell = Cell::from_row_col(r, c);
             if items.cell_is_nodata(cell) {
                 mark[cell] = MARK_DONE;
                 result.set_cell_value(cell, None);
