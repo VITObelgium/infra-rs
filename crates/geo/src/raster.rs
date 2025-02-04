@@ -12,7 +12,7 @@ use crate::GeoReference;
 // pub mod warp;
 use super::Result;
 
-#[cfg(feature = "arrow")]
+#[cfg(all(feature = "python", feature = "arrow"))]
 pub mod arrow {
     // pub(super) mod arrowraster;
     // #[cfg(feature = "gdal")]
