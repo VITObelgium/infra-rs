@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 inf           = { path = "../inf" }
-raster        = { path = "../raster" }
 vector_derive = { path = "vector_derive", optional = true }
 geos          = { version = "9.0", features = ["geo", "v3_11_0"], optional = true }
 geozero       = { version = "0.14" }
@@ -28,8 +27,6 @@ specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 wasm-bindgen = "0.2"
 
 [dev-dependencies]
-inf           = { path = "../inf" }
-raster        = { path = "../raster" }
 path_macro    = "1.0"
 ctor          = "0.2"
 test-log      = "0.2"
@@ -44,8 +41,12 @@ gdal        = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
 gdal-static = ["gdal"]
 arrow       = ["dep:arrow"]
 python      = ["arrow", "arrow/pyarrow", "dep:pyo3"]
-serde       = ["dep:serde", "raster/serde"]
+serde       = ["dep:serde"]
 specta      = ["dep:specta"]
+
+[[bench]]
+name    = "rasterops"
+harness = false
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,geos,sqlite3]", "proj[core]", "tiff[core,lzma,zip]"]

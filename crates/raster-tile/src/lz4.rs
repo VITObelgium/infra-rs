@@ -1,4 +1,4 @@
-use raster::RasterNum;
+use geo::RasterNum;
 
 use crate::{Error, Result};
 

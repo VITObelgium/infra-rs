@@ -1,9 +1,10 @@
+use crate::raster::RasterSize;
+use crate::{Cell, CellIterator};
 use gdal::vector::{LayerAccess, ToGdal};
 use geos::Geom;
 use geozero::ToGeos;
 use inf::duration;
 use inf::progressinfo::AsyncProgressNotification;
-use raster::{Cell, CellIterator, RasterSize};
 use rayon::prelude::*;
 use std::ffi::CString;
 use std::path::Path;
@@ -40,11 +41,7 @@ pub enum BorderHandling {
     AdjustCoverage,
 }
 
-fn warp_geometry(
-    geom: &geos::Geometry,
-    source_projection: SpatialReference,
-    dest_projection: SpatialReference,
-) -> Result<geos::Geometry> {
+fn warp_geometry(geom: &geos::Geometry, source_projection: SpatialReference, dest_projection: SpatialReference) -> Result<geos::Geometry> {
     let transfomer = CoordinateTransformer::new(source_projection, dest_projection)?;
 
     let warped = geom.transform_xy(|x, y| match transfomer.transform_point((x, y).into()) {
@@ -120,11 +117,7 @@ fn create_geometry_extent_for_srs(
     }
 }
 
-fn create_cell_coverages(
-    extent: &GeoReference,
-    polygon_extent: &GeoReference,
-    geom: &geos::Geometry,
-) -> Result<Vec<CellInfo>> {
+fn create_cell_coverages(extent: &GeoReference, polygon_extent: &GeoReference, geom: &geos::Geometry) -> Result<Vec<CellInfo>> {
     let mut result: Vec<CellInfo> = Vec::new();
 
     let prepared_geom = geom.to_prepared_geom()?;
@@ -300,9 +293,7 @@ impl CoverageData {
 
         for polygon in &self.polygons {
             for cell_info in &polygon.cells {
-                let cell_bbox = polygon
-                    .output_subgrid_extent
-                    .cell_bounding_box(cell_info.polygon_grid_cell);
+                let cell_bbox = polygon.output_subgrid_extent.cell_bounding_box(cell_info.polygon_grid_cell);
 
                 let cell_polygon = geo_types::Polygon::from(cell_bbox);
 
@@ -433,12 +424,7 @@ pub fn create_polygon_coverages(
     let mut result: Vec<PolygonCellCoverage> = geometries
         .into_par_iter()
         .flat_map(|id_geom| -> Result<PolygonCellCoverage> {
-            let mut cov = create_polygon_coverage(
-                id_geom.0,
-                id_geom.3,
-                SpatialReference::from_definition(&projection)?,
-                output_extent,
-            )?;
+            let mut cov = create_polygon_coverage(id_geom.0, id_geom.3, SpatialReference::from_definition(&projection)?, output_extent)?;
             cov.value = id_geom.1;
             cov.name = id_geom.2.clone();
             progress_cb.tick()?;

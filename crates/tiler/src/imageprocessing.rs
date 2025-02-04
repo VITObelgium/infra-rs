@@ -1,7 +1,7 @@
 use crate::{tiledata::TileData, tileformat::TileFormat, Error, PixelFormat, Result};
+use geo::RasterNum;
 use inf::{Color, Legend};
 use num::NumCast;
-use raster::RasterNum;
 use std::io::BufWriter;
 
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
@@ -44,12 +44,7 @@ fn float_as_color(val: f32) -> Color {
     }
 }
 
-pub fn raw_tile_to_float_encoded_png<T: RasterNum<T>>(
-    raw_data: &[T],
-    width: usize,
-    height: usize,
-    nodata: Option<T>,
-) -> Result<TileData> {
+pub fn raw_tile_to_float_encoded_png<T: RasterNum<T>>(raw_data: &[T], width: usize, height: usize, nodata: Option<T>) -> Result<TileData> {
     let raw_colors = raw_data
         .iter()
         .map(|&v| {
@@ -90,9 +85,7 @@ mod tests {
     use inf::colormap::{cmap, ColorMap};
 
     fn reference_image() -> std::path::PathBuf {
-        [env!("CARGO_MANIFEST_DIR"), "test", "data", "ref_encoded.png"]
-            .iter()
-            .collect()
+        [env!("CARGO_MANIFEST_DIR"), "test", "data", "ref_encoded.png"].iter().collect()
     }
 
     #[test_log::test]

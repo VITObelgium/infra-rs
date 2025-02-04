@@ -7,9 +7,9 @@ mod tests {
         vector::{self, BurnValue},
         CellSize, GeoReference, SpatialReference,
     };
+    use geo::{raster::RasterSize, Cell};
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
-    use raster::{Cell, RasterSize};
     use vector::polygoncoverage::CoverageConfiguration;
 
     #[cfg(feature = "derive")]
@@ -49,7 +49,7 @@ mod tests {
 
         #[test]
         fn test_row_data_derive() {
-            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road.csv");
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
             let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
 
             {
@@ -81,7 +81,7 @@ mod tests {
 
         #[test]
         fn test_row_data_derive_missing() {
-            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
             let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
             assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
             assert!(iter.next().unwrap().is_ok());
@@ -91,7 +91,7 @@ mod tests {
 
         #[test]
         fn test_row_data_derive_missing_optionals() {
-            let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "road_missing_data.csv");
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
             let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
 
             {
@@ -117,7 +117,7 @@ mod tests {
 
     #[test_log::test]
     fn test_polygon_coverage() {
-        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "boundaries.gpkg");
+        let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "boundaries.gpkg");
 
         let config = CoverageConfiguration {
             name_field: Some("Code3".to_string()),
@@ -127,10 +127,7 @@ mod tests {
 
         let ds = vector::io::dataset::open_read_only(&path).unwrap();
         let output_extent = GeoReference::with_origin(
-            SpatialReference::from_epsg(Epsg::from(31370))
-                .unwrap()
-                .to_wkt()
-                .unwrap(),
+            SpatialReference::from_epsg(Epsg::from(31370)).unwrap().to_wkt().unwrap(),
             RasterSize { rows: 120, cols: 260 },
             (11000.0, 140000.0).into(),
             CellSize::square(1000.0),
@@ -139,8 +136,7 @@ mod tests {
         .warped_to_epsg(Epsg::from(4326))
         .unwrap();
         log::debug!("Output extent: {:?}", output_extent.projection());
-        let coverages =
-            vector::polygoncoverage::create_polygon_coverages(&ds, &output_extent, config, DummyProgress).unwrap();
+        let coverages = vector::polygoncoverage::create_polygon_coverages(&ds, &output_extent, config, DummyProgress).unwrap();
 
         // A cell on the border of the BEB and BEF polygon
         let cell_to_check = Cell::from_row_col(55, 147);

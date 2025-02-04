@@ -1,4 +1,4 @@
-use geo::{georaster::io::RasterFormat, ZoomLevelStrategy};
+use geo::{raster::io::RasterFormat, ZoomLevelStrategy};
 
 use crate::Result;
 use std::path::Path;
@@ -16,10 +16,7 @@ pub struct TileProviderOptions {
 }
 
 /// Create a tile provider for hosting a single file
-pub fn create_single_file_tile_provider(
-    path: &Path,
-    opts: &TileProviderOptions,
-) -> Result<Box<dyn TileProvider + Send>> {
+pub fn create_single_file_tile_provider(path: &Path, opts: &TileProviderOptions) -> Result<Box<dyn TileProvider + Send>> {
     let raster_type = RasterFormat::guess_from_path(path);
 
     if raster_type == RasterFormat::MBTiles {
@@ -43,16 +40,10 @@ pub fn create_tile_provider(path: &Path, opts: &TileProviderOptions) -> Result<B
             return Ok(provider);
         }
 
-        return Err(Error::Runtime(format!(
-            "Not a supported file: {}",
-            path.to_string_lossy()
-        )));
+        return Err(Error::Runtime(format!("Not a supported file: {}", path.to_string_lossy())));
     } else if path.is_dir() {
         return Ok(Box::new(DirectoryTileProvider::new(path, opts.clone())?));
     }
 
-    Err(Error::Runtime(format!(
-        "Invalid location provided: {}",
-        path.to_string_lossy()
-    )))
+    Err(Error::Runtime(format!("Invalid location provided: {}", path.to_string_lossy())))
 }

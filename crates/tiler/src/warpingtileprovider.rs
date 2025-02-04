@@ -4,10 +4,10 @@ use gdal::raster::GdalType;
 
 use inf::legend::Legend;
 
-use geo::georaster::io::RasterFormat;
+use geo::raster::io::RasterFormat;
 use geo::{crs, Coordinate, GeoReference, LatLonBounds, Tile};
+use geo::{raster::RasterSize, Array, ArrayCreation, DenseArray, RasterDataType, RasterNum};
 use num::Num;
-use raster::{DenseRaster, Raster, RasterCreation, RasterDataType, RasterNum, RasterSize};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{
@@ -22,7 +22,7 @@ use crate::{
 };
 
 fn raw_tile_to_vito_tile_format<T: RasterNum<T>>(data: Vec<T>, width: usize, height: usize) -> Result<TileData> {
-    let raster_tile = DenseRaster::new(RasterSize::with_rows_cols(height, width), data);
+    let raster_tile = DenseArray::new(RasterSize::with_rows_cols(height, width), data);
 
     Ok(TileData::new(
         TileFormat::RasterTile,
@@ -43,19 +43,10 @@ impl WarpingTileProvider {
     }
 
     pub fn supports_raster_type(raster_type: RasterFormat) -> bool {
-        matches!(
-            raster_type,
-            RasterFormat::GeoTiff | RasterFormat::Vrt | RasterFormat::Netcdf
-        )
+        matches!(raster_type, RasterFormat::GeoTiff | RasterFormat::Vrt | RasterFormat::Netcdf)
     }
 
-    fn process_pixel_request<T>(
-        meta: &LayerMetadata,
-        band_nr: usize,
-        tile: Tile,
-        dpi_ratio: u8,
-        coord: Coordinate,
-    ) -> Result<Option<f32>>
+    fn process_pixel_request<T>(meta: &LayerMetadata, band_nr: usize, tile: Tile, dpi_ratio: u8, coord: Coordinate) -> Result<Option<f32>>
     where
         T: RasterNum<T> + Num + GdalType,
     {
@@ -173,44 +164,20 @@ impl WarpingTileProvider {
         let band_nr = meta.band_nr.unwrap_or(1);
         let tile = Tile::for_coordinate(coord, meta.max_zoom);
         match meta.data_type {
-            RasterDataType::Int8 => {
-                WarpingTileProvider::process_pixel_request::<i8>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Uint8 => {
-                WarpingTileProvider::process_pixel_request::<u8>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Int16 => {
-                WarpingTileProvider::process_pixel_request::<i16>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Uint16 => {
-                WarpingTileProvider::process_pixel_request::<u16>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Int32 => {
-                WarpingTileProvider::process_pixel_request::<i32>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Uint32 => {
-                WarpingTileProvider::process_pixel_request::<u32>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Int64 => {
-                WarpingTileProvider::process_pixel_request::<i64>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Uint64 => {
-                WarpingTileProvider::process_pixel_request::<u64>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Float32 => {
-                WarpingTileProvider::process_pixel_request::<f32>(meta, band_nr, tile, dpi_ratio, coord)
-            }
-            RasterDataType::Float64 => {
-                WarpingTileProvider::process_pixel_request::<f64>(meta, band_nr, tile, dpi_ratio, coord)
-            }
+            RasterDataType::Int8 => WarpingTileProvider::process_pixel_request::<i8>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Uint8 => WarpingTileProvider::process_pixel_request::<u8>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Int16 => WarpingTileProvider::process_pixel_request::<i16>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Uint16 => WarpingTileProvider::process_pixel_request::<u16>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Int32 => WarpingTileProvider::process_pixel_request::<i32>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Uint32 => WarpingTileProvider::process_pixel_request::<u32>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Int64 => WarpingTileProvider::process_pixel_request::<i64>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Uint64 => WarpingTileProvider::process_pixel_request::<u64>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Float32 => WarpingTileProvider::process_pixel_request::<f32>(meta, band_nr, tile, dpi_ratio, coord),
+            RasterDataType::Float64 => WarpingTileProvider::process_pixel_request::<f64>(meta, band_nr, tile, dpi_ratio, coord),
         }
     }
 
-    pub fn value_range_for_extent(
-        layer_meta: &LayerMetadata,
-        extent: LatLonBounds,
-        _zoom: Option<i32>,
-    ) -> Result<Range<f64>> {
+    pub fn value_range_for_extent(layer_meta: &LayerMetadata, extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
         detect_raster_range(&layer_meta.path, layer_meta.band_nr.unwrap_or(1), extent)
     }
 
@@ -260,14 +227,14 @@ impl TileProvider for WarpingTileProvider {
 mod tests {
     use approx::assert_relative_eq;
     use geo::{crs, Coordinate, Point, Tile, ZoomLevelStrategy};
+    use geo::{raster::RasterSize, Array, ArrayCreation, Cell, DenseArray};
     use inf::cast;
     use path_macro::path;
-    use raster::{Cell, DenseRaster, Raster, RasterCreation, RasterSize};
     use raster_tile::RasterTileIO;
 
     use crate::{
-        tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider,
-        Error, TileFormat, TileProvider,
+        tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider, Error, TileFormat,
+        TileProvider,
     };
 
     fn test_raster() -> std::path::PathBuf {
@@ -347,8 +314,8 @@ mod tests {
         };
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
-        let raster_tile = DenseRaster::<u8>::from_tile_bytes(&tile_data.data)?;
-        let mut raster_tile_per_pixel = DenseRaster::<u8>::zeros(RasterSize::with_rows_cols(
+        let raster_tile = DenseArray::<u8>::from_tile_bytes(&tile_data.data)?;
+        let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterSize::with_rows_cols(
             Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
             Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
         ));
@@ -397,8 +364,8 @@ mod tests {
         };
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
-        let raster_tile = DenseRaster::<u8>::from_tile_bytes(&tile_data.data)?;
-        let mut raster_tile_per_pixel = DenseRaster::<u8>::zeros(RasterSize::with_rows_cols(
+        let raster_tile = DenseArray::<u8>::from_tile_bytes(&tile_data.data)?;
+        let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterSize::with_rows_cols(
             Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
             Tile::TILE_SIZE as usize * request.dpi_ratio as usize,
         ));
@@ -438,9 +405,7 @@ mod tests {
         let tile_data = provider.get_tile(layer_id, &req)?;
 
         // decode the png data to raw data
-        let raw_data = image::load_from_memory(&tile_data.data)
-            .expect("Invalid image")
-            .to_rgba8();
+        let raw_data = image::load_from_memory(&tile_data.data).expect("Invalid image").to_rgba8();
         // count the number of transparent pixels
         let transparent_count = raw_data.pixels().filter(|p| p[3] == 0).count();
         // The transparent pixel count should be more than 80% of the total pixel count, otherwise there is an issue with the nodata handling
@@ -463,7 +428,7 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_id, &req)?;
 
-        let raster_tile = DenseRaster::<u8>::from_tile_bytes(&tile_data.data)?;
+        let raster_tile = DenseArray::<u8>::from_tile_bytes(&tile_data.data)?;
         assert_eq!(raster_tile.width(), 256);
         assert_eq!(raster_tile.height(), 256);
 

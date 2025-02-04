@@ -8,7 +8,6 @@ members = [
     "crates/geo",
     "crates/geo/vector_derive",
     "crates/inf",
-    "crates/raster",
     "crates/raster-tile",
     "crates/sqlite",
     "crates/tiler",

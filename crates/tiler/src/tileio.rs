@@ -12,9 +12,9 @@ use gdal::{
     raster::{GdalDataType, GdalType},
     Dataset,
 };
-use geo::{constants, crs, georaster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
+use geo::{constants, crs, raster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
+use geo::{raster::RasterSize, Array, ArrayCreation, DenseArray, RasterNum};
 use num::Num;
-use raster::{DenseRaster, Raster, RasterCreation, RasterNum, RasterSize};
 
 fn type_string<T: GdalType>() -> &'static str {
     match <T as GdalType>::datatype() {
@@ -49,9 +49,7 @@ pub fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: 
         "EPSG:4326".to_string(),
     ];
 
-    let timestamp = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)?
-        .as_nanos();
+    let timestamp = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH)?.as_nanos();
     let output_path = PathBuf::from(format!(
         "/vsimem/range_{}_{}.mem",
         raster_path
@@ -61,7 +59,7 @@ pub fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: 
         timestamp
     ));
 
-    if let Ok(ds) = georaster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
+    if let Ok(ds) = raster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
         if let Ok(Some(stats)) = ds.rasterband(band_nr)?.get_statistics(true, true) {
             log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
             return Ok(Range {
@@ -83,7 +81,7 @@ pub fn read_raster_tile<T: RasterNum<T> + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-) -> Result<DenseRaster<T>> {
+) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
     let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
 
@@ -105,9 +103,9 @@ pub fn read_raster_tile<T: RasterNum<T> + GdalType>(
     ];
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
-    let mut data = DenseRaster::zeros(RasterSize::with_rows_cols(scaled_size, scaled_size));
-    let ds = georaster::algo::translate_file(raster_path, &output_path, &options)?;
-    georaster::io::dataset::read_band(&ds, 1, data.as_mut())?;
+    let mut data = DenseArray::zeros(RasterSize::with_rows_cols(scaled_size, scaled_size));
+    let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
+    raster::io::dataset::read_band(&ds, 1, data.as_mut())?;
     Ok(data)
 }
 
@@ -116,7 +114,7 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-) -> Result<DenseRaster<T>> {
+) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
     let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
 
@@ -134,13 +132,13 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
 
     let src_ds = if raster_path.extension().is_some_and(|ext| ext == "nc") {
         let opts = vec!["PRESERVE_AXIS_UNIT_IN_CRS=YES"];
-        geo::georaster::io::dataset::open_read_only_with_options(raster_path, &opts)?
+        geo::raster::io::dataset::open_read_only_with_options(raster_path, &opts)?
     } else {
-        geo::georaster::io::dataset::open_read_only(raster_path)?
+        geo::raster::io::dataset::open_read_only(raster_path)?
     };
 
-    let data = DenseRaster::filled_with_nodata(RasterSize::with_rows_cols(scaled_size, scaled_size));
-    let mut dest_ds = georaster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_ref())?;
+    let data = DenseArray::filled_with_nodata(RasterSize::with_rows_cols(scaled_size, scaled_size));
+    let mut dest_ds = raster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_ref())?;
 
     let options = vec![
         "-b".to_string(),
@@ -157,11 +155,11 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
         ("NUM_THREADS".to_string(), "ALL_CPUS".to_string()),
     ];
 
-    georaster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
+    raster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
 
     // Avoid returning tiles containing only nodata values
     if !data.contains_data() {
-        return Ok(DenseRaster::empty());
+        return Ok(DenseArray::empty());
     }
 
     Ok(data)
@@ -173,7 +171,7 @@ pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-) -> Result<DenseRaster<T>> {
+) -> Result<DenseArray<T>> {
     let start = std::time::Instant::now();
 
     let raw_tile_data = if !meta.source_is_web_mercator {
@@ -189,11 +187,7 @@ pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
         tile.x(),
         tile.y(),
         dpi_ratio,
-        if meta.source_is_web_mercator {
-            "Translate"
-        } else {
-            "Warp"
-        },
+        if meta.source_is_web_mercator { "Translate" } else { "Warp" },
         start.elapsed().as_millis(),
         type_string::<T>(),
         std::thread::current().id(),
@@ -206,11 +200,7 @@ pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
     Ok(raw_tile_data)
 }
 
-pub fn read_color_mapped_tile_as_png<T>(
-    meta: &LayerMetadata,
-    band_nr: usize,
-    req: &ColorMappedTileRequest,
-) -> Result<TileData>
+pub fn read_color_mapped_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, req: &ColorMappedTileRequest) -> Result<TileData>
 where
     T: RasterNum<T> + Num + GdalType,
 {
@@ -229,13 +219,13 @@ where
 }
 
 pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<Vec<LayerMetadata>> {
-    let ds = georaster::io::dataset::open_read_only(path)?;
+    let ds = raster::io::dataset::open_read_only(path)?;
 
     let raster_count = ds.raster_count();
     let mut result = Vec::with_capacity(raster_count);
 
     for band_nr in 1..=raster_count {
-        let meta = georaster::io::dataset::read_band_metadata(&ds, band_nr)?;
+        let meta = raster::io::dataset::read_band_metadata(&ds, band_nr)?;
         let raster_band = ds.rasterband(band_nr)?;
         let over_view_count = raster_band.overview_count()?;
 
@@ -283,11 +273,7 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
             path: path.to_path_buf(),
             name,
             max_zoom: zoom_level,
-            min_zoom: if over_view_count > 0 {
-                zoom_level - over_view_count
-            } else {
-                0
-            },
+            min_zoom: if over_view_count > 0 { zoom_level - over_view_count } else { 0 },
             nodata: meta.nodata(),
             supports_dpi_ratio: true,
             tile_format: TileFormat::Png,

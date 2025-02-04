@@ -1,6 +1,6 @@
 use crate::gdalinterop;
+use crate::Cell;
 use gdal::vector::LayerAccess;
-use raster::Cell;
 
 use crate::Error;
 use crate::Result;
@@ -24,9 +24,7 @@ impl VectorBuilder {
             ..Default::default()
         })?;
 
-        Ok(Self {
-            layer: ds.into_layer(0)?,
-        })
+        Ok(Self { layer: ds.into_layer(0)? })
     }
 
     /// Add a field to the layer and return the index of the field

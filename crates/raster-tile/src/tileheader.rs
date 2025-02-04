@@ -1,11 +1,10 @@
-use bytemuck::NoUninit;
-use raster::RasterDataType;
+use geo::RasterDataType;
 
 use crate::{Error, Result};
 
 pub const RASTER_TILE_SIGNATURE: u32 = u32::from_le_bytes([b'T', b'I', b'L', b'E']);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, NoUninit)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CompressionAlgorithm {
     Lz4Block = 0,
@@ -37,13 +36,7 @@ pub struct TileHeader {
 }
 
 impl TileHeader {
-    pub fn new(
-        data_type: RasterDataType,
-        compression: CompressionAlgorithm,
-        tile_width: u16,
-        tile_height: u16,
-        data_size: u32,
-    ) -> Self {
+    pub fn new(data_type: RasterDataType, compression: CompressionAlgorithm, tile_width: u16, tile_height: u16, data_size: u32) -> Self {
         Self {
             signature: RASTER_TILE_SIGNATURE,
             version: 1,

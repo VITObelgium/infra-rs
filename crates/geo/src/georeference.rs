@@ -1,7 +1,6 @@
-use crate::tile::ZoomLevelStrategy;
+use crate::{array::ArrayMetadata, raster::RasterSize, tile::ZoomLevelStrategy, Cell};
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
-use raster::{Cell, RasterSize};
 
 use crate::{
     crs::{self, Epsg},
@@ -34,14 +33,8 @@ impl RelativeEq for CellSize {
         f64::default_max_relative()
     }
 
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: <f64 as AbsDiffEq>::Epsilon,
-        max_relative: <f64 as AbsDiffEq>::Epsilon,
-    ) -> bool {
-        f64::relative_eq(&self.x, &other.x, epsilon, max_relative)
-            && f64::relative_eq(&self.y, &other.y, epsilon, max_relative)
+    fn relative_eq(&self, other: &Self, epsilon: <f64 as AbsDiffEq>::Epsilon, max_relative: <f64 as AbsDiffEq>::Epsilon) -> bool {
+        f64::relative_eq(&self.x, &other.x, epsilon, max_relative) && f64::relative_eq(&self.y, &other.y, epsilon, max_relative)
     }
 }
 
@@ -102,7 +95,7 @@ impl GeoReference {
 
     #[cfg(feature = "gdal")]
     pub fn from_file(path: &std::path::Path) -> Result<Self> {
-        crate::georaster::io::dataset::read_file_metadata(path)
+        crate::raster::io::dataset::read_file_metadata(path)
     }
 
     pub fn raster_size(&self) -> RasterSize {
@@ -595,6 +588,20 @@ impl GeoReference {
     }
 }
 
+impl ArrayMetadata for GeoReference {
+    fn size(&self) -> RasterSize {
+        self.size
+    }
+
+    fn with_size(size: RasterSize) -> Self {
+        self::GeoReference::without_spatial_reference(size, None)
+    }
+
+    fn with_rows_cols(rows: usize, cols: usize) -> Self {
+        self::GeoReference::without_spatial_reference(RasterSize::with_rows_cols(rows, cols), None)
+    }
+}
+
 fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
     let diff = (val1 - val2).abs();
     diff % cellsize < 1e-12
@@ -641,12 +648,7 @@ mod tests {
     fn bounding_box_epsg_4326() {
         const TRANS: [f64; 6] = [-30.0, 0.100, 0.0, 30.0, 0.0, -0.05];
 
-        let meta = GeoReference::new(
-            "EPSG:4326".to_string(),
-            RasterSize { rows: 840, cols: 900 },
-            TRANS,
-            None,
-        );
+        let meta = GeoReference::new("EPSG:4326".to_string(), RasterSize { rows: 840, cols: 900 }, TRANS, None);
         let bbox = meta.bounding_box();
 
         assert_eq!(meta.top_left(), Point::new(-30.0, 30.0));
@@ -828,49 +830,59 @@ mod tests {
             ))
             .unwrap());
 
-        assert!(meta1.intersects(&GeoReference::with_origin(
+        assert!(meta1
+            .intersects(&GeoReference::with_origin(
                 String::new(),
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(11.0, 10.0),
                 CellSize::square(5.0),
                 Option::<f64>::None
-            )
-        )
-        .is_err_and(|e| {
-            assert_eq!(e.to_string(), "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }");
-            true
-        }));
+            ))
+            .is_err_and(|e| {
+                assert_eq!(
+                    e.to_string(),
+                    "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"
+                );
+                true
+            }));
 
-        assert!(meta1.intersects(&GeoReference::with_origin(
+        assert!(meta1
+            .intersects(&GeoReference::with_origin(
                 String::new(),
                 RasterSize { rows: 4, cols: 4 },
                 Point::new(10.0, 11.0),
                 CellSize::square(5.0),
                 Option::<f64>::None
-            )
+            ))
+            .is_err_and(|e| {
+                assert_eq!(
+                    e.to_string(),
+                    "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"
+                );
+                true
+            }));
+
+        assert!(GeoReference::with_origin(
+            "",
+            RasterSize { rows: 4, cols: 4 },
+            Point::new(11.0, 10.0),
+            CellSize::square(5.0),
+            Option::<f64>::None
         )
-        .is_err_and(|e| {
-            assert_eq!(e.to_string(), "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }");
-            true
-        }));
+        .intersects(&meta1)
+        .is_err_and(|e| e.to_string()
+            == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
 
         assert!(GeoReference::with_origin(
-                "",
-                RasterSize { rows: 4, cols: 4 },
-                Point::new(11.0, 10.0),
-                CellSize::square(5.0),
-                Option::<f64>::None
-            ).intersects(&meta1)
-        .is_err_and(|e| e.to_string() == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
-
-        assert!(GeoReference::with_origin(
-                "",
-                RasterSize { rows: 4, cols: 4 },
-                Point::new(10.0, 11.0),
-                CellSize::square(5.0),
-                Option::<f64>::None
-            ).intersects(&meta1)
-        .is_err_and(|e| e.to_string() == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
+            "",
+            RasterSize { rows: 4, cols: 4 },
+            Point::new(10.0, 11.0),
+            CellSize::square(5.0),
+            Option::<f64>::None
+        )
+        .intersects(&meta1)
+        .is_err_and(|e| e.to_string()
+            == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
     }
 
     #[test]
@@ -907,11 +919,7 @@ mod tests {
 
         assert_eq!(warped.projected_epsg(), Some(4326.into()));
         assert_eq!(warped.raster_size(), RasterSize { rows: 89, cols: 176 });
-        assert_relative_eq!(
-            warped.cell_size(),
-            CellSize::square(0.062023851850733745),
-            epsilon = 1e-10
-        );
+        assert_relative_eq!(warped.cell_size(), CellSize::square(0.062023851850733745), epsilon = 1e-10);
     }
 
     #[test]

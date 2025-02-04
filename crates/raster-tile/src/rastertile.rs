@@ -1,4 +1,5 @@
-use raster::{AnyDenseRaster, DenseRaster, Raster, RasterCreation, RasterDataType, RasterNum, RasterSize};
+use geo::raster;
+use geo::{raster::RasterSize, AnyDenseArray, Array, ArrayCreation, DenseArray, RasterDataType, RasterNum};
 
 use crate::lz4;
 use crate::{CompressionAlgorithm, Error, Result, TileHeader};
@@ -38,7 +39,7 @@ pub trait RasterTileCastIO {
         Self: std::marker::Sized;
 }
 
-impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
+impl<T: RasterNum<T>> RasterTileIO for DenseArray<T> {
     /// Create a raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     fn from_tile_bytes(data: &[u8]) -> Result<Self> {
@@ -91,7 +92,7 @@ impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
             CompressionAlgorithm::Lz4Block => lz4::decompress_tile_data(header.tile_width as usize * header.tile_height as usize, data)?,
         };
 
-        Ok(DenseRaster::new(
+        Ok(DenseArray::new(
             RasterSize::with_rows_cols(header.tile_height as usize, header.tile_width as usize),
             data,
         ))
@@ -111,7 +112,7 @@ impl<T: RasterNum<T>> RasterTileIO for DenseRaster<T> {
     }
 }
 
-impl<T: RasterNum<T>> RasterTileCastIO for DenseRaster<T> {
+impl<T: RasterNum<T>> RasterTileCastIO for DenseArray<T> {
     /// Create a raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     /// The data will be cast to the correct raster type if it doesnt match
@@ -136,21 +137,21 @@ impl<T: RasterNum<T>> RasterTileCastIO for DenseRaster<T> {
         }
 
         match header.data_type {
-            RasterDataType::Int8 => DenseRaster::<i8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint8 => DenseRaster::<u8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Int16 => DenseRaster::<i16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint16 => DenseRaster::<u16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Int32 => DenseRaster::<i32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint32 => DenseRaster::<u32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Int64 => DenseRaster::<i64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint64 => DenseRaster::<u64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Float32 => DenseRaster::<f32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Float64 => DenseRaster::<f64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Int8 => DenseArray::<i8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint8 => DenseArray::<u8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Int16 => DenseArray::<i16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint16 => DenseArray::<u16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Int32 => DenseArray::<i32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint32 => DenseArray::<u32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Int64 => DenseArray::<i64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Uint64 => DenseArray::<u64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Float32 => DenseArray::<f32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            RasterDataType::Float64 => DenseArray::<f64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
         }
     }
 }
 
-impl RasterTileIO for AnyDenseRaster {
+impl RasterTileIO for AnyDenseArray {
     /// Create an untyped raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     fn from_tile_bytes(data: &[u8]) -> Result<Self> {
@@ -171,31 +172,31 @@ impl RasterTileIO for AnyDenseRaster {
         Self: std::marker::Sized,
     {
         Ok(match header.data_type {
-            RasterDataType::Int8 => AnyDenseRaster::I8(DenseRaster::<i8>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint8 => AnyDenseRaster::U8(DenseRaster::<u8>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Int16 => AnyDenseRaster::I16(DenseRaster::<i16>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint16 => AnyDenseRaster::U16(DenseRaster::<u16>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Int32 => AnyDenseRaster::I32(DenseRaster::<i32>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint32 => AnyDenseRaster::U32(DenseRaster::<u32>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Int64 => AnyDenseRaster::I64(DenseRaster::<i64>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint64 => AnyDenseRaster::U64(DenseRaster::<u64>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Float32 => AnyDenseRaster::F32(DenseRaster::<f32>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Float64 => AnyDenseRaster::F64(DenseRaster::<f64>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Int8 => AnyDenseArray::I8(DenseArray::<i8>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Uint8 => AnyDenseArray::U8(DenseArray::<u8>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Int16 => AnyDenseArray::I16(DenseArray::<i16>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Uint16 => AnyDenseArray::U16(DenseArray::<u16>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Int32 => AnyDenseArray::I32(DenseArray::<i32>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Uint32 => AnyDenseArray::U32(DenseArray::<u32>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Int64 => AnyDenseArray::I64(DenseArray::<i64>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Uint64 => AnyDenseArray::U64(DenseArray::<u64>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Float32 => AnyDenseArray::F32(DenseArray::<f32>::from_tile_header_and_data(header, data)?),
+            RasterDataType::Float64 => AnyDenseArray::F64(DenseArray::<f64>::from_tile_header_and_data(header, data)?),
         })
     }
 
     fn encode_raster_tile(&self, algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
         match self {
-            AnyDenseRaster::I8(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::U8(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::I16(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::U16(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::I32(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::U32(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::I64(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::U64(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::F32(raster) => raster.encode_raster_tile(algorithm),
-            AnyDenseRaster::F64(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::I8(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::U8(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::I16(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::U16(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::I32(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::U32(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::I64(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::U64(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::F32(raster) => raster.encode_raster_tile(algorithm),
+            AnyDenseArray::F64(raster) => raster.encode_raster_tile(algorithm),
         }
     }
 
@@ -219,17 +220,17 @@ mod tests {
         const TILE_WIDTH: usize = 256;
         const TILE_HEIGHT: usize = 256;
 
-        let tile = DenseRaster::new(
+        let tile = DenseArray::new(
             RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
             (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
         );
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
 
-        let decoded = AnyDenseRaster::from_tile_bytes(&encoded).unwrap();
-        assert!(matches!(decoded, AnyDenseRaster::U32(_)));
+        let decoded = AnyDenseArray::from_tile_bytes(&encoded).unwrap();
+        assert!(matches!(decoded, AnyDenseArray::U32(_)));
 
-        let decoded_tile: DenseRaster<u32> = decoded.try_into().expect("Expected U32 tile");
+        let decoded_tile: DenseArray<u32> = decoded.try_into().expect("Expected U32 tile");
         assert_eq!(tile.width(), decoded_tile.width());
         assert_eq!(tile.height(), decoded_tile.height());
         assert_eq!(tile.as_slice(), decoded_tile.as_slice());
@@ -240,13 +241,13 @@ mod tests {
         const TILE_WIDTH: usize = 10;
         const TILE_HEIGHT: usize = 10;
 
-        let tile = DenseRaster::new(
+        let tile = DenseArray::new(
             RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
             (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>(),
         );
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
-        let decoded = DenseRaster::<u8>::from_tile_bytes(&encoded).unwrap();
+        let decoded = DenseArray::<u8>::from_tile_bytes(&encoded).unwrap();
 
         assert_eq!(tile.width(), decoded.width());
         assert_eq!(tile.height(), decoded.height());

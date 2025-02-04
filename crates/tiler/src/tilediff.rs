@@ -1,10 +1,10 @@
 use gdal::raster::GdalType;
-use raster::{DenseRaster, Raster, RasterNum};
+use geo::{Array, DenseArray, RasterNum};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{Error, Result, TileData, TileFormat};
 
-pub fn diff_tiles<T: RasterNum<T> + GdalType>(tile1: &DenseRaster<T>, tile2: &DenseRaster<T>, format: TileFormat) -> Result<TileData> {
+pub fn diff_tiles<T: RasterNum<T> + GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>, format: TileFormat) -> Result<TileData> {
     match format {
         #[cfg(feature = "vector-tiles")]
         #[allow(clippy::unwrap_used)] // Types are checked prior to unwrapping
@@ -14,10 +14,7 @@ pub fn diff_tiles<T: RasterNum<T> + GdalType>(tile1: &DenseRaster<T>, tile2: &De
     }
 }
 
-fn diff_tiles_as_raster<T: raster::RasterNum<T> + gdal::raster::GdalType>(
-    tile1: &raster::DenseRaster<T>,
-    tile2: &raster::DenseRaster<T>,
-) -> Result<TileData> {
+fn diff_tiles_as_raster<T: RasterNum<T> + gdal::raster::GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>) -> Result<TileData> {
     use crate::PixelFormat;
 
     if tile1.size() != tile2.size() {
@@ -38,13 +35,9 @@ fn diff_tiles_as_raster<T: raster::RasterNum<T> + gdal::raster::GdalType>(
 }
 
 #[cfg(feature = "vector-tiles")]
-fn diff_tiles_as_mvt<T: raster::RasterNum<T> + gdal::raster::GdalType>(
-    tile1: &raster::DenseRaster<T>,
-    tile2: &raster::DenseRaster<T>,
-) -> Result<TileData> {
+fn diff_tiles_as_mvt<T: RasterNum<T> + gdal::raster::GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>) -> Result<TileData> {
     use gdal::vector::LayerAccess;
-    use geo::{georaster, CellSize, GeoReference, Point, Tile};
-    use raster::Raster;
+    use geo::{raster, Array, CellSize, GeoReference, Point, Tile};
 
     use crate::PixelFormat;
 
@@ -66,7 +59,7 @@ fn diff_tiles_as_mvt<T: raster::RasterNum<T> + gdal::raster::GdalType>(
         Option::<f64>::None,
     );
 
-    let vec_ds = georaster::algo::polygonize(&geo_ref, diff.as_ref())?;
+    let vec_ds = raster::algo::polygonize(&geo_ref, diff.as_ref())?;
 
     let mut tile = mvt::Tile::new(Tile::TILE_SIZE as u32);
 

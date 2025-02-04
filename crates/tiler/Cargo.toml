@@ -5,7 +5,6 @@ edition = "2021"
 
 [dependencies]
 inf         = { path = "../inf", features = ["serde"] }
-raster      = { path = "../raster" }
 raster-tile = { path = "../raster-tile" }
 geo         = { path = "../geo", features = ["gdal", "serde"] }
 geozero     = { version = "0.14", optional = true }
@@ -30,6 +29,6 @@ path_macro = "1.0"
 
 [features]
 serde        = ["dep:serde", "dep:serde_json", "inf/serde"]
-specta       = ["dep:specta", "geo/specta", "inf/specta", "raster/specta"]
+specta       = ["dep:specta", "geo/specta", "inf/specta"]
 vector-tiles = ["dep:geozero", "dep:mvt", "geo/vector"]
 slow_tests   = []

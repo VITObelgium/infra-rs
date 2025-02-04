@@ -1,13 +1,11 @@
 use std::path::Path;
 
 use crate::{gdalinterop, vector::io::FeatureDefinitionExtension, GeoReference};
+use crate::{raster, Error, RasterNum, Result};
 use gdal::{
     raster::GdalType,
     vector::{FieldValue, LayerAccess},
 };
-use raster::RasterNum;
-
-use crate::{georaster, Error, Result};
 
 use super::{geometrytype::GeometryType, io, BurnValue};
 
@@ -32,9 +30,7 @@ pub fn translate_cli_opts(ds: &gdal::Dataset, options: &[String]) -> Result<gdal
     }
 
     if usage_error == gdalinterop::TRUE {
-        return Err(Error::InvalidArgument(
-            "Vector translate: invalid arguments".to_string(),
-        ));
+        return Err(Error::InvalidArgument("Vector translate: invalid arguments".to_string()));
     }
 
     Ok(mem_ds)
@@ -62,9 +58,7 @@ pub fn translate_ds_to_disk(ds: &gdal::Dataset, path: &Path, options: &[String])
     };
 
     if usage_error == gdalinterop::TRUE {
-        return Err(Error::InvalidArgument(
-            "Vector translate: invalid arguments".to_string(),
-        ));
+        return Err(Error::InvalidArgument("Vector translate: invalid arguments".to_string()));
     }
 
     gdalinterop::check_pointer(handle, "GDALVectorTranslate")?;
@@ -164,9 +158,9 @@ pub fn rasterize_with_cli_options<T: RasterNum<T> + GdalType>(
     let gdal_options = RasterizeOptionsWrapper::new(options)?;
 
     let data = vec![meta.nodata_as::<T>()?.unwrap_or(T::zero()); meta.rows() * meta.columns()];
-    let mut mem_ds = georaster::io::dataset::create_in_memory_with_data::<T>(meta, &data)?;
+    let mut mem_ds = raster::io::dataset::create_in_memory_with_data::<T>(meta, &data)?;
 
-    georaster::io::dataset::metadata_to_dataset_band(&mut mem_ds, meta, 1)?;
+    raster::io::dataset::metadata_to_dataset_band(&mut mem_ds, meta, 1)?;
 
     let mut usage_error: std::ffi::c_int = gdal_sys::CPLErr::CE_None as std::ffi::c_int;
     unsafe {
@@ -180,22 +174,16 @@ pub fn rasterize_with_cli_options<T: RasterNum<T> + GdalType>(
     }
 
     if usage_error == gdalinterop::TRUE {
-        return Err(Error::InvalidArgument(
-            "Vector rasterize: invalid arguments".to_string(),
-        ));
+        return Err(Error::InvalidArgument("Vector rasterize: invalid arguments".to_string()));
     }
 
-    let meta = georaster::io::dataset::read_band_metadata(&mem_ds, 1)?;
+    let meta = raster::io::dataset::read_band_metadata(&mem_ds, 1)?;
     Ok((meta, data))
 }
 
 /// Convenience function to rasterize a vector dataset to disk
 /// Avoids creating an in-memory dataset that then needs to be written to disk
-pub fn rasterize_to_disk_with_cli_options(
-    ds: &gdal::Dataset,
-    path: &Path,
-    options: &[String],
-) -> Result<gdal::Dataset> {
+pub fn rasterize_to_disk_with_cli_options(ds: &gdal::Dataset, path: &Path, options: &[String]) -> Result<gdal::Dataset> {
     let gdal_options = RasterizeOptionsWrapper::new(options)?;
     let path_cstr = std::ffi::CString::new(path.to_string_lossy().to_string())?;
 
@@ -211,9 +199,7 @@ pub fn rasterize_to_disk_with_cli_options(
     };
 
     if usage_error == gdalinterop::TRUE {
-        return Err(Error::InvalidArgument(
-            "Vector rasterize: invalid arguments".to_string(),
-        ));
+        return Err(Error::InvalidArgument("Vector rasterize: invalid arguments".to_string()));
     }
 
     gdalinterop::check_pointer(handle, "GDALRasterize")?;
@@ -293,11 +279,7 @@ pub fn buffer(ds: &gdal::Dataset, opts: &BufferOptions) -> Result<gdal::Dataset>
                         }
                     }
 
-                    dst_layer.create_feature_fields(
-                        geom,
-                        &names.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(),
-                        &values,
-                    )?;
+                    dst_layer.create_feature_fields(geom, &names.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(), &values)?;
                 } else {
                     // Only copy the geometry
                     dst_layer.create_feature(geom)?;
@@ -352,9 +334,7 @@ impl VectorTranslateOptionsWrapper {
 
         let options = unsafe { gdal_sys::GDALVectorTranslateOptionsNew(c_opts.as_ptr(), std::ptr::null_mut()) };
         if options.is_null() {
-            return Err(Error::InvalidArgument(
-                "Failed to create vector translate options".to_string(),
-            ));
+            return Err(Error::InvalidArgument("Failed to create vector translate options".to_string()));
         }
 
         Ok(Self { options })
@@ -387,7 +367,7 @@ mod tests {
 
     #[test]
     fn test_buffer() -> Result<()> {
-        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "boundaries.gpkg");
+        let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "boundaries.gpkg");
 
         let ds = vector::io::dataset::open_read_only(&path).unwrap();
         let buffered_ds = buffer(
@@ -410,7 +390,7 @@ mod tests {
 
     #[test]
     fn test_buffer_include_fields() -> Result<()> {
-        let path = path!(env!("CARGO_MANIFEST_DIR") / "test" / "data" / "boundaries.gpkg");
+        let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "boundaries.gpkg");
 
         let ds = vector::io::dataset::open_read_only(&path).unwrap();
         let buffered_ds = buffer(

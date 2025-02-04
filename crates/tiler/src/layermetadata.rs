@@ -1,8 +1,8 @@
 use crate::tileformat::TileFormat;
 use gdal::raster::GdalDataType;
+use geo::RasterDataType;
 use geo::{crs::Epsg, Coordinate, LatLonBounds};
 use num::NumCast;
-use raster::RasterDataType;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]

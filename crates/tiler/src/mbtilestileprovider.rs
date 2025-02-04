@@ -5,9 +5,9 @@ use std::{
     str::FromStr,
 };
 
+use geo::RasterDataType;
 use geo::{crs, Coordinate, LatLonBounds, Tile};
 use mbtilesdb::MbtilesDb;
-use raster::RasterDataType;
 
 use crate::{
     layermetadata::{LayerId, LayerMetadata, LayerSourceType},
@@ -47,9 +47,7 @@ impl MbtilesTileProvider {
             min_zoom: meta_map.remove("minzoom").unwrap_or_default().parse().unwrap_or(0),
             max_zoom: meta_map.remove("maxzoom").unwrap_or_default().parse().unwrap_or(20),
             tile_format: TileFormat::from(meta_map.remove("format").unwrap_or_default().as_str()),
-            name: meta_map
-                .remove("name")
-                .unwrap_or(meta_map.remove("basename").unwrap_or_default()),
+            name: meta_map.remove("name").unwrap_or(meta_map.remove("basename").unwrap_or_default()),
             description: meta_map.remove("description").unwrap_or_default(),
             epsg: Some(crs::epsg::WGS84_WEB_MERCATOR),
             bounds: parse_bounds(meta_map.remove("bounds").unwrap_or_default().as_str())?,
@@ -57,14 +55,8 @@ impl MbtilesTileProvider {
             source_is_web_mercator: true,
             supports_dpi_ratio: false,
             nodata: None,
-            min_value: meta_map
-                .remove("min_value")
-                .and_then(|s| f64::from_str(&s).ok())
-                .unwrap_or(0.0),
-            max_value: meta_map
-                .remove("max_value")
-                .and_then(|s| f64::from_str(&s).ok())
-                .unwrap_or(0.0),
+            min_value: meta_map.remove("min_value").and_then(|s| f64::from_str(&s).ok()).unwrap_or(0.0),
+            max_value: meta_map.remove("max_value").and_then(|s| f64::from_str(&s).ok()).unwrap_or(0.0),
             data_type: RasterDataType::Float32,
             source_format: LayerSourceType::Mbtiles,
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
@@ -89,35 +81,21 @@ impl MbtilesTileProvider {
 
     pub fn tile(meta: &LayerMetadata, tile: Tile) -> Result<TileData> {
         let mut db = MbtilesDb::new(&meta.path)?;
-        Ok(TileData::new(
-            meta.tile_format,
-            PixelFormat::Rgba,
-            db.get_tile_data(&tile)?,
-        ))
+        Ok(TileData::new(meta.tile_format, PixelFormat::Rgba, db.get_tile_data(&tile)?))
     }
 
-    pub fn value_range_for_extent(
-        _meta: &LayerMetadata,
-        _extent: LatLonBounds,
-        _zoom: Option<i32>,
-    ) -> Result<std::ops::Range<f64>> {
-        Err(Error::Runtime(
-            "Extent value range not supported for vector tiles".to_string(),
-        ))
+    pub fn value_range_for_extent(_meta: &LayerMetadata, _extent: LatLonBounds, _zoom: Option<i32>) -> Result<std::ops::Range<f64>> {
+        Err(Error::Runtime("Extent value range not supported for vector tiles".to_string()))
     }
 
     pub fn raster_pixel(_meta: &LayerMetadata, _coord: Coordinate) -> Result<Option<f32>> {
-        Err(Error::Runtime(
-            "Raster pixel not supported for vector tiles".to_string(),
-        ))
+        Err(Error::Runtime("Raster pixel not supported for vector tiles".to_string()))
     }
 }
 
 impl TileProvider for MbtilesTileProvider {
     fn extent_value_range(&self, _layer_id: LayerId, _extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
-        Err(Error::Runtime(
-            "Extent value range not supported for mbtiles".to_string(),
-        ))
+        Err(Error::Runtime("Extent value range not supported for mbtiles".to_string()))
     }
 
     fn get_raster_value(&self, _layer_id: LayerId, coord: Coordinate, _dpi_ratio: u8) -> Result<Option<f32>> {
@@ -192,14 +170,8 @@ mod mbtilesdb {
             let meta = stmt
                 .into_iter()
                 .map(|row| {
-                    let key = String::from(
-                        row.column_string(0)
-                            .ok_or(Error::Runtime("Metadata key error".to_string()))?,
-                    );
-                    let value = String::from(
-                        row.column_string(1)
-                            .ok_or(Error::Runtime("Metadata value error".to_string()))?,
-                    );
+                    let key = String::from(row.column_string(0).ok_or(Error::Runtime("Metadata key error".to_string()))?);
+                    let value = String::from(row.column_string(1).ok_or(Error::Runtime("Metadata value error".to_string()))?);
                     Ok((key, value))
                 })
                 .filter_map(Result::ok)
@@ -216,9 +188,7 @@ mod mbtilesdb {
             self.tile_query.bind(3, tile.y())?;
 
             if let Some(row) = self.tile_query.next() {
-                let blob = row
-                    .column_blob(0)
-                    .ok_or(Error::Runtime("Tile blob error".to_string()))?;
+                let blob = row.column_blob(0).ok_or(Error::Runtime("Tile blob error".to_string()))?;
                 return Ok(Vec::from(blob));
             }
 
@@ -234,9 +204,7 @@ mod tests {
     use crate::{layermetadata::LayerId, tileprovider::TileProvider};
 
     fn test_tiles() -> std::path::PathBuf {
-        [env!("CARGO_MANIFEST_DIR"), "test", "data", "gem_limburg.mbtiles"]
-            .iter()
-            .collect()
+        [env!("CARGO_MANIFEST_DIR"), "test", "data", "gem_limburg.mbtiles"].iter().collect()
     }
 
     #[test]

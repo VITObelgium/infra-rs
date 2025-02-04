@@ -1,6 +1,6 @@
-use geo::georaster::io::RasterFormat;
+use geo::raster::io::RasterFormat;
+use geo::DenseArray;
 use geo::{Coordinate, LatLonBounds};
-use raster::DenseRaster;
 use raster_tile::RasterTileCastIO;
 
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
@@ -105,8 +105,8 @@ impl DirectoryTileProvider {
     }
 
     pub fn diff_tile(layer1: &LayerMetadata, layer2: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
-        let tile1 = DenseRaster::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer1, tile_req)?.data)?;
-        let tile2 = DenseRaster::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer2, tile_req)?.data)?;
+        let tile1 = DenseArray::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer1, tile_req)?.data)?;
+        let tile2 = DenseArray::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer2, tile_req)?.data)?;
 
         tilediff::diff_tiles(&tile1, &tile2, layer1.tile_format)
     }

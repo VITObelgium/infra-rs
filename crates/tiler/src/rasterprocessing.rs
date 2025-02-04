@@ -1,5 +1,4 @@
-use geo::georaster::{self, io::RasterFormat};
-use raster::RasterSize;
+use geo::raster::{self, io::RasterFormat, RasterSize};
 use std::path::Path;
 
 use geo::{
@@ -10,8 +9,8 @@ use geo::{
 use crate::{layermetadata::LayerSourceType, Error, Result};
 
 fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -> Result<Option<f32>> {
-    let ds = georaster::io::dataset::open_read_only(raster_path)?;
-    let mut meta = georaster::io::dataset::read_band_metadata(&ds, band_nr)?;
+    let ds = raster::io::dataset::open_read_only(raster_path)?;
+    let mut meta = raster::io::dataset::read_band_metadata(&ds, band_nr)?;
     let cell = meta.point_to_cell(coord);
     if !meta.is_cell_on_map(cell) {
         return Ok(None);
@@ -22,7 +21,7 @@ fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -
     meta.set_extent(ll, RasterSize { rows: 1, cols: 1 }, meta.cell_size());
     let mut data = [0.0];
 
-    georaster::io::dataset::read_band_region(&ds, band_nr, &meta, &mut data)?;
+    raster::io::dataset::read_band_region(&ds, band_nr, &meta, &mut data)?;
     if Some(f64::from(data[0])) == meta.nodata() {
         return Ok(None);
     }
@@ -30,18 +29,13 @@ fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -
     Ok(Some(data[0]))
 }
 
-pub fn raster_pixel(
-    raster_path: &Path,
-    band_nr: usize,
-    mut coord: Coordinate,
-    layer_name: Option<&str>,
-) -> Result<Option<f32>> {
+pub fn raster_pixel(raster_path: &Path, band_nr: usize, mut coord: Coordinate, layer_name: Option<&str>) -> Result<Option<f32>> {
     let mut open_opt: Vec<String> = Vec::new();
     if let Some(layer_name) = layer_name {
         open_opt.push(format!("TABLE={}", layer_name));
     }
 
-    let meta = georaster::io::dataset::read_file_metadata_with_options(raster_path, &open_opt)?;
+    let meta = raster::io::dataset::read_file_metadata_with_options(raster_path, &open_opt)?;
     let srs = SpatialReference::from_definition(meta.projection())?;
     if !srs.is_geographic() || srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
         let transformer = CoordinateTransformer::new(
