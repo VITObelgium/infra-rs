@@ -12,9 +12,9 @@ where
     type Error = crate::Error;
 
     fn try_from(py_obj: pyo3::Py<pyo3::PyAny>) -> std::result::Result<Self, Self::Error> {
-        use crate::ArrayCreation;
+        use crate::Array;
         use crate::RasterSize;
-        use arrow::array::Array;
+        use arrow::array::Array as _;
         use arrow::pyarrow::FromPyArrow;
 
         pyo3::Python::with_gil(|py| -> Result<Self> {

@@ -3,13 +3,13 @@
 mod tests {
     use crate::{
         testutils::{create_vec, NOD},
-        Array, ArrayCreation, DenseArray, RasterNum, RasterSize,
+        Array, DenseArray, RasterNum, RasterSize,
     };
 
     const SIZE: RasterSize = RasterSize::with_rows_cols(3, 3);
 
     #[test]
-    fn test_add_raster_with_nodata<T: RasterNum<T>, R: Array + ArrayCreation<Metadata = RasterSize>>()
+    fn test_add_raster_with_nodata<T: RasterNum<T>, R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Add<&'a R, Output = R>,
     {
@@ -42,7 +42,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_raster_with_nodata_inclusive<T: RasterNum<T>, R: Array + ArrayCreation<Metadata = RasterSize>>()
+    fn test_add_raster_with_nodata_inclusive<T: RasterNum<T>, R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: crate::arrayops::AddInclusive<&'a R, Output = R>,
     {
@@ -77,7 +77,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T> + ArrayCreation<Metadata = RasterSize>>() {
+    fn test_add_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T, Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
         let expected = R::new(SIZE, create_vec(&[NOD, 6.0, 6.0, 7.0, NOD, 7.0, 5.0, 5.0, 4.0]));
 
@@ -96,7 +96,7 @@ mod tests {
     }
 
     #[test]
-    fn test_subtract_raster_with_nodata<T: RasterNum<T>, R: Array + ArrayCreation<Metadata = RasterSize>>()
+    fn test_subtract_raster_with_nodata<T: RasterNum<T>, R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Sub<&'a R, Output = R>,
     {
@@ -129,7 +129,7 @@ mod tests {
     }
 
     #[test]
-    fn test_subtract_raster_with_nodata_inclusive<T: RasterNum<T>, R: Array + ArrayCreation<Metadata = RasterSize>>()
+    fn test_subtract_raster_with_nodata_inclusive<T: RasterNum<T>, R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: crate::arrayops::SubInclusive<&'a R, Output = R>,
     {
@@ -168,7 +168,7 @@ mod tests {
     }
 
     #[test]
-    fn test_subtract_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T> + ArrayCreation<Metadata = RasterSize>>() {
+    fn test_subtract_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T, Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 4.0, 8.0, 10.0]));
         let expected = R::new(SIZE, create_vec(&[NOD, 0.0, 0.0, 1.0, NOD, 1.0, 2.0, 6.0, 8.0]));
 
@@ -187,7 +187,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiply_raster_with_nodata<T: RasterNum<T>, R: Array + ArrayCreation<Metadata = RasterSize>>()
+    fn test_multiply_raster_with_nodata<T: RasterNum<T>, R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Mul<&'a R, Output = R>,
     {
@@ -207,7 +207,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiply_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T> + ArrayCreation<Metadata = RasterSize>>() {
+    fn test_multiply_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T, Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0]));
         let expected = R::new(SIZE, create_vec(&[NOD, 8.0, 8.0, 12.0, NOD, 12.0, 4.0, 4.0, 0.0]));
 
@@ -226,7 +226,7 @@ mod tests {
     }
 
     #[test]
-    fn test_divide_raster_with_nodata<T: RasterNum<T>, R: Array + ArrayCreation<Metadata = RasterSize>>()
+    fn test_divide_raster_with_nodata<T: RasterNum<T>, R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Div<&'a R, Output = R>,
     {
@@ -246,7 +246,7 @@ mod tests {
     }
 
     #[test]
-    fn test_divide_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T> + ArrayCreation<Metadata = RasterSize>>() {
+    fn test_divide_scalar_with_nodata<T: RasterNum<T>, R: Array<Pixel = T, Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 6.0, 3.0, 0.0, NOD, 3.0, 30.0, 12.0, 0.0]));
         let expected = R::new(SIZE, create_vec(&[NOD, 2.0, 1.0, 0.0, NOD, 1.0, 10.0, 4.0, 0.0]));
 
@@ -271,7 +271,7 @@ mod tests {
     }
 
     #[test]
-    fn test_sum<T: RasterNum<T>, R: Array + ArrayCreation<Metadata = RasterSize>>() {
+    fn test_sum<T: RasterNum<T>, R: Array<Metadata = RasterSize>>() {
         let ras = R::new(RasterSize { rows: 2, cols: 2 }, create_vec(&[1.0, 2.0, NOD, 4.0]));
         assert_eq!(ras.sum(), 7.0);
     }

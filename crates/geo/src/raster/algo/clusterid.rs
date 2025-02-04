@@ -1,4 +1,4 @@
-use crate::{Array, ArrayCopy, ArrayCreation, Cell, DenseArray, Error, Nodata, RasterNum, Result};
+use crate::{Array, ArrayCopy, Cell, DenseArray, Error, Nodata, RasterNum, Result};
 
 use super::clusterutils::{
     handle_cell, insert_border_cell, insert_cell, show_warning_if_clustering_on_floats, visit_neighbour_cells, visit_neighbour_diag_cells,
@@ -357,14 +357,14 @@ where
 #[cfg(test)]
 #[generic_tests::define]
 mod generictests {
-    use crate::{testutils::create_vec, ArrayCreation, RasterSize};
+    use crate::{testutils::create_vec, RasterSize};
 
     use super::*;
 
     #[test]
-    fn test_cluster_id<R: Array<Pixel = T> + ArrayCreation<Pixel = T, Metadata = RasterSize>, T: RasterNum<T>>()
+    fn test_cluster_id<R: Array<Metadata = RasterSize>>()
     where
-        R::WithPixelType<u32>: ArrayCreation<Pixel = u32, Metadata = RasterSize> + ArrayCopy<u32, R>,
+        R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
         let size = RasterSize::with_rows_cols(5, 4);
         #[rustfmt::skip]
@@ -395,9 +395,9 @@ mod generictests {
     }
 
     #[test]
-    fn test_cluster_id_border_values<R: Array<Pixel = T> + ArrayCreation<Pixel = T, Metadata = RasterSize>, T: RasterNum<T>>()
+    fn test_cluster_id_border_values<R: Array<Metadata = RasterSize>>()
     where
-        R::WithPixelType<u32>: ArrayCreation<Pixel = u32, Metadata = RasterSize> + ArrayCopy<u32, R>,
+        R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
         let size = RasterSize::with_rows_cols(5, 4);
         #[rustfmt::skip]
@@ -472,28 +472,28 @@ mod generictests {
     //     assert_eq!(expected, fuzzy_cluster_id(&raster, 1.42 * meta.cell_size()));
     // }
 
-    #[instantiate_tests(<DenseArray<i8>, i8>)]
+    #[instantiate_tests(<DenseArray<i8>>)]
     mod denserasteri8 {}
 
-    #[instantiate_tests(<DenseArray<u8>, u8>)]
+    #[instantiate_tests(<DenseArray<u8>>)]
     mod denserasteru8 {}
 
-    #[instantiate_tests(<DenseArray<i32>, i32>)]
+    #[instantiate_tests(<DenseArray<i32>>)]
     mod denserasteri32 {}
 
-    #[instantiate_tests(<DenseArray<u32>, u32>)]
+    #[instantiate_tests(<DenseArray<u32>>)]
     mod denserasteru32 {}
 
-    #[instantiate_tests(<DenseArray<i64>, i64>)]
+    #[instantiate_tests(<DenseArray<i64>>)]
     mod denserasteri64 {}
 
-    #[instantiate_tests(<DenseArray<u64>, u64>)]
+    #[instantiate_tests(<DenseArray<u64>>)]
     mod denserasteru64 {}
 
-    #[instantiate_tests(<DenseArray<f32>, f32>)]
+    #[instantiate_tests(<DenseArray<f32>>)]
     mod denserasterf32 {}
 
-    #[instantiate_tests(<DenseArray<f64>, f64>)]
+    #[instantiate_tests(<DenseArray<f64>>)]
     mod denserasterf64 {}
 }
 

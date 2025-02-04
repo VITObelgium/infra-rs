@@ -1,5 +1,5 @@
+use crate::GeoReference;
 use crate::{Array, DenseArray, RasterNum, Result};
-use crate::{ArrayCreation, GeoReference};
 use num::NumCast;
 
 pub type DenseRaster<T> = DenseArray<T, GeoReference>;

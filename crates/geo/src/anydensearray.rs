@@ -139,8 +139,6 @@ impl_try_from_dense_raster_ref!(f64, F64);
 
 #[cfg(test)]
 mod tests {
-    use crate::ArrayCreation;
-
     use super::*;
 
     #[test]

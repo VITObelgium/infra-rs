@@ -1,6 +1,6 @@
 use crate::{
     raster::{self},
-    Array, ArrayCopy, ArrayCreation, ArrayMetadata, Cell, RasterNum, RasterSize,
+    Array, ArrayCopy, ArrayMetadata, Cell, RasterNum, RasterSize,
 };
 
 /// Raster implementation using a dense data structure.
@@ -70,8 +70,15 @@ impl<T: RasterNum<T>, Metadata: ArrayMetadata> AsMut<[T]> for DenseArray<T, Meta
     }
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> ArrayCreation for DenseArray<T, Metadata> {
+impl<T: RasterNum<T>, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayCopy<T, R> for DenseArray<T, Metadata> {
+    fn new_with_dimensions_of(ras: &R, fill: T) -> Self {
+        DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()])
+    }
+}
+
+impl<T: RasterNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     type Pixel = T;
+    type WithPixelType<U: RasterNum<U>> = DenseArray<U, Metadata>;
     type Metadata = Metadata;
 
     fn new(meta: Metadata, data: Vec<T>) -> Self {
@@ -104,18 +111,6 @@ impl<T: RasterNum<T>, Metadata: ArrayMetadata> ArrayCreation for DenseArray<T, M
         let cell_count = meta.size().cell_count();
         DenseArray::new(meta, vec![T::nodata_value(); cell_count])
     }
-}
-
-impl<T: RasterNum<T>, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayCopy<T, R> for DenseArray<T, Metadata> {
-    fn new_with_dimensions_of(ras: &R, fill: T) -> Self {
-        DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()])
-    }
-}
-
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
-    type Pixel = T;
-    type WithPixelType<U: RasterNum<U>> = DenseArray<U, Metadata>;
-    type Metadata = Metadata;
 
     /// Returns the metadata reference.
     fn metadata(&self) -> &Self::Metadata {

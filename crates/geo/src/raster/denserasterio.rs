@@ -1,5 +1,4 @@
 use crate::Array;
-use crate::ArrayCreation;
 use crate::GeoReference;
 use crate::RasterNum;
 use crate::Result;

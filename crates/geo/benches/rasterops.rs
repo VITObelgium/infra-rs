@@ -1,6 +1,6 @@
 use criterion::{BatchSize, Criterion};
+use geo::{Array, DenseArray, RasterNum, RasterSize};
 use num::NumCast;
-use raster::{DenseArray, Array, RasterCreation, RasterNum, RasterSize};
 
 const RASTER_WIDTH: usize = 1024;
 const RASTER_HEIGHT: usize = 768;

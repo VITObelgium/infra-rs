@@ -1,4 +1,4 @@
-use crate::{array::ArrayMetadata, RasterSize, tile::ZoomLevelStrategy, Cell};
+use crate::{array::ArrayMetadata, Cell, RasterSize};
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
 
@@ -544,7 +544,7 @@ impl GeoReference {
     /// Create a new `GeoReference` that is aligned to the XYZ tile grid used for serving tiles.
     /// Such an aligned grid is used as a warping target for rasters from which tiles can be extracted
     /// and served as XYZ tiles.
-    pub fn aligned_to_xyz_tiles_auto_detect_zoom_level(&self, strategy: ZoomLevelStrategy) -> Result<GeoReference> {
+    pub fn aligned_to_xyz_tiles_auto_detect_zoom_level(&self, strategy: crate::tile::ZoomLevelStrategy) -> Result<GeoReference> {
         let zoom = Tile::zoom_level_for_pixel_size(self.cell_size_x(), strategy);
         self.aligned_to_xyz_tiles_for_zoom_level(zoom)
     }

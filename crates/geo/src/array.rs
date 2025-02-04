@@ -7,7 +7,7 @@ pub trait ArrayMetadata: Clone + Debug {
 
 use std::fmt::Debug;
 
-use crate::{RasterSize, rasternum::RasterNum, Cell, Nodata};
+use crate::{rasternum::RasterNum, Cell, Nodata, RasterSize};
 
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
@@ -53,6 +53,30 @@ where
     type Metadata: ArrayMetadata;
 
     type WithPixelType<U: RasterNum<U>>: Array<Pixel = U, Metadata = Self::Metadata>;
+
+    //
+    // Creation functions
+    //
+
+    /// Create a new raster with the given metadata and data buffer.
+    fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Self;
+
+    fn from_iter<Iter>(meta: Self::Metadata, iter: Iter) -> Self
+    where
+        Iter: Iterator<Item = Option<Self::Pixel>>;
+
+    /// Create a new raster with the given metadata and filled with zeros.
+    fn zeros(meta: Self::Metadata) -> Self;
+
+    /// Create a new raster with the given metadata and filled with the provided value.
+    fn filled_with(val: Self::Pixel, meta: Self::Metadata) -> Self;
+
+    /// Create a new raster filled with nodata.
+    fn filled_with_nodata(meta: Self::Metadata) -> Self;
+
+    //
+    // Trait methods
+    //
 
     /// Returns the metadata reference.
     fn metadata(&self) -> &Self::Metadata;
@@ -135,27 +159,6 @@ where
     /// Use this for cases where a single cell value is needed not in a loop to
     /// to process the entire raster
     fn set_cell_value(&mut self, cell: Cell, val: Option<Self::Pixel>);
-}
-
-pub trait ArrayCreation {
-    type Pixel: RasterNum<Self::Pixel>;
-    type Metadata: ArrayMetadata;
-
-    /// Create a new raster with the given metadata and data buffer.
-    fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Self;
-
-    fn from_iter<Iter>(meta: Self::Metadata, iter: Iter) -> Self
-    where
-        Iter: Iterator<Item = Option<Self::Pixel>>;
-
-    /// Create a new raster with the given metadata and filled with zeros.
-    fn zeros(meta: Self::Metadata) -> Self;
-
-    /// Create a new raster with the given metadata and filled with the provided value.
-    fn filled_with(val: Self::Pixel, meta: Self::Metadata) -> Self;
-
-    /// Create a new raster filled with nodata.
-    fn filled_with_nodata(meta: Self::Metadata) -> Self;
 }
 
 pub trait ArrayCopy<T: RasterNum<T>, Rhs = Self> {

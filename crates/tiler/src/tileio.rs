@@ -13,7 +13,7 @@ use gdal::{
     Dataset,
 };
 use geo::{constants, crs, raster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
-use geo::{RasterSize, Array, ArrayCreation, DenseArray, RasterNum};
+use geo::{Array, DenseArray, RasterNum, RasterSize};
 use num::Num;
 
 fn type_string<T: GdalType>() -> &'static str {

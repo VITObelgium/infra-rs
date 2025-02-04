@@ -28,12 +28,11 @@ pub use rasterdiff::raster_diff;
 pub use rasterdiff::RasterCellMismatch;
 pub use rasterdiff::RasterDiffResult;
 
-use crate::{Array, ArrayCreation, RasterNum};
+use crate::{Array, RasterNum};
 
 pub fn cast<TDest, R>(src: &R) -> R::WithPixelType<TDest>
 where
     R: Array,
-    R::WithPixelType<TDest>: ArrayCreation<Pixel = TDest, Metadata = R::Metadata>,
     TDest: RasterNum<TDest>,
     for<'a> &'a R: IntoIterator<Item = Option<R::Pixel>>,
 {

@@ -80,7 +80,7 @@ build: build_release
 test: test_release
 
 rasterbench:
-  cargo bench --bench rasterops --package=raster
+  cargo bench --bench rasterops --package=geo
 
 rasterbenchbaseline name:
-  cargo bench --bench rasterops --package=raster -- --save-baseline {{name}}
+  cargo bench --bench rasterops --package=geo -- --save-baseline {{name}}
