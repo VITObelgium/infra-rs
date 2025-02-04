@@ -1,5 +1,5 @@
 use geo::raster;
-use geo::{AnyDenseArray, Array, DenseArray, RasterDataType, RasterNum, RasterSize};
+use geo::{AnyDenseArray, Array, DenseArray, ArrayDataType, ArrayNum, RasterSize};
 
 use crate::lz4;
 use crate::{CompressionAlgorithm, Error, Result, TileHeader};
@@ -39,7 +39,7 @@ pub trait RasterTileCastIO {
         Self: std::marker::Sized;
 }
 
-impl<T: RasterNum<T>> RasterTileIO for DenseArray<T> {
+impl<T: ArrayNum<T>> RasterTileIO for DenseArray<T> {
     /// Create a raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     fn from_tile_bytes(data: &[u8]) -> Result<Self> {
@@ -112,7 +112,7 @@ impl<T: RasterNum<T>> RasterTileIO for DenseArray<T> {
     }
 }
 
-impl<T: RasterNum<T>> RasterTileCastIO for DenseArray<T> {
+impl<T: ArrayNum<T>> RasterTileCastIO for DenseArray<T> {
     /// Create a raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     /// The data will be cast to the correct raster type if it doesnt match
@@ -137,16 +137,16 @@ impl<T: RasterNum<T>> RasterTileCastIO for DenseArray<T> {
         }
 
         match header.data_type {
-            RasterDataType::Int8 => DenseArray::<i8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint8 => DenseArray::<u8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Int16 => DenseArray::<i16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint16 => DenseArray::<u16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Int32 => DenseArray::<i32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint32 => DenseArray::<u32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Int64 => DenseArray::<i64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Uint64 => DenseArray::<u64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Float32 => DenseArray::<f32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
-            RasterDataType::Float64 => DenseArray::<f64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Int8 => DenseArray::<i8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Uint8 => DenseArray::<u8>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Int16 => DenseArray::<i16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Uint16 => DenseArray::<u16>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Int32 => DenseArray::<i32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Uint32 => DenseArray::<u32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Int64 => DenseArray::<i64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Uint64 => DenseArray::<u64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Float32 => DenseArray::<f32>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
+            ArrayDataType::Float64 => DenseArray::<f64>::from_tile_header_and_data(header, data).map(|r| raster::algo::cast(&r)),
         }
     }
 }
@@ -172,16 +172,16 @@ impl RasterTileIO for AnyDenseArray {
         Self: std::marker::Sized,
     {
         Ok(match header.data_type {
-            RasterDataType::Int8 => AnyDenseArray::I8(DenseArray::<i8>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint8 => AnyDenseArray::U8(DenseArray::<u8>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Int16 => AnyDenseArray::I16(DenseArray::<i16>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint16 => AnyDenseArray::U16(DenseArray::<u16>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Int32 => AnyDenseArray::I32(DenseArray::<i32>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint32 => AnyDenseArray::U32(DenseArray::<u32>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Int64 => AnyDenseArray::I64(DenseArray::<i64>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Uint64 => AnyDenseArray::U64(DenseArray::<u64>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Float32 => AnyDenseArray::F32(DenseArray::<f32>::from_tile_header_and_data(header, data)?),
-            RasterDataType::Float64 => AnyDenseArray::F64(DenseArray::<f64>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::<i8>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::<u8>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(DenseArray::<i16>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(DenseArray::<u16>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(DenseArray::<i32>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(DenseArray::<u32>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(DenseArray::<i64>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(DenseArray::<u64>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(DenseArray::<f32>::from_tile_header_and_data(header, data)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(DenseArray::<f64>::from_tile_header_and_data(header, data)?),
         })
     }
 

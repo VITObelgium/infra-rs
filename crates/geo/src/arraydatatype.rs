@@ -3,7 +3,7 @@
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
-pub enum RasterDataType {
+pub enum ArrayDataType {
     Int8 = 0,
     Uint8 = 1,
     Int16 = 2,

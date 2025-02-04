@@ -1,7 +1,7 @@
-use crate::{Nodata, RasterDataType};
+use crate::{ArrayDataType, Nodata};
 
 // Type requirements for data in rasters
-pub trait RasterNum<T>:
+pub trait ArrayNum<T>:
     Copy
     + Nodata<T>
     + num::Num
@@ -12,7 +12,7 @@ pub trait RasterNum<T>:
     + std::fmt::Debug
     + std::string::ToString
 {
-    const TYPE: RasterDataType;
+    const TYPE: ArrayDataType;
     const IS_SIGNED: bool;
 
     fn add_nodata_aware(self, other: Self) -> Self;
@@ -236,7 +236,7 @@ macro_rules! div_fp_nodata_impl {
 macro_rules! rasternum_signed_impl {
     ($trait_name:path, $t:ty, $raster_type:ident) => {
         impl $trait_name for $t {
-            const TYPE: RasterDataType = RasterDataType::$raster_type;
+            const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
             add_nodata_impl!();
@@ -250,7 +250,7 @@ macro_rules! rasternum_signed_impl {
 macro_rules! rasternum_unsigned_impl {
     ($trait_name:path, $t:ty, $raster_type:ident) => {
         impl $trait_name for $t {
-            const TYPE: RasterDataType = RasterDataType::$raster_type;
+            const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = false;
 
             add_nodata_impl!();
@@ -264,7 +264,7 @@ macro_rules! rasternum_unsigned_impl {
 macro_rules! rasternum_fp_impl {
     ($trait_name:path, $t:ty, $raster_type:ident) => {
         impl $trait_name for $t {
-            const TYPE: RasterDataType = RasterDataType::$raster_type;
+            const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
             add_fp_nodata_impl!();
@@ -275,14 +275,14 @@ macro_rules! rasternum_fp_impl {
     };
 }
 
-rasternum_signed_impl!(RasterNum<i8>, i8, Int8);
-rasternum_signed_impl!(RasterNum<i16>, i16, Int16);
-rasternum_signed_impl!(RasterNum<i32>, i32, Int32);
-rasternum_signed_impl!(RasterNum<i64>, i64, Int64);
-rasternum_unsigned_impl!(RasterNum<u8>, u8, Uint8);
-rasternum_unsigned_impl!(RasterNum<u16>, u16, Uint16);
-rasternum_unsigned_impl!(RasterNum<u32>, u32, Uint32);
-rasternum_unsigned_impl!(RasterNum<u64>, u64, Uint64);
+rasternum_signed_impl!(ArrayNum<i8>, i8, Int8);
+rasternum_signed_impl!(ArrayNum<i16>, i16, Int16);
+rasternum_signed_impl!(ArrayNum<i32>, i32, Int32);
+rasternum_signed_impl!(ArrayNum<i64>, i64, Int64);
+rasternum_unsigned_impl!(ArrayNum<u8>, u8, Uint8);
+rasternum_unsigned_impl!(ArrayNum<u16>, u16, Uint16);
+rasternum_unsigned_impl!(ArrayNum<u32>, u32, Uint32);
+rasternum_unsigned_impl!(ArrayNum<u64>, u64, Uint64);
 
-rasternum_fp_impl!(RasterNum<f32>, f32, Float32);
-rasternum_fp_impl!(RasterNum<f64>, f64, Float64);
+rasternum_fp_impl!(ArrayNum<f32>, f32, Float32);
+rasternum_fp_impl!(ArrayNum<f64>, f64, Float64);

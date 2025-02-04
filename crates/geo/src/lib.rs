@@ -4,6 +4,8 @@ pub type Result<T = ()> = std::result::Result<T, Error>;
 mod anydensearray;
 mod anydensearrayops;
 mod array;
+mod arraydatatype;
+mod arraynum;
 mod arrayops;
 mod cell;
 pub mod constants;
@@ -11,7 +13,6 @@ mod coordinate;
 #[cfg(feature = "gdal")]
 mod coordinatetransformer;
 pub mod crs;
-mod datatype;
 mod densearray;
 mod densearrayops;
 mod error;
@@ -21,7 +22,6 @@ mod georeference;
 mod latlonbounds;
 mod nodata;
 pub mod raster;
-mod rasternum;
 mod rastersize;
 pub mod rect;
 #[cfg(feature = "gdal")]
@@ -45,10 +45,10 @@ pub use {coordinatetransformer::CoordinateTransformer, runtimeconfiguration::Run
 
 #[doc(inline)]
 pub use {
-    anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayMetadata, cell::Cell, cell::CellIterator,
-    coordinate::Coordinate, datatype::RasterDataType, densearray::DenseArray, error::Error, georeference::CellSize,
-    georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata, rasternum::RasterNum, rastersize::RasterSize, rect::Rect,
-    tile::Tile, tile::ZoomLevelStrategy,
+    anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayMetadata, arraydatatype::ArrayDataType, arraynum::ArrayNum,
+    cell::Cell, cell::CellIterator, coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize,
+    georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata, rastersize::RasterSize, rect::Rect, tile::Tile,
+    tile::ZoomLevelStrategy,
 };
 
 pub type Point<T = f64> = geo_types::Point<T>;

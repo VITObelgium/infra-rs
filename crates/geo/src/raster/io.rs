@@ -94,7 +94,7 @@ struct CutOut {
 pub mod dataset {
     use gdal::Metadata;
 
-    use crate::{RasterSize, Nodata, RasterNum};
+    use crate::{RasterSize, Nodata, ArrayNum};
 
     use super::*;
 
@@ -177,7 +177,7 @@ pub mod dataset {
 
     /// The provided extent will be the extent of the resulting raster.
     /// Areas outside the extent of the raster on disk will be filled with nodata.
-    pub fn read_band_region<T: GdalType + RasterNum<T>>(
+    pub fn read_band_region<T: GdalType + ArrayNum<T>>(
         dataset: &gdal::Dataset,
         band_nr: usize,
         extent: &GeoReference,

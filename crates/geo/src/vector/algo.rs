@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::{gdalinterop, vector::io::FeatureDefinitionExtension, GeoReference};
-use crate::{raster, Error, RasterNum, Result};
+use crate::{raster, Error, ArrayNum, Result};
 use gdal::{
     raster::GdalType,
     vector::{FieldValue, LayerAccess},
@@ -127,7 +127,7 @@ impl<T: num::One + ToString> From<RasterizeOptions<T>> for Vec<String> {
     }
 }
 
-pub fn rasterize<T: RasterNum<T> + GdalType + ToString>(
+pub fn rasterize<T: ArrayNum<T> + GdalType + ToString>(
     ds: &gdal::Dataset,
     meta: &GeoReference,
     options: RasterizeOptions<T>,
@@ -150,7 +150,7 @@ pub fn rasterize<T: RasterNum<T> + GdalType + ToString>(
 /// The options are passed as a list of strings in the form `["-option1", "value1", "-option2", "value2"]`
 /// and match the options of the gdal `gdal_rasterize` command line tool
 /// The rasterized dataset is returned
-pub fn rasterize_with_cli_options<T: RasterNum<T> + GdalType>(
+pub fn rasterize_with_cli_options<T: ArrayNum<T> + GdalType>(
     ds: &gdal::Dataset,
     meta: &GeoReference,
     options: &[String],

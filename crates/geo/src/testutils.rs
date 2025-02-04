@@ -1,10 +1,10 @@
 use approx::relative_eq;
 
-use crate::{RasterSize, GeoReference, RasterNum};
+use crate::{RasterSize, GeoReference, ArrayNum};
 
 pub const NOD: f64 = 255.0;
 
-pub fn create_vec<T: num::NumCast + RasterNum<T>>(data: &[f64]) -> Vec<T> {
+pub fn create_vec<T: num::NumCast + ArrayNum<T>>(data: &[f64]) -> Vec<T> {
     data.iter()
         .map(|&v| {
             if relative_eq!(v, NOD) {

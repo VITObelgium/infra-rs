@@ -1,4 +1,4 @@
-use geo::RasterDataType;
+use geo::ArrayDataType;
 
 use crate::{Error, Result};
 
@@ -24,7 +24,7 @@ pub struct TileHeader {
     /// The version of the file format (currently 1)
     pub version: u16,
     /// The data type of the tile data represented by a `TileDataType` as u8
-    pub data_type: RasterDataType,
+    pub data_type: ArrayDataType,
     /// The compression algorithm used for the tile data
     pub compression: CompressionAlgorithm,
     /// The width of the tile in pixels
@@ -36,7 +36,7 @@ pub struct TileHeader {
 }
 
 impl TileHeader {
-    pub fn new(data_type: RasterDataType, compression: CompressionAlgorithm, tile_width: u16, tile_height: u16, data_size: u32) -> Self {
+    pub fn new(data_type: ArrayDataType, compression: CompressionAlgorithm, tile_width: u16, tile_height: u16, data_size: u32) -> Self {
         Self {
             signature: RASTER_TILE_SIGNATURE,
             version: 1,
@@ -63,7 +63,7 @@ impl TileHeader {
             return Err(Error::InvalidArgument("Unsupported tile version".into()));
         }
 
-        if header.data_type as u8 > RasterDataType::Float64 as u8 {
+        if header.data_type as u8 > ArrayDataType::Float64 as u8 {
             return Err(Error::InvalidArgument("Invalid tile data type".into()));
         }
 

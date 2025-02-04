@@ -1,18 +1,18 @@
 use crate::{
     raster::{self},
-    Array, ArrayCopy, ArrayMetadata, Cell, RasterNum, RasterSize,
+    Array, ArrayCopy, ArrayMetadata, Cell, ArrayNum, RasterSize,
 };
 
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::nodata_value`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
 #[derive(Debug, Clone)]
-pub struct DenseArray<T: RasterNum<T>, Metadata: ArrayMetadata = RasterSize> {
+pub struct DenseArray<T: ArrayNum<T>, Metadata: ArrayMetadata = RasterSize> {
     pub(super) meta: Metadata,
     pub(super) data: Vec<T>,
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     pub fn empty() -> Self {
         DenseArray {
             meta: Metadata::with_rows_cols(0, 0),
@@ -58,27 +58,27 @@ impl<T: RasterNum<T>, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     }
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> AsRef<[T]> for DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> AsRef<[T]> for DenseArray<T, Metadata> {
     fn as_ref(&self) -> &[T] {
         self.data.as_ref()
     }
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> AsMut<[T]> for DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> AsMut<[T]> for DenseArray<T, Metadata> {
     fn as_mut(&mut self) -> &mut [T] {
         self.data.as_mut()
     }
 }
 
-impl<T: RasterNum<T>, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayCopy<T, R> for DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayCopy<T, R> for DenseArray<T, Metadata> {
     fn new_with_dimensions_of(ras: &R, fill: T) -> Self {
         DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()])
     }
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     type Pixel = T;
-    type WithPixelType<U: RasterNum<U>> = DenseArray<U, Metadata>;
+    type WithPixelType<U: ArrayNum<U>> = DenseArray<U, Metadata>;
     type Metadata = Metadata;
 
     fn new(meta: Metadata, data: Vec<T>) -> Self {
@@ -212,7 +212,7 @@ impl<T: RasterNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata>
     }
 }
 
-impl<'a, T: RasterNum<T>, Metadata: ArrayMetadata> IntoIterator for &'a DenseArray<T, Metadata> {
+impl<'a, T: ArrayNum<T>, Metadata: ArrayMetadata> IntoIterator for &'a DenseArray<T, Metadata> {
     type Item = Option<T>;
     type IntoIter = DenserRasterIterator<'a, T, Metadata>;
 
@@ -221,12 +221,12 @@ impl<'a, T: RasterNum<T>, Metadata: ArrayMetadata> IntoIterator for &'a DenseArr
     }
 }
 
-pub struct DenserRasterIterator<'a, T: RasterNum<T>, Metadata: ArrayMetadata> {
+pub struct DenserRasterIterator<'a, T: ArrayNum<T>, Metadata: ArrayMetadata> {
     index: usize,
     raster: &'a DenseArray<T, Metadata>,
 }
 
-impl<'a, T: RasterNum<T>, Metadata: ArrayMetadata> DenserRasterIterator<'a, T, Metadata> {
+impl<'a, T: ArrayNum<T>, Metadata: ArrayMetadata> DenserRasterIterator<'a, T, Metadata> {
     fn new(raster: &'a DenseArray<T, Metadata>) -> Self {
         DenserRasterIterator { index: 0, raster }
     }
@@ -234,7 +234,7 @@ impl<'a, T: RasterNum<T>, Metadata: ArrayMetadata> DenserRasterIterator<'a, T, M
 
 impl<T, Metadata> Iterator for DenserRasterIterator<'_, T, Metadata>
 where
-    T: RasterNum<T>,
+    T: ArrayNum<T>,
     Metadata: ArrayMetadata,
 {
     type Item = Option<T>;
@@ -250,7 +250,7 @@ where
     }
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> PartialEq for DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> PartialEq for DenseArray<T, Metadata> {
     fn eq(&self, other: &Self) -> bool {
         if self.size() != other.size() {
             return false;
@@ -267,7 +267,7 @@ impl<T: RasterNum<T>, Metadata: ArrayMetadata> PartialEq for DenseArray<T, Metad
     }
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> std::ops::Index<Cell> for DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> std::ops::Index<Cell> for DenseArray<T, Metadata> {
     type Output = T;
 
     fn index(&self, cell: Cell) -> &Self::Output {
@@ -278,7 +278,7 @@ impl<T: RasterNum<T>, Metadata: ArrayMetadata> std::ops::Index<Cell> for DenseAr
     }
 }
 
-impl<T: RasterNum<T>, Metadata: ArrayMetadata> std::ops::IndexMut<Cell> for DenseArray<T, Metadata> {
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> std::ops::IndexMut<Cell> for DenseArray<T, Metadata> {
     fn index_mut(&mut self, cell: Cell) -> &mut Self::Output {
         let cols = self.size().cols;
         unsafe {

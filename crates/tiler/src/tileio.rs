@@ -13,7 +13,7 @@ use gdal::{
     Dataset,
 };
 use geo::{constants, crs, raster, CellSize, GeoReference, LatLonBounds, SpatialReference, Tile};
-use geo::{Array, DenseArray, RasterNum, RasterSize};
+use geo::{Array, DenseArray, ArrayNum, RasterSize};
 use num::Num;
 
 fn type_string<T: GdalType>() -> &'static str {
@@ -76,7 +76,7 @@ pub fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: 
     )))
 }
 
-pub fn read_raster_tile<T: RasterNum<T> + GdalType>(
+pub fn read_raster_tile<T: ArrayNum<T> + GdalType>(
     raster_path: &std::path::Path,
     band_nr: usize,
     tile: Tile,
@@ -109,7 +109,7 @@ pub fn read_raster_tile<T: RasterNum<T> + GdalType>(
     Ok(data)
 }
 
-pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
+pub fn read_raster_tile_warped<T: ArrayNum<T> + GdalType>(
     raster_path: &std::path::Path,
     band_nr: usize,
     tile: Tile,
@@ -166,7 +166,7 @@ pub fn read_raster_tile_warped<T: RasterNum<T> + GdalType>(
 }
 
 /// Read the raw tile data, result is a tuple with the raw data and the nodata value
-pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
+pub fn read_tile_data<T: ArrayNum<T> + Num + GdalType>(
     meta: &LayerMetadata,
     band_nr: usize,
     tile: Tile,
@@ -202,7 +202,7 @@ pub fn read_tile_data<T: RasterNum<T> + Num + GdalType>(
 
 pub fn read_color_mapped_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, req: &ColorMappedTileRequest) -> Result<TileData>
 where
-    T: RasterNum<T> + Num + GdalType,
+    T: ArrayNum<T> + Num + GdalType,
 {
     let raw_tile_data = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
     if raw_tile_data.is_empty() {

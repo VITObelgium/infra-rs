@@ -7,7 +7,7 @@ pub trait ArrayMetadata: Clone + Debug {
 
 use std::fmt::Debug;
 
-use crate::{rasternum::RasterNum, Cell, Nodata, RasterSize};
+use crate::{arraynum::ArrayNum, Cell, Nodata, RasterSize};
 
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
@@ -49,10 +49,10 @@ pub trait Array:
 where
     Self: Sized + std::fmt::Debug,
 {
-    type Pixel: RasterNum<Self::Pixel>;
+    type Pixel: ArrayNum<Self::Pixel>;
     type Metadata: ArrayMetadata;
 
-    type WithPixelType<U: RasterNum<U>>: Array<Pixel = U, Metadata = Self::Metadata>;
+    type WithPixelType<U: ArrayNum<U>>: Array<Pixel = U, Metadata = Self::Metadata>;
 
     //
     // Creation functions
@@ -161,7 +161,7 @@ where
     fn set_cell_value(&mut self, cell: Cell, val: Option<Self::Pixel>);
 }
 
-pub trait ArrayCopy<T: RasterNum<T>, Rhs = Self> {
+pub trait ArrayCopy<T: ArrayNum<T>, Rhs = Self> {
     /// Create a new raster with the same metadata and data as the provided raster.
     fn new_with_dimensions_of(ras: &Rhs, fill: T) -> Self;
 }

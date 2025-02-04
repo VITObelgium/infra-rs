@@ -1,15 +1,15 @@
 use criterion::{BatchSize, Criterion};
-use geo::{Array, DenseArray, RasterNum, RasterSize};
+use geo::{Array, DenseArray, ArrayNum, RasterSize};
 use num::NumCast;
 
 const RASTER_WIDTH: usize = 1024;
 const RASTER_HEIGHT: usize = 768;
 
-pub fn bench_name<T: RasterNum<T>>(name: &str) -> String {
+pub fn bench_name<T: ArrayNum<T>>(name: &str) -> String {
     format!("{}_{:?}", name, T::TYPE)
 }
 
-pub fn bench_addition<T: RasterNum<T>>(c: &mut Criterion) {
+pub fn bench_addition<T: ArrayNum<T>>(c: &mut Criterion) {
     let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
     let rhs = DenseArray::<T>::filled_with(NumCast::from(9.0).unwrap(), raster_size);
 

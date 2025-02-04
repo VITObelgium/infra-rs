@@ -1,13 +1,13 @@
 use crate::Array;
 use crate::GeoReference;
-use crate::RasterNum;
+use crate::ArrayNum;
 use crate::Result;
 use gdal::raster::GdalType;
 
 use super::denseraster::process_nodata;
 use super::{io, DenseRaster, RasterIO};
 
-impl<T: RasterNum<T> + GdalType> RasterIO for DenseRaster<T>
+impl<T: ArrayNum<T> + GdalType> RasterIO for DenseRaster<T>
 where
     Self: Array<Pixel = T, Metadata = GeoReference>,
 {

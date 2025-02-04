@@ -1,10 +1,10 @@
 use gdal::raster::GdalType;
-use geo::{Array, DenseArray, RasterNum};
+use geo::{Array, DenseArray, ArrayNum};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{Error, Result, TileData, TileFormat};
 
-pub fn diff_tiles<T: RasterNum<T> + GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>, format: TileFormat) -> Result<TileData> {
+pub fn diff_tiles<T: ArrayNum<T> + GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>, format: TileFormat) -> Result<TileData> {
     match format {
         #[cfg(feature = "vector-tiles")]
         #[allow(clippy::unwrap_used)] // Types are checked prior to unwrapping
@@ -14,7 +14,7 @@ pub fn diff_tiles<T: RasterNum<T> + GdalType>(tile1: &DenseArray<T>, tile2: &Den
     }
 }
 
-fn diff_tiles_as_raster<T: RasterNum<T> + gdal::raster::GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>) -> Result<TileData> {
+fn diff_tiles_as_raster<T: ArrayNum<T> + gdal::raster::GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>) -> Result<TileData> {
     use crate::PixelFormat;
 
     if tile1.size() != tile2.size() {
@@ -35,7 +35,7 @@ fn diff_tiles_as_raster<T: RasterNum<T> + gdal::raster::GdalType>(tile1: &DenseA
 }
 
 #[cfg(feature = "vector-tiles")]
-fn diff_tiles_as_mvt<T: RasterNum<T> + gdal::raster::GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>) -> Result<TileData> {
+fn diff_tiles_as_mvt<T: ArrayNum<T> + gdal::raster::GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>) -> Result<TileData> {
     use gdal::vector::LayerAccess;
     use geo::{raster, Array, CellSize, GeoReference, Point, Tile};
 

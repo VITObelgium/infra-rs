@@ -1,4 +1,4 @@
-use crate::{Array, ArrayCopy, Cell, DenseArray, Error, Nodata, RasterNum, Result};
+use crate::{Array, ArrayCopy, Cell, DenseArray, Error, Nodata, ArrayNum, Result};
 
 use super::clusterutils::{
     handle_cell, insert_border_cell, insert_cell, show_warning_if_clustering_on_floats, visit_neighbour_cells, visit_neighbour_diag_cells,
@@ -9,7 +9,7 @@ use super::clusterutils::{ClusterDiagonals, MARK_TODO};
 pub fn cluster_id<R, T>(ras: &R, diagonals: ClusterDiagonals) -> R::WithPixelType<u32>
 where
     R: Array<Pixel = T>,
-    T: RasterNum<T>,
+    T: ArrayNum<T>,
     R::WithPixelType<u32>: ArrayCopy<u32, R>,
 {
     show_warning_if_clustering_on_floats::<T>();

@@ -5,7 +5,7 @@ use std::{
     str::FromStr,
 };
 
-use geo::RasterDataType;
+use geo::ArrayDataType;
 use geo::{crs, Coordinate, LatLonBounds, Tile};
 use mbtilesdb::MbtilesDb;
 
@@ -57,7 +57,7 @@ impl MbtilesTileProvider {
             nodata: None,
             min_value: meta_map.remove("min_value").and_then(|s| f64::from_str(&s).ok()).unwrap_or(0.0),
             max_value: meta_map.remove("max_value").and_then(|s| f64::from_str(&s).ok()).unwrap_or(0.0),
-            data_type: RasterDataType::Float32,
+            data_type: ArrayDataType::Float32,
             source_format: LayerSourceType::Mbtiles,
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
             additional_data: HashMap::new(),

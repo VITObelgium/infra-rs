@@ -11,7 +11,7 @@ mod tests {
         gdalinterop,
         raster::{DenseRaster, RasterIO},
         testutils::NOD,
-        Array, GeoReference, Point, RasterNum,
+        Array, GeoReference, Point, ArrayNum,
     };
 
     #[ctor::ctor]
@@ -28,7 +28,7 @@ mod tests {
     }
 
     #[test]
-    fn test_read_dense_raster<T: RasterNum<T> + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() {
+    fn test_read_dense_raster<T: ArrayNum<T> + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "landusebyte.tif");
 
         let ras = R::read(path.as_path()).unwrap();

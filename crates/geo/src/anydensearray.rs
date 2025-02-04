@@ -1,4 +1,4 @@
-use crate::{Array, ArrayMetadata, Cell, DenseArray, Error, RasterDataType, RasterNum, RasterSize, Result};
+use crate::{Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result};
 
 /// Type erased `RasterTile`
 #[derive(Clone)]
@@ -39,37 +39,37 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     unerase_raster_type_op!(width);
     unerase_raster_type_op!(height);
 
-    pub fn empty(datatype: RasterDataType) -> Self {
+    pub fn empty(datatype: ArrayDataType) -> Self {
         match datatype {
-            RasterDataType::Uint8 => AnyDenseArray::U8(DenseArray::empty()),
-            RasterDataType::Uint16 => AnyDenseArray::U16(DenseArray::empty()),
-            RasterDataType::Uint32 => AnyDenseArray::U32(DenseArray::empty()),
-            RasterDataType::Uint64 => AnyDenseArray::U64(DenseArray::empty()),
-            RasterDataType::Int8 => AnyDenseArray::I8(DenseArray::empty()),
-            RasterDataType::Int16 => AnyDenseArray::I16(DenseArray::empty()),
-            RasterDataType::Int32 => AnyDenseArray::I32(DenseArray::empty()),
-            RasterDataType::Int64 => AnyDenseArray::I64(DenseArray::empty()),
-            RasterDataType::Float32 => AnyDenseArray::F32(DenseArray::empty()),
-            RasterDataType::Float64 => AnyDenseArray::F64(DenseArray::empty()),
+            ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::empty()),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(DenseArray::empty()),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(DenseArray::empty()),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(DenseArray::empty()),
+            ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::empty()),
+            ArrayDataType::Int16 => AnyDenseArray::I16(DenseArray::empty()),
+            ArrayDataType::Int32 => AnyDenseArray::I32(DenseArray::empty()),
+            ArrayDataType::Int64 => AnyDenseArray::I64(DenseArray::empty()),
+            ArrayDataType::Float32 => AnyDenseArray::F32(DenseArray::empty()),
+            ArrayDataType::Float64 => AnyDenseArray::F64(DenseArray::empty()),
         }
     }
 
-    pub fn data_type(&self) -> RasterDataType {
+    pub fn data_type(&self) -> ArrayDataType {
         match self {
-            AnyDenseArray::U8(_) => RasterDataType::Uint8,
-            AnyDenseArray::U16(_) => RasterDataType::Uint16,
-            AnyDenseArray::U32(_) => RasterDataType::Uint32,
-            AnyDenseArray::U64(_) => RasterDataType::Uint64,
-            AnyDenseArray::I8(_) => RasterDataType::Int8,
-            AnyDenseArray::I16(_) => RasterDataType::Int16,
-            AnyDenseArray::I32(_) => RasterDataType::Int32,
-            AnyDenseArray::I64(_) => RasterDataType::Int64,
-            AnyDenseArray::F32(_) => RasterDataType::Float32,
-            AnyDenseArray::F64(_) => RasterDataType::Float64,
+            AnyDenseArray::U8(_) => ArrayDataType::Uint8,
+            AnyDenseArray::U16(_) => ArrayDataType::Uint16,
+            AnyDenseArray::U32(_) => ArrayDataType::Uint32,
+            AnyDenseArray::U64(_) => ArrayDataType::Uint64,
+            AnyDenseArray::I8(_) => ArrayDataType::Int8,
+            AnyDenseArray::I16(_) => ArrayDataType::Int16,
+            AnyDenseArray::I32(_) => ArrayDataType::Int32,
+            AnyDenseArray::I64(_) => ArrayDataType::Int64,
+            AnyDenseArray::F32(_) => ArrayDataType::Float32,
+            AnyDenseArray::F64(_) => ArrayDataType::Float64,
         }
     }
 
-    pub fn cell_value<T: RasterNum<T>>(&self, cell: Cell) -> Option<T> {
+    pub fn cell_value<T: ArrayNum<T>>(&self, cell: Cell) -> Option<T> {
         match self {
             AnyDenseArray::U8(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
             AnyDenseArray::U16(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
@@ -87,10 +87,10 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
 
 macro_rules! impl_try_from_dense_raster {
     ( $data_type:path, $data_type_enum:ident ) => {
-        impl TryFrom<AnyDenseArray> for DenseArray<$data_type, RasterSize> {
+        impl<Metadata: ArrayMetadata> TryFrom<AnyDenseArray<Metadata>> for DenseArray<$data_type, Metadata> {
             type Error = Error;
 
-            fn try_from(value: AnyDenseArray) -> Result<Self> {
+            fn try_from(value: AnyDenseArray<Metadata>) -> Result<Self> {
                 match value {
                     AnyDenseArray::$data_type_enum(raster) => Ok(raster),
                     _ => Err(Error::InvalidArgument(format!("Expected {} raster", stringify!($data_type),))),
@@ -102,10 +102,10 @@ macro_rules! impl_try_from_dense_raster {
 
 macro_rules! impl_try_from_dense_raster_ref {
     ( $data_type:path, $data_type_enum:ident ) => {
-        impl<'a> TryFrom<&'a AnyDenseArray> for &'a DenseArray<$data_type, RasterSize> {
+        impl<'a, Metadata: ArrayMetadata> TryFrom<&'a AnyDenseArray<Metadata>> for &'a DenseArray<$data_type, Metadata> {
             type Error = Error;
 
-            fn try_from(value: &'a AnyDenseArray) -> Result<Self> {
+            fn try_from(value: &'a AnyDenseArray<Metadata>) -> Result<Self> {
                 match value {
                     AnyDenseArray::$data_type_enum(raster) => Ok(&raster),
                     _ => Err(Error::InvalidArgument(format!("Expected {} raster", stringify!($data_type),))),

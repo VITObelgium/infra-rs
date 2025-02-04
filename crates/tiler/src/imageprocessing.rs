@@ -1,5 +1,5 @@
 use crate::{tiledata::TileData, tileformat::TileFormat, Error, PixelFormat, Result};
-use geo::RasterNum;
+use geo::ArrayNum;
 use inf::{Color, Legend};
 use num::NumCast;
 use std::io::BufWriter;
@@ -44,7 +44,7 @@ fn float_as_color(val: f32) -> Color {
     }
 }
 
-pub fn raw_tile_to_float_encoded_png<T: RasterNum<T>>(raw_data: &[T], width: usize, height: usize, nodata: Option<T>) -> Result<TileData> {
+pub fn raw_tile_to_float_encoded_png<T: ArrayNum<T>>(raw_data: &[T], width: usize, height: usize, nodata: Option<T>) -> Result<TileData> {
     let raw_colors = raw_data
         .iter()
         .map(|&v| {
@@ -64,7 +64,7 @@ pub fn raw_tile_to_float_encoded_png<T: RasterNum<T>>(raw_data: &[T], width: usi
     ))
 }
 
-pub fn raw_tile_to_png_color_mapped<T: RasterNum<T>>(
+pub fn raw_tile_to_png_color_mapped<T: ArrayNum<T>>(
     raw_data: &[T],
     width: usize,
     height: usize,

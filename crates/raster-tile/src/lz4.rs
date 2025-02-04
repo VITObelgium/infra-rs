@@ -1,15 +1,15 @@
-use geo::RasterNum;
+use geo::ArrayNum;
 
 use crate::{Error, Result};
 
-pub(crate) fn compress_tile_data<T: RasterNum<T>>(source: &[T]) -> Result<Vec<u8>> {
+pub(crate) fn compress_tile_data<T: ArrayNum<T>>(source: &[T]) -> Result<Vec<u8>> {
     // Safety: The T type is a RasterNum, so it is safe to transmute the slice to a byte slice
     let source_bytes = unsafe { std::slice::from_raw_parts(source.as_ptr().cast::<u8>(), std::mem::size_of_val(source)) };
 
     Ok(lz4_flex::compress(source_bytes))
 }
 
-pub(crate) fn decompress_tile_data<T: RasterNum<T>>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
+pub(crate) fn decompress_tile_data<T: ArrayNum<T>>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
     let mut data = Vec::<T>::with_capacity(element_count);
 
     // Safety: The T array is initialized with the capacity of element_count, so it is safe to transmute the slice to a byte slice

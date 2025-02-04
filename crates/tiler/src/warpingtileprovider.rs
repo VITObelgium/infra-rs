@@ -6,7 +6,7 @@ use inf::legend::Legend;
 
 use geo::raster::io::RasterFormat;
 use geo::{crs, Coordinate, GeoReference, LatLonBounds, Tile};
-use geo::{Array, DenseArray, RasterDataType, RasterNum, RasterSize};
+use geo::{Array, DenseArray, ArrayDataType, ArrayNum, RasterSize};
 use num::Num;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
@@ -21,7 +21,7 @@ use crate::{
     Error, PixelFormat, Result,
 };
 
-fn raw_tile_to_vito_tile_format<T: RasterNum<T>>(data: Vec<T>, width: usize, height: usize) -> Result<TileData> {
+fn raw_tile_to_vito_tile_format<T: ArrayNum<T>>(data: Vec<T>, width: usize, height: usize) -> Result<TileData> {
     let raster_tile = DenseArray::new(RasterSize::with_rows_cols(height, width), data);
 
     Ok(TileData::new(
@@ -48,7 +48,7 @@ impl WarpingTileProvider {
 
     fn process_pixel_request<T>(meta: &LayerMetadata, band_nr: usize, tile: Tile, dpi_ratio: u8, coord: Coordinate) -> Result<Option<f32>>
     where
-        T: RasterNum<T> + Num + GdalType,
+        T: ArrayNum<T> + Num + GdalType,
     {
         let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
         if raw_tile_data.is_empty() {
@@ -67,7 +67,7 @@ impl WarpingTileProvider {
 
     fn process_tile_request<T>(meta: &LayerMetadata, band_nr: usize, req: &TileRequest) -> Result<TileData>
     where
-        T: RasterNum<T> + Num + GdalType,
+        T: ArrayNum<T> + Num + GdalType,
     {
         let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
         if raw_tile_data.is_empty() {
@@ -117,16 +117,16 @@ impl WarpingTileProvider {
 
         let band_nr = layer_meta.band_nr.unwrap_or(1);
         match layer_meta.data_type {
-            RasterDataType::Int8 => WarpingTileProvider::process_tile_request::<i8>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint8 => WarpingTileProvider::process_tile_request::<u8>(layer_meta, band_nr, tile_req),
-            RasterDataType::Int16 => WarpingTileProvider::process_tile_request::<i16>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint16 => WarpingTileProvider::process_tile_request::<u16>(layer_meta, band_nr, tile_req),
-            RasterDataType::Int32 => WarpingTileProvider::process_tile_request::<i32>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint32 => WarpingTileProvider::process_tile_request::<u32>(layer_meta, band_nr, tile_req),
-            RasterDataType::Int64 => WarpingTileProvider::process_tile_request::<i64>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint64 => WarpingTileProvider::process_tile_request::<u64>(layer_meta, band_nr, tile_req),
-            RasterDataType::Float32 => WarpingTileProvider::process_tile_request::<f32>(layer_meta, band_nr, tile_req),
-            RasterDataType::Float64 => WarpingTileProvider::process_tile_request::<f64>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int8 => WarpingTileProvider::process_tile_request::<i8>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint8 => WarpingTileProvider::process_tile_request::<u8>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int16 => WarpingTileProvider::process_tile_request::<i16>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint16 => WarpingTileProvider::process_tile_request::<u16>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int32 => WarpingTileProvider::process_tile_request::<i32>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint32 => WarpingTileProvider::process_tile_request::<u32>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int64 => WarpingTileProvider::process_tile_request::<i64>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint64 => WarpingTileProvider::process_tile_request::<u64>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Float32 => WarpingTileProvider::process_tile_request::<f32>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Float64 => WarpingTileProvider::process_tile_request::<f64>(layer_meta, band_nr, tile_req),
         }
     }
 
@@ -140,16 +140,16 @@ impl WarpingTileProvider {
 
         let band_nr = layer_meta.band_nr.unwrap_or(1);
         match layer_meta.data_type {
-            RasterDataType::Int8 => tileio::read_color_mapped_tile_as_png::<i8>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint8 => tileio::read_color_mapped_tile_as_png::<u8>(layer_meta, band_nr, tile_req),
-            RasterDataType::Int16 => tileio::read_color_mapped_tile_as_png::<i16>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint16 => tileio::read_color_mapped_tile_as_png::<u16>(layer_meta, band_nr, tile_req),
-            RasterDataType::Int32 => tileio::read_color_mapped_tile_as_png::<i32>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint32 => tileio::read_color_mapped_tile_as_png::<u32>(layer_meta, band_nr, tile_req),
-            RasterDataType::Int64 => tileio::read_color_mapped_tile_as_png::<i64>(layer_meta, band_nr, tile_req),
-            RasterDataType::Uint64 => tileio::read_color_mapped_tile_as_png::<u64>(layer_meta, band_nr, tile_req),
-            RasterDataType::Float32 => tileio::read_color_mapped_tile_as_png::<f32>(layer_meta, band_nr, tile_req),
-            RasterDataType::Float64 => tileio::read_color_mapped_tile_as_png::<f64>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int8 => tileio::read_color_mapped_tile_as_png::<i8>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint8 => tileio::read_color_mapped_tile_as_png::<u8>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int16 => tileio::read_color_mapped_tile_as_png::<i16>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint16 => tileio::read_color_mapped_tile_as_png::<u16>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int32 => tileio::read_color_mapped_tile_as_png::<i32>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint32 => tileio::read_color_mapped_tile_as_png::<u32>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Int64 => tileio::read_color_mapped_tile_as_png::<i64>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Uint64 => tileio::read_color_mapped_tile_as_png::<u64>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Float32 => tileio::read_color_mapped_tile_as_png::<f32>(layer_meta, band_nr, tile_req),
+            ArrayDataType::Float64 => tileio::read_color_mapped_tile_as_png::<f64>(layer_meta, band_nr, tile_req),
         }
     }
 
@@ -164,16 +164,16 @@ impl WarpingTileProvider {
         let band_nr = meta.band_nr.unwrap_or(1);
         let tile = Tile::for_coordinate(coord, meta.max_zoom);
         match meta.data_type {
-            RasterDataType::Int8 => WarpingTileProvider::process_pixel_request::<i8>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Uint8 => WarpingTileProvider::process_pixel_request::<u8>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Int16 => WarpingTileProvider::process_pixel_request::<i16>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Uint16 => WarpingTileProvider::process_pixel_request::<u16>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Int32 => WarpingTileProvider::process_pixel_request::<i32>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Uint32 => WarpingTileProvider::process_pixel_request::<u32>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Int64 => WarpingTileProvider::process_pixel_request::<i64>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Uint64 => WarpingTileProvider::process_pixel_request::<u64>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Float32 => WarpingTileProvider::process_pixel_request::<f32>(meta, band_nr, tile, dpi_ratio, coord),
-            RasterDataType::Float64 => WarpingTileProvider::process_pixel_request::<f64>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Int8 => WarpingTileProvider::process_pixel_request::<i8>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Uint8 => WarpingTileProvider::process_pixel_request::<u8>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Int16 => WarpingTileProvider::process_pixel_request::<i16>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Uint16 => WarpingTileProvider::process_pixel_request::<u16>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Int32 => WarpingTileProvider::process_pixel_request::<i32>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Uint32 => WarpingTileProvider::process_pixel_request::<u32>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Int64 => WarpingTileProvider::process_pixel_request::<i64>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Uint64 => WarpingTileProvider::process_pixel_request::<u64>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Float32 => WarpingTileProvider::process_pixel_request::<f32>(meta, band_nr, tile, dpi_ratio, coord),
+            ArrayDataType::Float64 => WarpingTileProvider::process_pixel_request::<f64>(meta, band_nr, tile, dpi_ratio, coord),
         }
     }
 

@@ -1,6 +1,6 @@
 use crate::tileformat::TileFormat;
 use gdal::raster::GdalDataType;
-use geo::RasterDataType;
+use geo::ArrayDataType;
 use geo::{crs::Epsg, Coordinate, LatLonBounds};
 use num::NumCast;
 use std::{collections::HashMap, path::PathBuf};
@@ -57,7 +57,7 @@ pub struct LayerMetadata {
     pub max_zoom: i32,
     pub nodata: Option<f64>,
     pub bounds: [f64; 4], // left bottom right top
-    pub data_type: RasterDataType,
+    pub data_type: ArrayDataType,
     pub epsg: Option<Epsg>,
     pub tile_format: TileFormat,
     pub supports_dpi_ratio: bool,
@@ -131,18 +131,18 @@ impl LayerMetadata {
     }
 }
 
-pub fn to_raster_data_type(type_info: GdalDataType) -> RasterDataType {
+pub fn to_raster_data_type(type_info: GdalDataType) -> ArrayDataType {
     match type_info {
-        GdalDataType::Int8 => RasterDataType::Int8,
-        GdalDataType::UInt8 => RasterDataType::Uint8,
-        GdalDataType::Int16 => RasterDataType::Int16,
-        GdalDataType::UInt16 => RasterDataType::Uint16,
-        GdalDataType::Int32 => RasterDataType::Int32,
-        GdalDataType::UInt32 => RasterDataType::Uint32,
-        GdalDataType::Int64 => RasterDataType::Int64,
-        GdalDataType::UInt64 => RasterDataType::Uint64,
-        GdalDataType::Float64 => RasterDataType::Float64,
-        GdalDataType::Float32 | GdalDataType::Unknown => RasterDataType::Float32,
+        GdalDataType::Int8 => ArrayDataType::Int8,
+        GdalDataType::UInt8 => ArrayDataType::Uint8,
+        GdalDataType::Int16 => ArrayDataType::Int16,
+        GdalDataType::UInt16 => ArrayDataType::Uint16,
+        GdalDataType::Int32 => ArrayDataType::Int32,
+        GdalDataType::UInt32 => ArrayDataType::Uint32,
+        GdalDataType::Int64 => ArrayDataType::Int64,
+        GdalDataType::UInt64 => ArrayDataType::Uint64,
+        GdalDataType::Float64 => ArrayDataType::Float64,
+        GdalDataType::Float32 | GdalDataType::Unknown => ArrayDataType::Float32,
     }
 }
 
