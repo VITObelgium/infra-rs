@@ -14,6 +14,8 @@ mod coordinate;
 mod coordinatetransformer;
 pub mod crs;
 mod densearray;
+#[cfg(feature = "gdal")]
+mod densearrayio;
 mod densearrayops;
 mod error;
 #[cfg(feature = "gdal")]
@@ -22,6 +24,8 @@ mod georeference;
 mod latlonbounds;
 mod nodata;
 pub mod raster;
+#[cfg(feature = "gdal")]
+mod rasteriotests;
 mod rastersize;
 pub mod rect;
 #[cfg(feature = "gdal")]

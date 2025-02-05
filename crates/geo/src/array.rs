@@ -1,13 +1,14 @@
+use crate::{arraynum::ArrayNum, Cell, Error, GeoReference, Nodata, RasterSize, Result};
+use std::fmt::Debug;
+
 pub trait ArrayMetadata: Clone + Debug {
     fn size(&self) -> RasterSize;
+    fn geo_reference(&self) -> GeoReference;
 
     fn with_size(size: RasterSize) -> Self;
     fn with_rows_cols(rows: Rows, cols: Columns) -> Self;
+    fn with_geo_reference(georef: GeoReference) -> Self;
 }
-
-use std::fmt::Debug;
-
-use crate::{arraynum::ArrayNum, Cell, Error, Nodata, RasterSize, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Rows(pub i32);
@@ -115,7 +116,7 @@ pub trait Array:
     fn zeros(meta: Self::Metadata) -> Self;
 
     /// Create a new raster with the given metadata and filled with the provided value.
-    fn filled_with(val: Self::Pixel, meta: Self::Metadata) -> Self;
+    fn filled_with(val: Option<Self::Pixel>, meta: Self::Metadata) -> Self;
 
     /// Create a new raster filled with nodata.
     fn filled_with_nodata(meta: Self::Metadata) -> Self;

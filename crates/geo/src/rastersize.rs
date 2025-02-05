@@ -1,6 +1,6 @@
 use crate::{
     array::{Columns, Rows},
-    ArrayMetadata,
+    ArrayMetadata, GeoReference,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -34,5 +34,13 @@ impl ArrayMetadata for RasterSize {
 
     fn with_rows_cols(rows: Rows, cols: Columns) -> Self {
         RasterSize::with_rows_cols(rows, cols)
+    }
+
+    fn with_geo_reference(georef: GeoReference) -> Self {
+        georef.size()
+    }
+
+    fn geo_reference(&self) -> GeoReference {
+        GeoReference::without_spatial_reference(*self, None)
     }
 }

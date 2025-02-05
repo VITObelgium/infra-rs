@@ -20,7 +20,7 @@ where
     let cols = ras.columns();
 
     let mut result = R::WithPixelType::<u32>::new_with_dimensions_of(ras, 0);
-    let mut mark = DenseArray::<u8>::filled_with(MARK_TODO, ras.size());
+    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), ras.size());
     let mut cluster_cells = Vec::new();
     let mut border = FiLo::new(rows, cols);
 
@@ -87,7 +87,7 @@ where
     let radius2 = (radius * radius) as i32;
 
     let mut result = R::WithPixelType::<i32>::new_with_dimensions_of(ras, -9999);
-    let mut mark = DenseArray::<u8>::filled_with(MARK_DONE, ras.size());
+    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_DONE), ras.size());
 
     ras.iter().zip(mark.iter_mut()).zip(result.iter_mut()).for_each(|((val, m), res)| {
         if val.is_nodata() {
@@ -258,7 +258,7 @@ where
     let cols = cat_map.columns();
 
     let mut result = R::new_with_dimensions_of(cat_map, Nodata::<i32>::nodata_value());
-    let mut mark = DenseArray::<u8>::filled_with(MARK_TODO, cat_map.size());
+    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), cat_map.size());
 
     let mut cluster_id = 0;
     let mut border = FiLo::new(rows, cols);
@@ -416,7 +416,7 @@ where
     let mut result = R::filled_with_nodata(items.metadata().clone());
     let radius = radius_in_meter / items.metadata().cell_size_x() as f32;
 
-    let mut mark = DenseArray::<u8>::filled_with(MARK_TODO, items.size());
+    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), items.size());
     let mut border = FiLo::new(rows, cols);
     let mut cluster_id = 1;
 

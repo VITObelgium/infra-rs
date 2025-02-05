@@ -11,9 +11,9 @@ pub fn bench_name<T: ArrayNum<T>>(name: &str) -> String {
 
 pub fn bench_addition<T: ArrayNum<T>>(c: &mut Criterion) {
     let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
-    let rhs = DenseArray::<T>::filled_with(NumCast::from(9.0).unwrap(), raster_size);
+    let rhs = DenseArray::<T>::filled_with(NumCast::from(9.0), raster_size);
 
-    let create_raster = || DenseArray::<T>::filled_with(NumCast::from(4.0).unwrap(), raster_size);
+    let create_raster = || DenseArray::<T>::filled_with(NumCast::from(4.0), raster_size);
 
     c.bench_function(&bench_name::<T>("raster_ops_add"), |b| {
         b.iter_batched_ref(create_raster, |lhs| *lhs += &rhs, BatchSize::LargeInput);

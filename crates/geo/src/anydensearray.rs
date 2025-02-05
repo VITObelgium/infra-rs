@@ -1,3 +1,5 @@
+use inf::cast;
+
 use crate::{
     array::{Columns, Rows},
     Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
@@ -38,9 +40,45 @@ macro_rules! unerase_raster_type_op {
     };
 }
 
+#[macro_export]
+macro_rules! unerase_raster_type_op_ref {
+    ( $raster_op:ident, $ret:path ) => {
+        pub fn $raster_op(&self) -> &$ret {
+            match self {
+                AnyDenseArray::U8(raster) => raster.$raster_op(),
+                AnyDenseArray::U16(raster) => raster.$raster_op(),
+                AnyDenseArray::U32(raster) => raster.$raster_op(),
+                AnyDenseArray::U64(raster) => raster.$raster_op(),
+                AnyDenseArray::I8(raster) => raster.$raster_op(),
+                AnyDenseArray::I16(raster) => raster.$raster_op(),
+                AnyDenseArray::I32(raster) => raster.$raster_op(),
+                AnyDenseArray::I64(raster) => raster.$raster_op(),
+                AnyDenseArray::F32(raster) => raster.$raster_op(),
+                AnyDenseArray::F64(raster) => raster.$raster_op(),
+            }
+        }
+    };
+}
+
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     unerase_raster_type_op!(rows, Rows);
     unerase_raster_type_op!(columns, Columns);
+    unerase_raster_type_op_ref!(metadata, Metadata);
+
+    pub fn filled_with(fill: Option<f64>, metadata: Metadata, datatype: ArrayDataType) -> Self {
+        match datatype {
+            ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::filled_with(cast::option::<u8>(fill), metadata)),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(DenseArray::filled_with(cast::option::<u16>(fill), metadata)),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(DenseArray::filled_with(cast::option::<u32>(fill), metadata)),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(DenseArray::filled_with(cast::option::<u64>(fill), metadata)),
+            ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::filled_with(cast::option::<i8>(fill), metadata)),
+            ArrayDataType::Int16 => AnyDenseArray::I16(DenseArray::filled_with(cast::option::<i16>(fill), metadata)),
+            ArrayDataType::Int32 => AnyDenseArray::I32(DenseArray::filled_with(cast::option::<i32>(fill), metadata)),
+            ArrayDataType::Int64 => AnyDenseArray::I64(DenseArray::filled_with(cast::option::<i64>(fill), metadata)),
+            ArrayDataType::Float32 => AnyDenseArray::F32(DenseArray::filled_with(cast::option::<f32>(fill), metadata)),
+            ArrayDataType::Float64 => AnyDenseArray::F64(DenseArray::filled_with(cast::option::<f64>(fill), metadata)),
+        }
+    }
 
     pub fn empty(datatype: ArrayDataType) -> Self {
         match datatype {
@@ -85,6 +123,47 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
             AnyDenseArray::F32(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
             AnyDenseArray::F64(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
         }
+    }
+}
+
+#[cfg(feature = "gdal")]
+impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
+    pub fn read(path: &std::path::Path) -> Result<Self> {
+        let data_type = crate::raster::io::dataset::detect_data_type(path, 1)?;
+        let data_type = match data_type {
+            gdal::raster::GdalDataType::Unknown => {
+                return Err(Error::Runtime(format!("Failed to detect data type from: {}", path.display())));
+            }
+            gdal::raster::GdalDataType::UInt8 => ArrayDataType::Uint8,
+            gdal::raster::GdalDataType::Int8 => ArrayDataType::Int8,
+            gdal::raster::GdalDataType::UInt16 => ArrayDataType::Uint16,
+            gdal::raster::GdalDataType::Int16 => ArrayDataType::Int16,
+            gdal::raster::GdalDataType::UInt32 => ArrayDataType::Uint32,
+            gdal::raster::GdalDataType::Int32 => ArrayDataType::Int32,
+            gdal::raster::GdalDataType::UInt64 => ArrayDataType::Uint64,
+            gdal::raster::GdalDataType::Int64 => ArrayDataType::Int64,
+            gdal::raster::GdalDataType::Float32 => ArrayDataType::Float32,
+            gdal::raster::GdalDataType::Float64 => ArrayDataType::Float64,
+        };
+
+        Self::read_as(data_type, path)
+    }
+
+    pub fn read_as(data_type: ArrayDataType, path: &std::path::Path) -> Result<Self> {
+        use crate::raster::RasterIO;
+
+        Ok(match data_type {
+            ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::<i8, _>::read(path)?),
+            ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::<u8, _>::read(path)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(DenseArray::<i16, _>::read(path)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(DenseArray::<u16, _>::read(path)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(DenseArray::<i32, _>::read(path)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(DenseArray::<u32, _>::read(path)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(DenseArray::<i64, _>::read(path)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(DenseArray::<u64, _>::read(path)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(DenseArray::<f32, _>::read(path)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(DenseArray::<f64, _>::read(path)?),
+        })
     }
 }
 

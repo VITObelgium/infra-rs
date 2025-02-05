@@ -2,11 +2,8 @@ pub mod algo;
 mod denseraster;
 mod denserasterconversions;
 #[cfg(feature = "gdal")]
-mod denserasterio;
-#[cfg(feature = "gdal")]
 pub mod io;
-#[cfg(feature = "gdal")]
-mod rasteriotests;
+
 use crate::GeoReference;
 
 // pub mod warp;

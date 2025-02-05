@@ -105,12 +105,16 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
     }
 
     fn zeros(meta: Metadata) -> Self {
-        DenseArray::filled_with(T::zero(), meta)
+        DenseArray::filled_with(Some(T::zero()), meta)
     }
 
-    fn filled_with(val: T, meta: Metadata) -> Self {
-        let cell_count = meta.size().cell_count();
-        DenseArray::new(meta, vec![val; cell_count])
+    fn filled_with(val: Option<T>, meta: Metadata) -> Self {
+        if let Some(val) = val {
+            let cell_count = meta.size().cell_count();
+            DenseArray::new(meta, vec![val; cell_count])
+        } else {
+            DenseArray::filled_with_nodata(meta)
+        }
     }
 
     fn filled_with_nodata(meta: Metadata) -> Self {

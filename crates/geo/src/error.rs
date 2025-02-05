@@ -3,10 +3,7 @@ use thiserror::Error;
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Raster dimensions do not match ({}x{}) <-> ({}x{})", .size1.0, .size1.1, .size2.0, .size2.1)]
-    SizeMismatch {
-        size1: (usize, usize),
-        size2: (usize, usize),
-    },
+    SizeMismatch { size1: (usize, usize), size2: (usize, usize) },
     #[error("The operation has been cancelled")]
     Cancelled,
     #[error("Invalid path: {0}")]
@@ -47,6 +44,7 @@ impl std::convert::From<Error> for pyo3::PyErr {
     fn from(err: Error) -> pyo3::PyErr {
         match err {
             Error::IOError(_) => pyo3::PyErr::new::<pyo3::exceptions::PyIOError, _>(err.to_string()),
+            Error::InvalidArgument(_) => pyo3::PyErr::new::<pyo3::exceptions::PyValueError, _>(err.to_string()),
             _ => pyo3::exceptions::PyRuntimeError::new_err(err.to_string()),
         }
     }

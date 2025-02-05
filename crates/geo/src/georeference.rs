@@ -604,6 +604,14 @@ impl ArrayMetadata for GeoReference {
     fn with_rows_cols(rows: Rows, cols: Columns) -> Self {
         self::GeoReference::without_spatial_reference(RasterSize::with_rows_cols(rows, cols), None)
     }
+
+    fn with_geo_reference(georef: GeoReference) -> Self {
+        georef
+    }
+
+    fn geo_reference(&self) -> GeoReference {
+        self.clone()
+    }
 }
 
 fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
