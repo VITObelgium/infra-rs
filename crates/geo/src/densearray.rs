@@ -3,6 +3,7 @@ use crate::{
     raster::{self},
     Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, RasterSize,
 };
+use approx::{AbsDiffEq, RelativeEq};
 
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::nodata_value`] for the type T in the same array data structure
@@ -271,6 +272,50 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> PartialEq for DenseArray<T, Metada
             .all(|(&a, &b)| match (a.is_nodata(), b.is_nodata()) {
                 (true, true) => true,
                 (false, false) => a == b,
+                _ => false,
+            })
+    }
+}
+
+impl<T: ArrayNum<T>, Metadata: ArrayMetadata> AbsDiffEq for DenseArray<T, Metadata> {
+    type Epsilon = T::Epsilon;
+
+    fn default_epsilon() -> Self::Epsilon {
+        T::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        if self.size() != other.size() {
+            return false;
+        }
+
+        self.data
+            .iter()
+            .zip(other.data.iter())
+            .all(|(&a, &b)| match (a.is_nodata(), b.is_nodata()) {
+                (true, true) => true,
+                (false, false) => a.abs_diff_eq(&b, epsilon),
+                _ => false,
+            })
+    }
+}
+
+impl<T: ArrayNum<T> + RelativeEq, Metadata: ArrayMetadata> RelativeEq for DenseArray<T, Metadata> {
+    fn default_max_relative() -> T::Epsilon {
+        T::default_max_relative()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
+        if self.size() != other.size() {
+            return false;
+        }
+
+        self.data
+            .iter()
+            .zip(other.data.iter())
+            .all(|(&a, &b)| match (a.is_nodata(), b.is_nodata()) {
+                (true, true) => true,
+                (false, false) => a.relative_eq(&b, epsilon, max_relative),
                 _ => false,
             })
     }

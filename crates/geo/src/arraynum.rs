@@ -11,6 +11,7 @@ pub trait ArrayNum<T>:
     + std::cmp::PartialOrd
     + std::fmt::Debug
     + std::string::ToString
+    + approx::AbsDiffEq<Epsilon = T>
 {
     const TYPE: ArrayDataType;
     const IS_SIGNED: bool;

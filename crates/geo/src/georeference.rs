@@ -42,33 +42,33 @@ impl RelativeEq for CellSize {
 }
 
 impl CellSize {
-    pub fn new(x: f64, y: f64) -> Self {
+    pub const fn new(x: f64, y: f64) -> Self {
         CellSize { x, y }
     }
 
-    pub fn square(size: f64) -> Self {
+    pub const fn square(size: f64) -> Self {
         CellSize::new(size, -size)
     }
 
-    pub fn is_valid(&self) -> bool {
+    pub const fn is_valid(&self) -> bool {
         self.x != 0.0 && self.y != 0.0
     }
 
-    pub fn multiply(&mut self, factor: f64) {
+    pub const fn multiply(&mut self, factor: f64) {
         self.x *= factor;
         self.y *= factor;
     }
 
-    pub fn divide(&mut self, factor: f64) {
+    pub const fn divide(&mut self, factor: f64) {
         self.x /= factor;
         self.y /= factor;
     }
 
-    pub fn x(&self) -> f64 {
+    pub const fn x(&self) -> f64 {
         self.x
     }
 
-    pub fn y(&self) -> f64 {
+    pub const fn y(&self) -> f64 {
         self.y
     }
 }

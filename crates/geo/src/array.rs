@@ -7,7 +7,7 @@ pub trait ArrayMetadata: Clone + Debug {
 
 use std::fmt::Debug;
 
-use crate::{arraynum::ArrayNum, Cell, Nodata, RasterSize};
+use crate::{arraynum::ArrayNum, Cell, Error, Nodata, RasterSize, Result};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Rows(pub i32);
@@ -58,7 +58,10 @@ impl std::ops::Mul<Rows> for Columns {
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Array:
     PartialEq
+    + approx::AbsDiffEq<Epsilon = Self::Pixel>
     + Clone
+    + Sized
+    + std::fmt::Debug
     + std::ops::Add<Self::Pixel, Output = Self>
     + std::ops::Sub<Self::Pixel, Output = Self>
     + std::ops::Mul<Self::Pixel, Output = Self>
@@ -91,8 +94,6 @@ pub trait Array:
 // + for<'a> std::ops::Sub<&'a Self, Output = Self>
 // + for<'a> std::ops::Mul<&'a Self, Output = Self>
 // + for<'a> std::ops::Div<&'a Self, Output = Self>
-where
-    Self: Sized + std::fmt::Debug,
 {
     type Pixel: ArrayNum<Self::Pixel>;
     type Metadata: ArrayMetadata;
@@ -217,4 +218,16 @@ where
 pub trait ArrayCopy<T: ArrayNum<T>, Rhs = Self> {
     /// Create a new raster with the same metadata and data as the provided raster.
     fn new_with_dimensions_of(ras: &Rhs, fill: T) -> Self;
+}
+
+pub fn check_dimensions(lhs: &impl Array, rhs: &impl Array) -> Result<()> {
+    if lhs.size() != rhs.size() {
+        return Err(Error::InvalidArgument(format!(
+            "The rasters have different dimensions {:?} <-> {:?}",
+            lhs.size(),
+            rhs.size()
+        )));
+    }
+
+    Ok(())
 }
