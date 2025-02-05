@@ -6,7 +6,7 @@ mod anydensearrayops;
 mod array;
 mod arraydatatype;
 mod arraynum;
-mod arrayops;
+pub mod arrayops;
 mod cell;
 pub mod constants;
 mod coordinate;

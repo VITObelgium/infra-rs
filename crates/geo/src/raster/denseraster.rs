@@ -1,5 +1,5 @@
 use crate::GeoReference;
-use crate::{Array, DenseArray, ArrayNum, Result};
+use crate::{Array, ArrayNum, DenseArray, Result};
 use num::NumCast;
 
 pub type DenseRaster<T> = DenseArray<T, GeoReference>;
@@ -42,6 +42,7 @@ impl<T: ArrayNum<T> + gdal::raster::GdalType> DenseRaster<T> {
 /// Process nodata values in the data array
 /// This means replacing all the values that match the nodata value with the default nodata value for the type T
 /// as defined by the [`crate::Nodata`] trait
+#[allow(dead_code)]
 pub fn process_nodata<T: ArrayNum<T>>(data: &mut [T], nodata: Option<f64>) {
     if let Some(nodata) = nodata {
         if nodata.is_nan() || NumCast::from(nodata) == Some(T::nodata_value()) {
