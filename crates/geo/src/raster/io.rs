@@ -363,7 +363,7 @@ pub mod dataset {
         let path_str = path.to_string_lossy();
         let path_str = CString::new(path_str.as_ref())?;
 
-        let _ = check_pointer(
+        let ds_handle = check_pointer(
             unsafe {
                 gdal_sys::GDALCreateCopy(
                     driver.c_driver(),
@@ -377,7 +377,9 @@ pub mod dataset {
             },
             "GDALCreateCopy",
         )
-        .map_err(|err| Error::Runtime(format!("Failed to write raster to disk: {}", err)));
+        .map_err(|err| Error::Runtime(format!("Failed to write raster to disk: {}", err)))?;
+
+        unsafe { gdal_sys::GDALClose(ds_handle) };
 
         Ok(())
     }

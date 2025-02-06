@@ -79,3 +79,36 @@ fn flatten_nodata<T: ArrayNum<T>>(data: &mut [T], nodata: Option<f64>) -> Result
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use tempdir::TempDir;
+
+    use crate::{crs, raster::RasterIO, testutils::workspace_test_data_dir, Array, Columns, DenseArray, GeoReference, RasterSize, Rows};
+
+    #[test]
+    fn read_raster() {
+        let raster = DenseArray::<f32, GeoReference>::read(&workspace_test_data_dir().join("landusebyte.tif")).unwrap();
+
+        assert_eq!(raster.columns().count(), 2370);
+        assert_eq!(raster.rows().count(), 920);
+        assert_eq!(raster.metadata().projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
+    }
+
+    #[test]
+    fn write_raster() {
+        let mut raster = DenseArray::<f32>::zeros(RasterSize::with_rows_cols(Rows(5), Columns(10)));
+        let tmp_dir = TempDir::new("ras_write").unwrap();
+
+        let raster_path = tmp_dir.path().join("test.asc");
+
+        // Write the raster
+        assert!(!raster_path.exists());
+        raster.write(&raster_path).unwrap();
+        assert!(raster_path.exists());
+
+        // Make sure the file can be removed and is no longer locked by the dataset
+        // This happened due to a bug not closing the dataset after writing
+        std::fs::remove_file(&raster_path).unwrap();
+    }
+}

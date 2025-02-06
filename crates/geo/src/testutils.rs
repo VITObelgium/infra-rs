@@ -1,4 +1,7 @@
+use std::path::PathBuf;
+
 use approx::relative_eq;
+use path_macro::path;
 
 use crate::{
     array::{Columns, Rows},
@@ -6,6 +9,10 @@ use crate::{
 };
 
 pub const NOD: f64 = 255.0;
+
+pub fn workspace_test_data_dir() -> PathBuf {
+    path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data")
+}
 
 pub fn create_vec<T: num::NumCast + ArrayNum<T>>(data: &[f64]) -> Vec<T> {
     data.iter()
