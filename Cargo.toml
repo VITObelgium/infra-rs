@@ -47,4 +47,4 @@ x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 
 [patch.crates-io]
 # more recent geozero to avoid multiple gdal copies
-geozero = { git = "https://github.com/georust/geozero.git", rev = "97b143716dcb6331ba259f9c98b1af9a6c325739" }
+geozero = { git = "https://github.com/georust/geozero.git", rev = "66583383b995925c3eef0a01cd5781b1d59e8209" }
