@@ -614,6 +614,31 @@ impl ArrayMetadata for GeoReference {
     }
 }
 
+impl std::fmt::Display for GeoReference {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "Rows: {} Cols: {} Xll: {:.3} Yll: {:.3} Cellsize: {},{}",
+            self.size.rows,
+            self.size.cols,
+            self.bottom_left().x(),
+            self.bottom_left().y(),
+            self.cell_size_x(),
+            self.cell_size_y()
+        )?;
+
+        if let Some(nodata) = self.nodata {
+            write!(f, " NoData: {}", nodata)?;
+        }
+
+        if !self.projection.is_empty() {
+            write!(f, " Projection: {}", self.projection)?;
+        }
+
+        Ok(())
+    }
+}
+
 fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
     let diff = (val1 - val2).abs();
     diff % cellsize < 1e-12

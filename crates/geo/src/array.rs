@@ -15,6 +15,18 @@ pub struct Rows(pub i32);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Columns(pub i32);
 
+impl std::fmt::Display for Rows {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::fmt::Display for Columns {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
 impl Rows {
     pub fn count(&self) -> i32 {
         self.0

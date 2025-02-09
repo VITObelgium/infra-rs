@@ -1184,9 +1184,9 @@ dependencies = [
 
 [[package]]
 name = "geos"
-version = "9.1.1"
+version = "10.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56d199db00644057267a8a68ee72df92aa59a32036b487b2a2b76fd0b3fca32b"
+checksum = "0473e63acafe4109b096ab8c1e6b8151e1cb25397811525779a9bc7187382a7b"
 dependencies = [
  "c_vec",
  "geo-types",
@@ -1210,7 +1210,7 @@ dependencies = [
 [[package]]
 name = "geozero"
 version = "0.14.0"
-source = "git+https://github.com/georust/geozero.git?rev=97b143716dcb6331ba259f9c98b1af9a6c325739#97b143716dcb6331ba259f9c98b1af9a6c325739"
+source = "git+https://github.com/georust/geozero.git?rev=66583383b995925c3eef0a01cd5781b1d59e8209#66583383b995925c3eef0a01cd5781b1d59e8209"
 dependencies = [
  "gdal",
  "gdal-sys",

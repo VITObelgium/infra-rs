@@ -15,3 +15,26 @@ pub enum ArrayDataType {
     Float32 = 8,
     Float64 = 9,
 }
+
+impl ArrayDataType {
+    pub fn to_str(&self) -> &'static str {
+        match self {
+            Self::Int8 => "int8",
+            Self::Uint8 => "uint8",
+            Self::Int16 => "int16",
+            Self::Uint16 => "uint16",
+            Self::Int32 => "int32",
+            Self::Uint32 => "uint32",
+            Self::Int64 => "int64",
+            Self::Uint64 => "uint64",
+            Self::Float32 => "float32",
+            Self::Float64 => "float64",
+        }
+    }
+}
+
+impl std::fmt::Display for ArrayDataType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.to_str())
+    }
+}

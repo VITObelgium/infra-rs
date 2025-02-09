@@ -7,7 +7,7 @@ use crate::{
 };
 
 /// Type erased `RasterTile`
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterSize> {
     U8(DenseArray<u8, Metadata>),
     U16(DenseArray<u16, Metadata>),
