@@ -1466,6 +1466,7 @@ version = "0.1.0"
 dependencies = [
  "geo",
  "inf",
+ "pyo3",
  "sqlite",
  "tiler",
 ]

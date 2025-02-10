@@ -20,6 +20,7 @@ inf    = { path = "./crates/inf" }
 geo    = { path = "./crates/geo" }
 tiler  = { path = "./crates/tiler", optional = true }
 sqlite = { path = "./crates/sqlite", optional = true }
+pyo3   = { version = "*", optional = true }
 
 [features]
 tiler       = ["dep:tiler"]
@@ -28,6 +29,7 @@ sqlite      = ["dep:sqlite"]
 gdal        = ["geo/gdal"]
 gdal-static = ["geo/gdal-static"]
 serde       = ["inf/serde"]
+python      = ["pyo3/auto-initialize"]
 
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"

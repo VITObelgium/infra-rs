@@ -50,7 +50,8 @@ If the bootstrap fails make sure to use m4 from homebrew
 `brew link m4 --force`
 
 ### Additional tooling
-`cargo install sd fd-find just cargo-vcpkg cargo-nextest`
+`cargo install cargo-binstall`
+`cargo binstall sd fd-find just cargo-vcpkg cargo-nextest`
 
 ### Compile the C++ dependencies
 `just bootstrap`
