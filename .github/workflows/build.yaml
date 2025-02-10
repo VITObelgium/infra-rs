@@ -6,8 +6,6 @@ jobs:
   compile:
     name: ${{ matrix.cfg.os }}
     runs-on: ${{ matrix.cfg.os }}
-    env: 
-      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
     strategy:
       fail-fast: false
       matrix:
@@ -28,7 +26,10 @@ jobs:
       - uses: prefix-dev/setup-pixi@v0.8.0
       - uses: cargo-bins/cargo-binstall@main
       - run: cargo binstall sd fd-find just cargo-vcpkg cargo-nextest
-      - run: just bootstrap
+      - name: Build the C++ dependencies using vcpkg
+        env: 
+          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+        run: just bootstrap
       - run: just pybootstrap
       - run: just build
       - run: just test
