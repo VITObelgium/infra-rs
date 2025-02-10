@@ -16,6 +16,14 @@ PYTHON_EXE := if os_family() == "windows" {
   }
 VCPKG_DEFAULT_HOST_TRIPLET := VCPKG_DEFAULT_TRIPLET
 
+export LD_LIBRARY_PATH := if os_family() == "windows" {
+  ""
+} else if os() == "macos" {
+  ""
+} else {
+  source_directory() / ".pixi/envs/default/lib"
+}
+
 cargo-config-gen:
   cp .cargo/config.toml.in .cargo/config.toml
   sd @CARGO_VCPKG_TRIPLET@ {{VCPKG_DEFAULT_TRIPLET}} .cargo/config.toml
