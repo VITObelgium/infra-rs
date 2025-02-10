@@ -23,10 +23,10 @@ jobs:
             core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
-      - uses: extractions/setup-just@v2
       - uses: prefix-dev/setup-pixi@v0.8.0
-      - uses: cargo-bins/cargo-binstall@main
-      - run: cargo binstall sd fd-find cargo-vcpkg cargo-nextest
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,sd,fd-find,cargo-vcpkg,cargo-nextest
       - name: Build the C++ dependencies using vcpkg
         env: 
           VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
