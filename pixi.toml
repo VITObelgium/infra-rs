@@ -11,4 +11,4 @@ test_release = { cmd = "cargo nextest run --profile ci --workspace --all-feature
 test_debug   = "cargo nextest run --profile ci  --workspace --all-features"
 
 [dependencies]
-pyarrow = ">=18.1.0,<19"
+pyarrow = ">=19.0.0,<20"
