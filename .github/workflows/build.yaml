@@ -30,6 +30,11 @@ jobs:
         env: 
           VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
         run: just bootstrap
-      - run: just pybootstrap
-      - run: just build
-      - run: just test
+      - name: Install the python environment with pixi
+        run: just pybootstrap
+      - name: Build the project
+        run: just build
+      - name: Run the unit tests
+        run: just test_release
+      - name: Run the unit tests with python feature enabled
+        run: just test_release_py

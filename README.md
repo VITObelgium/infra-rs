@@ -1,3 +1,5 @@
+[![Build](https://github.com/VITObelgium/infra-rs/actions/workflows/build.yml/badge.svg?branch=main)]
+
 This repo contains the shared crates for building geo applications
 
 ## Project integration
