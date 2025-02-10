@@ -1,0 +1,34 @@
+name: Build
+
+on: [push]
+
+jobs:
+  compile:
+    name: ${{ matrix.cfg.os }}
+    runs-on: ${{ matrix.cfg.os }}
+    env: 
+      VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { os: ubuntu-latest }
+          - { os: windows-2022 }
+          - { os: macos-latest }
+
+    steps:
+      - name: Export GitHub Actions cache environment variables
+        uses: actions/github-script@v7
+        with:
+          script: |
+            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
+            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: prefix-dev/setup-pixi@v0.8.0
+      - uses: cargo-bins/cargo-binstall@main
+      - run: cargo binstall sd fd-find just cargo-vcpkg cargo-nextest
+      - run: just bootstrap
+      - run: just pybootstrap
+      - run: just build
+      - run: just test
