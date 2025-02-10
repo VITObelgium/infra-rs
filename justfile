@@ -28,11 +28,15 @@ pybootstrap:
   -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/debug/libpython3.12.dylib
   -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/release/libpython3.12.dylib
 
+# gdal-sys uses pkg-config to find the gdal library
+# the gdal.pc file contains shlwapi as link flag for the shlwapi library but this gets ignored
+# by the pkg-config crate implementation, so we need to replace it with a format that is picked up by the crate
 bootstrap: cargo-config-gen
   echo "Bootstrapping vcpkg:{{VCPKG_DEFAULT_TRIPLET}}..."
   cargo vcpkg -v build
   -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
   fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- '-l-framework' '-framework'
+  fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- ' shlwapi ' ' -lshlwapi '
   -mkdir -p target/data && mkdir -p target/debug && mkdir -p target/release
   fd -g proj.db ./target/vcpkg/installed --exec cp "{}" ./target/data/
   cp ./target/data/proj.db ./target/debug/
