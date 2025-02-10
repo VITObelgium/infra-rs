@@ -12,3 +12,6 @@ test_debug   = "cargo nextest run --profile ci  --workspace --all-features"
 
 [dependencies]
 pyarrow = ">=19.0.0,<20"
+
+[target.linux.activation.env]
+LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"
