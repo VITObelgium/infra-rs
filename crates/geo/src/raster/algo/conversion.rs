@@ -51,7 +51,7 @@ mod generictests {
             ]),
         );
 
-        super::replace_value(&mut raster, NumCast::from(4.0).unwrap(), NumCast::from(4.0).unwrap());
+        super::replace_value(&mut raster, NumCast::from(4.0).unwrap(), NumCast::from(9.0).unwrap());
         assert_eq!(expected, raster);
     }
 

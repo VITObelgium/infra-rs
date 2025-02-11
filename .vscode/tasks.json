@@ -9,7 +9,7 @@
 			],
 			"args": [
 				"--workspace",
-				"--all-features"
+				"--features=serde,gdal-static,arrow,derive,vector"
 			],
 			"group": {
 				"kind": "build",
@@ -26,7 +26,6 @@
 			"args": [
 				"run",
 				"--workspace",
-				"--release",
 				"--features=serde,gdal-static,arrow,derive,vector"
 			],
 			"group": {
