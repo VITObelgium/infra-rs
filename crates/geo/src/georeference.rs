@@ -218,8 +218,16 @@ impl GeoReference {
         self.size.rows
     }
 
+    pub fn set_rows(&mut self, rows: Rows) {
+        self.size.rows = rows;
+    }
+
     pub fn columns(&self) -> Columns {
         self.size.cols
+    }
+
+    pub fn set_columns(&mut self, cols: Columns) {
+        self.size.cols = cols;
     }
 
     /// Translates a cell to a point in the raster.
