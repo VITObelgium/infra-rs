@@ -1,5 +1,6 @@
 //! Algorithms for raster data processing (translate, warp, ...).
 
+mod conversion;
 mod distance;
 mod nodata;
 #[cfg(all(feature = "gdal", feature = "vector"))]
@@ -26,6 +27,8 @@ pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_di
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
 };
+
+pub use conversion::replace_value;
 
 pub use {
     distance::closest_target, distance::distance, distance::distance_with_obstacles, distance::sum_targets_within_travel_distance,

@@ -597,6 +597,10 @@ impl ArrayMetadata for GeoReference {
         self.size
     }
 
+    fn nodata(&self) -> Option<f64> {
+        self.nodata
+    }
+
     fn with_size(size: RasterSize) -> Self {
         self::GeoReference::without_spatial_reference(size, None)
     }

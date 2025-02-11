@@ -3,6 +3,7 @@ use std::fmt::Debug;
 
 pub trait ArrayMetadata: Clone + Debug {
     fn size(&self) -> RasterSize;
+    fn nodata(&self) -> Option<f64>;
     fn geo_reference(&self) -> GeoReference;
 
     fn with_size(size: RasterSize) -> Self;
@@ -118,7 +119,13 @@ pub trait Array:
     //
 
     /// Create a new raster with the given metadata and data buffer.
+    /// The nodata value is assumed to be the default value for the pixel type.
     fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Self;
+
+    /// Create a new raster with the given metadata and data buffer.
+    /// The nodata value from the provided Metadata will be used to convert all the values in the
+    /// data buffer that match the nodata value to the internal nodata value.
+    fn new_process_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Self;
 
     fn from_iter<Iter>(meta: Self::Metadata, iter: Iter) -> Self
     where

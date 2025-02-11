@@ -28,6 +28,10 @@ impl ArrayMetadata for RasterSize {
         *self
     }
 
+    fn nodata(&self) -> Option<f64> {
+        None
+    }
+
     fn with_size(size: RasterSize) -> Self {
         size
     }

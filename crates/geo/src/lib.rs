@@ -17,6 +17,7 @@ mod densearray;
 #[cfg(feature = "gdal")]
 mod densearrayio;
 mod densearrayops;
+pub(crate) mod densearrayutil;
 mod error;
 #[cfg(feature = "gdal")]
 pub mod gdalinterop;

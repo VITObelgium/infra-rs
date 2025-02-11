@@ -1,5 +1,6 @@
 use crate::{
     array::{Columns, Rows},
+    densearrayutil,
     raster::{self},
     Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, RasterSize,
 };
@@ -89,6 +90,11 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
 
     fn new(meta: Metadata, data: Vec<T>) -> Self {
         DenseArray { meta, data }
+    }
+
+    fn new_process_nodata(meta: Self::Metadata, mut data: Vec<Self::Pixel>) -> Self {
+        densearrayutil::process_nodata(&mut data, meta.nodata());
+        Self::new(meta, data)
     }
 
     fn from_iter<Iter>(meta: Metadata, iter: Iter) -> Self
