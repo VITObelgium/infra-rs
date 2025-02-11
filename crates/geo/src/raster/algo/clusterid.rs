@@ -494,7 +494,7 @@ mod generictests {
                 4, 4, 5, 5,
                 4, 4, 5, 6
             ]
-        );
+        ).unwrap();
 
         assert_eq!(expected, cluster_id(&raster, ClusterDiagonals::Exclude));
     }

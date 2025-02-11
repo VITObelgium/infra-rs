@@ -280,7 +280,8 @@ mod tests {
         let raster = DenseArray::new(
             RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
             (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
-        );
+        )
+        .unwrap();
 
         let type_erased = AnyDenseArray::U32(raster);
 

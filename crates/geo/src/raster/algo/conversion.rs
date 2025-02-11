@@ -37,7 +37,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::new(
@@ -49,7 +49,7 @@ mod generictests {
                  9.0,  9.0,  5.0,  8.0,
                  3.0,  NOD,  9.0,  NOD,
             ]),
-        );
+        ).unwrap();
 
         super::replace_value(&mut raster, NumCast::from(4.0).unwrap(), NumCast::from(9.0).unwrap());
         assert_eq!(expected, raster);

@@ -2,7 +2,7 @@ use crate::{
     array::{Columns, Rows},
     densearrayutil,
     raster::{self},
-    Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, RasterSize,
+    Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, Error, RasterSize, Result,
 };
 use approx::{AbsDiffEq, RelativeEq};
 
@@ -28,7 +28,8 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     }
 
     pub fn unary<F: Fn(T) -> T>(&self, op: F) -> Self {
-        DenseArray::new(self.metadata().clone(), self.data.iter().map(|&a| op(a)).collect())
+        DenseArray::new(self.metadata().clone(), self.data.iter().map(|&a| op(a)).collect()).unwrap()
+        // only fails on size mismatch
     }
 
     pub fn unary_inplace<F: Fn(&mut T)>(&mut self, op: F) {
@@ -45,7 +46,7 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
 
         let data = self.data.iter().zip(other.data.iter()).map(|(&a, &b)| op(a, b)).collect();
 
-        DenseArray::new(self.metadata().clone(), data)
+        DenseArray::new(self.metadata().clone(), data).unwrap() // only fails on size mismatch
     }
 
     pub fn binary_inplace<F: Fn(&mut T, T)>(&mut self, other: &Self, op: F) {
@@ -79,7 +80,7 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> AsMut<[T]> for DenseArray<T, Metad
 
 impl<T: ArrayNum<T>, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayCopy<T, R> for DenseArray<T, Metadata> {
     fn new_with_dimensions_of(ras: &R, fill: T) -> Self {
-        DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()])
+        DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()]).unwrap()
     }
 }
 
@@ -88,16 +89,24 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
     type WithPixelType<U: ArrayNum<U>> = DenseArray<U, Metadata>;
     type Metadata = Metadata;
 
-    fn new(meta: Metadata, data: Vec<T>) -> Self {
-        DenseArray { meta, data }
+    fn new(meta: Metadata, data: Vec<T>) -> Result<Self> {
+        if meta.size().cell_count() != data.len() {
+            return Err(Error::InvalidArgument(format!(
+                "Data length does not match the number of cells in the metadata: {} != {}",
+                data.len(),
+                meta.size().cell_count()
+            )));
+        }
+
+        Ok(DenseArray { meta, data })
     }
 
-    fn new_process_nodata(meta: Self::Metadata, mut data: Vec<Self::Pixel>) -> Self {
+    fn new_process_nodata(meta: Self::Metadata, mut data: Vec<Self::Pixel>) -> Result<Self> {
         densearrayutil::process_nodata(&mut data, meta.nodata());
         Self::new(meta, data)
     }
 
-    fn from_iter<Iter>(meta: Metadata, iter: Iter) -> Self
+    fn from_iter<Iter>(meta: Metadata, iter: Iter) -> Result<Self>
     where
         Self: Sized,
         Iter: Iterator<Item = Option<T>>,
@@ -107,7 +116,7 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
             data.push(val.unwrap_or(T::nodata_value()));
         }
 
-        DenseArray { meta, data }
+        Self::new(meta, data)
     }
 
     fn zeros(meta: Metadata) -> Self {
@@ -117,7 +126,7 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
     fn filled_with(val: Option<T>, meta: Metadata) -> Self {
         if let Some(val) = val {
             let cell_count = meta.size().cell_count();
-            DenseArray::new(meta, vec![val; cell_count])
+            DenseArray::new(meta, vec![val; cell_count]).unwrap()
         } else {
             DenseArray::filled_with_nodata(meta)
         }
@@ -125,7 +134,7 @@ impl<T: ArrayNum<T>, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> 
 
     fn filled_with_nodata(meta: Metadata) -> Self {
         let cell_count = meta.size().cell_count();
-        DenseArray::new(meta, vec![T::nodata_value(); cell_count])
+        DenseArray::new(meta, vec![T::nodata_value(); cell_count]).unwrap()
     }
 
     /// Returns the metadata reference.
@@ -363,7 +372,8 @@ mod tests {
         let ras = DenseArray::new(
             RasterSize::with_rows_cols(Rows(2), Columns(2)),
             vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4],
-        );
+        )
+        .unwrap();
 
         let f64_ras = raster::algo::cast::<f64, _>(&ras);
         compare_fp_vectors(f64_ras.as_slice(), &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0]);

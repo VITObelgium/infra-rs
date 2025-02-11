@@ -120,14 +120,14 @@ pub trait Array:
 
     /// Create a new raster with the given metadata and data buffer.
     /// The nodata value is assumed to be the default value for the pixel type.
-    fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Self;
+    fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
 
     /// Create a new raster with the given metadata and data buffer.
     /// The nodata value from the provided Metadata will be used to convert all the values in the
     /// data buffer that match the nodata value to the internal nodata value.
-    fn new_process_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Self;
+    fn new_process_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
 
-    fn from_iter<Iter>(meta: Self::Metadata, iter: Iter) -> Self
+    fn from_iter<Iter>(meta: Self::Metadata, iter: Iter) -> Result<Self>
     where
         Iter: Iterator<Item = Option<Self::Pixel>>;
 

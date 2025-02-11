@@ -22,7 +22,7 @@ impl<T: ArrayNum<T> + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray
         let metadata = raster::io::dataset::read_band(&ds, band_index, data.as_mut_slice())?;
         densearrayutil::process_nodata(&mut data, metadata.nodata());
 
-        Ok(Self::new(Metadata::with_geo_reference(metadata), data))
+        Self::new(Metadata::with_geo_reference(metadata), data)
     }
 
     /// Reads a subset of the raster from disk into a `DenseRaster`
@@ -35,7 +35,7 @@ impl<T: ArrayNum<T> + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray
         let dst_meta = raster::io::dataset::read_band_region(&ds, band_index, bounds, &mut data)?;
         densearrayutil::process_nodata(&mut data, dst_meta.nodata());
 
-        Ok(Self::new(Metadata::with_geo_reference(dst_meta), data))
+        Self::new(Metadata::with_geo_reference(dst_meta), data)
     }
 
     fn write(&mut self, path: &std::path::Path) -> Result {

@@ -1037,7 +1037,7 @@ mod unspecialized_generictests {
                 3, 0, 0, 1, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f32>::new(
@@ -1049,7 +1049,7 @@ mod unspecialized_generictests {
                   0.0, 100.000, 100.000,   0.000, 100.000, 200.000, 300.000, 400.000, 500.000, 600.000,
                 100.0, 141.421, 141.421, 100.000, 141.421, 241.421, 341.421, 441.421, 541.421, 641.421,
             ]
-        );
+        ).unwrap();
 
         assert_abs_diff_eq!(expected, &super::distance(&raster), epsilon = 0.001);
     }
@@ -1077,7 +1077,7 @@ mod unspecialized_generictests {
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
             ],
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f32>::new(
@@ -1089,7 +1089,7 @@ mod unspecialized_generictests {
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             ]
-        );
+        ).unwrap();
 
         assert_abs_diff_eq!(expected, &super::distance(&raster));
     }
@@ -1117,7 +1117,7 @@ mod unspecialized_generictests {
                 3, 0, 0, 1, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
@@ -1129,7 +1129,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
-        );
+        ).unwrap();
 
         const INF: f32 = f32::INFINITY;
 
@@ -1143,7 +1143,7 @@ mod unspecialized_generictests {
                     0.0,   100.0, 100.000,   0.0, 100.000, 200.000,     INF, 482.843, 582.843, 682.843,
                   100.0, 141.421, 141.421, 100.0, 141.421, 241.421, 341.421, 441.421, 541.421, 641.421,
             ]
-        );
+        ).unwrap();
 
         assert_relative_eq!(
             expected,
@@ -1175,7 +1175,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
             ],
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
@@ -1187,7 +1187,7 @@ mod unspecialized_generictests {
                 1, 1, 1, 0, 1, 1, 0, 1, 1, 1,
                 1, 1, 1, 1, 0, 0, 1, 1, 1, 1,
             ],
-        );
+        ).unwrap();
 
         const INF: f32 = f32::INFINITY;
 
@@ -1203,7 +1203,7 @@ mod unspecialized_generictests {
                         INF,       INF,       INF, 100.0, 0.0, 0.0, 100.0,       INF,       INF,       INF,
                         INF,       INF,       INF,   INF, 0.0, 0.0,   INF,       INF,       INF,       INF,
                 ]
-            );
+            ).unwrap();
 
             assert_relative_eq!(
                 expected,
@@ -1224,7 +1224,7 @@ mod unspecialized_generictests {
                     INF, INF, INF, 100.0, 0.0, 0.0, 100.0, INF, INF, INF,
                     INF, INF, INF,   INF, 0.0, 0.0,   INF, INF, INF, INF,
                 ]
-            );
+            ).unwrap();
 
             assert_relative_eq!(
                 expected,
@@ -1257,7 +1257,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
             ],
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
@@ -1269,7 +1269,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
             ],
-        );
+        ).unwrap();
 
         const INF: f32 = f32::INFINITY;
 
@@ -1285,7 +1285,7 @@ mod unspecialized_generictests {
                     582.843, 482.843, 382.843,     INF, 100.0, 100.0,     INF, 382.843, 482.843, 582.843,
                     624.264, 524.264, 482.843,     INF,   0.0,   0.0,     INF, 482.843, 524.264, 624.264,
                 ]
-            );
+            ).unwrap();
 
             assert_relative_eq!(
                 expected,
@@ -1306,7 +1306,7 @@ mod unspecialized_generictests {
                     INF,     INF,     INF,     INF, 100.0, 100.0,     INF,     INF,     INF, INF,
                     INF,     INF,     INF,     INF,   0.0,   0.0,     INF,     INF,     INF, INF,
                 ]
-            );
+            ).unwrap();
 
             assert_relative_eq!(
                 expected,

@@ -37,6 +37,7 @@ pub fn is_nodata<RasterType: Array>(input: &RasterType) -> RasterType::WithPixel
         input.metadata().clone(),
         input.iter().map(|x| Some(if x.is_nodata() { 1 } else { 0 })),
     )
+    .expect("Input raster size mismatch with metadata")
 }
 
 pub fn is_data<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelType<u8> {
@@ -44,6 +45,7 @@ pub fn is_data<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelTy
         input.metadata().clone(),
         input.iter().map(|x| Some(if x.is_nodata() { 0 } else { 1 })),
     )
+    .expect("Input raster size mismatch with metadata")
 }
 
 #[cfg(test)]
@@ -72,7 +74,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::new(
@@ -84,7 +86,7 @@ mod generictests {
                  4.0,  4.0,  5.0,  8.0,
                  3.0, 44.0,  4.0, 44.0,
             ]),
-        );
+        ).unwrap();
 
         assert_eq!(expected, super::replace_nodata(&raster, NumCast::from(44.0).unwrap()));
     }
@@ -102,7 +104,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::new(
@@ -114,7 +116,7 @@ mod generictests {
                  NOD,  NOD,  5.0,  8.0,
                  3.0,  NOD,  NOD,  NOD,
             ]),
-        );
+        ).unwrap();
 
         super::turn_value_into_nodata(&mut raster, NumCast::from(4.0).unwrap());
         assert_eq!(expected, raster);
@@ -133,7 +135,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
@@ -145,7 +147,7 @@ mod generictests {
                  0,  0,  0,  0,
                  0,  1,  0,  1,
             ],
-        );
+        ).unwrap();
 
         assert_eq!(expected, super::is_nodata(&raster));
     }
@@ -163,7 +165,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
@@ -175,7 +177,7 @@ mod generictests {
                  1,  1,  1,  1,
                  1,  0,  1,  0,
             ],
-        );
+        ).unwrap();
 
         assert_eq!(expected, super::is_data(&raster));
     }

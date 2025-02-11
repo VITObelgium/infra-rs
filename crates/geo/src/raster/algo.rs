@@ -50,7 +50,7 @@ where
     TDest: ArrayNum<TDest>,
     for<'a> &'a R: IntoIterator<Item = Option<R::Pixel>>,
 {
-    R::WithPixelType::<TDest>::from_iter(src.metadata().clone(), src.into_iter().map(|x| x.and_then(|x| NumCast::from(x))))
+    R::WithPixelType::<TDest>::from_iter(src.metadata().clone(), src.into_iter().map(|x| x.and_then(|x| NumCast::from(x)))).unwrap()
 }
 
 pub fn assert_dimensions(r1: &impl Array, r2: &impl Array) {

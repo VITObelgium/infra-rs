@@ -38,9 +38,9 @@ where
 
                     if arrow_array.is_nullable() {
                         let data = arrow_array.iter().map(|v| v.unwrap_or(T::nodata_value())).collect();
-                        Ok(DenseRaster::new(geo_reference, data))
+                        DenseRaster::new(geo_reference, data)
                     } else {
-                        Ok(DenseRaster::new(geo_reference, arrow_array.values().to_vec()))
+                        DenseRaster::new(geo_reference, arrow_array.values().to_vec())
                     }
                 }
                 Err(e) => Err(crate::Error::InvalidArgument(format!(
