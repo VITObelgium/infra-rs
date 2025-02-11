@@ -33,8 +33,6 @@ cargo-config-gen:
 # see: https://github.com/PyO3/pyo3/issues/4155
 pybootstrap:
   pixi install
-  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/debug/libpython3.12.dylib
-  -ln -sf ../../.pixi/envs/default/lib/libpython3.12.dylib ./target/release/libpython3.12.dylib
 
 # gdal-sys uses pkg-config to find the gdal library
 # the gdal.pc file contains shlwapi as link flag for the shlwapi library but this gets ignored

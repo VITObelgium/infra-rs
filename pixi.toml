@@ -7,11 +7,18 @@ platforms   = ["linux-64", "osx-64", "osx-arm64", "win-64"]
 version     = "0.1.0"
 
 [tasks]
-test_release = { cmd = "cargo nextest run --profile ci --workspace --all-features --release" }
+test_release = { cmd = "cargo nextest run --profile ci --workspace --all-features --release", env = { DYLD_FALLBACK_LIBRARY_PATH = "$DYLDFALLBACKLIBRARYPATH" } }
 test_debug   = "cargo nextest run --profile ci  --workspace --all-features"
 
 [dependencies]
 pyarrow = ">=19.0.0,<20"
 
+# on mac/linux the LIBRARY PATH needs to be set to the conda prefix
+# see: https://github.com/PyO3/pyo3/issues/4155
 [target.linux.activation.env]
 LD_LIBRARY_PATH = "$CONDA_PREFIX/lib"
+
+# we pass the DYLD_FALLBACK_LIBRARY_PATH without underscores to the environment
+# because osx does not pass the DYLD_FALLBACK_LIBRARY_PATH to the child process
+[target.osx.activation.env]
+DYLDFALLBACKLIBRARYPATH = "$CONDA_PREFIX/lib"
