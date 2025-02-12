@@ -22,7 +22,7 @@ use crate::{
 };
 
 fn raw_tile_to_vito_tile_format<T: ArrayNum<T>>(data: Vec<T>, width: Columns, height: Rows) -> Result<TileData> {
-    let raster_tile = DenseArray::new(RasterSize::with_rows_cols(height, width), data);
+    let raster_tile = DenseArray::new(RasterSize::with_rows_cols(height, width), data)?;
 
     Ok(TileData::new(
         TileFormat::RasterTile,

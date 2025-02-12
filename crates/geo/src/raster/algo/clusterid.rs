@@ -482,7 +482,7 @@ mod generictests {
                 1.0, 1.0, 5.0, 5.0,
                 1.0, 1.0, 5.0, 1.0,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
@@ -515,7 +515,7 @@ mod generictests {
                 4.0, 9.0, 9.0, 7.0,
                 5.0, 6.0, 7.0, 8.0,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
@@ -527,7 +527,7 @@ mod generictests {
                 10,  6,  6, 11,
                 12, 13, 14, 15,
             ]
-        );
+        ).unwrap();
 
         assert_eq!(expected, cluster_id(&raster, ClusterDiagonals::Exclude));
     }
@@ -593,7 +593,7 @@ mod genericgeotests {
                 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             ]),
-        );
+        ).unwrap();
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<i32>::new(
@@ -610,7 +610,7 @@ mod genericgeotests {
                 5, 0, 6, 0, 7, 0, 8, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ]
-        );
+        ).unwrap();
 
         assert_eq!(expected, fuzzy_cluster_id(&raster, 1.42_f32 * meta.cell_size_x() as f32));
     }

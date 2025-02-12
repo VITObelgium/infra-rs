@@ -95,7 +95,8 @@ impl<T: ArrayNum<T>> RasterTileIO for DenseArray<T> {
         Ok(DenseArray::new(
             RasterSize::with_rows_cols(Rows(header.tile_height as i32), Columns(header.tile_width as i32)),
             data,
-        ))
+        )
+        .expect("Raster size calculation mistake"))
     }
 
     #[cfg(target_arch = "wasm32")]
@@ -221,7 +222,7 @@ mod tests {
 
     #[test]
     fn encode_decode_u32() {
-        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>());
+        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>()).unwrap();
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
 
@@ -240,7 +241,7 @@ mod tests {
         const TILE_HEIGHT: usize = 10;
         const TILE_SIZE: RasterSize = RasterSize::with_rows_cols(Rows(10), Columns(10));
 
-        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>());
+        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>()).unwrap();
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
         let decoded = DenseArray::<u8>::from_tile_bytes(&encoded).unwrap();
