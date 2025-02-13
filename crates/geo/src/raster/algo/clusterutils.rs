@@ -22,7 +22,7 @@ pub fn handle_time_cell<T>(
     travel_time: &impl Array<Pixel = T>,
     border: &mut FiLo<Cell>,
 ) where
-    T: ArrayNum<T>,
+    T: ArrayNum,
 {
     if distance_to_target.cell_is_nodata(cell) || distance_to_target.cell_is_nodata(new_cell) {
         return;
@@ -94,7 +94,7 @@ where
     }
 }
 
-pub fn show_warning_if_clustering_on_floats<T: ArrayNum<T>>() {
+pub fn show_warning_if_clustering_on_floats<T: ArrayNum>() {
     if T::has_nan() {
         log::warn!("Performing cluster operation on floating point raster");
     }
@@ -158,7 +158,7 @@ pub fn insert_border_cell(cell: Cell, mark: &mut impl Array<Pixel = u8>, border:
     border.push_back(cell);
 }
 
-pub fn handle_cell<T: ArrayNum<T>>(
+pub fn handle_cell<T: ArrayNum>(
     cell: Cell,
     cluster_value: T,
     cluster_cells: &mut Vec<Cell>,

@@ -21,7 +21,7 @@ use crate::{
     Error, PixelFormat, Result,
 };
 
-fn raw_tile_to_vito_tile_format<T: ArrayNum<T>>(data: Vec<T>, width: Columns, height: Rows) -> Result<TileData> {
+fn raw_tile_to_vito_tile_format<T: ArrayNum>(data: Vec<T>, width: Columns, height: Rows) -> Result<TileData> {
     let raster_tile = DenseArray::new(RasterSize::with_rows_cols(height, width), data)?;
 
     Ok(TileData::new(
@@ -48,7 +48,7 @@ impl WarpingTileProvider {
 
     fn process_pixel_request<T>(meta: &LayerMetadata, band_nr: usize, tile: Tile, dpi_ratio: u8, coord: Coordinate) -> Result<Option<f32>>
     where
-        T: ArrayNum<T> + Num + GdalType,
+        T: ArrayNum + Num + GdalType,
     {
         let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
         if raw_tile_data.is_empty() {
@@ -67,7 +67,7 @@ impl WarpingTileProvider {
 
     fn process_tile_request<T>(meta: &LayerMetadata, band_nr: usize, req: &TileRequest) -> Result<TileData>
     where
-        T: ArrayNum<T> + Num + GdalType,
+        T: ArrayNum + Num + GdalType,
     {
         let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
         if raw_tile_data.is_empty() {

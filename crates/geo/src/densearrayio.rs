@@ -9,7 +9,7 @@ use crate::GeoReference;
 use crate::Result;
 use gdal::raster::GdalType;
 
-impl<T: ArrayNum<T> + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T, Metadata> {
+impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T, Metadata> {
     fn read(path: &std::path::Path) -> Result<Self> {
         Self::read_band(path, 1)
     }

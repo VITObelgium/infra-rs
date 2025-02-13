@@ -12,7 +12,7 @@ macro_rules! dense_raster_op {
         $op_nodata_fn:ident, // name of the operation function with nodata handling e.g. add_nodata_aware
         $op_assign_nodata_fn:ident // name of the assignment function with nodata handling e.g. add_assign_nodata_aware
     ) => {
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_trait for DenseArray<T, Metadata> {
             type Output = DenseArray<T, Metadata>;
 
             fn $op_fn(self, other: DenseArray<T, Metadata>) -> DenseArray<T, Metadata> {
@@ -20,7 +20,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_trait for &DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_trait for &DenseArray<T, Metadata> {
             type Output = DenseArray<T, Metadata>;
 
             fn $op_fn(self, other: &DenseArray<T, Metadata>) -> DenseArray<T, Metadata> {
@@ -28,7 +28,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_assign_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_assign_trait for DenseArray<T, Metadata> {
             fn $op_assign_fn(&mut self, other: DenseArray<T, Metadata>) {
                 self.binary_inplace(&other, |x, y| {
                     x.$op_assign_nodata_fn(y);
@@ -36,7 +36,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_assign_scalar_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_assign_scalar_trait for DenseArray<T, Metadata> {
             fn $op_assign_fn(&mut self, scalar: T) {
                 self.unary_inplace(|x| {
                     x.$op_assign_nodata_fn(scalar);
@@ -44,7 +44,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_assign_ref_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_assign_ref_trait for DenseArray<T, Metadata> {
             fn $op_assign_fn(&mut self, other: &DenseArray<T, Metadata>) {
                 self.binary_inplace(&other, |x, y| {
                     x.$op_assign_nodata_fn(y);
@@ -52,7 +52,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $scalar_op_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $scalar_op_trait for DenseArray<T, Metadata> {
             type Output = DenseArray<T, Metadata>;
 
             fn $op_fn(self, scalar: T) -> DenseArray<T, Metadata> {
@@ -60,7 +60,7 @@ macro_rules! dense_raster_op {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $scalar_op_trait for &DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $scalar_op_trait for &DenseArray<T, Metadata> {
             type Output = DenseArray<T, Metadata>;
 
             fn $op_fn(self, scalar: T) -> DenseArray<T, Metadata> {
@@ -125,7 +125,7 @@ macro_rules! dense_raster_op_inclusive {
         $op_nodata_fn:ident, // name of the operation function with nodata handling e.g. add_nodata_aware
         $op_assign_nodata_fn:ident // name of the assignment function with nodata handling e.g. add_assign_nodata_aware
     ) => {
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_trait for DenseArray<T, Metadata> {
             type Output = DenseArray<T, Metadata>;
 
             fn $op_fn(mut self, rhs: Self) -> DenseArray<T, Metadata> {
@@ -134,7 +134,7 @@ macro_rules! dense_raster_op_inclusive {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_trait for &DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_trait for &DenseArray<T, Metadata> {
             type Output = DenseArray<T, Metadata>;
 
             fn $op_fn(self, rhs: Self) -> DenseArray<T, Metadata> {
@@ -142,13 +142,13 @@ macro_rules! dense_raster_op_inclusive {
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_assign_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_assign_trait for DenseArray<T, Metadata> {
             fn $op_assign_fn(&mut self, rhs: Self) {
                 self.binary_inplace(&rhs, |x, y| x.$op_assign_nodata_fn(y));
             }
         }
 
-        impl<T: ArrayNum<T>, Metadata: ArrayMetadata> $op_assign_ref_trait for DenseArray<T, Metadata> {
+        impl<T: ArrayNum, Metadata: ArrayMetadata> $op_assign_ref_trait for DenseArray<T, Metadata> {
             fn $op_assign_fn(&mut self, rhs: &DenseArray<T, Metadata>) {
                 self.binary_inplace(rhs, |x, y| x.$op_assign_nodata_fn(y));
             }

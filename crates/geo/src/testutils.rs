@@ -14,7 +14,7 @@ pub fn workspace_test_data_dir() -> PathBuf {
     path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data")
 }
 
-pub fn create_vec<T: num::NumCast + ArrayNum<T>>(data: &[f64]) -> Vec<T> {
+pub fn create_vec<T: num::NumCast + ArrayNum>(data: &[f64]) -> Vec<T> {
     data.iter()
         .map(|&v| {
             if relative_eq!(v, NOD) {

@@ -4,19 +4,19 @@ use crate::{Error, GeoReference, Result};
 
 #[derive(Debug, Clone)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum RasterCellMismatch<T: ArrayNum<T>> {
+pub enum RasterCellMismatch<T: ArrayNum> {
     DataMismatch(Cell, T, T),
     NodataMismatch(Cell, Option<T>, Option<T>),
 }
 
 #[derive(Debug, Clone, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub struct RasterDiffResult<T: ArrayNum<T>> {
+pub struct RasterDiffResult<T: ArrayNum> {
     pub matches: usize,
     pub mismatches: Vec<RasterCellMismatch<T>>,
 }
 
-impl<T: ArrayNum<T>> RasterDiffResult<T> {
+impl<T: ArrayNum> RasterDiffResult<T> {
     pub fn new() -> Self {
         Self {
             matches: 0,
@@ -37,7 +37,7 @@ impl<T: ArrayNum<T>> RasterDiffResult<T> {
 /// Compare two raster files and return a list of cell mismatches
 /// The two rasters must have the same cell size and be aligned
 /// Only the intersection of the two rasters will be compared
-pub fn raster_files_intersection_diff<T: ArrayNum<T> + gdal::raster::GdalType>(
+pub fn raster_files_intersection_diff<T: ArrayNum + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,
 ) -> Result<RasterDiffResult<T>> {
@@ -60,7 +60,7 @@ pub fn raster_files_intersection_diff<T: ArrayNum<T> + gdal::raster::GdalType>(
 #[cfg(feature = "gdal")]
 /// Compare two raster files and return a list of cell mismatches
 /// The two rasters must have the same extent, size, cell size and be aligned
-pub fn raster_files_diff<T: ArrayNum<T> + gdal::raster::GdalType>(
+pub fn raster_files_diff<T: ArrayNum + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,
 ) -> Result<RasterDiffResult<T>> {
@@ -74,7 +74,7 @@ pub fn raster_files_diff<T: ArrayNum<T> + gdal::raster::GdalType>(
 
 /// Compare two rasters and return a list of cell mismatches
 /// The two rasters must have the same extent, size, cell size and be aligned
-pub fn raster_diff<T: ArrayNum<T>>(
+pub fn raster_diff<T: ArrayNum>(
     lhs: &impl Array<Pixel = T, Metadata = GeoReference>,
     rhs: &impl Array<Pixel = T, Metadata = GeoReference>,
 ) -> Result<RasterDiffResult<T>> {

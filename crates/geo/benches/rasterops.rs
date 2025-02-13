@@ -5,11 +5,11 @@ use num::NumCast;
 const RASTER_WIDTH: Columns = Columns(1024);
 const RASTER_HEIGHT: Rows = Rows(768);
 
-pub fn bench_name<T: ArrayNum<T>>(name: &str) -> String {
+pub fn bench_name<T: ArrayNum>(name: &str) -> String {
     format!("{}_{:?}", name, T::TYPE)
 }
 
-pub fn bench_addition<T: ArrayNum<T>>(c: &mut Criterion) {
+pub fn bench_addition<T: ArrayNum>(c: &mut Criterion) {
     let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
     let rhs = DenseArray::<T>::filled_with(NumCast::from(9.0), raster_size);
 

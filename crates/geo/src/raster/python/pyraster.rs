@@ -87,7 +87,7 @@ pub struct PyRaster {
 }
 
 impl PyRaster {
-    pub fn new<T: ArrayNum<T> + ArrowType + Send + Sync>(raster: DenseRaster<T>) -> Self
+    pub fn new<T: ArrayNum + ArrowType + Send + Sync>(raster: DenseRaster<T>) -> Self
     where
         T::TArrow: ArrowPrimitiveType<Native = T>,
         arrow::array::PrimitiveArray<<T as arrowutil::ArrowType>::TArrow>: std::convert::From<std::vec::Vec<T>>,

@@ -11,7 +11,7 @@ use super::clusterutils::{ClusterDiagonals, MARK_TODO};
 pub fn cluster_id<R, T>(ras: &R, diagonals: ClusterDiagonals) -> R::WithPixelType<u32>
 where
     R: Array<Pixel = T>,
-    T: ArrayNum<T>,
+    T: ArrayNum,
     R::WithPixelType<u32>: ArrayCopy<u32, R>,
 {
     show_warning_if_clustering_on_floats::<T>();
@@ -257,7 +257,7 @@ where
     let rows = cat_map.rows();
     let cols = cat_map.columns();
 
-    let mut result = R::new_with_dimensions_of(cat_map, Nodata::<i32>::nodata_value());
+    let mut result = R::new_with_dimensions_of(cat_map, Nodata::nodata_value());
     let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), cat_map.size());
 
     let mut cluster_id = 0;

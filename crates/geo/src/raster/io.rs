@@ -183,7 +183,7 @@ pub mod dataset {
 
     /// The provided extent will be the extent of the resulting raster.
     /// Areas outside the extent of the raster on disk will be filled with nodata.
-    pub fn read_band_region<T: GdalType + ArrayNum<T>>(
+    pub fn read_band_region<T: GdalType + ArrayNum>(
         dataset: &gdal::Dataset,
         band_nr: usize,
         extent: &GeoReference,
@@ -291,8 +291,8 @@ pub mod dataset {
     /// If no driver options are provided, some sane defaults will be used for geotiff files
     pub fn write_as<TStore, T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result<()>
     where
-        T: GdalType + Nodata<T> + num::NumCast + Copy,
-        TStore: GdalType + Nodata<TStore> + num::NumCast,
+        T: GdalType + Nodata + num::NumCast + Copy,
+        TStore: GdalType + Nodata + num::NumCast,
     {
         create_output_directory_if_needed(path)?;
 
@@ -321,7 +321,7 @@ pub mod dataset {
     /// If no driver options are provided, some sane defaults will be used for geotiff files (compression, tiling).
     pub fn write<T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result
     where
-        T: GdalType + Nodata<T> + num::NumCast + Copy,
+        T: GdalType + Nodata + num::NumCast + Copy,
     {
         match <T>::datatype() {
             gdal::raster::GdalDataType::UInt8
@@ -393,7 +393,7 @@ pub mod dataset {
     /// Creates an in-memory dataset with the provided metadata.
     /// The array passed data will be used as the dataset band.
     /// Make sure the data array is the correct size and will live as long as the dataset.
-    pub fn create_in_memory_with_data<T: GdalType + Nodata<T>>(meta: &GeoReference, data: &[T]) -> Result<gdal::Dataset> {
+    pub fn create_in_memory_with_data<T: GdalType + Nodata>(meta: &GeoReference, data: &[T]) -> Result<gdal::Dataset> {
         let mut ds = create_in_memory(meta.raster_size())?;
         add_band_from_data_ptr(&mut ds, data)?;
         metadata_to_dataset_band(&mut ds, meta, 1)?;

@@ -39,7 +39,7 @@ pub trait RasterTileCastIO {
         Self: std::marker::Sized;
 }
 
-impl<T: ArrayNum<T>> RasterTileIO for DenseArray<T> {
+impl<T: ArrayNum> RasterTileIO for DenseArray<T> {
     /// Create a raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     fn from_tile_bytes(data: &[u8]) -> Result<Self> {
@@ -113,7 +113,7 @@ impl<T: ArrayNum<T>> RasterTileIO for DenseArray<T> {
     }
 }
 
-impl<T: ArrayNum<T>> RasterTileCastIO for DenseArray<T> {
+impl<T: ArrayNum> RasterTileCastIO for DenseArray<T> {
     /// Create a raster tile from the raw data
     /// The data is expected to be in the format of a `TileHeader` followed by the compressed tile data
     /// The data will be cast to the correct raster type if it doesnt match

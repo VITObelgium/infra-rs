@@ -48,7 +48,7 @@ fn polygonize_dataset(ds: &gdal::Dataset) -> Result<gdal::Dataset> {
     Ok(mem_ds)
 }
 
-pub fn polygonize<T: GdalType + Nodata<T>>(meta: &GeoReference, data: &[T]) -> Result<gdal::Dataset> {
+pub fn polygonize<T: GdalType + Nodata>(meta: &GeoReference, data: &[T]) -> Result<gdal::Dataset> {
     let ds = raster::io::dataset::create_in_memory_with_data(meta, data)?;
     polygonize_dataset(&ds)
 }

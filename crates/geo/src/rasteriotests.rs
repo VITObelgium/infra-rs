@@ -30,7 +30,7 @@ mod generictests {
     }
 
     #[test]
-    fn test_read_dense_raster<T: ArrayNum<T> + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() {
+    fn test_read_dense_raster<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() {
         let path = workspace_test_data_dir().join("landusebyte.tif");
 
         let ras = R::read(path.as_path()).unwrap();
@@ -57,7 +57,7 @@ mod generictests {
     }
 
     #[test]
-    fn read_write_raster_nodata_handling<T: ArrayNum<T> + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() {
+    fn read_write_raster_nodata_handling<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() {
         let tmp_dir = TempDir::new("asc_write").unwrap();
         let raster_path = tmp_dir.path().join("test.asc");
 

@@ -72,7 +72,7 @@ impl std::ops::Mul<Rows> for Columns {
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Array:
     PartialEq
-    + approx::AbsDiffEq<Epsilon = Self::Pixel>
+    + approx::AbsDiffEq<Epsilon = <Self::Pixel as approx::AbsDiffEq>::Epsilon>
     + Clone
     + Sized
     + std::fmt::Debug
@@ -109,10 +109,10 @@ pub trait Array:
 // + for<'a> std::ops::Mul<&'a Self, Output = Self>
 // + for<'a> std::ops::Div<&'a Self, Output = Self>
 {
-    type Pixel: ArrayNum<Self::Pixel>;
+    type Pixel: ArrayNum;
     type Metadata: ArrayMetadata;
 
-    type WithPixelType<U: ArrayNum<U>>: Array<Pixel = U, Metadata = Self::Metadata>;
+    type WithPixelType<U: ArrayNum>: Array<Pixel = U, Metadata = Self::Metadata>;
 
     //
     // Creation functions
@@ -235,7 +235,7 @@ pub trait Array:
     fn fill(&mut self, val: Self::Pixel);
 }
 
-pub trait ArrayCopy<T: ArrayNum<T>, Rhs = Self> {
+pub trait ArrayCopy<T: ArrayNum, Rhs = Self> {
     /// Create a new raster with the same metadata and data as the provided raster.
     fn new_with_dimensions_of(ras: &Rhs, fill: T) -> Self;
 }

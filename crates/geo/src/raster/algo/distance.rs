@@ -424,7 +424,7 @@ where
     RasterType: Array,
     RasterType::WithPixelType<f32>: ArrayCopy<f32, RasterType>,
     RasterType::WithPixelType<T>: ArrayCopy<T, RasterType>,
-    T: ArrayNum<T>,
+    T: ArrayNum,
 {
     let rows = target.rows();
     let cols = target.columns();
@@ -491,7 +491,7 @@ pub fn value_at_closest_target<TResult, TargetRaster, ValueRaster>(
     value: &ValueRaster,
 ) -> Result<ValueRaster::WithPixelType<TResult>>
 where
-    TResult: ArrayNum<TResult>,
+    TResult: ArrayNum,
     ValueRaster: Array,
     TargetRaster: Array,
     ValueRaster::WithPixelType<TResult>: ArrayCopy<TResult, ValueRaster>,
@@ -575,7 +575,7 @@ pub fn value_at_closest_travel_target<TResult, TargetRaster, TravelRaster, Value
     value: &ValueRaster,
 ) -> Result<ValueRaster::WithPixelType<TResult>>
 where
-    TResult: ArrayNum<TResult>,
+    TResult: ArrayNum,
     TargetRaster: Array,
     TravelRaster: Array,
     ValueRaster: Array,
@@ -656,7 +656,7 @@ pub fn value_at_closest_less_than_travel_target<TResult, TargetRaster, TravelRas
     value: &ValueRaster,
 ) -> Result<ValueRaster::WithPixelType<TResult>>
 where
-    TResult: ArrayNum<TResult>,
+    TResult: ArrayNum,
     TargetRaster: Array,
     TravelRaster: Array,
     ValueRaster: Array,
@@ -746,8 +746,9 @@ fn compute_sum_le_time_distance<TResult, TValue, TTravel>(
     adjacent_cells: &mut Vec<Cell>,
 ) -> TResult
 where
-    TValue: ArrayNum<TValue>,
-    TResult: ArrayNum<TResult>,
+    TValue: ArrayNum,
+    TResult: ArrayNum,
+    TTravel: ArrayNum,
 {
     let mut sum = TResult::zero();
 
@@ -833,7 +834,7 @@ pub fn sum_within_travel_distance<TResult, MaskRaster, ResistanceRaster, ValueRa
     include_adjacent: bool,
 ) -> Result<impl Array<Pixel = TResult>>
 where
-    TResult: ArrayNum<TResult>,
+    TResult: ArrayNum,
     MaskRaster: Array,
     ResistanceRaster: Array,
     ValueRaster: Array,
@@ -900,7 +901,7 @@ pub fn sum_targets_within_travel_distance<TResult, TargetRaster, ResistanceRaste
     max_resistance: f32,
 ) -> Result<impl Array<Pixel = TResult>>
 where
-    TResult: ArrayNum<TResult>,
+    TResult: ArrayNum,
     TargetRaster: Array,
     ResistanceRaster: Array,
     TargetRaster::WithPixelType<TResult>: ArrayCopy<TResult, TargetRaster>,

@@ -6,7 +6,7 @@ use {super::DenseRaster, crate::GeoReference, crate::Result, num::NumCast};
 #[cfg(all(feature = "python", feature = "arrow"))]
 impl<T> TryFrom<pyo3::Py<pyo3::PyAny>> for DenseRaster<T>
 where
-    T: crate::ArrayNum<T> + super::arrow::arrowutil::ArrowType + Send + Sync + arrow::datatypes::ArrowNativeType,
+    T: crate::ArrayNum + super::arrow::arrowutil::ArrowType + Send + Sync + arrow::datatypes::ArrowNativeType,
     T::TArrow: arrow::array::ArrowPrimitiveType<Native = T>,
 {
     type Error = crate::Error;

@@ -44,7 +44,7 @@ fn float_as_color(val: f32) -> Color {
     }
 }
 
-pub fn raw_tile_to_float_encoded_png<T: ArrayNum<T>>(raw_data: &[T], width: usize, height: usize, nodata: Option<T>) -> Result<TileData> {
+pub fn raw_tile_to_float_encoded_png<T: ArrayNum>(raw_data: &[T], width: usize, height: usize, nodata: Option<T>) -> Result<TileData> {
     let raw_colors = raw_data
         .iter()
         .map(|&v| {
@@ -64,7 +64,7 @@ pub fn raw_tile_to_float_encoded_png<T: ArrayNum<T>>(raw_data: &[T], width: usiz
     ))
 }
 
-pub fn raw_tile_to_png_color_mapped<T: ArrayNum<T>>(
+pub fn raw_tile_to_png_color_mapped<T: ArrayNum>(
     raw_data: &[T],
     width: usize,
     height: usize,

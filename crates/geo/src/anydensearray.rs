@@ -111,7 +111,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
-    pub fn cell_value<T: ArrayNum<T>>(&self, cell: Cell) -> Option<T> {
+    pub fn cell_value<T: ArrayNum>(&self, cell: Cell) -> Option<T> {
         match self {
             AnyDenseArray::U8(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
             AnyDenseArray::U16(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
@@ -141,7 +141,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
-    pub fn cast_to<T: ArrayNum<T>>(&self) -> DenseArray<T, Metadata> {
+    pub fn cast_to<T: ArrayNum>(&self) -> DenseArray<T, Metadata> {
         match self {
             AnyDenseArray::U8(raster) => algo::cast::<T, _>(raster),
             AnyDenseArray::U16(raster) => algo::cast::<T, _>(raster),

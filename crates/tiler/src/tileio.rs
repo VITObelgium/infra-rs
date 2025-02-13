@@ -76,7 +76,7 @@ pub fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: 
     )))
 }
 
-pub fn read_raster_tile<T: ArrayNum<T> + GdalType>(
+pub fn read_raster_tile<T: ArrayNum + GdalType>(
     raster_path: &std::path::Path,
     band_nr: usize,
     tile: Tile,
@@ -109,7 +109,7 @@ pub fn read_raster_tile<T: ArrayNum<T> + GdalType>(
     Ok(data)
 }
 
-pub fn read_raster_tile_warped<T: ArrayNum<T> + GdalType>(
+pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
     raster_path: &std::path::Path,
     band_nr: usize,
     tile: Tile,
@@ -166,7 +166,7 @@ pub fn read_raster_tile_warped<T: ArrayNum<T> + GdalType>(
 }
 
 /// Read the raw tile data, result is a tuple with the raw data and the nodata value
-pub fn read_tile_data<T: ArrayNum<T> + Num + GdalType>(
+pub fn read_tile_data<T: ArrayNum + Num + GdalType>(
     meta: &LayerMetadata,
     band_nr: usize,
     tile: Tile,
@@ -202,7 +202,7 @@ pub fn read_tile_data<T: ArrayNum<T> + Num + GdalType>(
 
 pub fn read_color_mapped_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, req: &ColorMappedTileRequest) -> Result<TileData>
 where
-    T: ArrayNum<T> + Num + GdalType,
+    T: ArrayNum + Num + GdalType,
 {
     let raw_tile_data = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
     if raw_tile_data.is_empty() {
