@@ -2,7 +2,7 @@ use inf::cast;
 
 use crate::{
     array::{Columns, Rows},
-    raster::{algo, RasterIO},
+    raster::algo,
     Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
 };
 
@@ -156,7 +156,10 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
+    #[cfg(feature = "gdal")]
     pub fn write(&mut self, path: &std::path::Path) -> Result<()> {
+        use crate::raster::RasterIO;
+
         match self {
             AnyDenseArray::U8(raster) => raster.write(path),
             AnyDenseArray::U16(raster) => raster.write(path),

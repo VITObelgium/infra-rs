@@ -28,8 +28,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     }
 
     pub fn unary<F: Fn(T) -> T>(&self, op: F) -> Self {
-        DenseArray::new(self.metadata().clone(), self.data.iter().map(|&a| op(a)).collect()).unwrap()
-        // only fails on size mismatch
+        DenseArray::new(self.metadata().clone(), self.data.iter().map(|&a| op(a)).collect()).expect("Raster size bug")
     }
 
     pub fn unary_inplace<F: Fn(&mut T)>(&mut self, op: F) {
@@ -46,7 +45,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
 
         let data = self.data.iter().zip(other.data.iter()).map(|(&a, &b)| op(a, b)).collect();
 
-        DenseArray::new(self.metadata().clone(), data).unwrap() // only fails on size mismatch
+        DenseArray::new(self.metadata().clone(), data).expect("Raster size bug")
     }
 
     pub fn binary_inplace<F: Fn(&mut T, T)>(&mut self, other: &Self, op: F) {

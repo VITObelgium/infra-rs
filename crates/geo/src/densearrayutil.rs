@@ -1,6 +1,6 @@
 use num::NumCast;
 
-use crate::{ArrayNum, Result};
+use crate::ArrayNum;
 
 /// Process nodata values in the data array
 /// This means replacing all the values that match the nodata value with the default nodata value for the type T
@@ -22,7 +22,8 @@ pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<f64>) {
     }
 }
 
-pub fn flatten_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<f64>) -> Result<()> {
+#[cfg(feature = "gdal")]
+pub fn flatten_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<f64>) -> crate::Result<()> {
     let nodata_value = inf::cast::option::<T>(nodata);
 
     if let Some(nodata) = nodata_value {

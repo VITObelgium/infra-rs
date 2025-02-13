@@ -1,13 +1,14 @@
+use crate::DenseArray;
 use crate::GeoReference;
-use crate::{Array, ArrayNum, DenseArray};
 
 pub type DenseRaster<T> = DenseArray<T, GeoReference>;
 
 #[cfg(feature = "gdal")]
-impl<T: ArrayNum + gdal::raster::GdalType> DenseRaster<T> {
+impl<T: crate::ArrayNum + gdal::raster::GdalType> DenseRaster<T> {
     pub fn warped_to_epsg(&self, epsg: crate::crs::Epsg) -> crate::Result<Self> {
         use super::algo;
         use super::io;
+        use crate::Array;
 
         let dest_meta = self.metadata().warped_to_epsg(epsg)?;
         let result = DenseRaster::filled_with_nodata(dest_meta);
