@@ -7,10 +7,12 @@ mod tests {
         Array, ArrayNum, DenseArray, RasterSize,
     };
 
+    use num::Zero;
+
     const SIZE: RasterSize = RasterSize::with_rows_cols(Rows(3), Columns(3));
 
     #[test]
-    fn test_add_raster_with_nodata<T: ArrayNum, R: Array<Metadata = RasterSize>>()
+    fn test_add_raster_with_nodata<R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Add<&'a R, Output = R>,
     {
@@ -43,7 +45,7 @@ mod tests {
     }
 
     #[test]
-    fn test_add_raster_with_nodata_inclusive<T: ArrayNum, R: Array<Metadata = RasterSize>>()
+    fn test_add_raster_with_nodata_inclusive<R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: crate::arrayops::AddInclusive<&'a R, Output = R>,
     {
@@ -78,11 +80,11 @@ mod tests {
     }
 
     #[test]
-    fn test_add_scalar_with_nodata<T: ArrayNum, R: Array<Pixel = T, Metadata = RasterSize>>() {
+    fn test_add_scalar_with_nodata<R: Array<Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0])).unwrap();
         let expected = R::new(SIZE, create_vec(&[NOD, 6.0, 6.0, 7.0, NOD, 7.0, 5.0, 5.0, 4.0])).unwrap();
 
-        let scalar: T = num::NumCast::from(4.0).unwrap();
+        let scalar: R::Pixel = num::NumCast::from(4.0).unwrap();
 
         {
             let mut raster1 = raster1.clone();
@@ -97,7 +99,7 @@ mod tests {
     }
 
     #[test]
-    fn test_subtract_raster_with_nodata<T: ArrayNum, R: Array<Metadata = RasterSize>>()
+    fn test_subtract_raster_with_nodata<R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Sub<&'a R, Output = R>,
     {
@@ -130,7 +132,7 @@ mod tests {
     }
 
     #[test]
-    fn test_subtract_raster_with_nodata_inclusive<T: ArrayNum, R: Array<Metadata = RasterSize>>()
+    fn test_subtract_raster_with_nodata_inclusive<R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: crate::arrayops::SubInclusive<&'a R, Output = R>,
     {
@@ -138,7 +140,7 @@ mod tests {
 
         let raster1 = R::new(SIZE, create_vec(&[NOD, 5.0, 9.0, 3.0, NOD, 13.0, 3.0, 4.0, 8.0])).unwrap();
         let raster2 = R::new(SIZE, create_vec(&[1.0, 3.0, 4.0, 3.0, NOD, 3.0, 1.0, 3.0, NOD])).unwrap();
-        let expected = if T::IS_SIGNED {
+        let expected = if R::Pixel::IS_SIGNED {
             R::new(SIZE, create_vec(&[-1.0, 2.0, 5.0, 0.0, NOD, 10.0, 2.0, 1.0, 8.0]))
         } else {
             R::new(SIZE, create_vec(&[NOD, 2.0, 5.0, 0.0, NOD, 10.0, 2.0, 1.0, 8.0]))
@@ -170,11 +172,11 @@ mod tests {
     }
 
     #[test]
-    fn test_subtract_scalar_with_nodata<T: ArrayNum, R: Array<Pixel = T, Metadata = RasterSize>>() {
+    fn test_subtract_scalar_with_nodata<R: Array<Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 4.0, 8.0, 10.0])).unwrap();
         let expected = R::new(SIZE, create_vec(&[NOD, 0.0, 0.0, 1.0, NOD, 1.0, 2.0, 6.0, 8.0])).unwrap();
 
-        let scalar: T = num::NumCast::from(2.0).unwrap();
+        let scalar: R::Pixel = num::NumCast::from(2.0).unwrap();
 
         {
             let mut raster1 = raster1.clone();
@@ -189,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn test_multiply_raster_with_nodata<T: ArrayNum, R: Array<Metadata = RasterSize>>()
+    fn test_multiply_raster_with_nodata<R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Mul<&'a R, Output = R>,
     {
@@ -209,11 +211,11 @@ mod tests {
     }
 
     #[test]
-    fn test_multiply_scalar_with_nodata<T: ArrayNum, R: Array<Pixel = T, Metadata = RasterSize>>() {
+    fn test_multiply_scalar_with_nodata<R: Array<Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 2.0, 2.0, 3.0, NOD, 3.0, 1.0, 1.0, 0.0])).unwrap();
         let expected = R::new(SIZE, create_vec(&[NOD, 8.0, 8.0, 12.0, NOD, 12.0, 4.0, 4.0, 0.0])).unwrap();
 
-        let scalar: T = num::NumCast::from(4.0).unwrap();
+        let scalar: R::Pixel = num::NumCast::from(4.0).unwrap();
 
         {
             let mut raster1 = raster1.clone();
@@ -228,7 +230,7 @@ mod tests {
     }
 
     #[test]
-    fn test_divide_raster_with_nodata<T: ArrayNum, R: Array<Metadata = RasterSize>>()
+    fn test_divide_raster_with_nodata<R: Array<Metadata = RasterSize>>()
     where
         for<'a> &'a R: std::ops::Div<&'a R, Output = R>,
     {
@@ -248,11 +250,11 @@ mod tests {
     }
 
     #[test]
-    fn test_divide_scalar_with_nodata<T: ArrayNum, R: Array<Pixel = T, Metadata = RasterSize>>() {
+    fn test_divide_scalar_with_nodata<R: Array<Metadata = RasterSize>>() {
         let raster1 = R::new(SIZE, create_vec(&[NOD, 6.0, 3.0, 0.0, NOD, 3.0, 30.0, 12.0, 0.0])).unwrap();
         let expected = R::new(SIZE, create_vec(&[NOD, 2.0, 1.0, 0.0, NOD, 1.0, 10.0, 4.0, 0.0])).unwrap();
 
-        let scalar: T = num::NumCast::from(3.0).unwrap();
+        let scalar: R::Pixel = num::NumCast::from(3.0).unwrap();
 
         {
             let mut raster1 = raster1.clone();
@@ -262,7 +264,7 @@ mod tests {
 
         {
             let mut raster1 = raster1.clone();
-            raster1 /= T::zero();
+            raster1 /= R::Pixel::zero();
             assert_eq!(raster1.nodata_count(), raster1.len());
         }
 
@@ -273,32 +275,32 @@ mod tests {
     }
 
     #[test]
-    fn test_sum<T: ArrayNum, R: Array<Metadata = RasterSize>>() {
+    fn test_sum<R: Array<Metadata = RasterSize>>() {
         let ras = R::new(RasterSize::with_rows_cols(Rows(2), Columns(2)), create_vec(&[1.0, 2.0, NOD, 4.0])).unwrap();
         assert_eq!(ras.sum(), 7.0);
     }
 
-    #[instantiate_tests(<i8, DenseArray<i8>>)]
+    #[instantiate_tests(<DenseArray<i8>>)]
     mod denserasteri8 {}
 
-    #[instantiate_tests(<u8, DenseArray<u8>>)]
+    #[instantiate_tests(<DenseArray<u8>>)]
     mod denserasteru8 {}
 
-    #[instantiate_tests(<i32, DenseArray<i32>>)]
+    #[instantiate_tests(<DenseArray<i32>>)]
     mod denserasteri32 {}
 
-    #[instantiate_tests(<u32, DenseArray<u32>>)]
+    #[instantiate_tests(<DenseArray<u32>>)]
     mod denserasteru32 {}
 
-    #[instantiate_tests(<i64, DenseArray<i64>>)]
+    #[instantiate_tests(<DenseArray<i64>>)]
     mod denserasteri64 {}
 
-    #[instantiate_tests(<u64, DenseArray<u64>>)]
+    #[instantiate_tests(<DenseArray<u64>>)]
     mod denserasteru64 {}
 
-    #[instantiate_tests(<f32, DenseArray<f32>>)]
+    #[instantiate_tests(<DenseArray<f32>>)]
     mod denserasterf32 {}
 
-    #[instantiate_tests(<f64, DenseArray<f64>>)]
+    #[instantiate_tests(<DenseArray<f64>>)]
     mod denseraster64 {}
 }

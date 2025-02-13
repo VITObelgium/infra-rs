@@ -297,7 +297,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> PartialEq for DenseArray<T, Metadata>
 }
 
 impl<T: ArrayNum, Metadata: ArrayMetadata> AbsDiffEq for DenseArray<T, Metadata> {
-    type Epsilon = T::Primitive;
+    type Epsilon = T;
 
     fn default_epsilon() -> Self::Epsilon {
         T::default_epsilon()

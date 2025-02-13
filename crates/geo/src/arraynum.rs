@@ -11,9 +11,8 @@ pub trait ArrayNum:
     + std::cmp::PartialOrd
     + std::fmt::Debug
     + std::string::ToString
-    + approx::AbsDiffEq<Epsilon = Self::Primitive>
+    + approx::AbsDiffEq<Epsilon = Self>
 {
-    type Primitive: Copy;
     const TYPE: ArrayDataType;
     const IS_SIGNED: bool;
 
@@ -238,7 +237,6 @@ macro_rules! div_fp_nodata_impl {
 macro_rules! arraynum_signed_impl {
     ($t:ty, $raster_type:ident) => {
         impl ArrayNum for $t {
-            type Primitive = $t;
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
@@ -253,7 +251,6 @@ macro_rules! arraynum_signed_impl {
 macro_rules! arraynum_unsigned_impl {
     ($t:ty, $raster_type:ident) => {
         impl ArrayNum for $t {
-            type Primitive = $t;
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = false;
 
@@ -268,7 +265,6 @@ macro_rules! arraynum_unsigned_impl {
 macro_rules! arraynum_fp_impl {
     ($t:ty, $raster_type:ident) => {
         impl ArrayNum for $t {
-            type Primitive = $t;
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
