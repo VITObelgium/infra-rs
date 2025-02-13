@@ -86,7 +86,7 @@ pub fn check_rc(rc: gdal_sys::CPLErr::Type) -> std::result::Result<(), GdalError
     }
 }
 
-pub fn check_pointer<T: ?Sized>(ptr: *mut T, method_name: &'static str) -> std::result::Result<*mut T, GdalError> {
+pub fn check_pointer<T>(ptr: *mut T, method_name: &'static str) -> std::result::Result<*mut T, GdalError> {
     if ptr.is_null() {
         let msg = last_error_message();
         unsafe { gdal_sys::CPLErrorReset() };
@@ -135,10 +135,7 @@ impl MemoryFile {
     pub fn empty(path: &Path) -> Result<Self> {
         let path_str = CString::new(path.to_string_lossy().as_ref())?;
         let mode = CString::new("w")?;
-        let file_ptr = check_pointer(
-            unsafe { gdal_sys::VSIFOpenL(path_str.as_ptr(), mode.as_ptr()) },
-            "Open memory file",
-        )?;
+        let file_ptr = check_pointer(unsafe { gdal_sys::VSIFOpenL(path_str.as_ptr(), mode.as_ptr()) }, "Open memory file")?;
 
         Ok(MemoryFile {
             path: path.to_path_buf(),
@@ -164,8 +161,7 @@ impl MemoryFile {
 
     #[allow(dead_code)]
     pub fn write(&mut self, data: &[u8]) -> Result<()> {
-        let bytes_written =
-            unsafe { gdal_sys::VSIFWriteL(data.as_ptr().cast::<std::ffi::c_void>(), 1, data.len(), self.file_ptr) };
+        let bytes_written = unsafe { gdal_sys::VSIFWriteL(data.as_ptr().cast::<std::ffi::c_void>(), 1, data.len(), self.file_ptr) };
         if bytes_written != data.len() {
             Err(Error::Runtime("Failed to write to memory file".to_string()))
         } else {
