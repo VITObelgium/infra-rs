@@ -1,6 +1,6 @@
-use crate::{RasterSize, AnyDenseArray, DenseArray};
+use crate::{AnyDenseArray, ArrayMetadata, DenseArray, RasterSize};
 
-fn assert_same_data_type(a: &AnyDenseArray, b: &AnyDenseArray) {
+fn assert_same_data_type<Metadata: ArrayMetadata>(a: &AnyDenseArray<Metadata>, b: &AnyDenseArray<Metadata>) {
     assert_eq!(
         a.data_type(),
         b.data_type(),
@@ -16,10 +16,10 @@ macro_rules! any_dense_raster_op {
         $op_fn:ident, // name of the operation function inside the trait e.g. add
         $op_assign_fn:ident, // name of the assignment function inside the trait e.g. add_assign
     ) => {
-        impl $op_trait for AnyDenseArray {
-            type Output = AnyDenseArray;
+        impl<Metadata: ArrayMetadata> $op_trait for AnyDenseArray<Metadata> {
+            type Output = AnyDenseArray<Metadata>;
 
-            fn $op_fn(self, other: AnyDenseArray) -> AnyDenseArray {
+            fn $op_fn(self, other: AnyDenseArray<Metadata>) -> AnyDenseArray<Metadata> {
                 assert_same_data_type(&self, &other);
                 match self {
                     AnyDenseArray::U8(raster) => AnyDenseArray::U8((&raster).$op_fn(&other.try_into().unwrap())),
@@ -36,41 +36,41 @@ macro_rules! any_dense_raster_op {
             }
         }
 
-        impl $op_trait for &AnyDenseArray {
-            type Output = AnyDenseArray;
+        impl<Metadata: ArrayMetadata> $op_trait for &AnyDenseArray<Metadata> {
+            type Output = AnyDenseArray<Metadata>;
 
-            fn $op_fn(self, other: &AnyDenseArray) -> AnyDenseArray {
+            fn $op_fn(self, other: &AnyDenseArray<Metadata>) -> AnyDenseArray<Metadata> {
                 assert_same_data_type(&self, &other);
                 match self {
                     AnyDenseArray::U8(raster) => {
-                        AnyDenseArray::U8(raster.$op_fn(TryInto::<&DenseArray<u8, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U8(raster.$op_fn(TryInto::<&DenseArray<u8, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::U16(raster) => {
-                        AnyDenseArray::U16(raster.$op_fn(TryInto::<&DenseArray<u16, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U16(raster.$op_fn(TryInto::<&DenseArray<u16, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::U32(raster) => {
-                        AnyDenseArray::U32(raster.$op_fn(TryInto::<&DenseArray<u32, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U32(raster.$op_fn(TryInto::<&DenseArray<u32, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::U64(raster) => {
-                        AnyDenseArray::U64(raster.$op_fn(TryInto::<&DenseArray<u64, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U64(raster.$op_fn(TryInto::<&DenseArray<u64, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I8(raster) => {
-                        AnyDenseArray::I8(raster.$op_fn(TryInto::<&DenseArray<i8, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I8(raster.$op_fn(TryInto::<&DenseArray<i8, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I16(raster) => {
-                        AnyDenseArray::I16(raster.$op_fn(TryInto::<&DenseArray<i16, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I16(raster.$op_fn(TryInto::<&DenseArray<i16, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I32(raster) => {
-                        AnyDenseArray::I32(raster.$op_fn(TryInto::<&DenseArray<i32, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I32(raster.$op_fn(TryInto::<&DenseArray<i32, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I64(raster) => {
-                        AnyDenseArray::I64(raster.$op_fn(TryInto::<&DenseArray<i64, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I64(raster.$op_fn(TryInto::<&DenseArray<i64, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::F32(raster) => {
-                        AnyDenseArray::F32(raster.$op_fn(TryInto::<&DenseArray<f32, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::F32(raster.$op_fn(TryInto::<&DenseArray<f32, Metadata>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::F64(raster) => {
-                        AnyDenseArray::F64(raster.$op_fn(TryInto::<&DenseArray<f64, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::F64(raster.$op_fn(TryInto::<&DenseArray<f64, Metadata>>::try_into(other).unwrap()))
                     }
                 }
             }
