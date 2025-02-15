@@ -1,6 +1,6 @@
 //! Contains low-level functions to read and write raster data using the GDAL library.
 //! These functions should only be used for specfiic use-cases.
-//! For general use, the [`crate::Raster`] and [`crate::RasterIO`] traits should be used.
+//! For general use, the [`crate::Array`] and [`crate::raster::RasterIO`] traits should be used.
 
 use std::{
     ffi::{c_void, CString},
@@ -154,7 +154,7 @@ pub mod dataset {
         Ok(open_read_only(path)?.rasterband(band_index)?.band_type())
     }
 
-    /// Reads the [`geo::GeoReference`] from the first band of a raster file
+    /// Reads the [`crate::GeoReference`] from the first band of a raster file
     pub fn read_file_metadata(path: &Path) -> Result<GeoReference> {
         read_band_metadata(&open_read_only(path)?, 1)
     }
@@ -164,7 +164,7 @@ pub mod dataset {
         read_band_metadata(&open_read_only_with_options(path, str_vec(open_options).as_slice())?, 1)
     }
 
-    /// Reads the [`geo::GeoReference`] from the provided band of a raster file
+    /// Reads the [`crate::GeoReference`] from the provided band of a raster file
     /// The band index is 1-based
     pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoReference> {
         let rasterband = ds.rasterband(band_index)?;

@@ -40,7 +40,7 @@ jobs:
       - name: Clean docs folder
         run: cargo clean --doc
       - name: Build docs
-        run: cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --no-deps --all-features --open
+        run: just doc
       - name: Force correct file permissions
         run: |
           chmod -c +rX "target/doc/.lock" &

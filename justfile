@@ -59,8 +59,8 @@ serve_tiles dir:
 serve_tiles_tui dir:
   cargo run -p tileserver --features=tui --release -- --tui --gis-dir {{dir}}
 
-doc:
-  cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --no-deps --all-features --open
+doc RUSTDOCFLAGS="-D warnings":
+  cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --no-deps --all-features
 
 docdeps:
   cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features --open
