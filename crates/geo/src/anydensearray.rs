@@ -6,7 +6,7 @@ use crate::{
     Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
 };
 
-/// Type erased `RasterTile`
+/// Type erased `DenseArray`
 #[derive(Clone, Debug, PartialEq)]
 pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterSize> {
     U8(DenseArray<u8, Metadata>),
