@@ -69,30 +69,12 @@ impl CoordinateTransformer {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use path_macro::path;
 
-    use crate::{crs, gdalinterop, Coordinate, CoordinateTransformer, Point};
+    use crate::{crs, Coordinate, CoordinateTransformer, Point};
 
     #[ctor::ctor]
     fn init() {
-        let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
-        if !data_dir.exists() {
-            data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / ".." / "target" / "data");
-        }
-
-        if !data_dir.exists() {
-            panic!("Proj.db data directory not found: {}", data_dir.display());
-        }
-
-        assert!(data_dir.join("proj.db").exists());
-
-        let gdal_config = gdalinterop::Config {
-            debug_logging: false,
-            proj_db_search_location: data_dir,
-            config_options: Vec::default(),
-        };
-
-        gdal_config.apply().expect("Failed to configure GDAL");
+        crate::testutils::configure_gdal_data();
     }
 
     #[test]

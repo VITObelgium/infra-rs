@@ -4,8 +4,7 @@ use approx::relative_eq;
 use path_macro::path;
 
 use crate::{
-    array::{Columns, Rows},
-    ArrayNum, GeoReference, RasterSize,
+    array::{Columns, Rows}, gdalinterop, ArrayNum, GeoReference, RasterSize
 };
 
 pub const NOD: f64 = 255.0;
@@ -58,4 +57,25 @@ pub fn test_metadata_3x3() -> GeoReference {
         [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
         Some(NOD),
     )
+}
+
+pub fn configure_gdal_data() {
+    let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
+    if !data_dir.exists() {
+        data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / ".." / "target" / "data");
+    }
+
+    if !data_dir.exists() {
+        panic!("Proj.db data directory not found: {}", data_dir.display());
+    }
+
+    assert!(data_dir.join("proj.db").exists());
+
+    let gdal_config = gdalinterop::Config {
+        debug_logging: false,
+        proj_db_search_location: data_dir,
+        config_options: Vec::default(),
+    };
+
+    gdal_config.apply().expect("Failed to configure GDAL");
 }

@@ -5,12 +5,10 @@ mod generictests {
     use core::fmt;
 
     use num::NumCast;
-    use path_macro::path;
     use tempdir::TempDir;
 
     use crate::{
         array::{Columns, Rows},
-        gdalinterop,
         raster::{DenseRaster, RasterIO},
         testutils::{workspace_test_data_dir, NOD},
         Array, ArrayNum, Cell, GeoReference, Point,
@@ -18,15 +16,7 @@ mod generictests {
 
     #[ctor::ctor]
     fn init() {
-        let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
-
-        let gdal_config = gdalinterop::Config {
-            debug_logging: false,
-            proj_db_search_location: data_dir,
-            config_options: Vec::default(),
-        };
-
-        gdal_config.apply().expect("Failed to configure GDAL");
+        crate::testutils::configure_gdal_data();
     }
 
     #[test]
