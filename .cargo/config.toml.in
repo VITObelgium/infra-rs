@@ -14,9 +14,6 @@ rustflags = ["-C", "target-feature=+avx2", "-C", "link-arg=-mmacosx-version-min=
 [target.aarch64-apple-darwin]
 rustflags = ["-C", "link-arg=-mmacosx-version-min=15.0"]
 
-[target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]
-
 [target.'cfg(all())']
 rustflags = [
     "-Wclippy::all",
