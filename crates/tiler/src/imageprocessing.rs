@@ -1,4 +1,4 @@
-use crate::{tiledata::TileData, tileformat::TileFormat, Error, PixelFormat, Result};
+use crate::{Error, PixelFormat, Result, tiledata::TileData, tileformat::TileFormat};
 use geo::ArrayNum;
 use inf::{Color, Legend};
 use num::NumCast;
@@ -7,7 +7,7 @@ use std::io::BufWriter;
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
 /// Otherwise the slice will contain (uninitialized) padding bytes
 unsafe fn vec_as_u8_slice<T: Sized>(data: &[T]) -> &[u8] {
-    ::core::slice::from_raw_parts((&data[0] as *const T).cast::<u8>(), std::mem::size_of_val(data))
+    unsafe { ::core::slice::from_raw_parts((&data[0] as *const T).cast::<u8>(), std::mem::size_of_val(data)) }
 }
 
 fn encode_png(colors: &[Color], width: u32, height: u32) -> Result<Vec<u8>> {
@@ -82,7 +82,7 @@ pub fn raw_tile_to_png_color_mapped<T: ArrayNum>(
 mod tests {
     use super::*;
     use crate::Result;
-    use inf::colormap::{cmap, ColorMap};
+    use inf::colormap::{ColorMap, cmap};
 
     fn reference_image() -> std::path::PathBuf {
         [env!("CARGO_MANIFEST_DIR"), "test", "data", "ref_encoded.png"].iter().collect()

@@ -9,8 +9,7 @@ use syn::*;
 fn named_fields(ast: &syn::DeriveInput) -> &FieldsNamed {
     match &ast.data {
         Data::Struct(DataStruct {
-            fields: Fields::Named(it),
-            ..
+            fields: Fields::Named(it), ..
         }) => it,
         _ => panic!("Expected a struct with named fields"),
     }
@@ -20,9 +19,7 @@ fn named_fields(ast: &syn::DeriveInput) -> &FieldsNamed {
 fn needs_to_be_skipped(field: &Field) -> bool {
     for attr in &field.attrs {
         if attr.path().is_ident("vector") {
-            let nested = attr
-                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
-                .unwrap();
+            let nested = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated).unwrap();
             for meta in nested {
                 if let Meta::Path(path) = meta {
                     if path.is_ident("skip") {
@@ -39,9 +36,7 @@ fn needs_to_be_skipped(field: &Field) -> bool {
 fn check_col_attr(field: &Field) -> Option<String> {
     for attr in &field.attrs {
         if attr.path().is_ident("vector") {
-            let nested = attr
-                .parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated)
-                .unwrap();
+            let nested = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated).unwrap();
             for meta in nested {
                 if let Meta::NameValue(name_value) = meta {
                     if name_value.path.is_ident("column") {
@@ -136,7 +131,7 @@ fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
     let field_names = field_names(ast)?;
     let field_initializers = field_initializers(ast)?;
 
-    let gen = quote! {
+    let generated = quote! {
         impl ::geo::vector::DataRow for #name {
             fn field_names() -> Vec<&'static str> {
                 vec![#(#field_names),*]
@@ -150,7 +145,7 @@ fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
         }
     };
 
-    Ok(gen.into())
+    Ok(generated.into())
 }
 
 #[proc_macro_derive(DataRow, attributes(vector))]

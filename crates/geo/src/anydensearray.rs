@@ -1,9 +1,9 @@
 use inf::cast;
 
 use crate::{
+    Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
     array::{Columns, Rows},
     raster::algo,
-    Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
 };
 
 /// Type erased `DenseArray`
@@ -177,34 +177,36 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     /// # Safety
     /// Used for FFI with python where safety is not guaranteed anyway
     pub unsafe fn raw_data_u8_slice(&self) -> &[u8] {
-        match self {
-            AnyDenseArray::U8(raster) => raster.as_slice(),
-            AnyDenseArray::U16(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::U32(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::U64(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::I8(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::I16(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::I32(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::I64(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::F32(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-            }
-            AnyDenseArray::F64(raster) => {
-                std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+        unsafe {
+            match self {
+                AnyDenseArray::U8(raster) => raster.as_slice(),
+                AnyDenseArray::U16(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::U32(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::U64(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::I8(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::I16(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::I32(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::I64(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::F32(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
+                AnyDenseArray::F64(raster) => {
+                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
+                }
             }
         }
     }

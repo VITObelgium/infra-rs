@@ -26,7 +26,12 @@ impl Config {
             // Also set the environment variable unless it is already set by the user
             // e.g. Spatialite library does not use gdal settings
             if std::env::var_os("PROJ_DATA").is_none() {
-                std::env::set_var("PROJ_DATA", proj_db_path.as_str());
+                // # Safety
+                // The config is applied at te beginning of the program
+                // so not race conditions should occur
+                unsafe {
+                    std::env::set_var("PROJ_DATA", proj_db_path.as_str());
+                }
             }
         }
 
