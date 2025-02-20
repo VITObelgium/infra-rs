@@ -95,19 +95,13 @@ pub mod dataset {
             // Match on the error to give a cleaner error message when the file does not exist
             GdalError::NullPointer { method_name: _, msg: _ } => {
                 let vec_type = VectorFormat::guess_from_path(path);
-                if vec_type != VectorFormat::Unknown
-                    && gdal::DriverManager::get_driver_by_name(vec_type.gdal_driver_name()).is_err()
-                {
+                if vec_type != VectorFormat::Unknown && gdal::DriverManager::get_driver_by_name(vec_type.gdal_driver_name()).is_err() {
                     return Error::Runtime(format!("Gdal driver not supported: {}", vec_type.gdal_driver_name()));
                 }
 
                 Error::InvalidPath(PathBuf::from(path))
             }
-            _ => Error::Runtime(format!(
-                "Failed to open raster dataset: {} ({})",
-                path.to_string_lossy(),
-                err
-            )),
+            _ => Error::Runtime(format!("Failed to open raster dataset: {} ({})", path.to_string_lossy(), err)),
         })
     }
 
@@ -160,6 +154,33 @@ pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result
     DataframeIterator::<T>::new(&path, layer)?.collect()
 }
 
+/// Read rows from a vector dataset and invokes the provided callback function for each row
+pub fn read_dataframe_rows_cb(
+    path: &Path,
+    layer: Option<&str>,
+    columns: &[String],
+    mut callback: impl FnMut(Vec<Option<FieldValue>>),
+) -> Result<()> {
+    let ds = dataset::open_read_only(path)?;
+    let mut ds_layer;
+    if let Some(layer_name) = layer {
+        ds_layer = ds.layer_by_name(layer_name)?;
+    } else {
+        ds_layer = ds.layer(0)?;
+    }
+
+    for feature in ds_layer.features() {
+        let mut row = Vec::with_capacity(columns.len());
+        for column in columns {
+            row.push(feature.field(column)?);
+        }
+
+        callback(row);
+    }
+
+    Ok(())
+}
+
 /// Iterator over the rows of a vector dataset that returns a an object
 /// that implements the [`DataRow`] trait
 pub struct DataframeIterator<TRow: DataRow> {
@@ -199,8 +220,7 @@ where
 {
     fn field_index_with_name(&self, field_name: &str) -> Result<i32> {
         let field_name_c_str = CString::new(field_name)?;
-        let field_index =
-            unsafe { gdal_sys::OGR_L_FindFieldIndex(self.c_layer(), field_name_c_str.as_ptr(), gdalinterop::TRUE) };
+        let field_index = unsafe { gdal_sys::OGR_L_FindFieldIndex(self.c_layer(), field_name_c_str.as_ptr(), gdalinterop::TRUE) };
 
         if field_index == -1 {
             return Err(Error::InvalidArgument(format!(
@@ -248,10 +268,7 @@ impl FeatureExtension for gdal::vector::Feature<'_> {
         let field_index = unsafe { gdal_sys::OGR_F_GetFieldIndex(self.c_feature(), field_name_c_str.as_ptr()) };
 
         if field_index == -1 {
-            return Err(Error::InvalidArgument(format!(
-                "Field '{}' not found in feature",
-                field_name
-            )));
+            return Err(Error::InvalidArgument(format!("Field '{}' not found in feature", field_name)));
         }
 
         Ok(field_index)
@@ -271,39 +288,15 @@ mod tests {
     fn vectorformat_guess_from_path() {
         assert_eq!(VectorFormat::guess_from_path(Path::new("test.csv")), VectorFormat::Csv);
         assert_eq!(VectorFormat::guess_from_path(Path::new("test.tab")), VectorFormat::Tab);
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("test.shp")),
-            VectorFormat::ShapeFile
-        );
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("test.dbf")),
-            VectorFormat::ShapeFile
-        );
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("test.xlsx")),
-            VectorFormat::Xlsx
-        );
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("test.json")),
-            VectorFormat::GeoJson
-        );
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("test.geojson")),
-            VectorFormat::GeoJson
-        );
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("test.gpkg")),
-            VectorFormat::GeoPackage
-        );
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.shp")), VectorFormat::ShapeFile);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.dbf")), VectorFormat::ShapeFile);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.xlsx")), VectorFormat::Xlsx);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.json")), VectorFormat::GeoJson);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.geojson")), VectorFormat::GeoJson);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("test.gpkg")), VectorFormat::GeoPackage);
         assert_eq!(VectorFormat::guess_from_path(Path::new("test.vrt")), VectorFormat::Vrt);
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("postgresql://")),
-            VectorFormat::PostgreSQL
-        );
-        assert_eq!(
-            VectorFormat::guess_from_path(Path::new("pg:")),
-            VectorFormat::PostgreSQL
-        );
+        assert_eq!(VectorFormat::guess_from_path(Path::new("postgresql://")), VectorFormat::PostgreSQL);
+        assert_eq!(VectorFormat::guess_from_path(Path::new("pg:")), VectorFormat::PostgreSQL);
         assert_eq!(VectorFormat::guess_from_path(Path::new("wfs:")), VectorFormat::Wfs);
         assert_eq!(VectorFormat::guess_from_path(Path::new("test")), VectorFormat::Unknown);
     }
