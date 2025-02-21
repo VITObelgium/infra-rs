@@ -32,11 +32,13 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: just,sd,fd-find,cargo-vcpkg,cargo-nextest
-      - uses: prefix-dev/setup-pixi@v0.8.0
       - name: Build the C++ dependencies using vcpkg
         env: 
           VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
-        run: just bootstrap && just pybootstrap
+        run: just bootstrap
+      - uses: prefix-dev/setup-pixi@v0.8.0
+      - name: Install the pixi environment
+        run: just pybootstrap
       - name: Clean docs folder
         run: cargo clean --doc
       - name: Build docs
