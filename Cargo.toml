@@ -34,7 +34,7 @@ python      = ["pyo3/auto-initialize"]
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
 rev = "10b7a17"
-overlay-triplets-path = "vcpkg-triplets"
+overlay-triplets-path = "vcpkg-overlay/triplets"
 dependencies = [
     "gdal[core,netcdf]",
     "netcdf-c[core,netcdf-4,hdf5]",
