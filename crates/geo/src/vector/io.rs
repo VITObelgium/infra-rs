@@ -10,7 +10,7 @@ use gdal::{
     vector::{FieldValue, LayerAccess},
 };
 
-use crate::{gdalinterop, Error, Result};
+use crate::{Error, Result, gdalinterop};
 
 use super::DataRow;
 
@@ -116,10 +116,10 @@ pub mod dataset {
     }
 
     /// Open a GDAL vector dataset for reading with driver open options
-    pub fn open_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset> {
+    pub fn open_read_only_with_options(path: &Path, open_options: Option<&[&str]>) -> Result<gdal::Dataset> {
         let options = gdal::DatasetOptions {
             open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_VECTOR,
-            open_options: Some(open_options),
+            open_options,
             ..Default::default()
         };
 
@@ -158,15 +158,21 @@ pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result
 pub fn read_dataframe_rows_cb(
     path: &Path,
     layer: Option<&str>,
+    filter: Option<&str>,
     columns: &[String],
+    data_frame_open_options: Option<&[&str]>,
     mut callback: impl FnMut(Vec<Option<FieldValue>>),
 ) -> Result<()> {
-    let ds = dataset::open_read_only(path)?;
+    let ds = dataset::open_read_only_with_options(path, data_frame_open_options)?;
     let mut ds_layer;
     if let Some(layer_name) = layer {
         ds_layer = ds.layer_by_name(layer_name)?;
     } else {
         ds_layer = ds.layer(0)?;
+    }
+
+    if let Some(filter) = filter {
+        ds_layer.set_attribute_filter(filter)?;
     }
 
     for feature in ds_layer.features() {
