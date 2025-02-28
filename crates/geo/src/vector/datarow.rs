@@ -17,10 +17,7 @@ pub mod __private {
     use super::*;
 
     // Helper function for the DataRow derive macro
-    pub fn read_feature_val<T: VectorFieldType<T>>(
-        feature: &gdal::vector::Feature,
-        field_name: &str,
-    ) -> Result<Option<T>> {
+    pub fn read_feature_val<T: VectorFieldType>(feature: &gdal::vector::Feature, field_name: &str) -> Result<Option<T>> {
         let index = feature.field_index_from_name(field_name)?;
         if !feature.field_is_valid(index) {
             return Ok(None);
