@@ -28,7 +28,7 @@ wasm-bindgen = "0.2"
 
 [dev-dependencies]
 path_macro    = "1.0"
-ctor          = "0.3"
+ctor          = "0.4"
 test-log      = "0.2"
 env_logger    = "0.11"
 generic-tests = "0.1"
@@ -56,8 +56,4 @@ harness = false
 dependencies = ["gdal[core,geos,sqlite3]", "proj[core]", "tiff[core,lzma,zip]"]
 
 [package.metadata.vcpkg.target]
-x86_64-unknown-linux-gnu = { dependencies = [
-    "gdal[core,geos,iconv,sqlite3]",
-    "proj[core]",
-    "tiff[core,lzma,zip]",
-] }
+x86_64-unknown-linux-gnu = { dependencies = ["gdal[core,geos,iconv,sqlite3]", "proj[core]", "tiff[core,lzma,zip]"] }
