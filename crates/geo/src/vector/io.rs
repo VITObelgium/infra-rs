@@ -175,13 +175,22 @@ pub fn read_dataframe_rows_cb(
         ds_layer.set_attribute_filter(filter)?;
     }
 
+    let columns: Vec<(&str, i32)> = columns
+        .iter()
+        .map(|name| Ok((name.as_str(), ds_layer.field_index_with_name(name)?)))
+        .collect::<Result<Vec<(&str, i32)>>>()?;
+
     for feature in ds_layer.features() {
         let mut row = Vec::with_capacity(columns.len());
-        for column in columns {
-            row.push(feature.field(column)?);
+        let mut valid_field = false;
+        for (column_name, column_idx) in &columns {
+            valid_field = valid_field || feature.field_is_valid(*column_idx);
+            row.push(feature.field(column_name)?);
         }
 
-        callback(row);
+        if valid_field {
+            callback(row);
+        }
     }
 
     Ok(())
