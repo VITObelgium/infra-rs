@@ -84,7 +84,7 @@ fn is_option_type(tp: &Type) -> Option<&Type> {
         return None;
     };
 
-    let final_segment = p.path.segments.iter().last()?;
+    let final_segment = p.path.segments.iter().next_back()?;
 
     if final_segment.ident == "Option" {
         // This is an Option type, now obtain the inner type
