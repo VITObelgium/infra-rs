@@ -1,30 +1,35 @@
 use num::NumCast;
 
 use crate::{
-    color::Color,
-    colormap::{cmap, ColorMap},
     Result,
+    color::Color,
+    colormap::{ColorMap, ColorMapDirection, ColorMapPreset, ProcessedColorMap},
 };
 use std::{collections::HashMap, ops::Range};
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Default, Clone, Debug)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct MappingConfig {
     /// The color of the nodata pixels
-    pub unmappable_nodata: Color,
+    pub nodata_color: Color,
     /// The color of the values below the lowest value in the colormap
-    pub unmappable_low: Color,
+    /// By default, this will be the color of the lower bound of the colormap
+    pub out_of_range_low_color: Option<Color>,
     /// The color of the values above the highest value in the colormap
-    pub unmappable_high: Color,
+    /// By default, this will be the color of the upper bound of the colormap
+    pub out_of_range_high_color: Option<Color>,
+    /// Render 0 values as nodata
+    pub zero_is_nodata: bool,
 }
 
 impl MappingConfig {
-    pub fn new(nodata: Color, low: Color, high: Color) -> Self {
+    pub fn new(nodata: Color, low: Option<Color>, high: Option<Color>, zero_is_nodata: bool) -> Self {
         MappingConfig {
-            unmappable_nodata: nodata,
-            unmappable_low: low,
-            unmappable_high: high,
+            nodata_color: nodata,
+            out_of_range_low_color: low,
+            out_of_range_high_color: high,
+            zero_is_nodata,
         }
     }
 }
@@ -73,11 +78,11 @@ pub mod mapper {
     #[derive(Default, Clone, Debug)]
     pub struct Linear {
         value_range: Range<f64>,
-        color_map: ColorMap,
+        color_map: ProcessedColorMap,
     }
 
     impl Linear {
-        pub fn new(value_range: Range<f64>, color_map: ColorMap) -> Self {
+        pub fn new(value_range: Range<f64>, color_map: ProcessedColorMap) -> Self {
             Linear { color_map, value_range }
         }
     }
@@ -87,9 +92,9 @@ pub mod mapper {
             const EDGE_TOLERANCE: f64 = 1e-4;
 
             if value < self.value_range.start - EDGE_TOLERANCE {
-                config.unmappable_low
+                config.out_of_range_low_color.unwrap_or(self.color_map.get_color(0.0))
             } else if value > self.value_range.end + EDGE_TOLERANCE {
-                config.unmappable_high
+                config.out_of_range_high_color.unwrap_or(self.color_map.get_color(1.0))
             } else {
                 let value_0_1 = linear_map_to_float::<f64, f64>(value, self.value_range.start, self.value_range.end);
                 self.color_map.get_color(value_0_1)
@@ -101,7 +106,7 @@ pub mod mapper {
                 self.color_for_numeric_value(num_value, config)
             } else {
                 // Linear legend does not support string values
-                config.unmappable_nodata
+                config.nodata_color
             }
         }
 
@@ -131,7 +136,7 @@ pub mod mapper {
             CategoricNumeric { categories }
         }
 
-        pub fn for_value_range(value_range: Range<i64>, color_map: ColorMap) -> Self {
+        pub fn for_value_range(value_range: Range<i64>, color_map: &ProcessedColorMap) -> Self {
             let category_count = value_range.end - value_range.start + 1;
             let color_offset = if category_count == 1 {
                 0.0
@@ -160,13 +165,10 @@ pub mod mapper {
     impl ColorMapper for CategoricNumeric {
         fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
             if let Some(cat) = value.to_i64() {
-                return self
-                    .categories
-                    .get(&cat)
-                    .map_or(config.unmappable_nodata, |cat| cat.color);
+                return self.categories.get(&cat).map_or(config.nodata_color, |cat| cat.color);
             }
 
-            config.unmappable_nodata
+            config.nodata_color
         }
 
         fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
@@ -174,7 +176,7 @@ pub mod mapper {
             if let Ok(num_value) = value.parse::<f64>() {
                 self.color_for_numeric_value(num_value, config)
             } else {
-                config.unmappable_nodata
+                config.nodata_color
             }
         }
 
@@ -205,9 +207,7 @@ pub mod mapper {
         }
 
         fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-            self.categories
-                .get(value)
-                .map_or(config.unmappable_nodata, |cat| cat.color)
+            self.categories.get(value).map_or(config.nodata_color, |cat| cat.color)
         }
 
         fn category_count(&self) -> usize {
@@ -229,12 +229,8 @@ pub mod mapper {
             Banded { bands }
         }
 
-        pub fn with_equal_bands(band_count: usize, value_range: Range<f64>, color_map: ColorMap) -> Self {
-            let color_offset = if band_count == 1 {
-                0.0
-            } else {
-                1.0 / (band_count as f64 - 1.0)
-            };
+        pub fn with_equal_bands(band_count: usize, value_range: Range<f64>, color_map: &ProcessedColorMap) -> Self {
+            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
             let band_offset: f64 = (value_range.end - value_range.start) / (band_count as f64 - 1.0);
             let mut color_pos = 0.0;
             let mut band_pos = value_range.start;
@@ -256,6 +252,20 @@ pub mod mapper {
 
             Banded { bands: entries }
         }
+
+        pub fn with_manual_ranges_from_preset(value_ranges: Vec<Range<f64>>, color_map: &ProcessedColorMap) -> Self {
+            let band_count = value_ranges.len();
+            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
+            let mut color_pos = 0.0;
+
+            let mut entries = Vec::with_capacity(band_count);
+            for range in value_ranges {
+                entries.push(LegendBand::new(range, color_map.get_color(color_pos), String::default()));
+                color_pos += color_offset;
+            }
+
+            Banded { bands: entries }
+        }
     }
 
     impl ColorMapper for Banded {
@@ -272,17 +282,17 @@ pub mod mapper {
                 if (value - first_entry.range.start).abs() < EDGE_TOLERANCE {
                     return first_entry.color;
                 } else if value < first_entry.range.start {
-                    return config.unmappable_low;
+                    return config.out_of_range_low_color.unwrap_or(first_entry.color);
                 } else if let Some(last_entry) = self.bands.last() {
                     if (value - last_entry.range.end).abs() < EDGE_TOLERANCE {
                         return last_entry.color;
                     } else if value > last_entry.range.end {
-                        return config.unmappable_high;
+                        return config.out_of_range_high_color.unwrap_or(last_entry.color);
                     }
                 }
             }
 
-            config.unmappable_nodata
+            config.nodata_color
         }
 
         fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
@@ -290,7 +300,7 @@ pub mod mapper {
             if let Ok(num_value) = value.parse::<f64>() {
                 self.color_for_numeric_value(num_value, config)
             } else {
-                config.unmappable_nodata
+                config.nodata_color
             }
         }
 
@@ -305,8 +315,6 @@ pub mod mapper {
 pub struct MappedLegend<TMapper: ColorMapper> {
     pub title: String,
     pub color_map_name: String,
-    /// Render zero values as nodata
-    pub zero_is_nodata: bool,
     pub mapper: TMapper,
     pub mapping_config: MappingConfig,
 }
@@ -321,27 +329,30 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     }
 
     fn is_unmappable(&self, value: f64, nodata: Option<f64>) -> bool {
-        value.is_nan() || Some(value) == nodata || (self.zero_is_nodata && value == 0.0)
+        value.is_nan() || Some(value) == nodata || (self.mapping_config.zero_is_nodata && value == 0.0)
     }
 
     pub fn color_for_value<T: Copy + num::NumCast>(&self, value: T, nodata: Option<f64>) -> Color {
         let value = value.to_f64().unwrap_or(f64::NAN);
         if self.is_unmappable(value, nodata) {
-            return self.mapping_config.unmappable_nodata;
+            return self.mapping_config.nodata_color;
         }
 
         self.mapper.color_for_numeric_value(value, &self.mapping_config)
+    }
+
+    pub fn color_for_opt_value<T: Copy + num::NumCast>(&self, value: Option<T>) -> Color {
+        match value {
+            Some(v) => self.color_for_value(v, None),
+            None => self.mapping_config.nodata_color,
+        }
     }
 
     pub fn color_for_string_value(&self, value: &str) -> Color {
         self.mapper.color_for_string_value(value, &self.mapping_config)
     }
 
-    pub fn apply_to_data<T: Copy + num::NumCast, TNodata: Copy + num::NumCast>(
-        &self,
-        data: &[T],
-        nodata: Option<TNodata>,
-    ) -> Vec<Color> {
+    pub fn apply_to_data<T: Copy + num::NumCast, TNodata: Copy + num::NumCast>(&self, data: &[T], nodata: Option<TNodata>) -> Vec<Color> {
         let nodata = nodata.map(|v| v.to_f64().unwrap_or(f64::NAN));
 
         data.iter().map(|&value| self.color_for_value(value, nodata)).collect()
@@ -369,37 +380,51 @@ pub enum Legend {
 impl Default for Legend {
     fn default() -> Self {
         Legend::Linear(LinearLegend::with_mapper(
-            mapper::Linear::new(Range { start: 0.0, end: 255.0 }, ColorMap::new(&cmap::gray(), false)),
+            mapper::Linear::new(
+                Range { start: 0.0, end: 255.0 },
+                ProcessedColorMap::create_for_preset(ColorMapPreset::Gray, ColorMapDirection::Regular),
+            ),
             MappingConfig::default(),
         ))
     }
 }
 
 impl Legend {
-    pub fn linear(cmap_name: &str, value_range: Range<f64>) -> Result<Self> {
-        Ok(Legend::Linear(create_linear(cmap_name, value_range)?))
+    pub fn linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+        Ok(Legend::Linear(create_linear(cmap_def, value_range, mapping_config)?))
     }
 
-    pub fn banded(category_count: usize, cmap_name: &str, value_range: Range<f64>) -> Result<Self> {
-        Ok(Legend::Banded(create_banded(category_count, cmap_name, value_range)?))
-    }
-
-    pub fn categoric_numeric(cmap_name: &str, value_range: Range<i64>) -> Result<Self> {
-        Ok(Legend::CategoricNumeric(create_categoric_numeric(
-            cmap_name,
+    pub fn banded(
+        category_count: usize,
+        cmap_def: &ColorMap,
+        value_range: Range<f64>,
+        mapping_config: Option<MappingConfig>,
+    ) -> Result<Self> {
+        Ok(Legend::Banded(create_banded(
+            category_count,
+            cmap_def,
             value_range,
+            mapping_config,
         )?))
     }
 
-    pub fn categoric_string(string_map: HashMap<String, mapper::LegendCategory>) -> Result<Self> {
-        Ok(Legend::CategoricString(create_categoric_string(string_map)?))
+    pub fn banded_manual_ranges(cmap_def: &ColorMap, value_range: Vec<Range<f64>>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+        Ok(Legend::Banded(create_banded_manual_ranges(cmap_def, value_range, mapping_config)?))
     }
 
-    pub fn apply<T: Copy + NumCast, TNodata: Copy + num::NumCast>(
-        &self,
-        data: &[T],
-        nodata: Option<TNodata>,
-    ) -> Vec<Color> {
+    pub fn categoric_numeric(cmap_def: &ColorMap, value_range: Range<i64>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+        Ok(Legend::CategoricNumeric(create_categoric_numeric(
+            cmap_def,
+            value_range,
+            mapping_config,
+        )?))
+    }
+
+    pub fn categoric_string(string_map: HashMap<String, mapper::LegendCategory>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+        Ok(Legend::CategoricString(create_categoric_string(string_map, mapping_config)?))
+    }
+
+    pub fn apply<T: Copy + NumCast, TNodata: Copy + num::NumCast>(&self, data: &[T], nodata: Option<TNodata>) -> Vec<Color> {
         match self {
             Legend::Linear(legend) => legend.apply_to_data(data, nodata),
             Legend::Banded(legend) => legend.apply_to_data(data, nodata),
@@ -414,6 +439,15 @@ impl Legend {
             Legend::Banded(legend) => legend.color_for_value(value, nodata),
             Legend::CategoricNumeric(legend) => legend.color_for_value(value, nodata),
             Legend::CategoricString(legend) => legend.color_for_value(value, nodata),
+        }
+    }
+
+    pub fn color_for_opt_value<T: Copy + num::NumCast>(&self, value: Option<T>) -> Color {
+        match self {
+            Legend::Linear(legend) => legend.color_for_opt_value(value),
+            Legend::Banded(legend) => legend.color_for_opt_value(value),
+            Legend::CategoricNumeric(legend) => legend.color_for_opt_value(value),
+            Legend::CategoricString(legend) => legend.color_for_opt_value(value),
         }
     }
 
@@ -437,36 +471,66 @@ impl Legend {
 }
 
 /// Create a legend with linear color mapping
-pub fn create_linear(cmap_name: &str, value_range: Range<f64>) -> Result<LinearLegend> {
+pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_config: Option<MappingConfig>) -> Result<LinearLegend> {
     Ok(MappedLegend {
-        mapper: mapper::Linear::new(value_range, ColorMap::create(cmap_name)?),
-        color_map_name: cmap_name.to_string(),
+        mapper: mapper::Linear::new(value_range, ProcessedColorMap::create(cmap_def)?),
+        color_map_name: cmap_def.name(),
+        mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
     })
 }
 
 /// Create a banded legend where the categories are equally spaced between the value range
-pub fn create_banded(category_count: usize, cmap_name: &str, value_range: Range<f64>) -> Result<BandedLegend> {
+pub fn create_banded(
+    category_count: usize,
+    cmap_def: &ColorMap,
+    value_range: Range<f64>,
+    mapping_config: Option<MappingConfig>,
+) -> Result<BandedLegend> {
     Ok(MappedLegend {
-        mapper: mapper::Banded::with_equal_bands(category_count, value_range, ColorMap::create(cmap_name)?),
-        color_map_name: cmap_name.to_string(),
+        mapper: mapper::Banded::with_equal_bands(category_count, value_range, &ProcessedColorMap::create(cmap_def)?),
+        color_map_name: cmap_def.name(),
+        mapping_config: mapping_config.unwrap_or_default(),
+        ..Default::default()
+    })
+}
+
+/// Create a banded legend where the value ranges are manually configured
+pub fn create_banded_manual_ranges(
+    cmap_def: &ColorMap,
+    value_ranges: Vec<Range<f64>>,
+    mapping_config: Option<MappingConfig>,
+) -> Result<BandedLegend> {
+    Ok(MappedLegend {
+        mapper: mapper::Banded::with_manual_ranges_from_preset(value_ranges, &ProcessedColorMap::create(cmap_def)?),
+        color_map_name: cmap_def.name(),
+        mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
     })
 }
 
 /// Create a categoric legend where each value in the value range is a category
-pub fn create_categoric_numeric(cmap_name: &str, value_range: Range<i64>) -> Result<CategoricNumericLegend> {
+pub fn create_categoric_numeric(
+    cmap_def: &ColorMap,
+    value_range: Range<i64>,
+    mapping_config: Option<MappingConfig>,
+) -> Result<CategoricNumericLegend> {
     Ok(MappedLegend {
-        mapper: mapper::CategoricNumeric::for_value_range(value_range, ColorMap::create(cmap_name)?),
-        color_map_name: cmap_name.to_string(),
+        mapper: mapper::CategoricNumeric::for_value_range(value_range, &ProcessedColorMap::create(cmap_def)?),
+        color_map_name: cmap_def.name(),
+        mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
     })
 }
 
 /// Create a categoric legend with string value mapping
-pub fn create_categoric_string(string_map: HashMap<String, mapper::LegendCategory>) -> Result<CategoricStringLegend> {
+pub fn create_categoric_string(
+    string_map: HashMap<String, mapper::LegendCategory>,
+    mapping_config: Option<MappingConfig>,
+) -> Result<CategoricStringLegend> {
     Ok(MappedLegend {
         mapper: mapper::CategoricString::new(string_map),
+        mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
     })
 }
