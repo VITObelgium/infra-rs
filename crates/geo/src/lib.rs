@@ -40,7 +40,7 @@ pub mod vector;
 #[cfg(test)]
 mod arraytests;
 #[cfg(test)]
-mod testutils;
+pub mod testutils;
 
 use thiserror::Error;
 

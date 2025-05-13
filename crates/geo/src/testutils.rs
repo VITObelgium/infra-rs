@@ -4,7 +4,7 @@ use approx::relative_eq;
 use path_macro::path;
 
 use crate::{
-    array::{Columns, Rows}, gdalinterop, ArrayNum, GeoReference, RasterSize
+    array::{Columns, Rows}, ArrayNum, GeoReference, RasterSize
 };
 
 pub const NOD: f64 = 255.0;
@@ -59,7 +59,9 @@ pub fn test_metadata_3x3() -> GeoReference {
     )
 }
 
+#[cfg(feature = "gdal")]
 pub fn configure_gdal_data() {
+    use crate::gdalinterop;
     let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
     if !data_dir.exists() {
         data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / ".." / "target" / "data");
