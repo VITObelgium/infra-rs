@@ -82,7 +82,7 @@ pub fn raw_tile_to_png_color_mapped<T: ArrayNum>(
 mod tests {
     use super::*;
     use crate::Result;
-    use inf::colormap::{ColorMap, cmap};
+    use inf::colormap::{ColorMapDirection, ColorMapPreset, ProcessedColorMap};
 
     fn reference_image() -> std::path::PathBuf {
         [env!("CARGO_MANIFEST_DIR"), "test", "data", "ref_encoded.png"].iter().collect()
@@ -93,7 +93,7 @@ mod tests {
         const WIDTH: usize = 32;
         const HEIGHT: usize = 16;
 
-        let cmap = ColorMap::new(&cmap::jet(), false);
+        let cmap = ProcessedColorMap::create_for_preset(ColorMapPreset::Jet, ColorMapDirection::Regular);
 
         let mut data = Vec::new();
         for _r in 0..HEIGHT {

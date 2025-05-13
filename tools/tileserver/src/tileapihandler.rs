@@ -1,18 +1,18 @@
 use std::{collections::HashMap, sync::Arc};
 
 use axum::{
+    Json,
     body::Body,
     http::{self, StatusCode},
     routing::get,
-    Json,
 };
 
 use geo::{Coordinate, LatLonBounds, Tile, ZoomLevelStrategy};
-use inf::{legend, Color, Legend};
+use inf::{Color, Legend, colormap::ColorMap, legend};
 use std::ops::Range;
 use tiler::{
-    tileproviderfactory::TileProviderOptions, ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata,
-    TileData, TileFormat, TileJson, TileProvider, TileRequest,
+    ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata, TileData, TileFormat, TileJson, TileProvider, TileRequest,
+    tileproviderfactory::TileProviderOptions,
 };
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -68,10 +68,7 @@ fn parse_layer_id(layer: &str) -> Result<LayerId> {
         .into())
 }
 
-async fn list_layers(
-    state: axum::Extension<Arc<State>>,
-    headers: http::HeaderMap,
-) -> std::result::Result<Json<LayersResponse>, AppError> {
+async fn list_layers(state: axum::Extension<Arc<State>>, headers: http::HeaderMap) -> std::result::Result<Json<LayersResponse>, AppError> {
     Ok(state.api.list_layers(headers)?)
 }
 
@@ -90,11 +87,7 @@ async fn layer_tile(
     axum::extract::Query(params): axum::extract::Query<HashMap<String, String>>,
 ) -> std::result::Result<TileResponse, AppError> {
     let (tile, dpi) = parse_tile(z, x, &y)?;
-    Ok(state
-        .api
-        .get_tile(layer.as_str(), tile, dpi, headers, params)
-        .await?
-        .into())
+    Ok(state.api.get_tile(layer.as_str(), tile, dpi, headers, params).await?.into())
 }
 
 async fn tile_diff(
@@ -127,9 +120,7 @@ async fn layer_raster_value(
     Ok(state.api.get_raster_value(layer.as_str(), params).await?)
 }
 
-pub fn create_router(
-    gis_dir: &std::path::Path,
-) -> (axum::routing::Router, tokio::sync::broadcast::Receiver<StatusEvent>) {
+pub fn create_router(gis_dir: &std::path::Path) -> (axum::routing::Router, tokio::sync::broadcast::Receiver<StatusEvent>) {
     let (status_tx, status_rx) = tokio::sync::broadcast::channel(100);
 
     (
@@ -163,11 +154,7 @@ fn parse_coordinate(val: &str) -> Result<f64> {
     }
 }
 
-fn parse_coordinate_param(
-    query_params: &HashMap<String, String>,
-    lat_name: &str,
-    lon_name: &str,
-) -> Result<geo::Coordinate> {
+fn parse_coordinate_param(query_params: &HashMap<String, String>, lat_name: &str, lon_name: &str) -> Result<geo::Coordinate> {
     if let (Some(lat), Some(lon)) = (query_params.get(lat_name), query_params.get(lon_name)) {
         return Ok(geo::Coordinate {
             latitude: parse_coordinate(lat)?,
@@ -175,10 +162,7 @@ fn parse_coordinate_param(
         });
     }
 
-    Err(Error::InvalidArgument(format!(
-        "Missing {} or {} parameter",
-        lat_name, lon_name
-    )))
+    Err(Error::InvalidArgument(format!("Missing {} or {} parameter", lat_name, lon_name)))
 }
 
 fn host_header(headers: &axum::http::HeaderMap) -> Result<&str> {
@@ -227,17 +211,12 @@ impl TileApiHandler {
             },
         )?;
         let _ = status_tx.send(StatusEvent::Layers(tile_provider.layers().clone()));
-        Ok(TileApiHandler {
-            tile_provider,
-            status_tx,
-        })
+        Ok(TileApiHandler { tile_provider, status_tx })
     }
 
     pub fn get_tile_json(&self, layer: String, headers: axum::http::HeaderMap) -> Result<Json<TileJson>> {
         let layer = parse_layer_id(layer.strip_suffix(".tilejson").unwrap_or_default())?;
-        Ok(Json(
-            self.tile_provider.layer(layer)?.to_tile_json(host_header(&headers)?),
-        ))
+        Ok(Json(self.tile_provider.layer(layer)?.to_tile_json(host_header(&headers)?)))
     }
 
     pub fn list_layers(&self, headers: axum::http::HeaderMap) -> Result<Json<LayersResponse>> {
@@ -475,9 +454,7 @@ impl TileApiHandler {
                 Self::fetch_diff_tile(layer_meta1, layer_meta2, tile, dpi_ratio, tile_format.unwrap()).await?
             }
             _ => {
-                return Err(Error::InvalidArgument(
-                    "Diff tile does not support color mapping".to_string(),
-                ));
+                return Err(Error::InvalidArgument("Diff tile does not support color mapping".to_string()));
             }
         };
 
@@ -494,11 +471,7 @@ impl TileApiHandler {
         Ok(tile)
     }
 
-    pub async fn get_value_range(
-        &self,
-        layer: &str,
-        query_params: HashMap<String, String>,
-    ) -> Result<Json<Range<f64>>> {
+    pub async fn get_value_range(&self, layer: &str, query_params: HashMap<String, String>) -> Result<Json<Range<f64>>> {
         let mut zoom: Option<i32> = None;
         let top_left = parse_coordinate_param(&query_params, "topleft_lat", "topleft_lon")?;
         let bottom_right = parse_coordinate_param(&query_params, "bottomright_lat", "bottomright_lon")?;
@@ -520,11 +493,7 @@ impl TileApiHandler {
         ))
     }
 
-    pub async fn get_raster_value(
-        &self,
-        layer: &str,
-        query_params: HashMap<String, String>,
-    ) -> Result<Json<RasterValueResponse>> {
+    pub async fn get_raster_value(&self, layer: &str, query_params: HashMap<String, String>) -> Result<Json<RasterValueResponse>> {
         let layer_meta = self.tile_provider.layer(parse_layer_id(layer)?)?;
         let coord = parse_coordinate_param(&query_params, "lat", "lon")?;
 
@@ -560,11 +529,7 @@ fn parse_classified_color_map_specification(cmap_name: &str) -> Result<inf::lege
 
         let color = Color::from_hex_string(format!("#{}", split[2]).as_str())?;
 
-        bands.push(legend::mapper::LegendBand::new(
-            Range { start, end },
-            color,
-            String::default(),
-        ));
+        bands.push(legend::mapper::LegendBand::new(Range { start, end }, color, String::default()));
     }
 
     let legend = MappedLegend::with_mapper(legend::mapper::Banded::new(bands), legend::MappingConfig::default());
@@ -594,10 +559,7 @@ fn parse_tile_filename(filename: &str) -> Result<(i32, u8, String)> {
                     .parse::<u8>()
                     .map_err(|_| Error::InvalidArgument(format!("Invalid DPI ratio: {}", num_ratio_split[1])))?;
             } else {
-                return Err(Error::InvalidArgument(format!(
-                    "Invalid DPI ratio: {}",
-                    num_ratio_split[1]
-                )));
+                return Err(Error::InvalidArgument(format!("Invalid DPI ratio: {}", num_ratio_split[1])));
             }
         } else if num_ratio_split.len() != 1 {
             return Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)));
@@ -622,8 +584,9 @@ fn create_legend(cmap_name: &str, min: f64, max: f64) -> Result<Legend> {
         Ok(Legend::Banded(parse_classified_color_map_specification(cmap_name)?))
     } else {
         Ok(Legend::Linear(legend::create_linear(
-            cmap_name,
+            &ColorMap::Named(cmap_name.into()),
             Range { start: min, end: max },
+            None,
         )?))
     }
 }

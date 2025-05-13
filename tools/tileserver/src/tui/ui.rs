@@ -1,8 +1,8 @@
 use ratatui::{
+    Frame,
     layout::{Alignment, Constraint, Direction, Layout},
     style::{Color, Style, Stylize},
     widgets::{Block, BorderType, Row, Table},
-    Frame,
 };
 use tiler::LayerMetadata;
 use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
@@ -28,7 +28,7 @@ fn layer_metadata_rows(layer: Option<&LayerMetadata>) -> Vec<Row> {
             Row::new(vec!["Max zoom".to_string(), layer.max_zoom.to_string()]),
             Row::new(vec!["Bounds".to_string(), format!("{:?}", layer.bounds)]),
             Row::new(vec!["Tile scheme".to_string(), layer.scheme.clone()]),
-            Row::new(vec!["Tile URL".to_string(), layer.url("http://localhost:8080")]),
+            Row::new(vec!["Tile URL".to_string(), layer.url("http://localhost:4444")]),
         ],
         None => Vec::new(),
     }
