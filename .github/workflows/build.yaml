@@ -15,12 +15,6 @@ jobs:
           - { os: macos-latest }
 
     steps:
-      - name: Export GitHub Actions cache environment variables
-        uses: actions/github-script@v7
-        with:
-          script: |
-            core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
-            core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
       - uses: prefix-dev/setup-pixi@v0.8.0
@@ -28,8 +22,6 @@ jobs:
         with:
           tool: just,sd,fd-find,cargo-vcpkg,cargo-nextest
       - name: Build the C++ dependencies using vcpkg
-        env: 
-          VCPKG_BINARY_SOURCES: "clear;x-gha,readwrite"
         run: just bootstrap
       - name: Install the python environment with pixi
         run: just pybootstrap
