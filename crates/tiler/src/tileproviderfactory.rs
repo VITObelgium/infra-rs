@@ -1,11 +1,11 @@
-use geo::{raster::io::RasterFormat, ZoomLevelStrategy};
+use geo::{ZoomLevelStrategy, raster::io::RasterFormat};
 
 use crate::Result;
 use std::path::Path;
 
 use crate::{
-    directorytileprovider::DirectoryTileProvider, mbtilestileprovider::MbtilesTileProvider, tileprovider::TileProvider,
-    warpingtileprovider::WarpingTileProvider, Error,
+    Error, directorytileprovider::DirectoryTileProvider, mbtilestileprovider::MbtilesTileProvider, tileprovider::TileProvider,
+    warpingtileprovider::WarpingTileProvider,
 };
 
 #[derive(Clone, Default)]
@@ -16,7 +16,7 @@ pub struct TileProviderOptions {
 }
 
 /// Create a tile provider for hosting a single file
-pub fn create_single_file_tile_provider(path: &Path, opts: &TileProviderOptions) -> Result<Box<dyn TileProvider + Send>> {
+pub fn create_single_file_tile_provider(path: &Path, opts: &TileProviderOptions) -> Result<Box<dyn TileProvider + Send + Sync>> {
     let raster_type = RasterFormat::guess_from_path(path);
 
     if raster_type == RasterFormat::MBTiles {
@@ -34,7 +34,7 @@ pub fn create_single_file_tile_provider(path: &Path, opts: &TileProviderOptions)
 /// Create a suitable tile provider for hosting a file or directory
 /// In case of a directory, all supported files in the directory are hosted as separate layers
 /// In case of a file, the file is hosted as a single layer
-pub fn create_tile_provider(path: &Path, opts: &TileProviderOptions) -> Result<Box<dyn TileProvider + Send>> {
+pub fn create_tile_provider(path: &Path, opts: &TileProviderOptions) -> Result<Box<dyn TileProvider + Send + Sync>> {
     if path.is_file() {
         if let Ok(provider) = create_single_file_tile_provider(path, opts) {
             return Ok(provider);

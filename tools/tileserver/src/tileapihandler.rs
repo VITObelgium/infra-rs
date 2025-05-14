@@ -12,7 +12,7 @@ use inf::{Color, Legend, colormap::ColorMap, legend};
 use std::ops::Range;
 use tiler::{
     ColorMappedTileRequest, DirectoryTileProvider, LayerId, LayerMetadata, TileData, TileFormat, TileJson, TileProvider, TileRequest,
-    tileproviderfactory::TileProviderOptions,
+    tileproviderfactory::{TileProviderOptions, create_tile_provider},
 };
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
@@ -197,19 +197,19 @@ impl axum::response::IntoResponse for TileResponse {
 }
 
 pub struct TileApiHandler {
-    tile_provider: DirectoryTileProvider,
+    tile_provider: Box<dyn TileProvider + Send + Sync>,
     status_tx: tokio::sync::broadcast::Sender<StatusEvent>,
 }
 
 impl TileApiHandler {
     pub fn new(gis_dir: &std::path::Path, status_tx: tokio::sync::broadcast::Sender<StatusEvent>) -> Result<Self> {
-        let tile_provider = DirectoryTileProvider::new(
-            gis_dir,
-            TileProviderOptions {
-                calculate_stats: true,
-                zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
-            },
-        )?;
+        let opts = TileProviderOptions {
+            calculate_stats: true,
+            zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
+        };
+
+        let tile_provider = create_tile_provider(gis_dir, &opts)?;
+
         let _ = status_tx.send(StatusEvent::Layers(tile_provider.layers().clone()));
         Ok(TileApiHandler { tile_provider, status_tx })
     }
