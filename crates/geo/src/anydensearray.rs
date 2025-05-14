@@ -156,6 +156,21 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
+    pub fn min_max(&self) -> Result<std::ops::Range<f64>> {
+        Ok(match self {
+            AnyDenseArray::U8(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::U16(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::U32(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::U64(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::I8(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::I16(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::I32(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::I64(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::F32(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::F64(raster) => cast::range::<f64>(algo::min_max(raster))?,
+        })
+    }
+
     #[cfg(feature = "gdal")]
     pub fn write(&mut self, path: &std::path::Path) -> Result<()> {
         use crate::raster::RasterIO;

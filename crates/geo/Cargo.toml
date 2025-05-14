@@ -17,6 +17,7 @@ log           = "0.4"
 thiserror     = "2.0"
 num           = "0.4"
 bon           = "3.0"
+itertools     = "0.14"
 #proj4rs = { version = "0.1" }
 arrow  = { version = "54", optional = true }
 pyo3   = { version = "0.23", optional = true }
@@ -56,4 +57,8 @@ harness = false
 dependencies = ["gdal[core,geos,sqlite3]", "proj[core]", "tiff[core,lzma,zip]"]
 
 [package.metadata.vcpkg.target]
-x86_64-unknown-linux-gnu = { dependencies = ["gdal[core,geos,iconv,sqlite3]", "proj[core]", "tiff[core,lzma,zip]"] }
+x86_64-unknown-linux-gnu = { dependencies = [
+    "gdal[core,geos,iconv,sqlite3]",
+    "proj[core]",
+    "tiff[core,lzma,zip]",
+] }

@@ -1,3 +1,6 @@
+use crate::{Error, Result};
+use std::ops::Range;
+
 use num::NumCast;
 
 /// Check if a f64 value fits in a given numerical type.
@@ -12,6 +15,13 @@ pub fn option<To: NumCast>(from: Option<impl NumCast>) -> Option<To> {
 
 pub fn option_or<To: NumCast>(from: Option<impl NumCast>, default: To) -> To {
     from.and_then(|x| NumCast::from(x)).unwrap_or(default)
+}
+
+pub fn range<To: NumCast>(from: Range<impl NumCast>) -> Result<Range<To>> {
+    Ok(Range {
+        start: NumCast::from(from.start).ok_or_else(|| Error::Runtime("Impossible range cast".into()))?,
+        end: NumCast::from(from.end).ok_or_else(|| Error::Runtime("Impossible range cast".into()))?,
+    })
 }
 
 /// # Safety

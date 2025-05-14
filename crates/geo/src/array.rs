@@ -1,4 +1,4 @@
-use crate::{arraynum::ArrayNum, Cell, Error, GeoReference, Nodata, RasterSize, Result};
+use crate::{Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
 use std::fmt::Debug;
 
 pub trait ArrayMetadata: Clone + Debug {
@@ -213,7 +213,10 @@ pub trait Array:
     /// Return an iterator over the raster data, nodata values are represented as None
     fn iter_opt(&self) -> impl Iterator<Item = Option<Self::Pixel>>;
 
-    /// Return an iterator over the raster data, nodata values are represented as None
+    /// Return an iterator over the raster data, nodata values are skipped
+    fn iter_values(&self) -> impl Iterator<Item = Self::Pixel>;
+
+    /// Return an iterator over the raster data, nodata values are `Self::Pixel::nodata()`
     fn iter(&self) -> std::slice::Iter<Self::Pixel>;
 
     /// Return a mutable iterator over the raster data

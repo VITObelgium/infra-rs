@@ -1,8 +1,8 @@
 use crate::{
+    Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, Error, RasterSize, Result,
     array::{Columns, Rows},
     densearrayutil,
     raster::{self},
-    Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, Error, RasterSize, Result,
 };
 use approx::{AbsDiffEq, RelativeEq};
 
@@ -176,11 +176,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         }
 
         let val = self.data[index];
-        if T::is_nodata(val) {
-            None
-        } else {
-            Some(val)
-        }
+        if T::is_nodata(val) { None } else { Some(val) }
     }
 
     fn index_has_data(&self, index: usize) -> bool {
@@ -208,6 +204,10 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
     fn iter_opt(&self) -> impl Iterator<Item = Option<T>> {
         DenserRasterIterator::new(self)
+    }
+
+    fn iter_values(&self) -> impl Iterator<Item = T> {
+        DenserRasterValueIterator::new(self)
     }
 
     fn cell_value(&self, cell: Cell) -> Option<T> {
@@ -272,6 +272,39 @@ where
             let result = self.raster.value(self.index);
             self.index += 1;
             Some(result)
+        } else {
+            None
+        }
+    }
+}
+
+pub struct DenserRasterValueIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
+    index: usize,
+    raster: &'a DenseArray<T, Metadata>,
+}
+
+impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterValueIterator<'a, T, Metadata> {
+    fn new(raster: &'a DenseArray<T, Metadata>) -> Self {
+        DenserRasterValueIterator { index: 0, raster }
+    }
+}
+
+impl<T, Metadata> Iterator for DenserRasterValueIterator<'_, T, Metadata>
+where
+    T: ArrayNum,
+    Metadata: ArrayMetadata,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.index < self.raster.len() {
+            let result = self.raster.value(self.index);
+            self.index += 1;
+            if result.is_none() {
+                return self.next();
+            }
+
+            result
         } else {
             None
         }
@@ -362,7 +395,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> std::ops::IndexMut<Cell> for DenseArr
 
 #[cfg(test)]
 mod tests {
-    use crate::{testutils::compare_fp_vectors, Nodata};
+    use crate::{Nodata, testutils::compare_fp_vectors};
 
     use super::*;
 

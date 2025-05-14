@@ -2,6 +2,7 @@
 
 mod conversion;
 mod distance;
+mod limits;
 mod nodata;
 #[cfg(all(feature = "gdal", feature = "vector"))]
 mod polygonize;
@@ -19,7 +20,7 @@ use num::NumCast;
 pub use polygonize::polygonize;
 
 #[cfg(feature = "gdal")]
-pub use {translate::translate, translate::translate_file, warp::warp, warp::warp_cli, warp::warp_to_disk_cli, warp::WarpOptions};
+pub use {translate::translate, translate::translate_file, warp::WarpOptions, warp::warp, warp::warp_cli, warp::warp_to_disk_cli};
 
 #[cfg(feature = "gdal")]
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};
@@ -34,13 +35,14 @@ pub use {
     distance::closest_target, distance::distance, distance::distance_with_obstacles, distance::sum_targets_within_travel_distance,
     distance::sum_within_travel_distance, distance::travel_distance, distance::travel_distances_up_to,
     distance::value_at_closest_less_than_travel_target, distance::value_at_closest_target, distance::value_at_closest_travel_target,
+    limits::min_max,
 };
 
 pub use {nodata::is_data, nodata::is_nodata, nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::turn_value_into_nodata};
 
-pub use rasterdiff::raster_diff;
 pub use rasterdiff::RasterCellMismatch;
 pub use rasterdiff::RasterDiffResult;
+pub use rasterdiff::raster_diff;
 
 use crate::{Array, ArrayNum};
 
