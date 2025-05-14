@@ -16,6 +16,7 @@ PYTHON_EXE := if os_family() == "windows" {
   }
 VCPKG_DEFAULT_HOST_TRIPLET := VCPKG_DEFAULT_TRIPLET
 
+export VCPKG_FORCE_DOWNLOADED_BINARIES := "1"
 export LD_LIBRARY_PATH := if os_family() == "windows" {
   ""
 } else if os() == "macos" {
