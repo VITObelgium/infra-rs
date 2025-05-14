@@ -139,7 +139,7 @@ pub fn read_dataframe(path: &Path, layer: Option<&str>, columns: &[String]) -> R
     let mut data = Vec::with_capacity(ds_layer.feature_count() as usize);
     let column_indexes = columns
         .iter()
-        .map(|name| ds_layer.field_index_with_name(name))
+        .map(|name| Ok(ds_layer.defn().field_index(name)?))
         .collect::<Result<Vec<usize>>>()?;
 
     for feature in ds_layer.features() {
@@ -181,7 +181,7 @@ pub fn read_dataframe_rows_cb(
 
     let column_indexes: Vec<usize> = columns
         .iter()
-        .map(|name| Ok(ds_layer.field_index_with_name(name)?))
+        .map(|name| Ok(ds_layer.defn().field_index(name)?))
         .collect::<Result<Vec<usize>>>()?;
 
     for feature in ds_layer.features() {
@@ -237,6 +237,10 @@ pub trait LayerAccessExtension
 where
     Self: LayerAccess,
 {
+    #[deprecated(
+        since = "0.1.0",
+        note = "This method is deprecated. Use `field_index` from the `FeatureDefinition` api instead."
+    )]
     fn field_index_with_name(&self, field_name: &str) -> Result<usize> {
         let field_name_c_str = CString::new(field_name)?;
         let field_index = unsafe { gdal_sys::OGR_L_FindFieldIndex(self.c_layer(), field_name_c_str.as_ptr(), gdalinterop::TRUE) };

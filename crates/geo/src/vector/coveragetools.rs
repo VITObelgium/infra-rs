@@ -8,7 +8,6 @@ use crate::Result;
 
 use super::algo;
 use super::io;
-use super::io::LayerAccessExtension;
 
 pub struct VectorBuilder {
     layer: gdal::vector::OwnedLayer,
@@ -31,8 +30,7 @@ impl VectorBuilder {
     /// Add a field to the layer and return the index of the field
     pub fn add_field(&mut self, name: &str, field_type: gdal::vector::OGRFieldType::Type) -> Result<usize> {
         self.layer.create_defn_fields(&[(name, field_type)])?;
-        self.layer.field_index_with_name(name)
-        //io::layer_field_index(&self.layer, name)
+        Ok(self.layer.defn().field_index(name)?)
     }
 
     // pub fn add_cell_geometry(&mut self, cell: Cell, geom: gdal::vector::Geometry) -> Result<()> {

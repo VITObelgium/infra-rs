@@ -6,16 +6,16 @@ use std::{
 };
 
 use geo::ArrayDataType;
-use geo::{crs, Coordinate, LatLonBounds, Tile};
+use geo::{Coordinate, LatLonBounds, Tile, crs};
 use mbtilesdb::MbtilesDb;
 
 use crate::{
+    Error, PixelFormat, Result, TileProvider,
     layermetadata::{LayerId, LayerMetadata, LayerSourceType},
     rasterprocessing::raster_pixel,
     tiledata::TileData,
     tileformat::TileFormat,
-    tileprovider::{unique_layer_id, ColorMappedTileRequest, TileRequest},
-    Error, PixelFormat, Result, TileProvider,
+    tileprovider::{ColorMappedTileRequest, TileRequest, unique_layer_id},
 };
 
 pub struct MbtilesTileProvider {
@@ -69,7 +69,7 @@ impl MbtilesTileProvider {
         log::info!(
             "[TILE] Serving {} [{}] ({})",
             meta.name,
-            meta.tile_format.to_string(),
+            meta.tile_format,
             db_path.file_name().unwrap_or_default().to_string_lossy()
         );
 
