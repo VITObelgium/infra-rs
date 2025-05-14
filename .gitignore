@@ -4,3 +4,4 @@ target
 .pixi
 *.aux.xml
 **/__pycache__
+.idea
