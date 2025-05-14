@@ -9,8 +9,8 @@ vector_derive = { path = "vector_derive", optional = true }
 geos          = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
 geozero       = { version = "0.14" }
 geo-types     = { version = "0.7", features = ["approx"] }
-gdal          = { version = "0.17", optional = true }
-gdal-sys      = { version = "0.10", optional = true }
+gdal          = { version = "0.18", optional = true }
+gdal-sys      = { version = "0.11", optional = true }
 approx        = "0.5"
 rayon         = { version = "1.10", optional = true }
 log           = "0.4"

@@ -11,8 +11,8 @@ use std::path::Path;
 
 use crate::{CoordinateTransformer, Error, GeoReference, Point, Rect, Result, SpatialReference};
 
-use super::coveragetools::VectorBuilder;
 use super::BurnValue;
+use super::coveragetools::VectorBuilder;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct CellInfo {
@@ -253,7 +253,7 @@ fn process_region_borders(cell_coverages: Vec<PolygonCellCoverage>) -> Result<Ve
     Ok(result)
 }
 
-fn required_layer_field_index(layer: &gdal::vector::Layer, field_name: &str) -> Result<i32> {
+fn required_layer_field_index(layer: &gdal::vector::Layer, field_name: &str) -> Result<usize> {
     let field_name_c_str = CString::new(field_name)?;
     let field_index = unsafe { gdal_sys::OGR_L_FindFieldIndex(layer.c_layer(), field_name_c_str.as_ptr(), 1) };
 
@@ -264,7 +264,7 @@ fn required_layer_field_index(layer: &gdal::vector::Layer, field_name: &str) -> 
             layer.name()
         )))
     } else {
-        Ok(field_index)
+        Ok(field_index as usize)
     }
 }
 

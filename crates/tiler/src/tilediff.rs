@@ -37,7 +37,7 @@ fn diff_tiles_as_raster<T: ArrayNum + gdal::raster::GdalType>(tile1: &DenseArray
 #[cfg(feature = "vector-tiles")]
 fn diff_tiles_as_mvt<T: ArrayNum + gdal::raster::GdalType>(tile1: &DenseArray<T>, tile2: &DenseArray<T>) -> Result<TileData> {
     use gdal::vector::LayerAccess;
-    use geo::{raster, Array, CellSize, GeoReference, Point, Tile};
+    use geo::{Array, CellSize, GeoReference, Point, Tile, raster};
 
     use crate::PixelFormat;
 
@@ -63,6 +63,8 @@ fn diff_tiles_as_mvt<T: ArrayNum + gdal::raster::GdalType>(tile1: &DenseArray<T>
 
     let mut tile = mvt::Tile::new(Tile::TILE_SIZE as u32);
 
+    let value_index = vec_ds.layer(0)?.defn().field_index("Value").expect("Value not found");
+
     let mut idx = 0;
     for feature in vec_ds.layer(0)?.features() {
         if let Some(geom) = feature.geometry() {
@@ -85,7 +87,7 @@ fn diff_tiles_as_mvt<T: ArrayNum + gdal::raster::GdalType>(tile1: &DenseArray<T>
                 let layer = tile.create_layer(&idx.to_string());
                 let mut mvt_feat = layer.into_feature(cell_geom.encode()?);
                 mvt_feat.set_id(idx as u64);
-                mvt_feat.add_tag_double("diff", feature.field_as_double_by_name("Value")?.expect("Value not found"));
+                mvt_feat.add_tag_double("diff", feature.field_as_double(value_index)?.expect("Value not found"));
                 tile.add_layer(mvt_feat.into_layer())?;
                 idx += 1;
             }

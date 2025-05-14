@@ -18,12 +18,12 @@ pub mod __private {
 
     // Helper function for the DataRow derive macro
     pub fn read_feature_val<T: VectorFieldType>(feature: &gdal::vector::Feature, field_name: &str) -> Result<Option<T>> {
-        let index = feature.field_index_from_name(field_name)?;
+        let index = feature.field_index(field_name)?;
         if !feature.field_is_valid(index) {
             return Ok(None);
         }
 
-        match feature.field(field_name)? {
+        match feature.field(index)? {
             Some(field) => {
                 if !T::empty_value_is_valid() {
                     if let FieldValue::StringValue(val) = &field {

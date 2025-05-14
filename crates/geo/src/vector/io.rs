@@ -137,11 +137,15 @@ pub fn read_dataframe(path: &Path, layer: Option<&str>, columns: &[String]) -> R
     }
 
     let mut data = Vec::with_capacity(ds_layer.feature_count() as usize);
+    let column_indexes = columns
+        .iter()
+        .map(|name| ds_layer.field_index_with_name(name))
+        .collect::<Result<Vec<usize>>>()?;
 
     for feature in ds_layer.features() {
         let mut row = Vec::with_capacity(columns.len());
-        for column in columns {
-            row.push(feature.field(column)?);
+        for column in &column_indexes {
+            row.push(feature.field(*column)?);
         }
 
         data.push(row);
@@ -175,17 +179,17 @@ pub fn read_dataframe_rows_cb(
         ds_layer.set_attribute_filter(filter)?;
     }
 
-    let columns: Vec<(&str, i32)> = columns
+    let column_indexes: Vec<usize> = columns
         .iter()
-        .map(|name| Ok((name.as_str(), ds_layer.field_index_with_name(name)?)))
-        .collect::<Result<Vec<(&str, i32)>>>()?;
+        .map(|name| Ok(ds_layer.field_index_with_name(name)?))
+        .collect::<Result<Vec<usize>>>()?;
 
     for feature in ds_layer.features() {
         let mut row = Vec::with_capacity(columns.len());
         let mut valid_field = false;
-        for (column_name, column_idx) in &columns {
+        for column_idx in &column_indexes {
             valid_field = valid_field || feature.field_is_valid(*column_idx);
-            row.push(feature.field(column_name)?);
+            row.push(feature.field(*column_idx)?);
         }
 
         if valid_field {
@@ -233,7 +237,7 @@ pub trait LayerAccessExtension
 where
     Self: LayerAccess,
 {
-    fn field_index_with_name(&self, field_name: &str) -> Result<i32> {
+    fn field_index_with_name(&self, field_name: &str) -> Result<usize> {
         let field_name_c_str = CString::new(field_name)?;
         let field_index = unsafe { gdal_sys::OGR_L_FindFieldIndex(self.c_layer(), field_name_c_str.as_ptr(), gdalinterop::TRUE) };
 
@@ -245,7 +249,7 @@ where
             )));
         }
 
-        Ok(field_index)
+        Ok(field_index as usize)
     }
 }
 
@@ -272,13 +276,13 @@ impl FeatureDefinitionExtension for gdal::vector::Defn {
 /// [`gdal::vector::Feature`] extenstion trait that implements missing functionality
 /// for working with GDAL vector layers
 pub trait FeatureExtension {
-    fn field_index_from_name(&self, field_name: &str) -> Result<i32>;
+    fn field_index_from_name(&self, field_name: &str) -> Result<usize>;
     /// The field at the index is set and not null
-    fn field_is_valid(&self, field_index: i32) -> bool;
+    fn field_is_valid(&self, field_index: usize) -> bool;
 }
 
 impl FeatureExtension for gdal::vector::Feature<'_> {
-    fn field_index_from_name(&self, field_name: &str) -> Result<i32> {
+    fn field_index_from_name(&self, field_name: &str) -> Result<usize> {
         let field_name_c_str = CString::new(field_name)?;
         let field_index = unsafe { gdal_sys::OGR_F_GetFieldIndex(self.c_feature(), field_name_c_str.as_ptr()) };
 
@@ -286,11 +290,11 @@ impl FeatureExtension for gdal::vector::Feature<'_> {
             return Err(Error::InvalidArgument(format!("Field '{}' not found in feature", field_name)));
         }
 
-        Ok(field_index)
+        Ok(field_index as usize)
     }
 
-    fn field_is_valid(&self, field_index: i32) -> bool {
-        unsafe { gdal_sys::OGR_F_IsFieldSetAndNotNull(self.c_feature(), field_index) == 1 }
+    fn field_is_valid(&self, field_index: usize) -> bool {
+        unsafe { gdal_sys::OGR_F_IsFieldSetAndNotNull(self.c_feature(), field_index as i32) == 1 }
     }
 }
 

@@ -1,5 +1,6 @@
-use crate::gdalinterop;
 use crate::Cell;
+use crate::gdalinterop;
+use gdal::vector::Feature;
 use gdal::vector::LayerAccess;
 
 use crate::Error;
@@ -28,7 +29,7 @@ impl VectorBuilder {
     }
 
     /// Add a field to the layer and return the index of the field
-    pub fn add_field(&mut self, name: &str, field_type: gdal::vector::OGRFieldType::Type) -> Result<i32> {
+    pub fn add_field(&mut self, name: &str, field_type: gdal::vector::OGRFieldType::Type) -> Result<usize> {
         self.layer.create_defn_fields(&[(name, field_type)])?;
         self.layer.field_index_with_name(name)
         //io::layer_field_index(&self.layer, name)
@@ -75,19 +76,16 @@ impl VectorBuilder {
         name: &str,
         geom: gdal::vector::Geometry,
     ) -> Result<()> {
-        use gdal::vector::FieldValue;
+        let defn = self.layer.defn();
+        let mut ft = Feature::new(defn)?;
+        ft.set_geometry(geom)?;
+        ft.set_field_integer(defn.field_index("row")?, cell.row)?;
+        ft.set_field_integer(defn.field_index("col")?, cell.col)?;
+        ft.set_field_double(defn.field_index("coverage")?, coverage)?;
+        ft.set_field_double(defn.field_index("cellcoverage")?, cell_coverage)?;
+        ft.set_field_string(defn.field_index("name")?, name)?;
 
-        self.layer.create_feature_fields(
-            geom,
-            &["row", "col", "coverage", "cellcoverage", "name"],
-            &[
-                FieldValue::IntegerValue(cell.row),
-                FieldValue::IntegerValue(cell.col),
-                FieldValue::RealValue(coverage),
-                FieldValue::RealValue(cell_coverage),
-                FieldValue::StringValue(name.to_string()),
-            ],
-        )?;
+        ft.create(&self.layer)?;
 
         Ok(())
     }

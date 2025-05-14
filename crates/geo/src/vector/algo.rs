@@ -1,13 +1,11 @@
 use std::path::Path;
 
-use crate::{gdalinterop, vector::io::FeatureDefinitionExtension, GeoReference};
-use crate::{raster, Error, ArrayNum, Result};
-use gdal::{
-    raster::GdalType,
-    vector::{FieldValue, LayerAccess},
-};
+use crate::{ArrayNum, Error, Result, raster};
+use crate::{GeoReference, gdalinterop, vector::io::FeatureDefinitionExtension};
+use gdal::vector::Feature;
+use gdal::{raster::GdalType, vector::LayerAccess};
 
-use super::{geometrytype::GeometryType, io, BurnValue};
+use super::{BurnValue, geometrytype::GeometryType, io};
 
 /// Translate a GDAL vector dataset using the provided translate options
 /// The options are passed as a list of strings in the form `["-option1", "value1", "-option2", "value2"]`
@@ -239,7 +237,7 @@ pub fn buffer(ds: &gdal::Dataset, opts: &BufferOptions) -> Result<gdal::Dataset>
         }
 
         let field_count = src_layer.defn().field_count()? as usize;
-        let mut dst_layer = mem_ds.create_layer(layer_options)?;
+        let dst_layer = mem_ds.create_layer(layer_options)?;
 
         if opts.include_fields {
             // Take over the field definitions
@@ -264,26 +262,23 @@ pub fn buffer(ds: &gdal::Dataset, opts: &BufferOptions) -> Result<gdal::Dataset>
             src_layer.set_attribute_filter(filter)?;
         }
 
+        let defn = dst_layer.defn();
         for feature in src_layer.features() {
             if let Some(geom) = feature.geometry() {
+                let mut ft = Feature::new(defn)?;
                 let geom = geom.buffer(opts.distance, opts.num_quad_segments)?;
-                if opts.include_fields {
-                    // Copy the geometry and the fields
-                    let mut names: Vec<String> = Vec::with_capacity(field_count);
-                    let mut values: Vec<FieldValue> = Vec::with_capacity(field_count);
+                ft.set_geometry(geom)?;
 
+                if opts.include_fields {
+                    // Copy the fields
                     for (name, value) in feature.fields() {
                         if let Some(value) = value {
-                            names.push(name);
-                            values.push(value);
+                            ft.set_field(defn.field_index(name)?, &value)?;
                         }
                     }
-
-                    dst_layer.create_feature_fields(geom, &names.iter().map(|s| s.as_ref()).collect::<Vec<&str>>(), &values)?;
-                } else {
-                    // Only copy the geometry
-                    dst_layer.create_feature(geom)?;
                 }
+
+                ft.create(&dst_layer)?;
             }
         }
     }
@@ -356,8 +351,8 @@ mod tests {
 
     use path_macro::path;
 
-    use crate::vector;
     use crate::Result;
+    use crate::vector;
 
     use super::*;
 
