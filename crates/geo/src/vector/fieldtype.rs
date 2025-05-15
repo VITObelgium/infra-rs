@@ -68,7 +68,7 @@ impl VectorFieldType for String {
 
     fn read_from_field(field: &FieldValue) -> Result<Option<String>> {
         match field {
-            FieldValue::StringValue(val) => Ok(Some(val.to_string())),
+            FieldValue::StringValue(val) => Ok(Some(val.clone())),
             FieldValue::RealValue(val) => Ok(Some(val.to_string())),
             FieldValue::IntegerValue(val) => Ok(Some(val.to_string())),
             _ => Ok(None),
