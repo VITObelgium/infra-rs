@@ -266,6 +266,17 @@ pub mod mapper {
 
             Banded { bands: entries }
         }
+
+        pub fn with_manual_ranges_from_color_list(value_ranges: Vec<Range<f64>>, color_list: &[Color]) -> Self {
+            let band_count = value_ranges.len();
+
+            let mut entries = Vec::with_capacity(band_count);
+            for (index, range) in value_ranges.into_iter().enumerate() {
+                entries.push(LegendBand::new(range, color_list[index], String::default()));
+            }
+
+            Banded { bands: entries }
+        }
     }
 
     impl ColorMapper for Banded {
@@ -501,8 +512,13 @@ pub fn create_banded_manual_ranges(
     value_ranges: Vec<Range<f64>>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<BandedLegend> {
+    let mapper = match cmap_def {
+        ColorMap::ColorList(colors) => mapper::Banded::with_manual_ranges_from_color_list(value_ranges, colors),
+        _ => mapper::Banded::with_manual_ranges_from_preset(value_ranges, &ProcessedColorMap::create(cmap_def)?),
+    };
+
     Ok(MappedLegend {
-        mapper: mapper::Banded::with_manual_ranges_from_preset(value_ranges, &ProcessedColorMap::create(cmap_def)?),
+        mapper,
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
