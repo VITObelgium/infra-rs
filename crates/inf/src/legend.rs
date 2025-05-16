@@ -44,7 +44,7 @@ pub trait ColorMapper: Default {
 pub mod mapper {
     use num::ToPrimitive;
 
-    use crate::interpolate::linear_map_to_float;
+    use crate::{Error, interpolate::linear_map_to_float};
 
     use super::*;
     use std::ops::Range;
@@ -136,29 +136,96 @@ pub mod mapper {
             CategoricNumeric { categories }
         }
 
-        pub fn for_value_range(value_range: Range<i64>, color_map: &ProcessedColorMap) -> Self {
-            let category_count = value_range.end - value_range.start + 1;
-            let color_offset = if category_count == 1 {
-                0.0
-            } else {
-                1.0 / (category_count as f64 - 1.0)
-            };
-            let mut color_pos = 0.0;
-
+        pub fn for_values(value_range: &[i64], color_map: &ColorMap) -> Result<Self> {
+            let category_count = value_range.len();
             let mut categories = HashMap::new();
-            for cat in value_range {
-                categories.insert(
-                    cat,
-                    LegendCategory {
-                        color: color_map.get_color(color_pos),
-                        name: String::default(),
-                    },
-                );
+            match color_map {
+                ColorMap::ColorList(colors) => {
+                    if category_count != colors.len() {
+                        return Err(Error::InvalidArgument("Color list length does not match value range length".into()));
+                    }
 
-                color_pos += color_offset;
+                    for (cat, color) in value_range.iter().zip(colors.iter()) {
+                        categories.insert(
+                            *cat,
+                            LegendCategory {
+                                color: *color,
+                                name: String::default(),
+                            },
+                        );
+                    }
+                }
+                _ => {
+                    let processed_color_map = ProcessedColorMap::create(color_map)?;
+                    let color_offset = if category_count == 1 {
+                        0.0
+                    } else {
+                        1.0 / (category_count as f64 - 1.0)
+                    };
+
+                    let mut color_pos = 0.0;
+
+                    for cat in value_range {
+                        categories.insert(
+                            *cat,
+                            LegendCategory {
+                                color: processed_color_map.get_color(color_pos),
+                                name: String::default(),
+                            },
+                        );
+
+                        color_pos += color_offset;
+                    }
+                }
             }
 
-            CategoricNumeric { categories }
+            Ok(CategoricNumeric { categories })
+        }
+
+        pub fn for_value_range(value_range: Range<i64>, color_map: &ColorMap) -> Result<Self> {
+            let category_count = value_range.end - value_range.start + 1;
+            let mut categories = HashMap::new();
+
+            match color_map {
+                ColorMap::ColorList(colors) => {
+                    if category_count != colors.len() as i64 {
+                        return Err(Error::InvalidArgument("Color list length does not match value range length".into()));
+                    }
+
+                    for (cat, color) in value_range.zip(colors.iter()) {
+                        categories.insert(
+                            cat,
+                            LegendCategory {
+                                color: *color,
+                                name: String::default(),
+                            },
+                        );
+                    }
+                }
+                _ => {
+                    let processed_color_map = ProcessedColorMap::create(color_map)?;
+                    let color_offset = if category_count == 1 {
+                        0.0
+                    } else {
+                        1.0 / (category_count as f64 - 1.0)
+                    };
+                    let mut color_pos = 0.0;
+
+                    for cat in value_range {
+                        categories.insert(
+                            cat,
+                            LegendCategory {
+                                color: processed_color_map.get_color(color_pos),
+                                name: String::default(),
+                            },
+                        );
+
+                        color_pos += color_offset;
+                    }
+                }
+            }
+
+            Ok(CategoricNumeric { categories })
         }
     }
 
@@ -423,10 +490,18 @@ impl Legend {
         Ok(Legend::Banded(create_banded_manual_ranges(cmap_def, value_range, mapping_config)?))
     }
 
-    pub fn categoric_numeric(cmap_def: &ColorMap, value_range: Range<i64>, mapping_config: Option<MappingConfig>) -> Result<Self> {
-        Ok(Legend::CategoricNumeric(create_categoric_numeric(
+    pub fn categoric_value_range(cmap_def: &ColorMap, value_range: Range<i64>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+        Ok(Legend::CategoricNumeric(create_categoric_for_value_range(
             cmap_def,
             value_range,
+            mapping_config,
+        )?))
+    }
+
+    pub fn categoric_value_list(cmap_def: &ColorMap, values: &[i64], mapping_config: Option<MappingConfig>) -> Result<Self> {
+        Ok(Legend::CategoricNumeric(create_categoric_for_value_list(
+            cmap_def,
+            values,
             mapping_config,
         )?))
     }
@@ -526,13 +601,26 @@ pub fn create_banded_manual_ranges(
 }
 
 /// Create a categoric legend where each value in the value range is a category
-pub fn create_categoric_numeric(
+pub fn create_categoric_for_value_range(
     cmap_def: &ColorMap,
     value_range: Range<i64>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<CategoricNumericLegend> {
     Ok(MappedLegend {
-        mapper: mapper::CategoricNumeric::for_value_range(value_range, &ProcessedColorMap::create(cmap_def)?),
+        mapper: mapper::CategoricNumeric::for_value_range(value_range, cmap_def)?,
+        color_map_name: cmap_def.name(),
+        mapping_config: mapping_config.unwrap_or_default(),
+        ..Default::default()
+    })
+}
+
+pub fn create_categoric_for_value_list(
+    cmap_def: &ColorMap,
+    values: &[i64],
+    mapping_config: Option<MappingConfig>,
+) -> Result<CategoricNumericLegend> {
+    Ok(MappedLegend {
+        mapper: mapper::CategoricNumeric::for_values(values, cmap_def)?,
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
