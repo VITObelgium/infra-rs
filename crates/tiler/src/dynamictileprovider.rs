@@ -6,9 +6,9 @@ use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;
 use crate::tiledata::TileData;
 use crate::tileprovider::{ColorMappedTileRequest, TileRequest};
-use crate::tileproviderfactory::{create_single_file_tile_provider, TileProviderOptions};
+use crate::tileproviderfactory::{TileProviderOptions, create_single_file_tile_provider};
 use crate::warpingtileprovider::WarpingTileProvider;
-use crate::{tilediff, DirectoryTileProvider, Error, Result, TileProvider};
+use crate::{DirectoryTileProvider, Error, Result, TileProvider, tilediff};
 use std::collections::HashMap;
 use std::ops::Range;
 

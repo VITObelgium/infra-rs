@@ -3,15 +3,16 @@ use inf::Legend;
 use std::{ops::Range, sync::atomic::AtomicU64};
 
 use crate::{
+    Result, TileFormat,
     layermetadata::{LayerId, LayerMetadata},
     tiledata::TileData,
-    Result, TileFormat,
 };
 
 #[derive(Debug, Clone)]
 pub struct TileRequest {
     pub tile: Tile,
     pub dpi_ratio: u8,
+    pub tile_size: u16,
     pub tile_format: TileFormat,
 }
 
@@ -19,6 +20,7 @@ pub struct TileRequest {
 pub struct ColorMappedTileRequest<'a> {
     pub tile: Tile,
     pub dpi_ratio: u8,
+    pub tile_size: u16,
     pub legend: &'a Legend,
 }
 

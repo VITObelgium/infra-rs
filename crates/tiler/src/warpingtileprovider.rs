@@ -5,12 +5,13 @@ use gdal::raster::GdalType;
 use inf::legend::Legend;
 
 use geo::raster::io::RasterFormat;
-use geo::{crs, Columns, Coordinate, GeoReference, LatLonBounds, Rows, Tile};
 use geo::{Array, ArrayDataType, ArrayNum, DenseArray, RasterSize};
+use geo::{Columns, Coordinate, GeoReference, LatLonBounds, Rows, Tile, crs};
 use num::Num;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 use crate::{
+    Error, PixelFormat, Result,
     imageprocessing::{self},
     layermetadata::{LayerId, LayerMetadata},
     tiledata::TileData,
@@ -18,7 +19,6 @@ use crate::{
     tileio::{self, detect_raster_range},
     tileprovider::{ColorMappedTileRequest, TileProvider, TileRequest},
     tileproviderfactory::TileProviderOptions,
-    Error, PixelFormat, Result,
 };
 
 fn raw_tile_to_vito_tile_format<T: ArrayNum>(data: Vec<T>, width: Columns, height: Rows) -> Result<TileData> {
@@ -50,7 +50,7 @@ impl WarpingTileProvider {
     where
         T: ArrayNum + Num + GdalType,
     {
-        let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio)?;
+        let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, tile, dpi_ratio, Tile::TILE_SIZE)?;
         if raw_tile_data.is_empty() {
             return Ok(None);
         }
@@ -69,7 +69,7 @@ impl WarpingTileProvider {
     where
         T: ArrayNum + Num + GdalType,
     {
-        let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
+        let raw_tile_data = tileio::read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio, req.tile_size)?;
         if raw_tile_data.is_empty() {
             return Ok(TileData::default());
         }
@@ -226,15 +226,15 @@ impl TileProvider for WarpingTileProvider {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use geo::{crs, Columns, Coordinate, Point, Rows, Tile, ZoomLevelStrategy};
     use geo::{Array, Cell, DenseArray, RasterSize};
+    use geo::{Columns, Coordinate, Point, Rows, Tile, ZoomLevelStrategy, crs};
     use inf::cast;
     use path_macro::path;
     use raster_tile::RasterTileIO;
 
     use crate::{
-        tileprovider::TileRequest, tileproviderfactory::TileProviderOptions, warpingtileprovider::WarpingTileProvider, Error, TileFormat,
-        TileProvider,
+        Error, TileFormat, TileProvider, tileprovider::TileRequest, tileproviderfactory::TileProviderOptions,
+        warpingtileprovider::WarpingTileProvider,
     };
 
     fn test_raster() -> std::path::PathBuf {
@@ -310,6 +310,7 @@ mod tests {
         let request = TileRequest {
             tile,
             dpi_ratio: 1,
+            tile_size: Tile::TILE_SIZE,
             tile_format: TileFormat::RasterTile,
         };
 
@@ -360,6 +361,7 @@ mod tests {
         let request = TileRequest {
             tile,
             dpi_ratio: 1,
+            tile_size: Tile::TILE_SIZE,
             tile_format: TileFormat::RasterTile,
         };
 
@@ -399,6 +401,7 @@ mod tests {
         let req = TileRequest {
             tile: Tile { x: 264, y: 171, z: 9 },
             dpi_ratio: 1,
+            tile_size: Tile::TILE_SIZE,
             tile_format: TileFormat::Png,
         };
 
@@ -423,6 +426,7 @@ mod tests {
         let req = TileRequest {
             tile: Tile { x: 264, y: 171, z: 9 },
             dpi_ratio: 1,
+            tile_size: Tile::TILE_SIZE,
             tile_format: TileFormat::RasterTile,
         };
 
@@ -459,6 +463,7 @@ mod tests {
         let req = TileRequest {
             tile: Tile { x: 0, y: 0, z: 0 },
             dpi_ratio: 1,
+            tile_size: Tile::TILE_SIZE,
             tile_format: TileFormat::Png,
         };
 

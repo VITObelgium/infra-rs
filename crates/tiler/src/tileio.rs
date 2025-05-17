@@ -1,19 +1,18 @@
 use std::{ops::Range, path::PathBuf};
 
 use crate::{
-    imageprocessing,
+    ColorMappedTileRequest, Error, LayerMetadata, Result, TileData, TileFormat, imageprocessing,
     layermetadata::to_raster_data_type,
     rasterprocessing::{metadata_bounds_wgs84, source_type_for_path},
     tileprovider,
     tileproviderfactory::TileProviderOptions,
-    ColorMappedTileRequest, Error, LayerMetadata, Result, TileData, TileFormat,
 };
 use gdal::{
-    raster::{GdalDataType, GdalType},
     Dataset,
+    raster::{GdalDataType, GdalType},
 };
-use geo::{constants, crs, raster, CellSize, Columns, GeoReference, LatLonBounds, Rows, SpatialReference, Tile};
 use geo::{Array, ArrayNum, DenseArray, RasterSize};
+use geo::{CellSize, Columns, GeoReference, LatLonBounds, Rows, SpatialReference, Tile, constants, crs, raster};
 use num::Num;
 
 fn type_string<T: GdalType>() -> &'static str {
@@ -81,9 +80,10 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
+    tile_size: u16,
 ) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as i32;
+    let scaled_size = (tile_size * dpi_ratio as u16) as i32;
 
     let options: Vec<String> = vec![
         "-b".to_string(),
@@ -114,9 +114,10 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
+    tile_size: u16,
 ) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = (Tile::TILE_SIZE * dpi_ratio as u16) as i32;
+    let scaled_size = (tile_size * dpi_ratio as u16) as i32;
 
     let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
     let dest_extent = GeoReference::with_origin(
@@ -171,13 +172,14 @@ pub fn read_tile_data<T: ArrayNum + Num + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
+    tile_size: u16,
 ) -> Result<DenseArray<T>> {
     let start = std::time::Instant::now();
 
     let raw_tile_data = if !meta.source_is_web_mercator {
-        read_raster_tile_warped(meta.path.as_path(), band_nr, tile, dpi_ratio)?
+        read_raster_tile_warped(meta.path.as_path(), band_nr, tile, dpi_ratio, tile_size)?
     } else {
-        read_raster_tile(meta.path.as_path(), band_nr, tile, dpi_ratio)?
+        read_raster_tile(meta.path.as_path(), band_nr, tile, dpi_ratio, tile_size)?
     };
 
     //[cfg(TILESERVER_VERBOSE)]
@@ -204,7 +206,7 @@ pub fn read_color_mapped_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, re
 where
     T: ArrayNum + Num + GdalType,
 {
-    let raw_tile_data = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio)?;
+    let raw_tile_data = read_tile_data::<T>(meta, band_nr, req.tile, req.dpi_ratio, req.tile_size)?;
     if raw_tile_data.is_empty() {
         return Ok(TileData::default());
     }

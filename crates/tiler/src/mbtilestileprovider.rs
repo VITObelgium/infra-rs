@@ -114,6 +114,10 @@ impl TileProvider for MbtilesTileProvider {
             return Err(Error::Runtime("Only png format is supported for mbtiles".to_string()));
         }
 
+        if req.tile_size != Tile::TILE_SIZE {
+            return Err(Error::Runtime("Only 256px tile size is supported for mbtiles".to_string()));
+        }
+
         let mut db = mbtilesdb::MbtilesDb::new(&self.db_path)?;
         Ok(TileData::new(
             self.meta.tile_format,
@@ -126,6 +130,7 @@ impl TileProvider for MbtilesTileProvider {
         let tile_req = TileRequest {
             tile: req.tile,
             dpi_ratio: req.dpi_ratio,
+            tile_size: req.tile_size,
             tile_format: TileFormat::Png,
         };
 
