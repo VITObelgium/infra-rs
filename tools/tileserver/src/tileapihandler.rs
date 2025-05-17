@@ -234,7 +234,7 @@ impl TileApiHandler {
         Ok(Json(LayersResponse { layers }))
     }
 
-    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat) -> Result<TileData> {
+    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat, tile_size: u16) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
@@ -242,6 +242,7 @@ impl TileApiHandler {
                 tile,
                 dpi_ratio: dpi,
                 tile_format,
+                tile_size,
             };
 
             let tile = DirectoryTileProvider::get_tile_for_layer(&layer_meta, &tile_request);
@@ -257,6 +258,7 @@ impl TileApiHandler {
         tile: Tile,
         dpi: u8,
         tile_format: TileFormat,
+        tile_size: u16,
     ) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
@@ -265,6 +267,7 @@ impl TileApiHandler {
                 tile,
                 dpi_ratio: dpi,
                 tile_format,
+                tile_size,
             };
 
             let tile = DirectoryTileProvider::diff_tile(&layer_meta1, &layer_meta2, &tile_request);
@@ -280,6 +283,7 @@ impl TileApiHandler {
         cmap: String,
         tile: Tile,
         dpi: u8,
+        tile_size: u16,
     ) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
@@ -295,6 +299,7 @@ impl TileApiHandler {
                     let tile_request = ColorMappedTileRequest {
                         tile,
                         dpi_ratio: dpi,
+                        tile_size,
                         legend: &legend,
                     };
 
@@ -351,6 +356,7 @@ impl TileApiHandler {
         let mut min_value = Option::<f64>::None;
         let mut max_value = Option::<f64>::None;
         let mut tile_format = Option::<TileFormat>::None;
+        let mut tile_size = 256;
 
         if let Some(cmap_str) = params.get("cmap") {
             cmap = cmap_str.to_string();
@@ -366,6 +372,10 @@ impl TileApiHandler {
 
         if let Some(format) = params.get("tile_format") {
             tile_format = Some(TileFormat::from(format.as_str()));
+        }
+
+        if let Some(size) = params.get("tile_size") {
+            tile_size = size.parse::<u16>().unwrap_or(256);
         }
 
         log::debug!(
@@ -384,9 +394,9 @@ impl TileApiHandler {
         let layer_meta = self.tile_provider.layer(layer_id)?;
         let tile = match tile_format {
             Some(TileFormat::FloatEncodedPng | TileFormat::RasterTile) => {
-                Self::fetch_tile(layer_meta, tile, dpi_ratio, tile_format.unwrap()).await?
+                Self::fetch_tile(layer_meta, tile, dpi_ratio, tile_format.unwrap(), tile_size).await?
             }
-            _ => Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, tile, dpi_ratio).await?,
+            _ => Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, tile, dpi_ratio, tile_size).await?,
         };
 
         if tile.format == TileFormat::Protobuf {
@@ -414,6 +424,7 @@ impl TileApiHandler {
         let mut min_value = Option::<f64>::None;
         let mut max_value = Option::<f64>::None;
         let mut tile_format = Option::<TileFormat>::None;
+        let mut tile_size = 256;
 
         if let Some(cmap_str) = params.get("cmap") {
             cmap = cmap_str.to_string();
@@ -429,6 +440,10 @@ impl TileApiHandler {
 
         if let Some(format) = params.get("tile_format") {
             tile_format = Some(TileFormat::from(format.as_str()));
+        }
+
+        if let Some(size) = params.get("tile_size") {
+            tile_size = size.parse::<u16>().unwrap_or(256);
         }
 
         log::debug!(
@@ -451,7 +466,7 @@ impl TileApiHandler {
         let layer_meta2 = self.tile_provider.layer(layer_id2)?;
         let tile = match tile_format {
             Some(TileFormat::FloatEncodedPng | TileFormat::RasterTile) => {
-                Self::fetch_diff_tile(layer_meta1, layer_meta2, tile, dpi_ratio, tile_format.unwrap()).await?
+                Self::fetch_diff_tile(layer_meta1, layer_meta2, tile, dpi_ratio, tile_format.unwrap(), tile_size).await?
             }
             _ => {
                 return Err(Error::InvalidArgument("Diff tile does not support color mapping".to_string()));

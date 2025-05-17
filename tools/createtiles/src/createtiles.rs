@@ -1,9 +1,9 @@
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
-use geo::{crs, GeoReference, Tile, ZoomLevelStrategy};
+use geo::{GeoReference, Tile, ZoomLevelStrategy, crs};
 use inf::progressinfo::AsyncProgressNotification;
-use tiler::{tileproviderfactory, TileData, TileProvider, WarpingTileProvider};
+use tiler::{TileData, TileProvider, WarpingTileProvider, tileproviderfactory};
 
 pub type Result<T> = tiler::Result<T>;
 
@@ -11,6 +11,7 @@ pub struct TileCreationOptions {
     pub min_zoom: Option<i32>,
     pub max_zoom: Option<i32>,
     pub zoom_level_strategy: ZoomLevelStrategy,
+    pub tile_size: u16,
 }
 
 use std::sync::mpsc;
@@ -66,9 +67,7 @@ pub fn create_mbtiles(
     let min_zoom = opts.min_zoom.unwrap_or(0);
     if let Some(zoom) = opts.max_zoom {
         if zoom < 0 {
-            return Err(tiler::Error::Runtime(
-                "Max zoom level must be greater than 0".to_string(),
-            ));
+            return Err(tiler::Error::Runtime("Max zoom level must be greater than 0".to_string()));
         }
 
         opts.zoom_level_strategy = ZoomLevelStrategy::Manual(zoom);
@@ -121,6 +120,7 @@ pub fn create_mbtiles(
             let tile_request = tiler::TileRequest {
                 tile,
                 dpi_ratio: 1,
+                tile_size: opts.tile_size,
                 tile_format: tiler::TileFormat::RasterTile,
             };
 

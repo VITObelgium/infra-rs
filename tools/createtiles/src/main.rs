@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use createtiles::{create_mbtiles, TileCreationOptions};
+use createtiles::{TileCreationOptions, create_mbtiles};
 use env_logger::{Env, TimestampPrecision};
 use geo::ZoomLevelStrategy;
 use indicatif::{MultiProgress, ProgressBar};
@@ -29,6 +29,9 @@ pub struct Opt {
 
     #[clap(long = "max-zoom")]
     pub max_zoom: Option<i32>,
+
+    #[clap(long = "tile-size", default_value = "256")]
+    pub tile_size: u16,
 
     #[clap(long = "noprogress")]
     pub no_progress: bool,
@@ -65,6 +68,7 @@ fn main() -> Result<()> {
     let tile_opts = TileCreationOptions {
         min_zoom: opt.min_zoom,
         max_zoom: opt.max_zoom,
+        tile_size: opt.tile_size,
         zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
     };
 
