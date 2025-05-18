@@ -520,13 +520,12 @@ impl TileApiHandler {
 }
 
 fn parse_classified_color_map_specification(cmap_name: &str) -> Result<inf::legend::BandedLegend> {
-    use inf::MappedLegend;
-
     if !cmap_name.starts_with('[') || !cmap_name.ends_with(']') {
         return Err(Error::Runtime("Invalid classified color map description".to_string()));
     }
 
-    let mut bands = Vec::new();
+    let mut bands: Vec<Range<f64>> = Vec::new();
+    let mut colors = Vec::new();
     let classes: Vec<&str> = cmap_name[1..cmap_name.len() - 1].split(',').collect();
     for cl in classes {
         let split: Vec<&str> = cl.split(';').collect();
@@ -542,14 +541,11 @@ fn parse_classified_color_map_specification(cmap_name: &str) -> Result<inf::lege
             .parse()
             .map_err(|_| Error::InvalidArgument(format!("Invalid upper bound: {}", split[1])))?;
 
-        let color = Color::from_hex_string(format!("#{}", split[2]).as_str())?;
-
-        bands.push(legend::mapper::LegendBand::new(Range { start, end }, color, String::default()));
+        colors.push(Color::from_hex_string(format!("#{}", split[2]).as_str())?);
+        bands.push(start..end);
     }
 
-    let legend = MappedLegend::with_mapper(legend::mapper::Banded::new(bands), legend::MappingConfig::default());
-
-    Ok(legend)
+    Ok(legend::create_banded_manual_ranges(&ColorMap::ColorList(colors), bands, None)?)
 }
 
 fn parse_tile(z: i32, x: i32, y: &str) -> Result<(Tile, u8)> {

@@ -4,6 +4,7 @@ use crate::{
     Result,
     color::Color,
     colormap::{ColorMap, ColorMapDirection, ColorMapPreset, ProcessedColorMap},
+    colormapper::{self, ColorMapper},
 };
 use std::{collections::HashMap, ops::Range};
 
@@ -34,357 +35,33 @@ impl MappingConfig {
     }
 }
 
-/// Trait for implementing color mappers
-pub trait ColorMapper: Default {
-    fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color;
-    fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color;
-    fn category_count(&self) -> usize;
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Default, Clone, Debug)]
+pub struct LegendCategory {
+    pub color: Color,
+    pub name: String,
 }
 
-pub mod mapper {
-    use num::ToPrimitive;
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[derive(Clone, Debug)]
+pub struct LegendBand {
+    pub range: Range<f64>,
+    pub color: Color,
+    pub name: String,
+}
 
-    use crate::{Error, interpolate::linear_map_to_float};
-
-    use super::*;
-    use std::ops::Range;
-
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Clone, Debug)]
-    pub struct LegendBand {
-        range: Range<f64>,
-        color: Color,
-        name: String,
+impl PartialEq for LegendBand {
+    fn eq(&self, other: &Self) -> bool {
+        self.color == other.color
+            && self.name == other.name
+            && (self.range.start - other.range.start).abs() <= f64::EPSILON
+            && (self.range.end - other.range.end).abs() <= f64::EPSILON
     }
+}
 
-    impl PartialEq for LegendBand {
-        fn eq(&self, other: &Self) -> bool {
-            self.color == other.color
-                && self.name == other.name
-                && (self.range.start - other.range.start).abs() <= f64::EPSILON
-                && (self.range.end - other.range.end).abs() <= f64::EPSILON
-        }
-    }
-
-    impl LegendBand {
-        pub fn new(range: Range<f64>, color: Color, name: String) -> Self {
-            LegendBand { range, color, name }
-        }
-    }
-
-    /// Linear color mapper
-    /// each value gets its color based on the position in the configured value range
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Default, Clone, Debug)]
-    pub struct Linear {
-        value_range: Range<f64>,
-        color_map: ProcessedColorMap,
-    }
-
-    impl Linear {
-        pub fn new(value_range: Range<f64>, color_map: ProcessedColorMap) -> Self {
-            Linear { color_map, value_range }
-        }
-    }
-
-    impl ColorMapper for Linear {
-        fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
-            const EDGE_TOLERANCE: f64 = 1e-4;
-
-            if value < self.value_range.start - EDGE_TOLERANCE {
-                config.out_of_range_low_color.unwrap_or(self.color_map.get_color(0.0))
-            } else if value > self.value_range.end + EDGE_TOLERANCE {
-                config.out_of_range_high_color.unwrap_or(self.color_map.get_color(1.0))
-            } else {
-                let value_0_1 = linear_map_to_float::<f64, f64>(value, self.value_range.start, self.value_range.end);
-                self.color_map.get_color(value_0_1)
-            }
-        }
-
-        fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-            if let Ok(num_value) = value.parse::<f64>() {
-                self.color_for_numeric_value(num_value, config)
-            } else {
-                // Linear legend does not support string values
-                config.nodata_color
-            }
-        }
-
-        fn category_count(&self) -> usize {
-            1
-        }
-    }
-
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Default, Clone, Debug)]
-    pub struct LegendCategory {
-        pub color: Color,
-        pub name: String,
-    }
-
-    /// Categoric numeric color mapper (single numeric value → color)
-    /// Contains a number of categories that map to a color
-    /// each value gets its color based on the exact category match
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Default, Clone, Debug)]
-    pub struct CategoricNumeric {
-        categories: HashMap<i64, LegendCategory>,
-    }
-
-    impl CategoricNumeric {
-        pub fn new(categories: HashMap<i64, LegendCategory>) -> Self {
-            CategoricNumeric { categories }
-        }
-
-        pub fn for_values(value_range: &[i64], color_map: &ColorMap) -> Result<Self> {
-            let category_count = value_range.len();
-            let mut categories = HashMap::new();
-            match color_map {
-                ColorMap::ColorList(colors) => {
-                    if category_count != colors.len() {
-                        return Err(Error::InvalidArgument("Color list length does not match value range length".into()));
-                    }
-
-                    for (cat, color) in value_range.iter().zip(colors.iter()) {
-                        categories.insert(
-                            *cat,
-                            LegendCategory {
-                                color: *color,
-                                name: String::default(),
-                            },
-                        );
-                    }
-                }
-                _ => {
-                    let processed_color_map = ProcessedColorMap::create(color_map)?;
-                    let color_offset = if category_count == 1 {
-                        0.0
-                    } else {
-                        1.0 / (category_count as f64 - 1.0)
-                    };
-
-                    let mut color_pos = 0.0;
-
-                    for cat in value_range {
-                        categories.insert(
-                            *cat,
-                            LegendCategory {
-                                color: processed_color_map.get_color(color_pos),
-                                name: String::default(),
-                            },
-                        );
-
-                        color_pos += color_offset;
-                    }
-                }
-            }
-
-            Ok(CategoricNumeric { categories })
-        }
-
-        pub fn for_value_range(value_range: Range<i64>, color_map: &ColorMap) -> Result<Self> {
-            let category_count = value_range.end - value_range.start + 1;
-            let mut categories = HashMap::new();
-
-            match color_map {
-                ColorMap::ColorList(colors) => {
-                    if category_count != colors.len() as i64 {
-                        return Err(Error::InvalidArgument("Color list length does not match value range length".into()));
-                    }
-
-                    for (cat, color) in value_range.zip(colors.iter()) {
-                        categories.insert(
-                            cat,
-                            LegendCategory {
-                                color: *color,
-                                name: String::default(),
-                            },
-                        );
-                    }
-                }
-                _ => {
-                    let processed_color_map = ProcessedColorMap::create(color_map)?;
-                    let color_offset = if category_count == 1 {
-                        0.0
-                    } else {
-                        1.0 / (category_count as f64 - 1.0)
-                    };
-                    let mut color_pos = 0.0;
-
-                    for cat in value_range {
-                        categories.insert(
-                            cat,
-                            LegendCategory {
-                                color: processed_color_map.get_color(color_pos),
-                                name: String::default(),
-                            },
-                        );
-
-                        color_pos += color_offset;
-                    }
-                }
-            }
-
-            Ok(CategoricNumeric { categories })
-        }
-    }
-
-    impl ColorMapper for CategoricNumeric {
-        fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
-            if let Some(cat) = value.to_i64() {
-                return self.categories.get(&cat).map_or(config.nodata_color, |cat| cat.color);
-            }
-
-            config.nodata_color
-        }
-
-        fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-            // No string value support, so convert to numeric value if possible or return nodata color
-            if let Ok(num_value) = value.parse::<f64>() {
-                self.color_for_numeric_value(num_value, config)
-            } else {
-                config.nodata_color
-            }
-        }
-
-        fn category_count(&self) -> usize {
-            self.categories.len()
-        }
-    }
-
-    /// Categoric string color mapper (single string value → color)
-    /// Contains a number of categories that map to a color
-    /// each value gets its color based on the exact category match
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Default, Clone, Debug)]
-    pub struct CategoricString {
-        categories: HashMap<String, LegendCategory>,
-    }
-
-    impl CategoricString {
-        pub fn new(string_map: HashMap<String, LegendCategory>) -> Self {
-            CategoricString { categories: string_map }
-        }
-    }
-
-    impl ColorMapper for CategoricString {
-        fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
-            // Convert to string and match if possible
-            self.color_for_string_value(value.to_string().as_str(), config)
-        }
-
-        fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-            self.categories.get(value).map_or(config.nodata_color, |cat| cat.color)
-        }
-
-        fn category_count(&self) -> usize {
-            self.categories.len()
-        }
-    }
-
-    /// Banded color mapper (value range -> color)
-    /// Contains a number of configured bands with a value range and a color
-    /// each value gets its color based on the band it belongs to
-    #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-    #[derive(Default, Clone, Debug)]
-    pub struct Banded {
-        bands: Vec<LegendBand>,
-    }
-
-    impl Banded {
-        pub fn new(bands: Vec<LegendBand>) -> Self {
-            Banded { bands }
-        }
-
-        pub fn with_equal_bands(band_count: usize, value_range: Range<f64>, color_map: &ProcessedColorMap) -> Self {
-            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
-            let band_offset: f64 = (value_range.end - value_range.start) / (band_count as f64 - 1.0);
-            let mut color_pos = 0.0;
-            let mut band_pos = value_range.start;
-
-            let mut entries = Vec::with_capacity(band_count);
-            for _band in 0..band_count {
-                entries.push(LegendBand::new(
-                    Range {
-                        start: band_pos,
-                        end: band_pos + band_offset,
-                    },
-                    color_map.get_color(color_pos),
-                    String::default(),
-                ));
-
-                band_pos += band_offset;
-                color_pos += color_offset;
-            }
-
-            Banded { bands: entries }
-        }
-
-        pub fn with_manual_ranges_from_preset(value_ranges: Vec<Range<f64>>, color_map: &ProcessedColorMap) -> Self {
-            let band_count = value_ranges.len();
-            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
-            let mut color_pos = 0.0;
-
-            let mut entries = Vec::with_capacity(band_count);
-            for range in value_ranges {
-                entries.push(LegendBand::new(range, color_map.get_color(color_pos), String::default()));
-                color_pos += color_offset;
-            }
-
-            Banded { bands: entries }
-        }
-
-        pub fn with_manual_ranges_from_color_list(value_ranges: Vec<Range<f64>>, color_list: &[Color]) -> Self {
-            let band_count = value_ranges.len();
-
-            let mut entries = Vec::with_capacity(band_count);
-            for (index, range) in value_ranges.into_iter().enumerate() {
-                entries.push(LegendBand::new(range, color_list[index], String::default()));
-            }
-
-            Banded { bands: entries }
-        }
-    }
-
-    impl ColorMapper for Banded {
-        fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
-            const EDGE_TOLERANCE: f64 = 1e-4;
-
-            for entry in &self.bands {
-                if entry.range.contains(&value) {
-                    return entry.color;
-                }
-            }
-
-            if let Some(first_entry) = self.bands.first() {
-                if (value - first_entry.range.start).abs() < EDGE_TOLERANCE {
-                    return first_entry.color;
-                } else if value < first_entry.range.start {
-                    return config.out_of_range_low_color.unwrap_or(first_entry.color);
-                } else if let Some(last_entry) = self.bands.last() {
-                    if (value - last_entry.range.end).abs() < EDGE_TOLERANCE {
-                        return last_entry.color;
-                    } else if value > last_entry.range.end {
-                        return config.out_of_range_high_color.unwrap_or(last_entry.color);
-                    }
-                }
-            }
-
-            config.nodata_color
-        }
-
-        fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-            // No string value support, so convert to numeric value if possible or return nodata color
-            if let Ok(num_value) = value.parse::<f64>() {
-                self.color_for_numeric_value(num_value, config)
-            } else {
-                config.nodata_color
-            }
-        }
-
-        fn category_count(&self) -> usize {
-            self.bands.len()
-        }
+impl LegendBand {
+    pub fn new(range: Range<f64>, color: Color, name: String) -> Self {
+        LegendBand { range, color, name }
     }
 }
 
@@ -437,10 +114,10 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     }
 }
 
-pub type LinearLegend = MappedLegend<mapper::Linear>;
-pub type BandedLegend = MappedLegend<mapper::Banded>;
-pub type CategoricNumericLegend = MappedLegend<mapper::CategoricNumeric>;
-pub type CategoricStringLegend = MappedLegend<mapper::CategoricString>;
+pub type LinearLegend = MappedLegend<colormapper::Linear>;
+pub type BandedLegend = MappedLegend<colormapper::Banded>;
+pub type CategoricNumericLegend = MappedLegend<colormapper::CategoricNumeric>;
+pub type CategoricStringLegend = MappedLegend<colormapper::CategoricString>;
 
 /// Legend for mapping values to colors, can be linear, banded or categoric
 /// Use this when you need to store a legend that can be of any mapping type
@@ -458,7 +135,7 @@ pub enum Legend {
 impl Default for Legend {
     fn default() -> Self {
         Legend::Linear(LinearLegend::with_mapper(
-            mapper::Linear::new(
+            colormapper::Linear::new(
                 Range { start: 0.0, end: 255.0 },
                 ProcessedColorMap::create_for_preset(ColorMapPreset::Gray, ColorMapDirection::Regular),
             ),
@@ -506,7 +183,7 @@ impl Legend {
         )?))
     }
 
-    pub fn categoric_string(string_map: HashMap<String, mapper::LegendCategory>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+    pub fn categoric_string(string_map: HashMap<String, LegendCategory>, mapping_config: Option<MappingConfig>) -> Result<Self> {
         Ok(Legend::CategoricString(create_categoric_string(string_map, mapping_config)?))
     }
 
@@ -559,7 +236,7 @@ impl Legend {
 /// Create a legend with linear color mapping
 pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_config: Option<MappingConfig>) -> Result<LinearLegend> {
     Ok(MappedLegend {
-        mapper: mapper::Linear::new(value_range, ProcessedColorMap::create(cmap_def)?),
+        mapper: colormapper::Linear::new(value_range, ProcessedColorMap::create(cmap_def)?),
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
@@ -574,7 +251,7 @@ pub fn create_banded(
     mapping_config: Option<MappingConfig>,
 ) -> Result<BandedLegend> {
     Ok(MappedLegend {
-        mapper: mapper::Banded::with_equal_bands(category_count, value_range, &ProcessedColorMap::create(cmap_def)?),
+        mapper: colormapper::Banded::with_equal_bands(category_count, value_range, &ProcessedColorMap::create(cmap_def)?),
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
@@ -587,10 +264,7 @@ pub fn create_banded_manual_ranges(
     value_ranges: Vec<Range<f64>>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<BandedLegend> {
-    let mapper = match cmap_def {
-        ColorMap::ColorList(colors) => mapper::Banded::with_manual_ranges_from_color_list(value_ranges, colors),
-        _ => mapper::Banded::with_manual_ranges_from_preset(value_ranges, &ProcessedColorMap::create(cmap_def)?),
-    };
+    let mapper = colormapper::Banded::with_manual_ranges(value_ranges, cmap_def)?;
 
     Ok(MappedLegend {
         mapper,
@@ -607,7 +281,7 @@ pub fn create_categoric_for_value_range(
     mapping_config: Option<MappingConfig>,
 ) -> Result<CategoricNumericLegend> {
     Ok(MappedLegend {
-        mapper: mapper::CategoricNumeric::for_value_range(value_range, cmap_def)?,
+        mapper: colormapper::CategoricNumeric::for_value_range(value_range, cmap_def)?,
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
@@ -620,7 +294,7 @@ pub fn create_categoric_for_value_list(
     mapping_config: Option<MappingConfig>,
 ) -> Result<CategoricNumericLegend> {
     Ok(MappedLegend {
-        mapper: mapper::CategoricNumeric::for_values(values, cmap_def)?,
+        mapper: colormapper::CategoricNumeric::for_values(values, cmap_def)?,
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
@@ -629,11 +303,11 @@ pub fn create_categoric_for_value_list(
 
 /// Create a categoric legend with string value mapping
 pub fn create_categoric_string(
-    string_map: HashMap<String, mapper::LegendCategory>,
+    string_map: HashMap<String, LegendCategory>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<CategoricStringLegend> {
     Ok(MappedLegend {
-        mapper: mapper::CategoricString::new(string_map),
+        mapper: colormapper::CategoricString::new(string_map),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
     })

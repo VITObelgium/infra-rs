@@ -15,25 +15,25 @@ pub enum ColorMapDirection {
     Reversed,
 }
 
-pub struct ColorDictEntry {
+struct ColorDictEntry {
     pub x: f64,
     pub y0: f64,
     pub y1: f64,
 }
 
-pub struct ColorDict {
+struct ColorDict {
     pub red: Vec<ColorDictEntry>,
     pub green: Vec<ColorDictEntry>,
     pub blue: Vec<ColorDictEntry>,
 }
 
-pub struct ColorMapper {
+struct ColorMapper {
     pub red: fn(f64) -> u8,
     pub green: fn(f64) -> u8,
     pub blue: fn(f64) -> u8,
 }
 
-pub struct ColorInfo {
+struct ColorInfo {
     pub start: f64,
     pub color: Color,
 }
@@ -145,7 +145,7 @@ impl ColorMap {
 }
 
 impl ProcessedColorMap {
-    pub fn new(cdict: &ColorDict, direction: ColorMapDirection) -> ProcessedColorMap {
+    fn new(cdict: &ColorDict, direction: ColorMapDirection) -> ProcessedColorMap {
         let map_value = |index: usize| -> Color {
             let value = index as f64 / (256 - 1) as f64;
             Color::rgb(
@@ -180,7 +180,7 @@ impl ProcessedColorMap {
         ProcessedColorMap::new(&cdict, direction)
     }
 
-    pub fn from_color_info_list(clist: &[ColorInfo], direction: ColorMapDirection) -> ProcessedColorMap {
+    fn from_color_info_list(clist: &[ColorInfo], direction: ColorMapDirection) -> ProcessedColorMap {
         let cdict = colorinfo_list_to_dict(clist);
         ProcessedColorMap::new(&cdict, direction)
     }
@@ -193,7 +193,7 @@ impl ProcessedColorMap {
         ProcessedColorMap { cmap }
     }
 
-    pub fn from_color_mapper(cmap: &ColorMapper, direction: ColorMapDirection) -> ProcessedColorMap {
+    fn from_color_mapper(cmap: &ColorMapper, direction: ColorMapDirection) -> ProcessedColorMap {
         let mut cmap_values = [Color::default(); 256];
         for (i, cmap_value) in cmap_values.iter_mut().enumerate() {
             let map_val = i as f64 / 255.0;
@@ -443,7 +443,7 @@ fn remap(start: f64, end: f64, map_start: f64, map_end: f64, value: f64) -> u8 {
     ((map_start + (map_width * pos)) * 255.0).round() as u8
 }
 
-pub mod cmap {
+mod cmap {
 
     use crate::color::Color;
 

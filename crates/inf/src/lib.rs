@@ -9,6 +9,7 @@ mod bigarray;
 pub mod cast;
 pub mod color;
 pub mod colormap;
+mod colormapper;
 pub mod duration;
 mod error;
 pub mod fs;
