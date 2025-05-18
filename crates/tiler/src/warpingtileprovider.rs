@@ -79,16 +79,16 @@ impl WarpingTileProvider {
                 // The default legend is with grayscale colors in range 0-255
                 imageprocessing::raw_tile_to_png_color_mapped::<T>(
                     raw_tile_data.as_ref(),
-                    (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                    (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+                    (req.tile_size * req.dpi_ratio as u16) as usize,
+                    (req.tile_size * req.dpi_ratio as u16) as usize,
                     Some(T::nodata_value()),
                     &Legend::default(),
                 )
             }
             TileFormat::FloatEncodedPng => imageprocessing::raw_tile_to_float_encoded_png::<T>(
                 raw_tile_data.as_ref(),
-                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-                (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+                (req.tile_size * req.dpi_ratio as u16) as usize,
+                (req.tile_size * req.dpi_ratio as u16) as usize,
                 Some(T::nodata_value()),
             ),
             TileFormat::RasterTile => {
