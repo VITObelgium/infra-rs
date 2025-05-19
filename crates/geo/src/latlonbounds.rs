@@ -3,10 +3,25 @@ use approx::{AbsDiffEq, RelativeEq};
 use crate::coordinate::Coordinate;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 pub struct LatLonBounds {
     sw: Coordinate,
     ne: Coordinate,
     bounded: bool,
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
+impl LatLonBounds {
+    /// Return the convex hull of two points; the smallest bounds that contains both.
+    pub fn hull(a: Coordinate, b: Coordinate) -> LatLonBounds {
+        let mut bounds = LatLonBounds {
+            sw: a,
+            ne: a,
+            bounded: true,
+        };
+        bounds.extend(b);
+        bounds
+    }
 }
 
 impl LatLonBounds {
@@ -23,17 +38,6 @@ impl LatLonBounds {
             },
             bounded: true,
         }
-    }
-
-    /// Return the convex hull of two points; the smallest bounds that contains both.
-    pub fn hull(a: Coordinate, b: Coordinate) -> LatLonBounds {
-        let mut bounds = LatLonBounds {
-            sw: a,
-            ne: a,
-            bounded: true,
-        };
-        bounds.extend(b);
-        bounds
     }
 
     /// Return a bounds that may serve as the identity element for the extend operation.
@@ -62,7 +66,7 @@ impl LatLonBounds {
         }
     }
 
-    pub fn valid(&self) -> bool {
+    pub const fn valid(&self) -> bool {
         self.sw.latitude <= self.ne.latitude && self.sw.longitude <= self.ne.longitude
     }
 
@@ -82,11 +86,11 @@ impl LatLonBounds {
         self.ne.longitude
     }
 
-    pub fn southwest(&self) -> Coordinate {
+    pub const fn southwest(&self) -> Coordinate {
         self.sw
     }
 
-    pub fn northeast(&self) -> Coordinate {
+    pub const fn northeast(&self) -> Coordinate {
         self.ne
     }
 
@@ -104,14 +108,14 @@ impl LatLonBounds {
         }
     }
 
-    pub fn center(&self) -> Coordinate {
+    pub const fn center(&self) -> Coordinate {
         Coordinate {
             latitude: (self.sw.latitude + self.ne.latitude) / 2.0,
             longitude: (self.sw.longitude + self.ne.longitude) / 2.0,
         }
     }
 
-    pub fn constrain(&self, p: &Coordinate) -> Coordinate {
+    pub const fn constrain(&self, p: &Coordinate) -> Coordinate {
         if !self.bounded {
             return *p;
         }
@@ -133,26 +137,26 @@ impl LatLonBounds {
         }
     }
 
-    fn contains_latitude(&self, latitude: f64) -> bool {
+    const fn contains_latitude(&self, latitude: f64) -> bool {
         latitude >= self.south() && latitude <= self.north()
     }
 
-    fn contains_longitude(&self, longitude: f64) -> bool {
+    const fn contains_longitude(&self, longitude: f64) -> bool {
         longitude >= self.west() && longitude <= self.east()
     }
 
-    pub fn contains_coordinate(&self, coordinate: &Coordinate) -> bool {
+    pub const fn contains_coordinate(&self, coordinate: &Coordinate) -> bool {
         self.contains_latitude(coordinate.latitude) && self.contains_longitude(coordinate.longitude)
     }
 
-    pub fn extend(&mut self, point: Coordinate) {
+    pub const fn extend(&mut self, point: Coordinate) {
         self.sw.latitude = self.sw.latitude.min(point.latitude);
         self.sw.longitude = self.sw.longitude.min(point.longitude);
         self.ne.latitude = self.ne.latitude.max(point.latitude);
         self.ne.longitude = self.ne.longitude.max(point.longitude);
     }
 
-    pub fn extend_bounds(&mut self, bounds: &LatLonBounds) {
+    pub const fn extend_bounds(&mut self, bounds: &LatLonBounds) {
         self.extend(bounds.sw);
         self.extend(bounds.ne);
     }
@@ -235,12 +239,7 @@ impl RelativeEq for LatLonBounds {
         f64::default_max_relative()
     }
 
-    fn relative_eq(
-        &self,
-        other: &Self,
-        epsilon: <f64 as AbsDiffEq>::Epsilon,
-        max_relative: <f64 as AbsDiffEq>::Epsilon,
-    ) -> bool {
+    fn relative_eq(&self, other: &Self, epsilon: <f64 as AbsDiffEq>::Epsilon, max_relative: <f64 as AbsDiffEq>::Epsilon) -> bool {
         Coordinate::relative_eq(&self.ne, &other.ne, epsilon, max_relative)
             && Coordinate::relative_eq(&self.sw, &other.sw, epsilon, max_relative)
     }
