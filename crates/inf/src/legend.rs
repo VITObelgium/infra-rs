@@ -43,29 +43,6 @@ pub struct LegendCategory {
 }
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Clone, Debug)]
-pub struct LegendBand {
-    pub range: Range<f64>,
-    pub color: Color,
-    pub name: String,
-}
-
-impl PartialEq for LegendBand {
-    fn eq(&self, other: &Self) -> bool {
-        self.color == other.color
-            && self.name == other.name
-            && (self.range.start - other.range.start).abs() <= f64::EPSILON
-            && (self.range.end - other.range.end).abs() <= f64::EPSILON
-    }
-}
-
-impl LegendBand {
-    pub fn new(range: Range<f64>, color: Color, name: String) -> Self {
-        LegendBand { range, color, name }
-    }
-}
-
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Default, Clone, Debug)]
 pub struct MappedLegend<TMapper: ColorMapper> {
     pub title: String,
