@@ -181,6 +181,7 @@ impl axum::response::IntoResponse for TileResponse {
         let mut response = axum::response::Response::builder()
             .status(StatusCode::OK)
             .header("Content-Type", tile_format_content_type(self.data.format))
+            .header("Cache-Control", "max-age=86400")
             .header("Access-Control-Allow-Origin", "*");
 
         if self.data.format == TileFormat::Protobuf {
