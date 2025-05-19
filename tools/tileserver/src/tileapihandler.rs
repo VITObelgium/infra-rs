@@ -178,13 +178,10 @@ fn host_header(headers: &axum::http::HeaderMap) -> Result<&str> {
 
 impl axum::response::IntoResponse for TileResponse {
     fn into_response(self) -> axum::response::Response {
-        if self.data.is_empty() {
-            return (StatusCode::OK, "").into_response();
-        }
-
         let mut response = axum::response::Response::builder()
             .status(StatusCode::OK)
-            .header("Content-Type", tile_format_content_type(self.data.format));
+            .header("Content-Type", tile_format_content_type(self.data.format))
+            .header("Access-Control-Allow-Origin", "*");
 
         if self.data.format == TileFormat::Protobuf {
             response = response.header("Content-Encoding", "gzip");
