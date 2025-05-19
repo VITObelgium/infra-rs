@@ -244,6 +244,8 @@ pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_confi
 }
 
 /// Create a banded legend where the categories are equally spaced between the value range
+/// If the the `ColorMap` is a `ColorMap::ColorList`, the length of the list must match `category_count`
+/// Otherwise, the colors will be taken linearly from the colormap
 pub fn create_banded(
     category_count: usize,
     cmap_def: &ColorMap,
@@ -251,7 +253,7 @@ pub fn create_banded(
     mapping_config: Option<MappingConfig>,
 ) -> Result<BandedLegend> {
     Ok(MappedLegend {
-        mapper: colormapper::Banded::with_equal_bands(category_count, value_range, &ProcessedColorMap::create(cmap_def)?),
+        mapper: colormapper::Banded::with_equal_bands(category_count, value_range, cmap_def)?,
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
@@ -259,6 +261,8 @@ pub fn create_banded(
 }
 
 /// Create a banded legend where the value ranges are manually configured
+/// If the the `ColorMap` is a `ColorMap::ColorList`, the length of the list must match the number of bands
+/// Otherwise, the colors will be taken linearly from the colormap
 pub fn create_banded_manual_ranges(
     cmap_def: &ColorMap,
     value_ranges: Vec<Range<f64>>,
@@ -275,6 +279,8 @@ pub fn create_banded_manual_ranges(
 }
 
 /// Create a categoric legend where each value in the value range is a category
+/// If the the `ColorMap` is a `ColorMap::ColorList`, the length of the list must match the number of values in the range
+/// Otherwise, the colors will be taken linearly from the colormap
 pub fn create_categoric_for_value_range(
     cmap_def: &ColorMap,
     value_range: Range<i64>,
@@ -288,6 +294,9 @@ pub fn create_categoric_for_value_range(
     })
 }
 
+/// Create a categoric legend based on the provided list of values
+/// If the the `ColorMap` is a `ColorMap::ColorList`, the length of the list must match the number of values
+/// Otherwise, the colors will be taken linearly from the colormap
 pub fn create_categoric_for_value_list(
     cmap_def: &ColorMap,
     values: &[i64],

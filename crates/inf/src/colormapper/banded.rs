@@ -1,7 +1,7 @@
 use std::ops::Range;
 
 use crate::{
-    Color, Result,
+    Color, Error, Result,
     colormap::{ColorMap, ProcessedColorMap},
     legend::{LegendBand, MappingConfig},
 };
@@ -22,28 +22,50 @@ impl Banded {
         Banded { bands }
     }
 
-    pub fn with_equal_bands(band_count: usize, value_range: Range<f64>, color_map: &ProcessedColorMap) -> Self {
-        let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
+    pub fn with_equal_bands(band_count: usize, value_range: Range<f64>, color_map: &ColorMap) -> Result<Self> {
+        let mut entries = Vec::with_capacity(band_count);
         let band_offset: f64 = (value_range.end - value_range.start) / (band_count as f64 - 1.0);
-        let mut color_pos = 0.0;
         let mut band_pos = value_range.start;
 
-        let mut entries = Vec::with_capacity(band_count);
-        for _band in 0..band_count {
-            entries.push(LegendBand::new(
-                Range {
-                    start: band_pos,
-                    end: band_pos + band_offset,
-                },
-                color_map.get_color(color_pos),
-                String::default(),
-            ));
+        if let ColorMap::ColorList(colors) = color_map {
+            if colors.len() != band_count {
+                return Err(Error::InvalidArgument("Color list length does not match band count".into()));
+            }
 
-            band_pos += band_offset;
-            color_pos += color_offset;
+            for color in colors.iter().take(band_count) {
+                entries.push(LegendBand::new(
+                    Range {
+                        start: band_pos,
+                        end: band_pos + band_offset,
+                    },
+                    *color,
+                    String::default(),
+                ));
+
+                band_pos += band_offset;
+            }
+        } else {
+            let cmap = ProcessedColorMap::create(color_map)?;
+
+            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
+            let mut color_pos = 0.0;
+
+            for _band in 0..band_count {
+                entries.push(LegendBand::new(
+                    Range {
+                        start: band_pos,
+                        end: band_pos + band_offset,
+                    },
+                    cmap.get_color(color_pos),
+                    String::default(),
+                ));
+
+                band_pos += band_offset;
+                color_pos += color_offset;
+            }
         }
 
-        Banded { bands: entries }
+        Ok(Banded { bands: entries })
     }
 
     pub fn with_manual_ranges(value_ranges: Vec<Range<f64>>, color_map: &ColorMap) -> Result<Self> {
@@ -51,6 +73,12 @@ impl Banded {
         let mut entries = Vec::with_capacity(band_count);
 
         if let ColorMap::ColorList(colors) = color_map {
+            if colors.len() != value_ranges.len() {
+                return Err(Error::InvalidArgument(
+                    "Color list length does not match the number of ranges".into(),
+                ));
+            }
+
             for (range, color) in value_ranges.into_iter().zip(colors.iter()) {
                 entries.push(LegendBand::new(range, *color, String::default()));
             }

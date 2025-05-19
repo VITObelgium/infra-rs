@@ -24,15 +24,17 @@ impl CategoricNumeric {
         CategoricNumeric { categories }
     }
 
-    pub fn for_values(value_range: &[i64], color_map: &ColorMap) -> Result<Self> {
-        let category_count = value_range.len();
+    pub fn for_values(category_values: &[i64], color_map: &ColorMap) -> Result<Self> {
+        let category_count = category_values.len();
         let mut categories = HashMap::new();
         if let ColorMap::ColorList(colors) = color_map {
             if category_count != colors.len() {
-                return Err(Error::InvalidArgument("Color list length does not match value range length".into()));
+                return Err(Error::InvalidArgument(
+                    "Color list length does not match the number of category values".into(),
+                ));
             }
 
-            for (cat, color) in value_range.iter().zip(colors.iter()) {
+            for (cat, color) in category_values.iter().zip(colors.iter()) {
                 categories.insert(
                     *cat,
                     LegendCategory {
@@ -51,7 +53,7 @@ impl CategoricNumeric {
 
             let mut color_pos = 0.0;
 
-            for cat in value_range {
+            for cat in category_values {
                 categories.insert(
                     *cat,
                     LegendCategory {
@@ -73,7 +75,9 @@ impl CategoricNumeric {
 
         if let ColorMap::ColorList(colors) = color_map {
             if category_count != colors.len() as i64 {
-                return Err(Error::InvalidArgument("Color list length does not match value range length".into()));
+                return Err(Error::InvalidArgument(
+                    "Color list length does not match the number of categories in the range".into(),
+                ));
             }
 
             for (cat, color) in value_range.zip(colors.iter()) {
