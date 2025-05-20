@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 
 use geo::{GeoReference, Tile, ZoomLevelStrategy, crs};
 use inf::progressinfo::AsyncProgressNotification;
-use tiler::{TileData, TileProvider, WarpingTileProvider, tileproviderfactory};
+use tiler::{TileData, TileFormat, TileProvider, WarpingTileProvider, tileproviderfactory};
 
 pub type Result<T> = tiler::Result<T>;
 
@@ -12,6 +12,7 @@ pub struct TileCreationOptions {
     pub max_zoom: Option<i32>,
     pub zoom_level_strategy: ZoomLevelStrategy,
     pub tile_size: u16,
+    pub tile_format: TileFormat,
 }
 
 use std::sync::mpsc;
@@ -121,7 +122,7 @@ pub fn create_mbtiles(
                 tile,
                 dpi_ratio: 1,
                 tile_size: opts.tile_size,
-                tile_format: tiler::TileFormat::RasterTile,
+                tile_format: opts.tile_format,
             };
 
             match tiler.get_tile(layer.id, &tile_request) {

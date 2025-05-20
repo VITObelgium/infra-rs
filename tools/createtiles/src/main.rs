@@ -7,6 +7,7 @@ use geo::ZoomLevelStrategy;
 use indicatif::{MultiProgress, ProgressBar};
 use indicatif_log_bridge::LogWrapper;
 use inf::progressinfo::{CallbackProgress, ComputationStatus};
+use tiler::TileFormat;
 
 pub type Error = tiler::Error;
 pub type Result<T> = tiler::Result<T>;
@@ -32,6 +33,10 @@ pub struct Opt {
 
     #[clap(long = "tile-size", default_value = "256")]
     pub tile_size: u16,
+
+    #[clap(long = "tile-format")]
+    #[clap(default_value = "vrt")]
+    pub tile_format: TileFormat,
 
     #[clap(long = "noprogress")]
     pub no_progress: bool,
@@ -70,6 +75,7 @@ fn main() -> Result<()> {
         max_zoom: opt.max_zoom,
         tile_size: opt.tile_size,
         zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
+        tile_format: opt.tile_format,
     };
 
     let progress = multi.add(ProgressBar::new(100));
