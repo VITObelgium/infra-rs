@@ -171,6 +171,23 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         })
     }
 
+    pub fn filter(&mut self, values_to_include: &[f64]) -> Result<()> {
+        match self {
+            AnyDenseArray::U8(raster) => algo::filter(raster, &cast::slice::<u8>(values_to_include)?),
+            AnyDenseArray::U16(raster) => algo::filter(raster, &cast::slice::<u16>(values_to_include)?),
+            AnyDenseArray::U32(raster) => algo::filter(raster, &cast::slice::<u32>(values_to_include)?),
+            AnyDenseArray::U64(raster) => algo::filter(raster, &cast::slice::<u64>(values_to_include)?),
+            AnyDenseArray::I8(raster) => algo::filter(raster, &cast::slice::<i8>(values_to_include)?),
+            AnyDenseArray::I16(raster) => algo::filter(raster, &cast::slice::<i16>(values_to_include)?),
+            AnyDenseArray::I32(raster) => algo::filter(raster, &cast::slice::<i32>(values_to_include)?),
+            AnyDenseArray::I64(raster) => algo::filter(raster, &cast::slice::<i64>(values_to_include)?),
+            AnyDenseArray::F32(raster) => algo::filter(raster, &cast::slice::<f32>(values_to_include)?),
+            AnyDenseArray::F64(raster) => algo::filter(raster, &cast::slice::<f64>(values_to_include)?),
+        }
+
+        Ok(())
+    }
+
     #[cfg(feature = "gdal")]
     pub fn write(&mut self, path: &std::path::Path) -> Result<()> {
         use crate::raster::RasterIO;

@@ -24,6 +24,12 @@ pub fn range<To: NumCast>(from: Range<impl NumCast>) -> Result<Range<To>> {
     })
 }
 
+pub fn slice<To: NumCast>(from: &[impl NumCast + Copy]) -> Result<Vec<To>> {
+    from.iter()
+        .map(|x| NumCast::from(*x).ok_or_else(|| Error::Runtime("Impossible slice cast".into())))
+        .collect()
+}
+
 /// # Safety
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
 /// Otherwise the slice will contain (uninitialized) padding bytes

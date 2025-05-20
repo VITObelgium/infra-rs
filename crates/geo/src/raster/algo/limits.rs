@@ -30,7 +30,7 @@ mod unspecialized_generictests {
     use super::*;
 
     #[test]
-    fn test_min_max_empty<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() {
+    fn test_min_max_empty<R: Array<Pixel = u8, Metadata = GeoReference>>() {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(0), Columns(0)),
@@ -51,7 +51,7 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_min_max_single_element<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() {
+    fn test_min_max_single_element<R: Array<Pixel = u8, Metadata = GeoReference>>() {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(1), Columns(1)),
@@ -73,7 +73,7 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_min_max_multiple_elements<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() {
+    fn test_min_max_multiple_elements<R: Array<Pixel = u8, Metadata = GeoReference>>() {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
@@ -97,7 +97,7 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() {
+    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference>>() {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
