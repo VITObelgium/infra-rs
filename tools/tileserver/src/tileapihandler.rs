@@ -357,7 +357,7 @@ impl TileApiHandler {
         let mut tile_size = 256;
 
         if let Some(cmap_str) = params.get("cmap") {
-            cmap = cmap_str.to_string();
+            cmap = cmap_str.clone();
         }
 
         if let Some(min_str) = params.get("min") {
@@ -425,7 +425,7 @@ impl TileApiHandler {
         let mut tile_size = 256;
 
         if let Some(cmap_str) = params.get("cmap") {
-            cmap = cmap_str.to_string();
+            cmap = cmap_str.clone();
         }
 
         if let Some(min_str) = params.get("min") {
