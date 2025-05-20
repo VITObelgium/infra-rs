@@ -40,7 +40,11 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         self
     }
 
-    pub fn binary<F: Fn(T, T) -> T>(&self, other: &Self, op: F) -> Self {
+    pub fn binary<TDest: ArrayNum>(
+        &self,
+        other: &Self,
+        op: impl Fn(T, T) -> TDest,
+    ) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
         raster::algo::assert_dimensions(self, other);
 
         let data = self.data.iter().zip(other.data.iter()).map(|(&a, &b)| op(a, b)).collect();

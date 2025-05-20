@@ -54,7 +54,7 @@ where
     for<'a> &'a R: IntoIterator<Item = Option<R::Pixel>>,
 {
     R::WithPixelType::<TDest>::from_iter(src.metadata().clone(), src.into_iter().map(|x| x.and_then(|x| NumCast::from(x))))
-        .expect("Failed to create raster") // Can only fail if the metadata size is invalid which is impossible in this case
+        .expect("Raster size bug") // Can only fail if the metadata size is invalid which is impossible in this case
 }
 
 pub fn assert_dimensions(r1: &impl Array, r2: &impl Array) {
