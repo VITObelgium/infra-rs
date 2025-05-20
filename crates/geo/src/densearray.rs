@@ -83,7 +83,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> AsMut<[T]> for DenseArray<T, Metadata
 
 impl<T: ArrayNum, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayCopy<T, R> for DenseArray<T, Metadata> {
     fn new_with_dimensions_of(ras: &R, fill: T) -> Self {
-        DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()]).unwrap()
+        DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()]).expect("Raster size bug")
     }
 }
 
@@ -129,7 +129,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     fn filled_with(val: Option<T>, meta: Metadata) -> Self {
         if let Some(val) = val {
             let cell_count = meta.size().cell_count();
-            DenseArray::new(meta, vec![val; cell_count]).unwrap()
+            DenseArray::new(meta, vec![val; cell_count]).expect("Raster size bug")
         } else {
             DenseArray::filled_with_nodata(meta)
         }
@@ -137,7 +137,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
     fn filled_with_nodata(meta: Metadata) -> Self {
         let cell_count = meta.size().cell_count();
-        DenseArray::new(meta, vec![T::nodata_value(); cell_count]).unwrap()
+        DenseArray::new(meta, vec![T::nodata_value(); cell_count]).expect("Raster size bug")
     }
 
     /// Returns the metadata reference.
