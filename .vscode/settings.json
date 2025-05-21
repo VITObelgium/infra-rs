@@ -1,6 +1,22 @@
 {
     "editor.formatOnSave": true,
     "rust-analyzer.check.command": "clippy",
-    "rust-analyzer.cargo.features": "all",
-    "rust-analyzer.check.features": "all"
+    "rust-analyzer.cargo.features": [
+        "serde",
+        "gdal-static",
+        "arrow",
+        "derive",
+        "vector",
+        "vector-tiles",
+        "vector-diff"
+    ],
+    "rust-analyzer.check.features": [
+        "serde",
+        "gdal-static",
+        "arrow",
+        "derive",
+        "vector",
+        "vector-tiles",
+        "vector-diff"
+    ]
 }

@@ -37,7 +37,7 @@ rev = "10b7a17"
 overlay-triplets-path = "vcpkg-overlay/triplets"
 dependencies = [
     "gdal[core,netcdf,zstd]",
-    "hdf5[core,zlib]",
+    "hdf5[core,szip,zlib]",
     "netcdf-c[core,netcdf-4,hdf5]",
     "tiff[core,lzma,zstd]",
 ] # needed to run the geo tests
