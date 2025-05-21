@@ -33,11 +33,11 @@ python      = ["pyo3/auto-initialize"]
 
 [package.metadata.vcpkg]
 git = "https://github.com/microsoft/vcpkg"
-rev = "10b7a17"
+rev = "ce613c4"
 overlay-triplets-path = "vcpkg-overlay/triplets"
 dependencies = [
     "gdal[core,netcdf,zstd]",
-    "hdf5[core,szip,zlib]",
+    "hdf5[core,zlib]",
     "netcdf-c[core,netcdf-4,hdf5]",
     "tiff[core,lzma,zstd]",
 ] # needed to run the geo tests

@@ -11,7 +11,7 @@ jobs:
       matrix:
         cfg:
           - { os: ubuntu-latest }
-          - { os: windows-2022 }
+          - { os: windows-2025 }
           - { os: macos-latest }
 
     steps:
@@ -21,6 +21,14 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: just,sd,fd-find,cargo-vcpkg,cargo-nextest
+      - name: Cache vcpkg packages
+        id: cache-vcpkg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/vcpkg
+            ~/AppData/Local/vcpkg/archives
+          key: ${{ matrix.cfg.os }}-${{ hashFiles('Cargo.toml') }}
       - name: Build the C++ dependencies using vcpkg
         run: just bootstrap
       - name: Install the python environment with pixi
