@@ -67,6 +67,36 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     unerase_raster_type_op!(columns, Columns);
     unerase_raster_type_op_ref!(metadata, Metadata);
 
+    pub fn unary<T: ArrayNum, TDest: ArrayNum>(&self, op: impl Fn(T) -> TDest) -> DenseArray<TDest, Metadata> {
+        let lhs: Result<&DenseArray<T, Metadata>> = self.try_into();
+
+        match lhs {
+            Ok(lhs) => lhs.unary::<TDest>(op),
+            Err(_) => self.cast_to::<T>().unary(op),
+        }
+    }
+
+    // pub fn unary_mut<T: ArrayNum>(self, op: impl Fn(T) -> T) -> DenseArray<T, Metadata> {
+    //     let lhs: Result<DenseArray<T, Metadata>> = self.try_into();
+
+    //     match lhs {
+    //         Ok(lhs) => lhs.unary_mut(op),
+    //         Err(_) => self.cast_to::<T>().unary(op),
+    //     }
+    // }
+
+    pub fn unary_inplace<T: ArrayNum>(&mut self, op: impl Fn(&mut T)) -> Result<()> {
+        let lhs: Result<&mut DenseArray<T, Metadata>> = self.try_into();
+
+        match lhs {
+            Ok(lhs) => {
+                lhs.unary_inplace(op);
+                Ok(())
+            }
+            Err(_) => Err(Error::InvalidArgument("Invalid unary callback function".into())),
+        }
+    }
+
     pub fn binary_op<T: ArrayNum, TDest: ArrayNum>(&self, other: &Self, op: impl Fn(T, T) -> TDest) -> DenseArray<TDest, Metadata> {
         let lhs: Result<&DenseArray<T, Metadata>> = self.try_into();
         let rhs: Result<&DenseArray<T, Metadata>> = other.try_into();
@@ -330,6 +360,21 @@ where
     }
 }
 
+fn dense_array_as_mut_ref<TDest, T, Metadata>(raster: &mut DenseArray<T, Metadata>) -> Result<&mut DenseArray<TDest, Metadata>>
+where
+    TDest: ArrayNum,
+    T: ArrayNum,
+    Metadata: ArrayMetadata,
+{
+    if TDest::TYPE == T::TYPE {
+        let ptr = (raster as *mut DenseArray<T, Metadata>).cast::<DenseArray<TDest, Metadata>>();
+        // Safety: We just checked that TDest and T are the same type
+        Ok(unsafe { &mut *ptr })
+    } else {
+        Err(Error::InvalidArgument(format!("Type mismatch: {} != {}", TDest::TYPE, T::TYPE)))
+    }
+}
+
 macro_rules! impl_try_from_dense_raster {
     ( $data_type:path, $data_type_enum:ident ) => {
         impl<Metadata: ArrayMetadata> TryFrom<AnyDenseArray<Metadata>> for DenseArray<$data_type, Metadata> {
@@ -371,6 +416,25 @@ impl<'a, T: ArrayNum, Metadata: ArrayMetadata> TryFrom<&'a AnyDenseArray<Metadat
             AnyDenseArray::I64(raster) => dense_array_as_ref::<T, _, _>(raster),
             AnyDenseArray::F32(raster) => dense_array_as_ref::<T, _, _>(raster),
             AnyDenseArray::F64(raster) => dense_array_as_ref::<T, _, _>(raster),
+        }
+    }
+}
+
+impl<'a, T: ArrayNum, Metadata: ArrayMetadata> TryFrom<&'a mut AnyDenseArray<Metadata>> for &'a mut DenseArray<T, Metadata> {
+    type Error = Error;
+
+    fn try_from(value: &'a mut AnyDenseArray<Metadata>) -> Result<Self> {
+        match value {
+            AnyDenseArray::U8(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::U16(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::U32(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::U64(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::I8(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::I16(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::I32(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::I64(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::F32(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
+            AnyDenseArray::F64(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
         }
     }
 }

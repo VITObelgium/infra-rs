@@ -27,15 +27,15 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         (self.meta, self.data)
     }
 
-    pub fn unary<F: Fn(T) -> T>(&self, op: F) -> Self {
+    pub fn unary<TDest: ArrayNum>(&self, op: impl Fn(T) -> TDest) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
         DenseArray::new(self.metadata().clone(), self.data.iter().map(|&a| op(a)).collect()).expect("Raster size bug")
     }
 
-    pub fn unary_inplace<F: Fn(&mut T)>(&mut self, op: F) {
+    pub fn unary_inplace(&mut self, op: impl Fn(&mut T)) {
         self.data.iter_mut().for_each(op);
     }
 
-    pub fn unary_mut<F: Fn(T) -> T>(mut self, op: F) -> Self {
+    pub fn unary_mut(mut self, op: impl Fn(T) -> T) -> Self {
         self.data.iter_mut().for_each(|x| *x = op(*x));
         self
     }
