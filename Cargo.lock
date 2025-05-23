@@ -2536,6 +2536,7 @@ dependencies = [
  "inf",
  "js-sys",
  "lz4_flex",
+ "path_macro",
  "thiserror 2.0.12",
  "wasm-bindgen",
 ]
