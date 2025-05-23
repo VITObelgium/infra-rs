@@ -6,7 +6,7 @@ use geo::{Array as _, Columns, Coordinate, DenseArray, RasterSize, Rows, Tile, r
 use indicatif::{MultiProgress, ProgressBar};
 use indicatif_log_bridge::LogWrapper;
 use inf::progressinfo::{CallbackProgress, ComputationStatus};
-use raster_tile::RasterTileIO as _;
+use raster_tile::RasterTileCastIO;
 use reqwest::blocking::Client;
 
 pub type Error = raster_tile::Error;
@@ -74,7 +74,7 @@ fn main() -> Result<()> {
     let p = progress.clone();
 
     let bounds = bounds_from_coords(&opt.coord1, &opt.coord2)?;
-    log::info!("Bounds: {:?}", bounds);
+    let raster_size = RasterSize::with_rows_cols(Rows(opt.tile_size as i32), Columns(opt.tile_size as i32));
 
     let mut raster = raster_tile::utils::reassemble_raster_from_tiles::<f32>(
         bounds,
@@ -96,15 +96,14 @@ fn main() -> Result<()> {
 
             match result {
                 Ok(response) => {
-                    let bytes = response.bytes().unwrap();
-                    if !bytes.is_empty() {
-                        let raster = DenseArray::<u8>::from_tile_bytes(bytes.as_ref()).unwrap();
-                        Ok(raster.cast_to::<f32>())
+                    let bytes = response
+                        .bytes()
+                        .map_err(|err| Error::Runtime(format!("Failed to read tile data: {}", err)))?;
+
+                    if bytes.is_empty() {
+                        Ok(DenseArray::<f32>::filled_with_nodata(raster_size))
                     } else {
-                        Ok(DenseArray::<f32>::filled_with_nodata(RasterSize::with_rows_cols(
-                            Rows(opt.tile_size as i32),
-                            Columns(opt.tile_size as i32),
-                        )))
+                        Ok(DenseArray::<f32>::from_tile_bytes_autodetect_format_with_cast(bytes.as_ref())?)
                     }
                 }
                 Err(err) => Err(Error::Runtime(format!("Failed to fetch tile: {}", err))),

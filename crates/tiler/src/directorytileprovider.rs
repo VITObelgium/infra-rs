@@ -1,5 +1,5 @@
-use geo::raster::io::RasterFormat;
 use geo::DenseArray;
+use geo::raster::io::RasterFormat;
 use geo::{Coordinate, LatLonBounds};
 use raster_tile::RasterTileCastIO;
 
@@ -7,9 +7,9 @@ use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;
 use crate::tiledata::TileData;
 use crate::tileprovider::{ColorMappedTileRequest, TileRequest};
-use crate::tileproviderfactory::{create_single_file_tile_provider, TileProviderOptions};
+use crate::tileproviderfactory::{TileProviderOptions, create_single_file_tile_provider};
 use crate::warpingtileprovider::WarpingTileProvider;
-use crate::{tilediff, Error, Result, TileProvider};
+use crate::{Error, Result, TileProvider, tilediff};
 use std::collections::HashMap;
 use std::ops::Range;
 
@@ -105,8 +105,8 @@ impl DirectoryTileProvider {
     }
 
     pub fn diff_tile(layer1: &LayerMetadata, layer2: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
-        let tile1 = DenseArray::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer1, tile_req)?.data)?;
-        let tile2 = DenseArray::<f32>::from_tile_bytes_with_cast(&Self::get_tile_for_layer(layer2, tile_req)?.data)?;
+        let tile1 = DenseArray::<f32>::from_raster_tile_bytes_with_cast(&Self::get_tile_for_layer(layer1, tile_req)?.data)?;
+        let tile2 = DenseArray::<f32>::from_raster_tile_bytes_with_cast(&Self::get_tile_for_layer(layer2, tile_req)?.data)?;
 
         tilediff::diff_tiles(&tile1, &tile2, layer1.tile_format)
     }

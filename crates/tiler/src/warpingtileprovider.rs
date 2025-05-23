@@ -315,7 +315,7 @@ mod tests {
         };
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
-        let raster_tile = DenseArray::<u8>::from_tile_bytes(&tile_data.data)?;
+        let raster_tile = DenseArray::<u8>::from_raster_tile_bytes(&tile_data.data)?;
         let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterSize::with_rows_cols(
             Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
             Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
@@ -366,7 +366,7 @@ mod tests {
         };
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
-        let raster_tile = DenseArray::<u8>::from_tile_bytes(&tile_data.data)?;
+        let raster_tile = DenseArray::<u8>::from_raster_tile_bytes(&tile_data.data)?;
         let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterSize::with_rows_cols(
             Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
             Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
@@ -432,7 +432,7 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_id, &req)?;
 
-        let raster_tile = DenseArray::<u8>::from_tile_bytes(&tile_data.data)?;
+        let raster_tile = DenseArray::<u8>::from_raster_tile_bytes(&tile_data.data)?;
         assert_eq!(raster_tile.columns(), Columns(256));
         assert_eq!(raster_tile.rows(), Rows(256));
 

@@ -6,7 +6,7 @@ edition = "2024"
 [dependencies]
 inf                  = { path = "../../crates/inf", features = [] }
 geo                  = { path = "../../crates/geo", features = ["gdal-static"] }
-raster-tile          = { path = "../../crates/raster-tile", features = [] }
+raster-tile          = { path = "../../crates/raster-tile", features = ["float_png"] }
 sqlite               = { path = "../../crates/sqlite", features = [] }
 clap                 = { version = "4.5", features = ["derive", "env"] }
 log                  = "0.4"

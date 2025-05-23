@@ -89,7 +89,7 @@ mod tests {
             assert!(path.exists(), "Tile file does not exist: {}", path.display());
 
             let bytes = std::fs::read(&path).unwrap();
-            Ok(DenseArray::<u8>::from_tile_bytes(&bytes).unwrap().cast_to::<f32>())
+            Ok(DenseArray::<u8>::from_raster_tile_bytes(&bytes).unwrap().cast_to::<f32>())
         })
         .unwrap();
 
