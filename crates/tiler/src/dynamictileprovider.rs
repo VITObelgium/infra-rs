@@ -103,8 +103,8 @@ impl DynamicTileProvider {
         let tile1 = Self::get_tile_for_layer(self.layer_data(id_lhs)?, &diff_tile_req)?.data;
         let tile2 = Self::get_tile_for_layer(self.layer_data(id_rhs)?, &diff_tile_req)?.data;
 
-        let tile1 = DenseArray::<f32>::from_tile_bytes_with_cast(&tile1)?;
-        let tile2 = DenseArray::<f32>::from_tile_bytes_with_cast(&tile2)?;
+        let tile1 = DenseArray::<f32>::from_raster_tile_bytes_with_cast(&tile1)?;
+        let tile2 = DenseArray::<f32>::from_raster_tile_bytes_with_cast(&tile2)?;
 
         tilediff::diff_tiles(&tile1, &tile2, tile_req.tile_format)
     }

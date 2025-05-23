@@ -8,10 +8,15 @@ geo       = { path = "../geo" }
 inf       = { path = "../inf" }
 thiserror = "2.0"
 lz4_flex  = "0.11"
+png       = { version = "0.17", optional = true }
+num       = { version = "0.4", optional = true }
 
 [dev-dependencies]
 path_macro = "1.0"
 geo        = { path = "../geo", features = ["gdal-static"] }
+
+[features]
+float_png = ["dep:png", "dep:num"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
