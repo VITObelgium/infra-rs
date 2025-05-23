@@ -1,6 +1,6 @@
 use crate::{
-    array::{Columns, Rows},
     ArrayMetadata, GeoReference,
+    array::{Columns, Rows},
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -14,12 +14,22 @@ impl RasterSize {
         RasterSize { rows, cols }
     }
 
+    pub fn empty() -> Self {
+        Self::with_rows_cols(Rows(0), Columns(0))
+    }
+
     pub fn is_empty(&self) -> bool {
         self.rows.count() == 0 || self.cols.count() == 0
     }
 
     pub fn cell_count(&self) -> usize {
         self.rows * self.cols
+    }
+}
+
+impl std::fmt::Display for RasterSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "(rows: {}, cols: {})", self.rows, self.cols)
     }
 }
 

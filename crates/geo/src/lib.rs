@@ -34,6 +34,7 @@ mod runtimeconfiguration;
 #[cfg(feature = "gdal")]
 mod spatialreference;
 mod tile;
+pub mod tileutils;
 #[cfg(feature = "vector")]
 pub mod vector;
 

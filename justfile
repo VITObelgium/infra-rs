@@ -95,3 +95,6 @@ rasterbench:
 
 rasterbenchbaseline name:
   cargo bench --bench rasterops --package=geo -- --save-baseline {{name}}
+
+tiles2raster zoom:
+  cargo run --release -p tiles2raster -- --url "http://localhost:4444/api/1/{z}/{x}/{y}.vrt?tile_format=vrt" --zoom {{zoom}} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_{{zoom}}.tif

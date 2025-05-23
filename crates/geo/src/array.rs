@@ -236,6 +236,8 @@ pub trait Array:
 
     /// Assigns the value to all the elements of the raster, even nodata
     fn fill(&mut self, val: Self::Pixel);
+
+    fn cast_to<U: ArrayNum>(&self) -> Self::WithPixelType<U>;
 }
 
 pub trait ArrayCopy<T: ArrayNum, Rhs = Self> {

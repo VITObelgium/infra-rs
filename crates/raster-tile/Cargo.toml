@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 geo       = { path = "../geo" }
+inf       = { path = "../inf" }
 thiserror = "2.0"
 lz4_flex  = "0.11"
 

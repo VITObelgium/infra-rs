@@ -5,6 +5,7 @@ use crate::{
     raster::{self},
 };
 use approx::{AbsDiffEq, RelativeEq};
+use num::NumCast;
 
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::nodata_value`] for the type T in the same array data structure
@@ -241,6 +242,10 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
     fn fill(&mut self, val: Self::Pixel) {
         self.data.iter_mut().for_each(|x| *x = val);
+    }
+
+    fn cast_to<U: ArrayNum>(&self) -> <DenseArray<T, Metadata> as Array>::WithPixelType<U> {
+        DenseArray::from_iter(self.metadata().clone(), self.iter_opt().map(|v| v.and_then(|v| NumCast::from(v)))).expect("Raster size bug")
     }
 }
 
