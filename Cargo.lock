@@ -1269,6 +1269,7 @@ dependencies = [
  "arrow",
  "bon",
  "criterion",
+ "ctor",
  "env_logger",
  "gdal",
  "gdal-sys",

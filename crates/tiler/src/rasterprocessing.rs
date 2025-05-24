@@ -1,15 +1,15 @@
 use geo::{
-    raster::{self, io::RasterFormat},
     Columns, RasterSize, Rows,
+    raster::{self, io::RasterFormat},
 };
 use std::path::Path;
 
 use geo::{
-    crs::{self, web_mercator_to_lat_lon},
     Coordinate, CoordinateTransformer, GeoReference, LatLonBounds, Point, SpatialReference,
+    crs::{self, web_mercator_to_lat_lon},
 };
 
-use crate::{layermetadata::LayerSourceType, Error, Result};
+use crate::{Error, Result, layermetadata::LayerSourceType};
 
 fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -> Result<Option<f32>> {
     let ds = raster::io::dataset::open_read_only(raster_path)?;
@@ -103,19 +103,11 @@ pub fn source_type_for_path(path: &std::path::Path) -> LayerSourceType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use geo::{CellSize, RuntimeConfiguration};
+    use geo::{CellSize};
     use path_macro::path;
 
     fn test_raster() -> std::path::PathBuf {
         path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "landusebyte.tif")
-    }
-
-    #[ctor::ctor]
-    fn init() {
-        let data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
-
-        let config = RuntimeConfiguration::builder().proj_db(&data_dir).build();
-        config.apply().expect("Failed to configure runtime");
     }
 
     #[test]
@@ -143,17 +135,25 @@ mod tests {
 
     #[test]
     fn test_raster_pixel_outside_of_raster_extent() {
-        assert!(raster_pixel(&test_raster(), 1, Coordinate::latlon(50.3, 4.7), None)
-            .unwrap()
-            .is_none());
-        assert!(raster_pixel(&test_raster(), 1, Coordinate::latlon(52.0, 4.2), None)
-            .unwrap()
-            .is_none());
-        assert!(raster_pixel(&test_raster(), 1, Coordinate::latlon(51.0, 7.0), None)
-            .unwrap()
-            .is_none());
-        assert!(raster_pixel(&test_raster(), 1, Coordinate::latlon(51.0, 1.8), None)
-            .unwrap()
-            .is_none());
+        assert!(
+            raster_pixel(&test_raster(), 1, Coordinate::latlon(50.3, 4.7), None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            raster_pixel(&test_raster(), 1, Coordinate::latlon(52.0, 4.2), None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            raster_pixel(&test_raster(), 1, Coordinate::latlon(51.0, 7.0), None)
+                .unwrap()
+                .is_none()
+        );
+        assert!(
+            raster_pixel(&test_raster(), 1, Coordinate::latlon(51.0, 1.8), None)
+                .unwrap()
+                .is_none()
+        );
     }
 }
