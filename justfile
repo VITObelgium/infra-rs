@@ -17,6 +17,7 @@ PYTHON_EXE := if os_family() == "windows" {
 VCPKG_DEFAULT_HOST_TRIPLET := VCPKG_DEFAULT_TRIPLET
 
 unexport VCPKG_ROOT
+unexport CONDA_ENV
 export VCPKG_OVERLAY_PORTS := join(justfile_directory(), "vcpkg-overlay", "ports")
 export VCPKG_FORCE_DOWNLOADED_BINARIES := "1"
 export LD_LIBRARY_PATH := if os_family() == "windows" {
