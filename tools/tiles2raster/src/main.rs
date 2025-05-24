@@ -1,8 +1,12 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use comfy_table::Table;
 use env_logger::{Env, TimestampPrecision};
-use geo::{Array as _, Columns, Coordinate, DenseArray, RasterSize, Rows, Tile, raster::RasterIO};
+use geo::{
+    Array as _, ArrayNum, Columns, Coordinate, DenseArray, RasterSize, Rows, Tile,
+    raster::{DenseRaster, RasterIO, algo},
+};
 use indicatif::{MultiProgress, ProgressBar};
 use indicatif_log_bridge::LogWrapper;
 use inf::progressinfo::{CallbackProgress, ComputationStatus};
@@ -33,6 +37,9 @@ pub struct Opt {
     #[clap(long = "tile-size", default_value = "256")]
     pub tile_size: u16,
 
+    #[clap(long = "stats")]
+    pub calc_stats: bool,
+
     #[clap(long = "noprogress")]
     pub no_progress: bool,
 }
@@ -56,6 +63,25 @@ fn bounds_from_coords(coord1: &str, coord2: &str) -> Result<geo::LatLonBounds> {
         Coordinate::latlon(lat1, lon1),
         Coordinate::latlon(lat2, lon2),
     ))
+}
+
+struct RasterStats {
+    quantiles: Vec<f64>,
+}
+
+fn calc_stats<T: ArrayNum>(raster: &DenseRaster<T>) -> Result<RasterStats> {
+    Ok(RasterStats {
+        quantiles: algo::quantiles(raster, &[0.0, 0.25, 0.5, 0.75, 1.0]).unwrap().unwrap(),
+    })
+}
+
+fn print_raster_stats(stats: &RasterStats) {
+    let mut table = Table::new();
+    table
+        .set_header(vec!["Type", "Values"])
+        .add_row(vec!["Quantiles", &format!("{:?}", stats.quantiles)]);
+
+    println!("{table}");
 }
 
 fn main() -> Result<()> {
@@ -114,6 +140,10 @@ fn main() -> Result<()> {
     raster.write(&opt.output)?;
 
     p.finish_with_message("Raster creation done");
+
+    if opt.calc_stats {
+        print_raster_stats(&calc_stats(&raster)?);
+    }
 
     Ok(())
 }
