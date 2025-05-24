@@ -33,6 +33,7 @@ test-log      = "0.2"
 env_logger    = "0.11"
 generic-tests = "0.1"
 tempdir       = "0.3"
+ctor          = "0.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.6"
