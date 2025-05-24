@@ -8,16 +8,11 @@ mod generictests {
     use tempdir::TempDir;
 
     use crate::{
+        Array, ArrayNum, Cell, GeoReference, Point,
         array::{Columns, Rows},
         raster::{DenseRaster, RasterIO},
-        testutils::{workspace_test_data_dir, NOD},
-        Array, ArrayNum, Cell, GeoReference, Point,
+        testutils::{NOD, workspace_test_data_dir},
     };
-
-    #[ctor::ctor]
-    fn init() {
-        crate::testutils::configure_gdal_data();
-    }
 
     #[test]
     fn test_read_dense_raster<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() {
@@ -104,7 +99,7 @@ mod generictests {
 mod tests {
     use tempdir::TempDir;
 
-    use crate::{raster::RasterIO, Array, Columns, DenseArray, RasterSize, Rows};
+    use crate::{Array, Columns, DenseArray, RasterSize, Rows, raster::RasterIO};
 
     #[test]
     fn write_raster() {

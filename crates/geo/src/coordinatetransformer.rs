@@ -1,10 +1,10 @@
 use gdal::spatial_ref::CoordTransform;
 
-use crate::crs::Epsg;
-use crate::spatialreference::SpatialReference;
 use crate::Coordinate;
 use crate::Point;
 use crate::Result;
+use crate::crs::Epsg;
+use crate::spatialreference::SpatialReference;
 
 pub struct CoordinateTransformer {
     source_srs: SpatialReference,
@@ -31,16 +31,14 @@ impl CoordinateTransformer {
     pub fn transform_point(&self, point: Point) -> Result<Point> {
         let mut result_x = [point.x()];
         let mut result_y = [point.y()];
-        self.transformer
-            .transform_coords(&mut result_x, &mut result_y, &mut [])?;
+        self.transformer.transform_coords(&mut result_x, &mut result_y, &mut [])?;
         Ok(Point::new(result_x[0], result_y[0]))
     }
 
     pub fn transform_point_in_place(&self, point: &mut Point) -> Result<()> {
         let mut result_x = [point.x()];
         let mut result_y = [point.y()];
-        self.transformer
-            .transform_coords(&mut result_x, &mut result_y, &mut [])?;
+        self.transformer.transform_coords(&mut result_x, &mut result_y, &mut [])?;
 
         point.set_x(result_x[0]);
         point.set_y(result_y[0]);
@@ -70,12 +68,7 @@ impl CoordinateTransformer {
 mod tests {
     use approx::assert_relative_eq;
 
-    use crate::{crs, Coordinate, CoordinateTransformer, Point};
-
-    #[ctor::ctor]
-    fn init() {
-        crate::testutils::configure_gdal_data();
-    }
+    use crate::{Coordinate, CoordinateTransformer, Point, crs};
 
     #[test]
     fn test_projection_point() {

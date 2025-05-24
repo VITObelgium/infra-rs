@@ -2,12 +2,12 @@
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
+    use geo::{Cell, RasterSize};
     use geo::{
+        CellSize, Columns, GeoReference, Rows, SpatialReference,
         crs::Epsg,
         vector::{self, BurnValue},
-        CellSize, Columns, GeoReference, Rows, SpatialReference,
     };
-    use geo::{Cell, RasterSize};
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
     use vector::polygoncoverage::CoverageConfiguration;
@@ -16,8 +16,8 @@ mod tests {
     mod derive {
 
         use super::*;
-        use geo::{vector, RuntimeConfiguration};
-        use vector::{io::DataframeIterator, DataRow};
+        use geo::vector;
+        use vector::{DataRow, io::DataframeIterator};
 
         #[derive(vector::DataRow)]
         struct PollutantData {
@@ -37,21 +37,6 @@ mod tests {
             #[vector(column = "Sector")]
             sector: String,
             value: Option<f64>,
-        }
-
-        #[ctor::ctor]
-        fn init() {
-            let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
-            if !data_dir.exists() {
-                data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / ".." / "target" / "data");
-            }
-
-            if !data_dir.exists() {
-                panic!("Proj.db data directory not found: {}", data_dir.display());
-            }
-
-            let config = RuntimeConfiguration::builder().proj_db(&data_dir).build();
-            config.apply().expect("Failed to configure runtime");
         }
 
         #[test]

@@ -1,6 +1,14 @@
 {
     "editor.formatOnSave": true,
     "rust-analyzer.check.command": "clippy",
-    "rust-analyzer.cargo.features": "all",
-    "rust-analyzer.check.features": "all"
+    "rust-analyzer.cargo.features": [
+        "gdal-static",
+        "serde",
+        "vector"
+    ],
+    "rust-analyzer.check.features": [
+        "gdal-static",
+        "serde",
+        "vector"
+    ]
 }

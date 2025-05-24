@@ -34,7 +34,6 @@ where
             let lower_val = to_f64(data[lower])?;
             let upper_val = to_f64(data[upper])?;
             let weight = pos - lower as f64;
-            println!("{} {} {}", lower_val, upper_val, weight);
             lower_val * (1.0 - weight) + upper_val * weight
         };
 

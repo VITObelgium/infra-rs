@@ -16,6 +16,8 @@ PYTHON_EXE := if os_family() == "windows" {
   }
 VCPKG_DEFAULT_HOST_TRIPLET := VCPKG_DEFAULT_TRIPLET
 
+unexport VCPKG_ROOT
+export VCPKG_OVERLAY_PORTS := join(justfile_directory(), "vcpkg-overlay", "ports")
 export VCPKG_FORCE_DOWNLOADED_BINARIES := "1"
 export LD_LIBRARY_PATH := if os_family() == "windows" {
   ""
@@ -38,17 +40,14 @@ pybootstrap:
 # gdal-sys uses pkg-config to find the gdal library
 # the gdal.pc file contains shlwapi as link flag for the shlwapi library but this gets ignored
 # by the pkg-config crate implementation, so we need to replace it with a format that is picked up by the crate
+# Warning: gdal fails to build when zstd is enabled and the CONDA_ENV enrironment variable is set
 bootstrap: cargo-config-gen
   echo "Bootstrapping vcpkg:{{VCPKG_DEFAULT_TRIPLET}}..."
   cargo vcpkg -v build
   -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
   fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- '-l-framework' '-framework'
   fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- ' shlwapi ' ' -lshlwapi '
-  -mkdir -p target/data && mkdir -p target/debug && mkdir -p target/release
-  fd -g proj.db ./target/vcpkg/installed --exec cp "{}" ./target/data/
-  cp ./target/data/proj.db ./target/debug/
-  cp ./target/data/proj.db ./target/release/
-
+  
 build_py:
   #!/usr/bin/env fish
   conda activate ./target/conda
