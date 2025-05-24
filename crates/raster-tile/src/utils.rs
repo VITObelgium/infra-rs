@@ -12,11 +12,22 @@ pub fn reassemble_raster_from_tiles<T: ArrayNum>(
     progress: impl ProgressNotification,
     tile_cb: impl Fn(Tile) -> Result<DenseArray<T>>,
 ) -> Result<DenseRaster<T>> {
-    let tiles = tileutils::tiles_for_bounds(bounds, zoom);
-    let top_left_tile = Tile::for_coordinate(bounds.northwest(), zoom);
-    let lower_left_tile = Tile::for_coordinate(bounds.southwest(), zoom);
+    let mut zoom_offset = 0;
+    if tile_size == 512 {
+        zoom_offset = -1; // Adjust zoom level for 512x512 tiles
+    } else if tile_size != 256 {
+        return Err(Error::InvalidArgument(format!(
+            "Unsupported tile size: {}. Only 256 and 512 are supported.",
+            tile_size
+        )));
+    }
 
-    let raster_size = tileutils::raster_size_for_tiles_containing_bounds(bounds, zoom, tile_size)?;
+    let tile_size_aware_zoom = zoom + zoom_offset;
+    let tiles = tileutils::tiles_for_bounds(bounds, tile_size_aware_zoom);
+    let top_left_tile = Tile::for_coordinate(bounds.northwest(), tile_size_aware_zoom);
+    let lower_left_tile = Tile::for_coordinate(bounds.southwest(), tile_size_aware_zoom);
+
+    let raster_size = tileutils::raster_size_for_tiles_containing_bounds(bounds, tile_size_aware_zoom, tile_size)?;
     let raster_tile_size = RasterSize::square(tile_size as i32);
     let lower_left = crs::lat_lon_to_web_mercator(lower_left_tile.bounds().southwest());
 
