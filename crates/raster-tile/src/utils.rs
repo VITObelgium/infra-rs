@@ -1,6 +1,7 @@
 use crate::{Error, Result};
 use geo::{
-    Array as _, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, LatLonBounds, Rows, Tile, crs, raster::DenseRaster, tileutils,
+    Array as _, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, LatLonBounds, RasterSize, Rows, Tile, Window, crs,
+    raster::DenseRaster, tileutils,
 };
 use inf::progressinfo::ProgressNotification;
 
@@ -16,6 +17,7 @@ pub fn reassemble_raster_from_tiles<T: ArrayNum>(
     let lower_left_tile = Tile::for_coordinate(bounds.southwest(), zoom);
 
     let raster_size = tileutils::raster_size_for_tiles_containing_bounds(bounds, zoom, tile_size)?;
+    let raster_tile_size = RasterSize::square(tile_size as i32);
     let lower_left = crs::lat_lon_to_web_mercator(lower_left_tile.bounds().southwest());
 
     let geo_ref = GeoReference::with_origin(
@@ -42,19 +44,17 @@ pub fn reassemble_raster_from_tiles<T: ArrayNum>(
 
                 let offset_x = (tile.x - top_left_tile.x) * tile_size as i32;
                 let offset_y = (tile.y - top_left_tile.y) * tile_size as i32;
+                let cell = Cell::from_row_col(offset_y, offset_x);
 
-                for y in 0..tile_size {
-                    let raster_y = offset_y + y as i32;
-
-                    for x in 0..tile_size {
-                        let raster_x = offset_x + x as i32;
-
-                        raster.set_cell_value(
-                            Cell::from_row_col(raster_y, raster_x),
-                            tile_data.cell_value(Cell::from_row_col(y as i32, x as i32)),
-                        );
-                    }
-                }
+                // Overwite the corresponding cells in the raster with the tile data
+                raster
+                    .iter_window_mut(Window::new(cell, raster_tile_size))
+                    .zip(tile_data.iter_opt())
+                    .for_each(|(cell, value)| {
+                        if let Some(value) = value {
+                            *cell = value;
+                        }
+                    });
             }
         }
 

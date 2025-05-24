@@ -68,6 +68,29 @@ impl std::ops::Mul<Rows> for Columns {
     }
 }
 
+pub struct Window {
+    top_left: Cell,
+    bottom_right: Cell,
+}
+
+impl Window {
+    pub fn new(top_left: Cell, size: RasterSize) -> Self {
+        let bottom_right = Cell {
+            row: top_left.row + size.rows.count() - 1,
+            col: top_left.col + size.cols.count() - 1,
+        };
+        Window { top_left, bottom_right }
+    }
+
+    pub fn top_left(&self) -> Cell {
+        self.top_left
+    }
+
+    pub fn bottom_right(&self) -> Cell {
+        self.bottom_right
+    }
+}
+
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Array:
@@ -207,6 +230,9 @@ pub trait Array:
     /// Return the value at the given index or None if the index contains nodata
     fn value(&self, index: usize) -> Option<Self::Pixel>;
 
+    /// Return the value at the given index or None if the index contains nodata
+    fn value_mut(&mut self, index: usize) -> Option<&mut Self::Pixel>;
+
     /// Return the sum of all the data values
     fn sum(&self) -> f64;
 
@@ -216,17 +242,30 @@ pub trait Array:
     /// Return an iterator over the raster data, nodata values are skipped
     fn iter_values(&self) -> impl Iterator<Item = Self::Pixel>;
 
-    /// Return an iterator over the raster data, nodata values are `Self::Pixel::nodata()`
+    /// Return an iterator over the raster data, nodata values are `Self::Pixel::nodata_value()`
     fn iter(&self) -> std::slice::Iter<Self::Pixel>;
 
     /// Return a mutable iterator over the raster data
     fn iter_mut(&mut self) -> std::slice::IterMut<Self::Pixel>;
+
+    /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::nodata_value()`
+    fn iter_window(&self, window: Window) -> impl Iterator<Item = Self::Pixel>;
+
+    /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::nodata_value()`
+    fn iter_window_mut(&mut self, window: Window) -> impl Iterator<Item = &mut Self::Pixel>;
 
     /// Return the value at the given cell or None if the cell contains nodata
     /// Use this for cases where a single cell value is needed not in a loop to
     /// to process the entire raster
     fn cell_value(&self, cell: Cell) -> Option<Self::Pixel> {
         self.value((cell.row * self.columns().count() + cell.col) as usize)
+    }
+
+    /// Return the value at the given cell or None if the cell contains nodata
+    /// Use this for cases where a single cell value is needed not in a loop to
+    /// to process the entire raster
+    fn cell_value_mut(&mut self, cell: Cell) -> Option<&mut Self::Pixel> {
+        self.value_mut((cell.row * self.columns().count() + cell.col) as usize)
     }
 
     /// Set the value at the given cell, if the value is None the cell will be set to nodata

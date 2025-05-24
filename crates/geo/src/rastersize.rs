@@ -14,6 +14,13 @@ impl RasterSize {
         RasterSize { rows, cols }
     }
 
+    pub const fn square(size: i32) -> Self {
+        RasterSize {
+            rows: Rows(size),
+            cols: Columns(size),
+        }
+    }
+
     pub fn empty() -> Self {
         Self::with_rows_cols(Rows(0), Columns(0))
     }

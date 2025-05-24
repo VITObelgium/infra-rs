@@ -1,7 +1,7 @@
 use crate::{
     Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, Error, RasterSize, Result,
-    array::{Columns, Rows},
-    densearrayutil,
+    array::{Columns, Rows, Window},
+    densearrayiterators, densearrayutil,
     raster::{self},
 };
 use approx::{AbsDiffEq, RelativeEq};
@@ -176,12 +176,14 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
     fn value(&self, index: usize) -> Option<T> {
         assert!(index < self.len());
-        if index >= self.len() {
-            return None;
-        }
+        let val = self.data.get(index);
+        val.and_then(|&val| if val.is_nodata() { None } else { Some(val) })
+    }
 
-        let val = self.data[index];
-        if T::is_nodata(val) { None } else { Some(val) }
+    fn value_mut(&mut self, index: usize) -> Option<&mut T> {
+        assert!(index < self.len());
+        let val = self.data.get_mut(index);
+        val.and_then(|val| if val.is_nodata() { None } else { Some(val) })
     }
 
     fn index_has_data(&self, index: usize) -> bool {
@@ -207,12 +209,20 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         self.data.iter_mut()
     }
 
+    fn iter_window(&self, window: Window) -> impl Iterator<Item = T> {
+        densearrayiterators::DenserRasterWindowIterator::new(self, window)
+    }
+
+    fn iter_window_mut(&mut self, window: Window) -> impl Iterator<Item = &mut T> {
+        densearrayiterators::DenserRasterWindowIteratorMut::new(self, window)
+    }
+
     fn iter_opt(&self) -> impl Iterator<Item = Option<T>> {
-        DenserRasterIterator::new(self)
+        densearrayiterators::DenserRasterIterator::new(self)
     }
 
     fn iter_values(&self) -> impl Iterator<Item = T> {
-        DenserRasterValueIterator::new(self)
+        densearrayiterators::DenserRasterValueIterator::new(self)
     }
 
     fn cell_value(&self, cell: Cell) -> Option<T> {
@@ -251,72 +261,10 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
 impl<'a, T: ArrayNum, Metadata: ArrayMetadata> IntoIterator for &'a DenseArray<T, Metadata> {
     type Item = Option<T>;
-    type IntoIter = DenserRasterIterator<'a, T, Metadata>;
+    type IntoIter = densearrayiterators::DenserRasterIterator<'a, T, Metadata>;
 
     fn into_iter(self) -> Self::IntoIter {
-        DenserRasterIterator::new(self)
-    }
-}
-
-pub struct DenserRasterIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
-    index: usize,
-    raster: &'a DenseArray<T, Metadata>,
-}
-
-impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterIterator<'a, T, Metadata> {
-    fn new(raster: &'a DenseArray<T, Metadata>) -> Self {
-        DenserRasterIterator { index: 0, raster }
-    }
-}
-
-impl<T, Metadata> Iterator for DenserRasterIterator<'_, T, Metadata>
-where
-    T: ArrayNum,
-    Metadata: ArrayMetadata,
-{
-    type Item = Option<T>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.raster.len() {
-            let result = self.raster.value(self.index);
-            self.index += 1;
-            Some(result)
-        } else {
-            None
-        }
-    }
-}
-
-pub struct DenserRasterValueIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
-    index: usize,
-    raster: &'a DenseArray<T, Metadata>,
-}
-
-impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterValueIterator<'a, T, Metadata> {
-    fn new(raster: &'a DenseArray<T, Metadata>) -> Self {
-        DenserRasterValueIterator { index: 0, raster }
-    }
-}
-
-impl<T, Metadata> Iterator for DenserRasterValueIterator<'_, T, Metadata>
-where
-    T: ArrayNum,
-    Metadata: ArrayMetadata,
-{
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.raster.len() {
-            let result = self.raster.value(self.index);
-            self.index += 1;
-            if result.is_none() {
-                return self.next();
-            }
-
-            result
-        } else {
-            None
-        }
+        densearrayiterators::DenserRasterIterator::new(self)
     }
 }
 

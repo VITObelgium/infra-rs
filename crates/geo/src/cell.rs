@@ -1,4 +1,4 @@
-use crate::{array::Columns, array::Rows, RasterSize};
+use crate::{RasterSize, array::Columns, array::Rows};
 
 /// Represents a point in the raster using row, col coordinates
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -11,6 +11,10 @@ pub struct Cell {
 impl Cell {
     pub const fn from_row_col(row: i32, col: i32) -> Self {
         Cell { row, col }
+    }
+
+    pub const fn invalid() -> Self {
+        Cell { row: -1, col: -1 }
     }
 
     pub const fn is_valid(&self) -> bool {
@@ -55,6 +59,15 @@ impl Cell {
             self.col = 0;
             self.row += 1;
         }
+    }
+
+    pub fn index_in_raster(&mut self, cols_in_grid: i32) -> usize {
+        assert!(self.is_valid());
+        if !self.is_valid() {
+            return 0;
+        }
+
+        (self.row * cols_in_grid + self.col) as usize
     }
 
     pub fn distance(&self, other: &Cell) -> f64 {
