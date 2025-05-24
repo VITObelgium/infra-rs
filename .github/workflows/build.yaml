@@ -10,9 +10,9 @@ jobs:
       fail-fast: false
       matrix:
         cfg:
-          - { os: ubuntu-latest }
-          - { os: windows-2025 }
-          - { os: macos-latest }
+          - { os: ubuntu-latest, id: linux  }
+          - { os: windows-2025, id: windows  }
+          - { os: macos-latest, id: mac  }
 
     steps:
       - uses: actions/checkout@v4
@@ -41,3 +41,14 @@ jobs:
         run: just test_release_py
       - name: Build the docs
         run: just doc
+      - name: Archive build logs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.cfg.id }}-build-logs
+          path: |
+            target/vcpkg/buildtrees/**/autoconf*.log
+            target/vcpkg/buildtrees/**/config*.log
+            target/vcpkg/buildtrees/**/build*.log
+            target/vcpkg/buildtrees/**/install*.log
+            target/vcpkg/buildtrees/**/package*.log
