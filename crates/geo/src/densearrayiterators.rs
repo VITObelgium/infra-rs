@@ -1,5 +1,7 @@
 use crate::{Array as _, ArrayMetadata, ArrayNum, Cell, DenseArray, Window};
 
+/// Iterator over the values of a dense raster array.
+/// All the values will be visited, nodata values will be returned as `None`.
 pub struct DenserRasterIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
     index: usize,
     raster: &'a DenseArray<T, Metadata>,
@@ -25,6 +27,51 @@ where
             Some(result)
         } else {
             None
+        }
+    }
+}
+
+/// Iterator over the values of a dense raster array.
+/// Only the cells that contain valid data will be visited.
+/// Nodata values will be skipped.
+pub struct DenserRasterValueIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
+    index: usize,
+    raster: &'a DenseArray<T, Metadata>,
+}
+
+impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterValueIterator<'a, T, Metadata> {
+    pub fn new(raster: &'a DenseArray<T, Metadata>) -> Self {
+        DenserRasterValueIterator { index: 0, raster }
+    }
+
+    fn next_value(&mut self) -> Option<T> {
+        let index = self.index;
+        if index < self.raster.len() {
+            self.index += 1;
+            self.raster.value(index)
+        } else {
+            None
+        }
+    }
+}
+
+impl<T, Metadata> Iterator for DenserRasterValueIterator<'_, T, Metadata>
+where
+    T: ArrayNum,
+    Metadata: ArrayMetadata,
+{
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        loop {
+            let val = self.next_value();
+            if val.is_some() {
+                return val;
+            }
+
+            if self.index >= self.raster.len() {
+                return None;
+            }
         }
     }
 }
@@ -123,39 +170,6 @@ impl<'a, T: ArrayNum, Metadata: ArrayMetadata> Iterator for DenserRasterWindowIt
             let item = unsafe { &mut *ptr.add(index) };
             self.increment_index();
             Some(item)
-        } else {
-            None
-        }
-    }
-}
-
-pub struct DenserRasterValueIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
-    index: usize,
-    raster: &'a DenseArray<T, Metadata>,
-}
-
-impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterValueIterator<'a, T, Metadata> {
-    pub fn new(raster: &'a DenseArray<T, Metadata>) -> Self {
-        DenserRasterValueIterator { index: 0, raster }
-    }
-}
-
-impl<T, Metadata> Iterator for DenserRasterValueIterator<'_, T, Metadata>
-where
-    T: ArrayNum,
-    Metadata: ArrayMetadata,
-{
-    type Item = T;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.index < self.raster.len() {
-            let result = self.raster.value(self.index);
-            self.index += 1;
-            if result.is_none() {
-                return self.next();
-            }
-
-            result
         } else {
             None
         }

@@ -52,6 +52,7 @@ where
     }
 
     let mut data: Vec<RasterType::Pixel> = ras.iter_values().collect();
+
     if data.is_empty() {
         return Ok(None);
     }
