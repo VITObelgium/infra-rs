@@ -12,7 +12,7 @@ where
         .ok_or_else(|| Error::InvalidArgument(format!("Failed to convert raster value to f64: '{:?}'", value)))
 }
 
-fn array_quantiles<T>(data: &[T], quantile_vals: &[f64]) -> Result<Option<Vec<f64>>>
+pub(crate) fn array_quantiles<T>(data: &[T], quantile_vals: &[f64]) -> Result<Option<Vec<f64>>>
 where
     T: ArrayNum,
 {

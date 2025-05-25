@@ -10,6 +10,7 @@ mod nodata;
 mod polygonize;
 mod quantile;
 mod rasterdiff;
+mod statistics;
 #[cfg(feature = "gdal")]
 mod translate;
 #[cfg(feature = "gdal")]
@@ -40,6 +41,7 @@ pub use {
     distance::sum_targets_within_travel_distance, distance::sum_within_travel_distance, distance::travel_distance,
     distance::travel_distances_up_to, distance::value_at_closest_less_than_travel_target, distance::value_at_closest_target,
     distance::value_at_closest_travel_target, filter::filter, limits::min_max, quantile::quantiles, quantile::quantiles_neg_pos,
+    statistics::RasterStats, statistics::statistics,
 };
 
 pub use {nodata::is_data, nodata::is_nodata, nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::turn_value_into_nodata};

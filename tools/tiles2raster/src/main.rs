@@ -5,7 +5,10 @@ use comfy_table::Table;
 use env_logger::{Env, TimestampPrecision};
 use geo::{
     Array as _, ArrayNum, Columns, Coordinate, DenseArray, RasterSize, Rows, Tile,
-    raster::{DenseRaster, RasterIO, algo},
+    raster::{
+        RasterIO,
+        algo::{self, RasterStats},
+    },
 };
 use indicatif::{MultiProgress, ProgressBar};
 use indicatif_log_bridge::LogWrapper;
@@ -65,23 +68,24 @@ fn bounds_from_coords(coord1: &str, coord2: &str) -> Result<geo::LatLonBounds> {
     ))
 }
 
-struct RasterStats {
-    quantiles: Vec<f64>,
-}
+fn print_raster_stats<T: ArrayNum>(stats: &Option<RasterStats<T>>) {
+    if let Some(stats) = stats {
+        let mut table = Table::new();
+        table
+            .set_header(vec!["Statistics", "Value"])
+            .add_row(vec!["Minimum", &stats.min.to_string()])
+            .add_row(vec!["Maximum", &stats.max.to_string()])
+            .add_row(vec!["Mean", &stats.mean.to_string()])
+            .add_row(vec!["Standard Deviation", &stats.stddev.to_string()])
+            .add_row(vec!["Median", &stats.median.to_string()])
+            .add_row(vec!["Value Count", &stats.value_count.to_string()])
+            .add_row(vec!["Sum", &stats.sum.to_string()])
+            .add_row(vec!["Quantiles", &format!("{:?}", stats.quantiles)]);
 
-fn calc_stats<T: ArrayNum>(raster: &DenseRaster<T>) -> Result<RasterStats> {
-    Ok(RasterStats {
-        quantiles: algo::quantiles(raster, &[0.0, 0.25, 0.5, 0.75, 1.0]).unwrap().unwrap(),
-    })
-}
-
-fn print_raster_stats(stats: &RasterStats) {
-    let mut table = Table::new();
-    table
-        .set_header(vec!["Type", "Values"])
-        .add_row(vec!["Quantiles", &format!("{:?}", stats.quantiles)]);
-
-    println!("{table}");
+        println!("{table}");
+    } else {
+        println!("No statistics available for the raster.");
+    }
 }
 
 fn main() -> Result<()> {
@@ -142,7 +146,7 @@ fn main() -> Result<()> {
     p.finish_with_message("Raster creation done");
 
     if opt.calc_stats {
-        print_raster_stats(&calc_stats(&raster)?);
+        print_raster_stats(&algo::statistics(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0]).expect("Failed to calculate statistics"));
     }
 
     Ok(())
