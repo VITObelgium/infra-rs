@@ -76,6 +76,7 @@ pub fn reassemble_raster_from_tiles<T: ArrayNum>(
 }
 
 #[cfg(test)]
+#[cfg(feature = "gdal")]
 mod tests {
 
     use geo::{
