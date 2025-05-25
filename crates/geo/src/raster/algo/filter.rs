@@ -7,7 +7,7 @@ where
 {
     for v in ras.iter_mut() {
         if *v != value {
-            *v = T::nodata_value();
+            *v = T::NODATA;
         }
     }
 }
@@ -23,7 +23,7 @@ where
 
     for v in ras.iter_mut() {
         if !values_to_include.contains(v) {
-            *v = T::nodata_value();
+            *v = T::NODATA;
         }
     }
 }

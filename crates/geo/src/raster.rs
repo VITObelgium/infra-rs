@@ -31,19 +31,7 @@ mod python;
 #[cfg(all(feature = "python", feature = "arrow"))]
 pub use python::pyraster::PyRaster;
 
-// pub fn cast<TDest: RasterNum<TDest>, TSrc: RasterNum<TSrc>, RDest, RSrc>(src: &RSrc) -> RDest
-// where
-//     RDest: GeoRaster<TDest> + GeoRasterCreation<TDest>,
-//     RSrc: GeoRaster<TSrc>,
-//     for<'a> &'a RSrc: IntoIterator<Item = Option<TSrc>>,
-// {
-//     RDest::from_iter(
-//         src.geo_reference().copy_with_nodata(Some(TDest::nodata_value())),
-//         src.into_iter().map(|x| x.and_then(|x| NumCast::from(x))),
-//     )
-// }
-
-/// A trait representing a raster io operations
+/// Raster IO operations trait
 pub trait RasterIO
 where
     Self: Sized,

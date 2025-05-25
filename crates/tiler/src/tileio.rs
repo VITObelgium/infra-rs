@@ -128,7 +128,7 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
         },
         bounds.bottom_left(),
         CellSize::square(bounds.width() / scaled_size as f64),
-        Some(T::nodata_value()),
+        Some(T::NODATA),
     );
 
     let src_ds = if raster_path.extension().is_some_and(|ext| ext == "nc") {
@@ -215,7 +215,7 @@ where
         raw_tile_data.as_slice(),
         (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
         (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-        Some(T::nodata_value()),
+        Some(T::NODATA),
         req.legend,
     )
 }

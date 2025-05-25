@@ -7,16 +7,16 @@ use crate::ArrayNum;
 /// as defined by the [`crate::Nodata`] trait
 pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<f64>) {
     if let Some(nodata) = nodata {
-        if nodata.is_nan() || NumCast::from(nodata) == Some(T::nodata_value()) {
+        if nodata.is_nan() || NumCast::from(nodata) == Some(T::NODATA) {
             // the nodata value for floats is also nan, so no processing required
             // or the nodata value matches the default nodata value for the type
             return;
         }
 
-        let nodata = NumCast::from(nodata).unwrap_or(T::nodata_value());
+        let nodata = NumCast::from(nodata).unwrap_or(T::NODATA);
         for v in data.iter_mut() {
             if *v == nodata {
-                *v = T::nodata_value();
+                *v = T::NODATA;
             }
         }
     }

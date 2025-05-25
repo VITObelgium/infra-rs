@@ -4,7 +4,8 @@ use approx::relative_eq;
 use path_macro::path;
 
 use crate::{
-    array::{Columns, Rows}, ArrayNum, GeoReference, RasterSize
+    ArrayNum, GeoReference, RasterSize,
+    array::{Columns, Rows},
 };
 
 pub const NOD: f64 = 255.0;
@@ -17,7 +18,7 @@ pub fn create_vec<T: num::NumCast + ArrayNum>(data: &[f64]) -> Vec<T> {
     data.iter()
         .map(|&v| {
             if relative_eq!(v, NOD) {
-                T::nodata_value()
+                T::NODATA
             } else {
                 num::NumCast::from(v).unwrap()
             }

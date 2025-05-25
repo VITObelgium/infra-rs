@@ -27,7 +27,7 @@ where
 {
     ras.iter_mut().for_each(|x| {
         if *x == value {
-            *x = RasterType::Pixel::nodata_value();
+            *x = RasterType::Pixel::NODATA;
         }
     });
 }
@@ -54,9 +54,9 @@ mod generictests {
     use num::NumCast;
 
     use crate::{
-        array::{Columns, Rows},
-        testutils::{create_vec, NOD},
         DenseArray, RasterSize,
+        array::{Columns, Rows},
+        testutils::{NOD, create_vec},
     };
 
     use super::*;

@@ -3,12 +3,12 @@
 //! For general use, the [`crate::Array`] and [`crate::raster::RasterIO`] traits should be used.
 
 use std::{
-    ffi::{c_void, CString},
+    ffi::{CString, c_void},
     path::{Path, PathBuf},
 };
 
-use crate::{gdalinterop::*, GeoReference};
 use crate::{Error, Result};
+use crate::{GeoReference, gdalinterop::*};
 use approx::relative_eq;
 use gdal::{
     cpl::CslStringList,
@@ -95,8 +95,8 @@ pub mod dataset {
     use gdal::Metadata;
 
     use crate::{
-        array::{Columns, Rows},
         ArrayNum, Nodata, RasterSize,
+        array::{Columns, Rows},
     };
 
     use super::*;
@@ -307,7 +307,7 @@ pub mod dataset {
             // TODO: Investigate VRT driver to create a virtual dataset with different type without creating a copy
             let converted: Vec<TStore> = data
                 .iter()
-                .map(|&v| -> TStore { NumCast::from(v).unwrap_or(TStore::nodata_value()) })
+                .map(|&v| -> TStore { NumCast::from(v).unwrap_or(TStore::NODATA) })
                 .collect();
             let mut ds = create_in_memory_with_data(meta, &converted)?;
             write_to_disk(&mut ds, path, driver_options, &[])?;
@@ -482,7 +482,7 @@ pub mod dataset {
 
     #[cfg(test)]
     mod tests {
-        use crate::{crs, CellSize, Point};
+        use crate::{CellSize, Point, crs};
 
         use super::*;
         use crate::Cell;

@@ -81,7 +81,7 @@ impl WarpingTileProvider {
                     raw_tile_data.as_ref(),
                     (req.tile_size * req.dpi_ratio as u16) as usize,
                     (req.tile_size * req.dpi_ratio as u16) as usize,
-                    Some(T::nodata_value()),
+                    Some(T::NODATA),
                     &Legend::default(),
                 )
             }
@@ -89,7 +89,7 @@ impl WarpingTileProvider {
                 raw_tile_data.as_ref(),
                 (req.tile_size * req.dpi_ratio as u16) as usize,
                 (req.tile_size * req.dpi_ratio as u16) as usize,
-                Some(T::nodata_value()),
+                Some(T::NODATA),
             ),
             TileFormat::RasterTile => {
                 let (size, data) = raw_tile_data.into_raw_parts();

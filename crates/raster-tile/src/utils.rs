@@ -36,7 +36,7 @@ pub fn reassemble_raster_from_tiles<T: ArrayNum>(
         raster_size,
         lower_left,
         CellSize::square(Tile::pixel_size_at_zoom_level(zoom)),
-        Some(T::nodata_value()),
+        Some(T::NODATA),
     );
     let mut raster = DenseArray::<T, GeoReference>::filled_with_nodata(geo_ref);
 

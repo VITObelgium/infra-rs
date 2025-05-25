@@ -3,6 +3,7 @@ use crate::{
     array::{Columns, Rows},
 };
 
+/// Raster size represented by rows and columns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct RasterSize {
     pub rows: Rows,

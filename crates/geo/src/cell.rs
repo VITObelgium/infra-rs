@@ -90,6 +90,9 @@ impl Ord for Cell {
     }
 }
 
+/// Iterator over the cells in a raster
+/// The iterator will yield each cell in the raster based on the specified number of rows and columns.
+/// Iteration will occur from the top-left cell to the bottom-right cell in row-major order.
 pub struct CellIterator {
     rows: Rows,
     cols: Columns,

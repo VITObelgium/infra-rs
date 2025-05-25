@@ -117,7 +117,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     {
         let mut data = Vec::with_capacity(meta.size().cell_count());
         for val in iter {
-            data.push(val.unwrap_or(T::nodata_value()));
+            data.push(val.unwrap_or(T::NODATA));
         }
 
         Self::new(meta, data)
@@ -138,7 +138,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
     fn filled_with_nodata(meta: Metadata) -> Self {
         let cell_count = meta.size().cell_count();
-        DenseArray::new(meta, vec![T::nodata_value(); cell_count]).expect("Raster size bug")
+        DenseArray::new(meta, vec![T::NODATA; cell_count]).expect("Raster size bug")
     }
 
     /// Returns the metadata reference.
@@ -187,7 +187,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     }
 
     fn index_has_data(&self, index: usize) -> bool {
-        self.data[index] != T::nodata_value()
+        self.data[index] != T::NODATA
     }
 
     fn masked_data(&self) -> Vec<Option<T>> {
@@ -231,7 +231,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
     fn set_cell_value(&mut self, cell: Cell, val: Option<T>) {
         let index = self.cell_index(cell);
-        self.data[index] = val.unwrap_or(T::nodata_value());
+        self.data[index] = val.unwrap_or(T::NODATA);
     }
 
     fn is_empty(&self) -> bool {
@@ -360,11 +360,11 @@ mod tests {
     fn cast_dense_raster() {
         let ras = DenseArray::new(
             RasterSize::with_rows_cols(Rows(2), Columns(2)),
-            vec![1, 2, <i32 as Nodata>::nodata_value(), 4],
+            vec![1, 2, <i32 as Nodata>::NODATA, 4],
         )
         .unwrap();
 
         let f64_ras = raster::algo::cast::<f64, _>(&ras);
-        compare_fp_vectors(f64_ras.as_slice(), &[1.0, 2.0, <f64 as Nodata>::nodata_value(), 4.0]);
+        compare_fp_vectors(f64_ras.as_slice(), &[1.0, 2.0, <f64 as Nodata>::NODATA, 4.0]);
     }
 }

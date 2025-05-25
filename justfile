@@ -99,5 +99,10 @@ rasterbenchbaseline name:
 tiles2raster zoom tile_size="256":
   cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.vrt?tile_format=vrt&tile_size={{tile_size}}" --zoom {{zoom}} --tile-size={{tile_size}} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_{{zoom}}_{{tile_size}}.tif
 
-pngtiles2raster zoom:
+
+#cargo run --release -p tiles2raster -- --stats --url "https://testmap.marvintest.vito.be/guppy/tiles/raster/no2_atmo_street-20220101-0000UT/{z}/{x}/{y}.png" --zoom {{zoom}} --coord1 51.26,4.33 --coord2 51.16,4.50 -o test_png_{{zoom}}.tif
+pngtiles2raster zoom tile_size="256":
   cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.png?tile_format=float_png" --zoom {{zoom}} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_png_{{zoom}}.tif
+
+guppy zoom:
+  cargo run --release -p tiles2raster -- --stats --url "http://localhost:8080/api/tiles/raster/landuse/{z}/{x}/{y}.png" --zoom {{zoom}} --coord1 50.67,2.52 --coord2 51.50,5.91 -o guppy_png_{{zoom}}.tif

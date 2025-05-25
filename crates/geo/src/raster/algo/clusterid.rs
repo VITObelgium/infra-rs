@@ -2,11 +2,11 @@ use num::Zero;
 
 use crate::{Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, GeoReference, Nodata, RasterSize, Result};
 
-use super::clusterutils::{
-    handle_cell, insert_border_cell, insert_cell, show_warning_if_clustering_on_floats, visit_neighbour_cells, visit_neighbour_diag_cells,
-    FiLo, MARK_BORDER, MARK_DONE,
-};
 use super::clusterutils::{ClusterDiagonals, MARK_TODO};
+use super::clusterutils::{
+    FiLo, MARK_BORDER, MARK_DONE, handle_cell, insert_border_cell, insert_cell, show_warning_if_clustering_on_floats,
+    visit_neighbour_cells, visit_neighbour_diag_cells,
+};
 
 pub fn cluster_id<R, T>(ras: &R, diagonals: ClusterDiagonals) -> R::WithPixelType<u32>
 where
@@ -92,7 +92,7 @@ where
     ras.iter().zip(mark.iter_mut()).zip(result.iter_mut()).for_each(|((val, m), res)| {
         if val.is_nodata() {
             *m = MARK_TODO;
-            *res = i32::nodata_value();
+            *res = i32::NODATA;
             return;
         }
 
@@ -257,7 +257,7 @@ where
     let rows = cat_map.rows();
     let cols = cat_map.columns();
 
-    let mut result = R::new_with_dimensions_of(cat_map, Nodata::nodata_value());
+    let mut result = R::new_with_dimensions_of(cat_map, Nodata::NODATA);
     let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), cat_map.size());
 
     let mut cluster_id = 0;
@@ -459,9 +459,9 @@ where
 #[generic_tests::define]
 mod generictests {
     use crate::{
+        RasterSize,
         array::{Columns, Rows},
         testutils::create_vec,
-        RasterSize,
     };
 
     use super::*;
@@ -561,10 +561,10 @@ mod generictests {
 #[generic_tests::define]
 mod genericgeotests {
     use crate::{
+        RasterSize,
         array::{Columns, Rows},
         raster::DenseRaster,
         testutils::create_vec,
-        RasterSize,
     };
 
     use super::*;

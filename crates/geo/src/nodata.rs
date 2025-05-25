@@ -1,11 +1,15 @@
 use num::ToPrimitive;
 
+/// Trait for types that can represent a no-data value in raster data.
+/// Typically used for pixel values in rasters, where a specific value indicates that the pixel does not contain valid data.
+/// Floating point types may use NaN as the no-data value, while integer types typically use their maximum value for unsigned types
+/// and minimum value for signed types.
 pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
-    fn nodata_value() -> Self;
+    const NODATA: Self;
 
     #[inline]
     fn is_nodata(self) -> bool {
-        self == Self::nodata_value()
+        self == Self::NODATA
     }
 
     fn has_nan() -> bool;
@@ -13,9 +17,7 @@ pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
 }
 
 impl Nodata for u8 {
-    fn nodata_value() -> u8 {
-        u8::MAX
-    }
+    const NODATA: u8 = u8::MAX;
 
     fn has_nan() -> bool {
         false
@@ -27,9 +29,7 @@ impl Nodata for u8 {
 }
 
 impl Nodata for u16 {
-    fn nodata_value() -> u16 {
-        u16::MAX
-    }
+    const NODATA: u16 = u16::MAX;
 
     fn has_nan() -> bool {
         false
@@ -41,9 +41,7 @@ impl Nodata for u16 {
 }
 
 impl Nodata for u32 {
-    fn nodata_value() -> u32 {
-        u32::MAX
-    }
+    const NODATA: u32 = u32::MAX;
 
     fn has_nan() -> bool {
         false
@@ -55,9 +53,7 @@ impl Nodata for u32 {
 }
 
 impl Nodata for u64 {
-    fn nodata_value() -> u64 {
-        u64::MAX
-    }
+    const NODATA: u64 = u64::MAX;
 
     fn has_nan() -> bool {
         false
@@ -69,9 +65,7 @@ impl Nodata for u64 {
 }
 
 impl Nodata for i8 {
-    fn nodata_value() -> i8 {
-        i8::MIN
-    }
+    const NODATA: i8 = i8::MIN;
 
     fn has_nan() -> bool {
         false
@@ -83,9 +77,7 @@ impl Nodata for i8 {
 }
 
 impl Nodata for i16 {
-    fn nodata_value() -> i16 {
-        i16::MIN
-    }
+    const NODATA: i16 = i16::MIN;
 
     fn has_nan() -> bool {
         false
@@ -97,9 +89,7 @@ impl Nodata for i16 {
 }
 
 impl Nodata for i32 {
-    fn nodata_value() -> i32 {
-        i32::MIN
-    }
+    const NODATA: i32 = i32::MIN;
 
     fn has_nan() -> bool {
         false
@@ -111,9 +101,7 @@ impl Nodata for i32 {
 }
 
 impl Nodata for i64 {
-    fn nodata_value() -> i64 {
-        i64::MIN
-    }
+    const NODATA: i64 = i64::MIN;
 
     fn has_nan() -> bool {
         false
@@ -125,9 +113,7 @@ impl Nodata for i64 {
 }
 
 impl Nodata for f32 {
-    fn nodata_value() -> f32 {
-        f32::NAN
-    }
+    const NODATA: f32 = f32::NAN;
 
     fn is_nodata(self) -> bool {
         self.is_nan()
@@ -143,9 +129,7 @@ impl Nodata for f32 {
 }
 
 impl Nodata for f64 {
-    fn nodata_value() -> f64 {
-        f64::NAN
-    }
+    const NODATA: f64 = f64::NAN;
 
     fn is_nodata(self) -> bool {
         self.is_nan()

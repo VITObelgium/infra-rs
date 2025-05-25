@@ -62,7 +62,7 @@ macro_rules! add_nodata_impl {
         #[inline]
         fn add_nodata_aware(self, other: Self) -> Self {
             if self.is_nodata() || other.is_nodata() {
-                Self::nodata_value()
+                Self::NODATA
             } else {
                 self.wrapping_add(other)
             }
@@ -71,7 +71,7 @@ macro_rules! add_nodata_impl {
         #[inline]
         fn add_inclusive_nodata_aware(self, other: Self) -> Self {
             match (self.is_nodata(), other.is_nodata()) {
-                (true, true) => Self::nodata_value(),
+                (true, true) => Self::NODATA,
                 (false, true) => self,
                 (true, false) => other,
                 (false, false) => self.saturating_add(other),
@@ -90,7 +90,7 @@ macro_rules! add_fp_nodata_impl {
         #[inline]
         fn add_inclusive_nodata_aware(self, other: Self) -> Self {
             match (self.is_nodata(), other.is_nodata()) {
-                (true, true) => Self::nodata_value(),
+                (true, true) => Self::NODATA,
                 (false, true) => self,
                 (true, false) => other,
                 (false, false) => self + other,
@@ -104,7 +104,7 @@ macro_rules! sub_nodata_impl {
         #[inline]
         fn sub_nodata_aware(self, other: Self) -> Self {
             if self.is_nodata() || other.is_nodata() {
-                Self::nodata_value()
+                Self::NODATA
             } else {
                 self.wrapping_sub(other)
             }
@@ -113,7 +113,7 @@ macro_rules! sub_nodata_impl {
         #[inline]
         fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
             match (self.is_nodata(), other.is_nodata()) {
-                (true, true) => Self::nodata_value(),
+                (true, true) => Self::NODATA,
                 (false, true) => self,
                 (true, false) => -other,
                 (false, false) => self.wrapping_sub(other),
@@ -127,7 +127,7 @@ macro_rules! sub_nodata_unsigned_impl {
         #[inline]
         fn sub_nodata_aware(self, other: Self) -> Self {
             if self.is_nodata() || other.is_nodata() {
-                Self::nodata_value()
+                Self::NODATA
             } else {
                 self.wrapping_sub(other)
             }
@@ -136,9 +136,9 @@ macro_rules! sub_nodata_unsigned_impl {
         #[inline]
         fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
             match (self.is_nodata(), other.is_nodata()) {
-                (true, true) => Self::nodata_value(),
+                (true, true) => Self::NODATA,
                 (false, true) => self,
-                (true, false) => Self::nodata_value(),
+                (true, false) => Self::NODATA,
                 (false, false) => self.wrapping_sub(other),
             }
         }
@@ -150,7 +150,7 @@ macro_rules! sub_fp_nodata_impl {
         #[inline]
         fn sub_nodata_aware(self, other: Self) -> Self {
             if self.is_nodata() || other.is_nodata() {
-                Self::nodata_value()
+                Self::NODATA
             } else {
                 self - other
             }
@@ -159,7 +159,7 @@ macro_rules! sub_fp_nodata_impl {
         #[inline]
         fn sub_inclusive_nodata_aware(self, other: Self) -> Self {
             match (self.is_nodata(), other.is_nodata()) {
-                (true, true) => Self::nodata_value(),
+                (true, true) => Self::NODATA,
                 (false, true) => self,
                 (true, false) => -other,
                 (false, false) => self - other,
@@ -173,7 +173,7 @@ macro_rules! mul_nodata_impl {
         #[inline]
         fn mul_nodata_aware(self, other: Self) -> Self {
             if self.is_nodata() || other.is_nodata() {
-                Self::nodata_value()
+                Self::NODATA
             } else {
                 self.wrapping_mul(other)
             }
@@ -195,7 +195,7 @@ macro_rules! div_nodata_impl {
         #[inline]
         fn div_nodata_aware(self, other: Self) -> Self {
             if self.is_nodata() || other.is_nodata() || other == 0 {
-                Self::nodata_value()
+                Self::NODATA
             } else {
                 self / other
             }
@@ -217,7 +217,7 @@ macro_rules! div_fp_nodata_impl {
         #[inline]
         fn div_nodata_aware(self, other: Self) -> Self {
             if self.is_nodata() || other.is_nodata() || other == 0.0 {
-                Self::nodata_value()
+                Self::NODATA
             } else {
                 self / other
             }
