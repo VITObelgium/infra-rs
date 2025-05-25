@@ -12,9 +12,9 @@ where
     type Error = crate::Error;
 
     fn try_from(py_obj: pyo3::Py<pyo3::PyAny>) -> std::result::Result<Self, Self::Error> {
-        use crate::array::{Columns, Rows};
         use crate::Array;
         use crate::RasterSize;
+        use crate::array::{Columns, Rows};
         use arrow::array::Array as _;
         use arrow::pyarrow::FromPyArrow;
 
@@ -33,11 +33,11 @@ where
                     let arrow_array: arrow::array::PrimitiveArray<T::TArrow> = array.into();
                     let geo_reference = GeoReference::without_spatial_reference(
                         RasterSize::with_rows_cols(Rows(1), Columns(arrow_array.len() as i32)),
-                        Some(NumCast::from(T::nodata_value()).expect("Failed to cast nodata value")),
+                        Some(NumCast::from(T::NODATA).expect("Failed to cast nodata value")),
                     );
 
                     if arrow_array.is_nullable() {
-                        let data = arrow_array.iter().map(|v| v.unwrap_or(T::nodata_value())).collect();
+                        let data = arrow_array.iter().map(|v| v.unwrap_or(T::NODATA)).collect();
                         DenseRaster::new(geo_reference, data)
                     } else {
                         DenseRaster::new(geo_reference, arrow_array.values().to_vec())
@@ -56,8 +56,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        array::{Columns, Rows},
         Array, Nodata,
+        array::{Columns, Rows},
     };
     use arrow::{array::Array as _, pyarrow::PyArrowType};
     use pyo3::{IntoPyObject, PyObject};
@@ -83,7 +83,7 @@ mod tests {
         // no shape information is present in the arrow array, so the raster will have a single row
         assert_eq!(raster.columns(), Columns(4));
         assert_eq!(raster.rows(), Rows(1));
-        assert_eq!(raster.metadata().nodata_as::<i32>().unwrap(), Some(i32::nodata_value()));
+        assert_eq!(raster.metadata().nodata_as::<i32>().unwrap(), Some(i32::NODATA));
     }
 
     #[test]
@@ -96,7 +96,7 @@ mod tests {
         // no shape information is present in the arrow array, so the raster will have a single row
         assert_eq!(raster.columns(), Columns(4));
         assert_eq!(raster.rows(), Rows(1));
-        assert_eq!(raster.metadata().nodata_as::<i32>().unwrap(), Some(i32::nodata_value()));
+        assert_eq!(raster.metadata().nodata_as::<i32>().unwrap(), Some(i32::NODATA));
 
         assert_eq!(1, raster.nodata_count());
         assert!(raster.index_has_data(0));

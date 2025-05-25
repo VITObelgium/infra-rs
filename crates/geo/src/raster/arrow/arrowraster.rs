@@ -8,8 +8,8 @@ use num::NumCast;
 use raster::{Cell, Raster, RasterNum};
 
 use crate::{
-    georaster::{GeoRaster, GeoRasterCreation},
     GeoReference,
+    georaster::{GeoRaster, GeoRasterCreation},
 };
 
 use super::arrowutil::ArrowType;
@@ -123,7 +123,7 @@ where
         }
 
         if let Some(nodata) = self.metadata.nodata() {
-            let nodata = NumCast::from(nodata).unwrap_or(T::nodata_value());
+            let nodata = NumCast::from(nodata).unwrap_or(T::NODATA);
             self.metadata.set_nodata(nodata.to_f64());
 
             if let (_dt, data, Some(mask)) = self.data.clone().into_parts() {
@@ -327,8 +327,7 @@ impl<T: RasterNum<T>> std::ops::Index<Cell> for ArrowRaster<T> {
     type Output = T;
 
     fn index(&self, cell: Cell) -> &Self::Output {
-        self.data
-            .value(cell.row as usize * self.metadata.columns() + cell.col as usize)
+        self.data.value(cell.row as usize * self.metadata.columns() + cell.col as usize)
     }
 }
 
@@ -336,8 +335,7 @@ impl<T: RasterNum<T>> std::ops::IndexMut<Cell> for ArrowRaster<T> {
     fn index_mut(&mut self, cell: Cell) -> &mut Self::Output {
         unsafe {
             // SAFETY: The index is checked to be within bounds
-            self.data
-                .get_unchecked_mut(cell.row as usize * self.size.cols + cell.col as usize)
+            self.data.get_unchecked_mut(cell.row as usize * self.size.cols + cell.col as usize)
         }
     }
 }
@@ -377,14 +375,7 @@ where
         let cols = self.metadata.columns();
         if rows * cols < 100 {
             for row in self.as_slice().chunks(cols) {
-                writeln!(
-                    f,
-                    "{}",
-                    row.iter()
-                        .map(|&val| val.to_string())
-                        .collect::<Vec<String>>()
-                        .join(", ")
-                )?;
+                writeln!(f, "{}", row.iter().map(|&val| val.to_string()).collect::<Vec<String>>().join(", "))?;
             }
         } else {
             write!(f, "Data too big for debug output")?;
@@ -403,18 +394,15 @@ mod tests {
 
     #[test]
     fn cast_arrow_raster() {
-        let ras = ArrowRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
+        let ras = ArrowRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::NODATA, 4]);
 
         let f64_ras = algo::cast::<f64, _, ArrowRaster<f64>, _>(&ras);
-        compare_fp_vectors(
-            f64_ras.as_slice(),
-            &[1.0, 2.0, <f64 as Nodata<f64>>::nodata_value(), 4.0],
-        );
+        compare_fp_vectors(f64_ras.as_slice(), &[1.0, 2.0, <f64 as Nodata<f64>>::NODATA, 4.0]);
     }
 
     #[test]
     fn clone_raster() {
-        let ras = ArrowRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::nodata_value(), 4]);
+        let ras = ArrowRaster::new(test_metadata_2x2(), vec![1, 2, <i32 as Nodata<i32>>::NODATA, 4]);
         let ras2 = ras.clone();
 
         assert_eq!(ras, ras2);
