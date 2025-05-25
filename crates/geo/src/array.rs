@@ -68,6 +68,8 @@ impl std::ops::Mul<Rows> for Columns {
     }
 }
 
+/// A struct representing a rectangular window in a raster.
+/// Used for operations on a subregion of the raster data.
 pub struct Window {
     top_left: Cell,
     bottom_right: Cell,
@@ -135,6 +137,7 @@ pub trait Array:
     type Pixel: ArrayNum;
     type Metadata: ArrayMetadata;
 
+    // Type alias for a raster of the the same array implementor type but with a different pixel type
     type WithPixelType<U: ArrayNum>: Array<Pixel = U, Metadata = Self::Metadata>;
 
     //
@@ -142,7 +145,8 @@ pub trait Array:
     //
 
     /// Create a new raster with the given metadata and data buffer.
-    /// The nodata value is assumed to be the default value for the pixel type.
+    /// Important! The nodata value is assumed to be the default value for the pixel type.
+    /// If this is not the case `Array::new_process_nodata` should be used instead.
     fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
 
     /// Create a new raster with the given metadata and data buffer.
@@ -150,7 +154,8 @@ pub trait Array:
     /// data buffer that match the nodata value to the internal nodata value.
     fn new_process_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
 
-    fn from_iter<Iter>(meta: Self::Metadata, iter: Iter) -> Result<Self>
+    /// Create a new raster from an iterator of optional pixels where None values will become nodata.
+    fn from_iter_opt<Iter>(meta: Self::Metadata, iter: Iter) -> Result<Self>
     where
         Iter: Iterator<Item = Option<Self::Pixel>>;
 
@@ -178,10 +183,7 @@ pub trait Array:
 
     /// Returns the size data structure of the raster.
     fn size(&self) -> RasterSize {
-        RasterSize {
-            cols: self.columns(),
-            rows: self.rows(),
-        }
+        self.metadata().size()
     }
 
     fn len(&self) -> usize {

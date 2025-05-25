@@ -8,7 +8,7 @@ use approx::{AbsDiffEq, RelativeEq};
 use num::NumCast;
 
 /// Raster implementation using a dense data structure.
-/// The nodata values are stored as the [`crate::Nodata::nodata_value`] for the type T in the same array data structure
+/// The nodata values are stored as the [`crate::Nodata::NODATA`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
 #[derive(Debug, Clone)]
 pub struct DenseArray<T: ArrayNum, Metadata: ArrayMetadata = RasterSize> {
@@ -110,7 +110,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         Self::new(meta, data)
     }
 
-    fn from_iter<Iter>(meta: Metadata, iter: Iter) -> Result<Self>
+    fn from_iter_opt<Iter>(meta: Metadata, iter: Iter) -> Result<Self>
     where
         Self: Sized,
         Iter: Iterator<Item = Option<T>>,
@@ -255,7 +255,8 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     }
 
     fn cast_to<U: ArrayNum>(&self) -> <DenseArray<T, Metadata> as Array>::WithPixelType<U> {
-        DenseArray::from_iter(self.metadata().clone(), self.iter_opt().map(|v| v.and_then(|v| NumCast::from(v)))).expect("Raster size bug")
+        DenseArray::from_iter_opt(self.metadata().clone(), self.iter_opt().map(|v| v.and_then(|v| NumCast::from(v))))
+            .expect("Raster size bug")
     }
 }
 

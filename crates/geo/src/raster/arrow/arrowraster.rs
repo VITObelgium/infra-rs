@@ -272,10 +272,7 @@ where
     }
 
     fn nodata_value(&self) -> Option<T> {
-        match self.metadata.nodata() {
-            Some(nodata) => NumCast::from(nodata),
-            None => None,
-        }
+        self.metadata.nodata().and_then(|nodata| NumCast::from(nodata))
     }
 
     fn nodata_count(&self) -> usize {

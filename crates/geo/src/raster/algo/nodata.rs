@@ -33,7 +33,7 @@ where
 }
 
 pub fn is_nodata<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelType<u8> {
-    RasterType::WithPixelType::<u8>::from_iter(
+    RasterType::WithPixelType::<u8>::from_iter_opt(
         input.metadata().clone(),
         input.iter().map(|x| Some(if x.is_nodata() { 1 } else { 0 })),
     )
@@ -41,7 +41,7 @@ pub fn is_nodata<RasterType: Array>(input: &RasterType) -> RasterType::WithPixel
 }
 
 pub fn is_data<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelType<u8> {
-    RasterType::WithPixelType::<u8>::from_iter(
+    RasterType::WithPixelType::<u8>::from_iter_opt(
         input.metadata().clone(),
         input.iter().map(|x| Some(if x.is_nodata() { 0 } else { 1 })),
     )

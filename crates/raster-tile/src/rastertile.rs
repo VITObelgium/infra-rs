@@ -120,7 +120,7 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
             Ok(Self::new(Meta::with_rows_cols(height, width), Vec::from(float_slice)).expect("Raster size bug"))
         } else {
             let float_slice = unsafe { ::core::slice::from_raw_parts(data.as_ptr().cast::<f32>(), data.len() / 4) };
-            Ok(Self::from_iter(
+            Ok(Self::from_iter_opt(
                 Meta::with_rows_cols(height, width),
                 float_slice.iter().map(|f| if f.is_nan() { None } else { NumCast::from(*f) }),
             )
