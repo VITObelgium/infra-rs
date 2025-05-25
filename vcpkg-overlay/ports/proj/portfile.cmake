@@ -8,6 +8,7 @@ vcpkg_from_github(
         fix-proj4-targets-cmake.patch
         remove_toolset_restriction.patch
         sqlite.diff
+        embed-data-winfix.patch # included in next release
 )
 
 vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
@@ -16,6 +17,7 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
         tiff  ENABLE_TIFF
         tools BUILD_APPS
         embed-data EMBED_RESOURCE_FILES
+        embed-data USE_ONLY_EMBEDDED_RESOURCE_FILES
 )
 
 vcpkg_list(SET TOOL_NAMES cct cs2cs geod gie invgeod invproj proj projinfo projsync)
@@ -37,7 +39,6 @@ vcpkg_cmake_configure(
         "-DEXE_SQLITE3=${EXE_SQLITE3}"
         -DPROJ_DATA_ENV_VAR_TRIED_LAST=ON
         -DEMBED_PROJ_DATA_PATH=OFF
-        -DUSE_ONLY_EMBEDDED_RESOURCE_FILES=OFF # build fails if this is on
     OPTIONS_DEBUG
         -DBUILD_APPS=OFF
 )
