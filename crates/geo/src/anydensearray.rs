@@ -22,7 +22,6 @@ pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterSize> {
     F64(DenseArray<f64, Metadata>),
 }
 
-#[macro_export]
 macro_rules! unerase_raster_type_op {
     ( $raster_op:ident, $ret:path ) => {
         pub fn $raster_op(&self) -> $ret {
@@ -42,7 +41,6 @@ macro_rules! unerase_raster_type_op {
     };
 }
 
-#[macro_export]
 macro_rules! unerase_raster_type_op_ref {
     ( $raster_op:ident, $ret:path ) => {
         pub fn $raster_op(&self) -> &$ret {

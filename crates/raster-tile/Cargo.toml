@@ -16,7 +16,7 @@ path_macro = "1.0"
 geo        = { path = "../geo", features = ["gdal-static"] }
 
 [features]
-float_png = ["dep:png", "dep:num"]
+float_png = ["dep:num", "dep:png"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
