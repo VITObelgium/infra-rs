@@ -90,8 +90,7 @@ where
 }
 
 #[cfg(test)]
-#[generic_tests::define]
-mod unspecialized_generictests {
+mod tests {
 
     use crate::{
         CellSize, GeoReference, Point, RasterSize,
@@ -103,7 +102,7 @@ mod unspecialized_generictests {
     use super::*;
 
     #[test]
-    fn test_quantiles_all_nodata<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
+    fn test_quantiles_all_nodata() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
@@ -113,7 +112,7 @@ mod unspecialized_generictests {
         );
 
         #[rustfmt::skip]
-        let raster = R::WithPixelType::<f64>::new_process_nodata(
+        let raster = DenseRaster::<f64>::new_process_nodata(
             meta,
             vec![
                 NOD, NOD,
@@ -128,7 +127,7 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_quantiles<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
+    fn test_quantiles() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
@@ -139,7 +138,7 @@ mod unspecialized_generictests {
 
         {
             #[rustfmt::skip]
-            let raster = R::WithPixelType::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_process_nodata(
                 meta.clone(),
                 vec![
                     3.0, 1.0,
@@ -154,7 +153,7 @@ mod unspecialized_generictests {
 
         {
             #[rustfmt::skip]
-            let raster = R::WithPixelType::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_process_nodata(
                 meta,
                 vec![
                     3.0, 1.0,
@@ -171,7 +170,7 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_quantiles_neg_pos<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
+    fn test_quantiles_neg_pos() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(4)),
@@ -181,7 +180,7 @@ mod unspecialized_generictests {
         );
 
         #[rustfmt::skip]
-            let raster = R::WithPixelType::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_process_nodata(
                 meta,
                 vec![
                     3.0, 1.0,
@@ -201,7 +200,4 @@ mod unspecialized_generictests {
 
         Ok(())
     }
-
-    #[instantiate_tests(<DenseRaster<u8>>)]
-    mod denseraster {}
 }
