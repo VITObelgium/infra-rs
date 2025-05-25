@@ -81,7 +81,11 @@ impl MbtilesTileProvider {
 
     pub fn tile(meta: &LayerMetadata, tile: Tile) -> Result<TileData> {
         let mut db = MbtilesDb::new(&meta.path)?;
-        Ok(TileData::new(meta.tile_format, PixelFormat::Rgba, db.get_tile_data(&tile)?))
+        Ok(TileData::new(
+            meta.tile_format,
+            PixelFormat::Rgba,
+            db.get_tile_data(&tile)?.unwrap_or_default(),
+        ))
     }
 
     pub fn value_range_for_extent(_meta: &LayerMetadata, _extent: LatLonBounds, _zoom: Option<i32>) -> Result<std::ops::Range<f64>> {
@@ -122,7 +126,7 @@ impl TileProvider for MbtilesTileProvider {
         Ok(TileData::new(
             self.meta.tile_format,
             PixelFormat::Rgba,
-            db.get_tile_data(&req.tile)?,
+            db.get_tile_data(&req.tile)?.unwrap_or_default(),
         ))
     }
 
@@ -185,7 +189,7 @@ mod mbtilesdb {
             Ok(meta)
         }
 
-        pub fn get_tile_data(&mut self, tile: &Tile) -> Result<Vec<u8>> {
+        pub fn get_tile_data(&mut self, tile: &Tile) -> Result<Option<Vec<u8>>> {
             self.tile_query.reset()?;
 
             self.tile_query.bind(1, tile.z())?;
@@ -194,10 +198,11 @@ mod mbtilesdb {
 
             if let Some(row) = self.tile_query.next() {
                 let blob = row.column_blob(0).ok_or(Error::Runtime("Tile blob error".to_string()))?;
-                return Ok(Vec::from(blob));
+                return Ok(Some(Vec::from(blob)));
             }
 
-            Err(Error::Runtime(format!("Tile not found: {:?}", tile)))
+            // Tile not in database
+            Ok(None)
         }
     }
 }
