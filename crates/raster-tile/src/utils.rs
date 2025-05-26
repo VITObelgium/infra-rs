@@ -5,12 +5,12 @@ use geo::{
 };
 use inf::progressinfo::ProgressNotification;
 
-pub fn reassemble_raster_from_tiles<T: ArrayNum>(
+pub async fn reassemble_raster_from_tiles<T: ArrayNum, Fut: Future<Output = Result<DenseArray<T>>>>(
     bounds: LatLonBounds,
     zoom: i32,
     tile_size: u16,
     progress: impl ProgressNotification,
-    tile_cb: impl Fn(Tile) -> Result<DenseArray<T>>,
+    tile_cb: impl Fn(Tile) -> Fut,
 ) -> Result<DenseRaster<T>> {
     let mut zoom_offset = 0;
     if tile_size == 512 {
@@ -43,7 +43,7 @@ pub fn reassemble_raster_from_tiles<T: ArrayNum>(
     progress.reset(tiles.len() as u64);
 
     for tile in &tiles {
-        if let Ok(tile_data) = tile_cb(*tile) {
+        if let Ok(tile_data) = tile_cb(*tile).await {
             if !tile_data.is_empty() {
                 if tile_data.rows() != Rows(tile_size as i32) || tile_data.columns() != Columns(tile_size as i32) {
                     return Err(Error::Runtime(format!(
@@ -90,19 +90,20 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn reassemble_from_tiles() {
+    #[tokio::test]
+    async fn reassemble_from_tiles() {
         let bounds = LatLonBounds::hull(Coordinate::latlon(50.67, 2.52), Coordinate::latlon(51.50, 5.91));
 
         let test_data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data");
 
-        let raster = reassemble_raster_from_tiles(bounds, 7, 256, DummyProgress, |tile| {
+        let raster = reassemble_raster_from_tiles(bounds, 7, 256, DummyProgress, async |tile| {
             let path = test_data_dir.join(format!("tiles/{}_{}_{}.vrt", tile.z, tile.x, tile.y));
             assert!(path.exists(), "Tile file does not exist: {}", path.display());
 
             let bytes = std::fs::read(&path).unwrap();
             Ok(DenseArray::<u8>::from_raster_tile_bytes(&bytes).unwrap().cast_to::<f32>())
         })
+        .await
         .unwrap();
 
         let expected = DenseRaster::<f32>::read(&test_data_dir.join("reference/reassembled_from_tiles.tif")).unwrap();

@@ -2557,6 +2557,7 @@ dependencies = [
  "path_macro",
  "png",
  "thiserror 2.0.12",
+ "tokio",
  "wasm-bindgen",
 ]
 
@@ -2681,7 +2682,6 @@ dependencies = [
  "base64",
  "bytes",
  "encoding_rs",
- "futures-channel",
  "futures-core",
  "futures-util",
  "h2",

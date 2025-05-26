@@ -14,7 +14,7 @@ use indicatif::{MultiProgress, ProgressBar};
 use indicatif_log_bridge::LogWrapper;
 use inf::progressinfo::{CallbackProgress, ComputationStatus};
 use raster_tile::RasterTileCastIO;
-use reqwest::blocking::Client;
+use reqwest::Client;
 
 pub type Error = raster_tile::Error;
 pub type Result<T> = raster_tile::Result<T>;
@@ -88,7 +88,8 @@ fn print_raster_stats<T: ArrayNum>(stats: &Option<RasterStats<T>>) {
     }
 }
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     let opt = Opt::parse();
 
     let logger = env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
@@ -106,7 +107,7 @@ fn main() -> Result<()> {
     let bounds = bounds_from_coords(&opt.coord1, &opt.coord2)?;
     let raster_size = RasterSize::with_rows_cols(Rows(opt.tile_size as i32), Columns(opt.tile_size as i32));
 
-    let mut raster = raster_tile::utils::reassemble_raster_from_tiles::<f32>(
+    let mut raster = raster_tile::utils::reassemble_raster_from_tiles::<f32, _>(
         bounds,
         opt.zoom,
         opt.tile_size,
@@ -114,7 +115,7 @@ fn main() -> Result<()> {
             progress.set_position((pos * 100.0) as u64);
             ComputationStatus::Continue
         }),
-        |tile: Tile| {
+        async |tile: Tile| {
             let url = opt
                 .url
                 .replace("{x}", &tile.x().to_string())
@@ -122,12 +123,13 @@ fn main() -> Result<()> {
                 .replace("{z}", &tile.z().to_string());
 
             let request = Client::new().get(url);
-            let result = request.send();
+            let result = request.send().await;
 
             match result {
                 Ok(response) => {
                     let bytes = response
                         .bytes()
+                        .await
                         .map_err(|err| Error::Runtime(format!("Failed to read tile data: {}", err)))?;
 
                     if bytes.is_empty() {
@@ -139,7 +141,8 @@ fn main() -> Result<()> {
                 Err(err) => Err(Error::Runtime(format!("Failed to fetch tile: {}", err))),
             }
         },
-    )?;
+    )
+    .await?;
 
     raster.write(&opt.output)?;
 
