@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
     let bounds = bounds_from_coords(&opt.coord1, &opt.coord2)?;
     let raster_size = RasterSize::with_rows_cols(Rows(opt.tile_size as i32), Columns(opt.tile_size as i32));
 
-    let mut raster = raster_tile::utils::reassemble_raster_from_tiles::<f32, _>(
+    let mut raster = raster_tile::utils::reconstruct_raster_from_tiles::<f32, _>(
         bounds,
         opt.zoom,
         opt.tile_size,

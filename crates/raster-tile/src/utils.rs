@@ -5,7 +5,7 @@ use geo::{
 };
 use inf::progressinfo::ProgressNotification;
 
-pub async fn reassemble_raster_from_tiles<T: ArrayNum, Fut: Future<Output = Result<DenseArray<T>>>>(
+pub async fn reconstruct_raster_from_tiles<T: ArrayNum, Fut: Future<Output = Result<DenseArray<T>>>>(
     bounds: LatLonBounds,
     zoom: i32,
     tile_size: u16,
@@ -91,12 +91,12 @@ mod tests {
     use super::*;
 
     #[tokio::test]
-    async fn reassemble_from_tiles() {
+    async fn reconstruct_from_tiles() {
         let bounds = LatLonBounds::hull(Coordinate::latlon(50.67, 2.52), Coordinate::latlon(51.50, 5.91));
 
         let test_data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data");
 
-        let raster = reassemble_raster_from_tiles(bounds, 7, 256, DummyProgress, async |tile| {
+        let raster = reconstruct_raster_from_tiles(bounds, 7, 256, DummyProgress, async |tile| {
             let path = test_data_dir.join(format!("tiles/{}_{}_{}.vrt", tile.z, tile.x, tile.y));
             assert!(path.exists(), "Tile file does not exist: {}", path.display());
 
