@@ -50,16 +50,16 @@ impl<T: ArrayNum> RasterBuilder<T> {
     }
 
     pub fn add_tile_data(&mut self, tile: Tile, tile_data: DenseArray<T>) -> Result<()> {
+        if tile_data.is_empty() {
+            return Ok(()); // No data to add
+        }
+
         if tile_data.rows() != Rows(self.tile_size as i32) || tile_data.columns() != Columns(self.tile_size as i32) {
             return Err(Error::Runtime(format!(
                 "Tile size mismatch: expected {}, got {}",
                 self.tile_size,
                 tile_data.size()
             )));
-        }
-
-        if tile_data.is_empty() {
-            return Ok(()); // No data to add
         }
 
         let offset_x = (tile.x - self.top_left_tile.x) * self.tile_size as i32;
