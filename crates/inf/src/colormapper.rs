@@ -13,6 +13,14 @@ pub(crate) use linear::Linear;
 /// Trait for implementing color mappers
 pub trait ColorMapper: Default {
     fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color;
+    #[cfg(feature = "simd")]
+    fn color_for_numeric_value_simd<const N: usize>(
+        &self,
+        value: &std::simd::Simd<f64, N>,
+        config: &MappingConfig,
+    ) -> std::simd::Simd<u32, N>
+    where
+        std::simd::LaneCount<N>: std::simd::SupportedLaneCount;
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color;
     fn category_count(&self) -> usize;
 }

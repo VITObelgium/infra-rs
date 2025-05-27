@@ -124,6 +124,18 @@ impl ColorMapper for CategoricNumeric {
         config.nodata_color
     }
 
+    #[cfg(feature = "simd")]
+    fn color_for_numeric_value_simd<const N: usize>(
+        &self,
+        value: &std::simd::Simd<f64, N>,
+        config: &MappingConfig,
+    ) -> std::simd::Simd<u32, N>
+    where
+        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+    {
+        todo!()
+    }
+
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
         // No string value support, so convert to numeric value if possible or return nodata color
         if let Ok(num_value) = value.parse::<f64>() {
@@ -157,6 +169,18 @@ impl ColorMapper for CategoricString {
     fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
         // Convert to string and match if possible
         self.color_for_string_value(value.to_string().as_str(), config)
+    }
+
+    #[cfg(feature = "simd")]
+    fn color_for_numeric_value_simd<const N: usize>(
+        &self,
+        value: &std::simd::Simd<f64, N>,
+        config: &MappingConfig,
+    ) -> std::simd::Simd<u32, N>
+    where
+        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+    {
+        todo!()
     }
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {

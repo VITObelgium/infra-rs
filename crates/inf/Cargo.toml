@@ -1,26 +1,35 @@
 [package]
+edition = "2024"
 name    = "inf"
 version = "0.1.0"
-edition = "2024"
+
+[[bench]]
+harness = false
+name    = "colormapping"
 
 [dependencies]
-num       = "0.4"
-thiserror = "2.0"
-approx    = "0.5"
-log       = "0.4"
-serde     = { version = "1.0", features = ["derive"], optional = true }
-strum     = { version = "0.27", features = ["derive"] }
-specta    = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
+aligned-vec = { version = "0.6", optional = true }
+approx      = "0.5"
+log         = "0.4"
+num         = "0.4"
+serde       = { version = "1.0", features = ["derive"], optional = true }
+specta      = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
+strum       = { version = "0.27", features = ["derive"] }
+thiserror   = "2.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 
 [dev-dependencies]
-test-log      = "0.2"
+ctor          = "0.4"
 env_logger    = "0.11"
 generic-tests = "0.1"
-ctor          = "0.4"
+test-log      = "0.2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = "0.6"
 
 [features]
 serde  = ["dep:serde"]
+simd   = ["dep:aligned-vec"]
 specta = ["dep:specta"]

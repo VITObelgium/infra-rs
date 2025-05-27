@@ -1,4 +1,5 @@
 #![warn(clippy::unwrap_used)]
+#![feature(portable_simd)]
 extern crate approx;
 
 pub use error::Error;
@@ -17,6 +18,8 @@ pub mod interpolate;
 pub mod legend;
 pub mod legendscaletype;
 pub mod progressinfo;
+#[cfg(feature = "simd")]
+pub mod simd;
 
 #[doc(inline)]
 pub use color::Color;

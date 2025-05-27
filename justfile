@@ -93,6 +93,9 @@ test: test_release
 rasterbench:
   cargo bench --bench rasterops --package=geo
 
+cmapbench:
+  cargo bench --bench colormapping --package=inf --features=simd
+
 rasterbenchbaseline name:
   cargo bench --bench rasterops --package=geo -- --save-baseline {{name}}
 
