@@ -6,7 +6,7 @@ use crate::{
     colormap::{ColorMap, ColorMapDirection, ColorMapPreset, ProcessedColorMap},
     colormapper::{self, ColorMapper},
 };
-use std::{collections::HashMap, ops::Range};
+use std::{collections::HashMap, ops::Range, ops::RangeInclusive};
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -129,7 +129,7 @@ impl Legend {
     pub fn banded(
         category_count: usize,
         cmap_def: &ColorMap,
-        value_range: Range<f64>,
+        value_range: RangeInclusive<f64>,
         mapping_config: Option<MappingConfig>,
     ) -> Result<Self> {
         Ok(Legend::Banded(create_banded(
@@ -144,7 +144,11 @@ impl Legend {
         Ok(Legend::Banded(create_banded_manual_ranges(cmap_def, value_range, mapping_config)?))
     }
 
-    pub fn categoric_value_range(cmap_def: &ColorMap, value_range: Range<i64>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+    pub fn categoric_value_range(
+        cmap_def: &ColorMap,
+        value_range: RangeInclusive<i64>,
+        mapping_config: Option<MappingConfig>,
+    ) -> Result<Self> {
         Ok(Legend::CategoricNumeric(create_categoric_for_value_range(
             cmap_def,
             value_range,
@@ -226,7 +230,7 @@ pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_confi
 pub fn create_banded(
     category_count: usize,
     cmap_def: &ColorMap,
-    value_range: Range<f64>,
+    value_range: RangeInclusive<f64>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<BandedLegend> {
     Ok(MappedLegend {
@@ -260,7 +264,7 @@ pub fn create_banded_manual_ranges(
 /// Otherwise, the colors will be taken linearly from the colormap
 pub fn create_categoric_for_value_range(
     cmap_def: &ColorMap,
-    value_range: Range<i64>,
+    value_range: RangeInclusive<i64>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<CategoricNumericLegend> {
     Ok(MappedLegend {
@@ -297,4 +301,32 @@ pub fn create_categoric_string(
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::colormap::ColorMapPreset;
+
+    #[test]
+    fn test_compare_banded_categoric() -> Result<()> {
+        const RANGE_WIDTH: i64 = 100;
+
+        // Create a banded and categoric legend which should have the same colors for the same values
+        // and verify that the colors match
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+        let banded = create_banded(RANGE_WIDTH as usize, &cmap_def, 1.0..=RANGE_WIDTH as f64, None)?;
+        let categoric = create_categoric_for_value_range(&cmap_def, 1..=RANGE_WIDTH, None)?;
+
+        for value in 1..=RANGE_WIDTH {
+            assert_eq!(
+                banded.color_for_value(value, None),
+                categoric.color_for_value(value, None),
+                "Color mismatch for value {}",
+                value
+            );
+        }
+
+        Ok(())
+    }
 }

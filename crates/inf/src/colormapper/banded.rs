@@ -1,4 +1,4 @@
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 use crate::{
     Color, Error, Result,
@@ -45,10 +45,10 @@ impl Banded {
         Banded { bands }
     }
 
-    pub fn with_equal_bands(band_count: usize, value_range: Range<f64>, color_map: &ColorMap) -> Result<Self> {
+    pub fn with_equal_bands(band_count: usize, value_range: RangeInclusive<f64>, color_map: &ColorMap) -> Result<Self> {
         let mut entries = Vec::with_capacity(band_count);
-        let band_offset: f64 = (value_range.end - value_range.start) / (band_count as f64 - 1.0);
-        let mut band_pos = value_range.start;
+        let band_offset: f64 = (value_range.end() - value_range.start()) / (band_count as f64 - 1.0);
+        let mut band_pos = *value_range.start();
 
         if let ColorMap::ColorList(colors) = color_map {
             if colors.len() != band_count {
@@ -73,7 +73,7 @@ impl Banded {
             let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
             let mut color_pos = 0.0;
 
-            for _band in 0..band_count {
+            for _ in 0..band_count {
                 entries.push(LegendBand::new(
                     Range {
                         start: band_pos,

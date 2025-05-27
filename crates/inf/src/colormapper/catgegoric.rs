@@ -1,4 +1,4 @@
-use std::{collections::HashMap, ops::Range};
+use std::{collections::HashMap, ops::RangeInclusive};
 
 use num::ToPrimitive as _;
 
@@ -69,8 +69,8 @@ impl CategoricNumeric {
         Ok(CategoricNumeric { categories })
     }
 
-    pub fn for_value_range(value_range: Range<i64>, color_map: &ColorMap) -> Result<Self> {
-        let category_count = value_range.end - value_range.start + 1;
+    pub fn for_value_range(value_range: RangeInclusive<i64>, color_map: &ColorMap) -> Result<Self> {
+        let category_count = value_range.end() - value_range.start() + 1;
         let mut categories = HashMap::new();
 
         if let ColorMap::ColorList(colors) = color_map {
