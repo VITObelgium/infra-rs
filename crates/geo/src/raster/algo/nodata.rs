@@ -21,7 +21,7 @@ where
     result
 }
 
-pub fn turn_value_into_nodata<RasterType>(ras: &mut RasterType, value: RasterType::Pixel)
+pub fn replace_value_by_nodata<RasterType>(ras: &mut RasterType, value: RasterType::Pixel)
 where
     RasterType: Array,
 {
@@ -92,7 +92,7 @@ mod generictests {
     }
 
     #[test]
-    fn turn_value_into_nodata<R: Array<Metadata = RasterSize>>() {
+    fn replace_value_by_nodata<R: Array<Metadata = RasterSize>>() {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let mut raster = R::new(
@@ -118,7 +118,7 @@ mod generictests {
             ]),
         ).unwrap();
 
-        super::turn_value_into_nodata(&mut raster, NumCast::from(4.0).unwrap());
+        super::replace_value_by_nodata(&mut raster, NumCast::from(4.0).unwrap());
         assert_eq!(expected, raster);
     }
 

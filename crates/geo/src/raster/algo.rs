@@ -44,7 +44,7 @@ pub use {
     statistics::RasterStats, statistics::statistics,
 };
 
-pub use {nodata::is_data, nodata::is_nodata, nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::turn_value_into_nodata};
+pub use {nodata::is_data, nodata::is_nodata, nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::replace_value_by_nodata};
 
 pub use rasterdiff::RasterCellMismatch;
 pub use rasterdiff::RasterDiffResult;
