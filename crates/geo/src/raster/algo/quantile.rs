@@ -102,7 +102,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_quantiles_all_nodata() -> Result<()> {
+    fn quantiles_all_nodata() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
@@ -127,7 +127,7 @@ mod tests {
     }
 
     #[test]
-    fn test_quantiles() -> Result<()> {
+    fn quantiles() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
@@ -169,8 +169,20 @@ mod tests {
         Ok(())
     }
 
+    #[cfg(feature = "gdal")]
     #[test]
-    fn test_quantiles_neg_pos() -> Result<()> {
+    fn quantiles_on_byte_raster() -> Result<()> {
+        use crate::{raster::RasterIO, testutils::workspace_test_data_dir};
+
+        let raster = DenseRaster::<f32>::read(&workspace_test_data_dir().join("landusebyte.tif"))?;
+        let quants = algo::quantiles(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?.expect("Quantiles should have a value");
+        assert_eq!(quants, vec![0.0, 42.0, 138.0, 159.0, 249.0]);
+
+        Ok(())
+    }
+
+    #[test]
+    fn quantiles_neg_pos() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(4)),
