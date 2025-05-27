@@ -1,9 +1,88 @@
 use crate::{Error, Result};
+use futures::{StreamExt as _, stream::FuturesUnordered};
 use geo::{
     Array as _, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, LatLonBounds, RasterSize, Rows, Tile, Window, crs,
     raster::DenseRaster, tileutils,
 };
 use inf::progressinfo::ProgressNotification;
+
+pub struct RasterBuilder<T: ArrayNum> {
+    raster: DenseRaster<T>,
+    tile_size: u16,
+    top_left_tile: Tile,
+    raster_tile_size: RasterSize,
+    zoom: i32,
+    bounds: LatLonBounds,
+}
+
+impl<T: ArrayNum> RasterBuilder<T> {
+    pub fn new(bounds: LatLonBounds, tile_size: u16, zoom: i32) -> Result<Self> {
+        let zoom_offset = if tile_size == 512 { -1 } else { 0 };
+        let tile_size_aware_zoom = zoom + zoom_offset;
+
+        let top_left_tile = Tile::for_coordinate(bounds.northwest(), tile_size_aware_zoom);
+        let lower_left_tile = Tile::for_coordinate(bounds.southwest(), tile_size_aware_zoom);
+
+        let raster_size = tileutils::raster_size_for_tiles_containing_bounds(bounds, tile_size_aware_zoom, tile_size)?;
+        let raster_tile_size = RasterSize::square(tile_size as i32);
+        let lower_left = crs::lat_lon_to_web_mercator(lower_left_tile.bounds().southwest());
+
+        let geo_ref = GeoReference::with_origin(
+            crs::epsg::WGS84_WEB_MERCATOR.to_string(),
+            raster_size,
+            lower_left,
+            CellSize::square(Tile::pixel_size_at_zoom_level(zoom)),
+            Some(T::NODATA),
+        );
+
+        Ok(Self {
+            raster: DenseArray::<T, GeoReference>::filled_with_nodata(geo_ref),
+            tile_size,
+            top_left_tile,
+            raster_tile_size,
+            zoom: tile_size_aware_zoom,
+            bounds,
+        })
+    }
+
+    pub fn covering_tiles(&self) -> Vec<Tile> {
+        tileutils::tiles_for_bounds(self.bounds, self.zoom)
+    }
+
+    pub fn add_tile_data(&mut self, tile: Tile, tile_data: DenseArray<T>) -> Result<()> {
+        if tile_data.rows() != Rows(self.tile_size as i32) || tile_data.columns() != Columns(self.tile_size as i32) {
+            return Err(Error::Runtime(format!(
+                "Tile size mismatch: expected {}, got {}",
+                self.tile_size,
+                tile_data.size()
+            )));
+        }
+
+        if tile_data.is_empty() {
+            return Ok(()); // No data to add
+        }
+
+        let offset_x = (tile.x - self.top_left_tile.x) * self.tile_size as i32;
+        let offset_y = (tile.y - self.top_left_tile.y) * self.tile_size as i32;
+        let cell = Cell::from_row_col(offset_y, offset_x);
+
+        // Overwrite the corresponding cells in the raster with the tile data
+        self.raster
+            .iter_window_mut(Window::new(cell, self.raster_tile_size))
+            .zip(tile_data.iter_opt())
+            .for_each(|(cell, value)| {
+                if let Some(value) = value {
+                    *cell = value;
+                }
+            });
+
+        Ok(())
+    }
+
+    pub fn into_raster(self) -> DenseRaster<T> {
+        self.raster
+    }
+}
 
 pub async fn reconstruct_raster_from_tiles<T: ArrayNum, Fut: Future<Output = Result<DenseArray<T>>>>(
     bounds: LatLonBounds,
@@ -12,67 +91,38 @@ pub async fn reconstruct_raster_from_tiles<T: ArrayNum, Fut: Future<Output = Res
     progress: impl ProgressNotification,
     tile_cb: impl Fn(Tile) -> Fut,
 ) -> Result<DenseRaster<T>> {
-    let mut zoom_offset = 0;
-    if tile_size == 512 {
-        zoom_offset = -1; // Adjust zoom level for 512x512 tiles
-    } else if tile_size != 256 {
-        return Err(Error::InvalidArgument(format!(
-            "Unsupported tile size: {}. Only 256 and 512 are supported.",
-            tile_size
-        )));
-    }
-
-    let tile_size_aware_zoom = zoom + zoom_offset;
-    let tiles = tileutils::tiles_for_bounds(bounds, tile_size_aware_zoom);
-    let top_left_tile = Tile::for_coordinate(bounds.northwest(), tile_size_aware_zoom);
-    let lower_left_tile = Tile::for_coordinate(bounds.southwest(), tile_size_aware_zoom);
-
-    let raster_size = tileutils::raster_size_for_tiles_containing_bounds(bounds, tile_size_aware_zoom, tile_size)?;
-    let raster_tile_size = RasterSize::square(tile_size as i32);
-    let lower_left = crs::lat_lon_to_web_mercator(lower_left_tile.bounds().southwest());
-
-    let geo_ref = GeoReference::with_origin(
-        crs::epsg::WGS84_WEB_MERCATOR.to_string(),
-        raster_size,
-        lower_left,
-        CellSize::square(Tile::pixel_size_at_zoom_level(zoom)),
-        Some(T::NODATA),
-    );
-    let mut raster = DenseArray::<T, GeoReference>::filled_with_nodata(geo_ref);
+    let mut raster_builder = RasterBuilder::<T>::new(bounds, tile_size, zoom)?;
+    let tiles = raster_builder.covering_tiles();
 
     progress.reset(tiles.len() as u64);
 
-    for tile in &tiles {
-        if let Ok(tile_data) = tile_cb(*tile).await {
-            if !tile_data.is_empty() {
-                if tile_data.rows() != Rows(tile_size as i32) || tile_data.columns() != Columns(tile_size as i32) {
-                    return Err(Error::Runtime(format!(
-                        "Tile size mismatch: expected {}, got {}",
-                        tile_size,
-                        tile_data.size()
-                    )));
-                }
+    let mut futures = FuturesUnordered::new();
 
-                let offset_x = (tile.x - top_left_tile.x) * tile_size as i32;
-                let offset_y = (tile.y - top_left_tile.y) * tile_size as i32;
-                let cell = Cell::from_row_col(offset_y, offset_x);
-
-                // Overwite the corresponding cells in the raster with the tile data
-                raster
-                    .iter_window_mut(Window::new(cell, raster_tile_size))
-                    .zip(tile_data.iter_opt())
-                    .for_each(|(cell, value)| {
-                        if let Some(value) = value {
-                            *cell = value;
-                        }
-                    });
+    for tile in tiles {
+        let fut = {
+            let tile_cb = &tile_cb;
+            async move {
+                let tile_data = tile_cb(tile).await?;
+                Ok::<_, Error>((tile, tile_data))
             }
-        }
+        };
+        futures.push(fut);
+    }
 
+    // Process tiles as they complete
+    while let Some(result) = futures.next().await {
+        match result {
+            Ok((tile, tile_data)) => raster_builder.add_tile_data(tile, tile_data)?,
+            Err(e) => eprintln!("Task failed: {}", e),
+        }
         progress.tick()?;
     }
 
-    Ok(raster)
+    // if let Ok(tile_data) = tile_cb(*tile).await {
+    //     raster_builder.add_tile_data(*tile, tile_data)?;
+    // }
+
+    Ok(raster_builder.into_raster())
 }
 
 #[cfg(test)]
