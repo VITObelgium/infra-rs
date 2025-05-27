@@ -3,4 +3,5 @@
     "rust-analyzer.check.command": "clippy",
     "rust-analyzer.cargo.features": "all",
     "rust-analyzer.check.features": "all",
+    "evenBetterToml.formatter.reorderKeys": true,
 }
