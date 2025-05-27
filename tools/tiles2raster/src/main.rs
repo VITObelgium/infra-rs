@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use comfy_table::Table;
+use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table, modifiers, presets};
 use env_logger::{Env, TimestampPrecision};
 use geo::{
     Array as _, ArrayNum, Columns, Coordinate, DenseArray, RasterSize, Rows, Tile,
@@ -68,11 +68,24 @@ fn bounds_from_coords(coord1: &str, coord2: &str) -> Result<geo::LatLonBounds> {
     ))
 }
 
+fn format_quantiles(quantiles: &Option<Vec<f64>>) -> String {
+    match quantiles {
+        Some(q) => format!("{:?}", q),
+        _ => "No quantiles available".to_string(),
+    }
+}
+
 fn print_raster_stats<T: ArrayNum>(stats: &Option<RasterStats<T>>) {
     if let Some(stats) = stats {
         let mut table = Table::new();
         table
-            .set_header(vec!["Statistics", "Value"])
+            .load_preset(presets::UTF8_FULL_CONDENSED)
+            .apply_modifier(modifiers::UTF8_ROUND_CORNERS)
+            .set_content_arrangement(ContentArrangement::Dynamic)
+            .set_header(vec![
+                Cell::new("Statistics").add_attribute(Attribute::Bold).fg(Color::Green),
+                Cell::new("Value").add_attribute(Attribute::Bold).fg(Color::Green),
+            ])
             .add_row(vec!["Minimum", &stats.min.to_string()])
             .add_row(vec!["Maximum", &stats.max.to_string()])
             .add_row(vec!["Mean", &stats.mean.to_string()])
@@ -80,7 +93,7 @@ fn print_raster_stats<T: ArrayNum>(stats: &Option<RasterStats<T>>) {
             .add_row(vec!["Median", &stats.median.to_string()])
             .add_row(vec!["Value Count", &stats.value_count.to_string()])
             .add_row(vec!["Sum", &stats.sum.to_string()])
-            .add_row(vec!["Quantiles", &format!("{:?}", stats.quantiles)]);
+            .add_row(vec!["Quantiles", &format_quantiles(&stats.quantiles)]);
 
         println!("{table}");
     } else {
