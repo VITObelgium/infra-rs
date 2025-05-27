@@ -99,28 +99,25 @@ pub async fn reconstruct_raster_from_tiles<T: ArrayNum, Fut: Future<Output = Res
     let mut futures = FuturesUnordered::new();
 
     for tile in tiles {
-        let fut = {
+        futures.push({
             let tile_cb = &tile_cb;
             async move {
                 let tile_data = tile_cb(tile).await?;
                 Ok::<_, Error>((tile, tile_data))
             }
-        };
-        futures.push(fut);
+        });
     }
 
     // Process tiles as they complete
     while let Some(result) = futures.next().await {
         match result {
             Ok((tile, tile_data)) => raster_builder.add_tile_data(tile, tile_data)?,
-            Err(e) => eprintln!("Task failed: {}", e),
+            Err(_) => {
+                return Err(Error::Runtime("Failed to fetch tile data".to_string()));
+            }
         }
         progress.tick()?;
     }
-
-    // if let Ok(tile_data) = tile_cb(*tile).await {
-    //     raster_builder.add_tile_data(*tile, tile_data)?;
-    // }
 
     Ok(raster_builder.into_raster())
 }
