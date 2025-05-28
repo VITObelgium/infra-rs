@@ -309,7 +309,7 @@ impl ProcessedColorMap {
         }
     }
 
-    pub fn get_color(&self, value: f64) -> Color {
+    pub fn get_color(&self, value: f32) -> Color {
         if !(0.0..=1.0).contains(&value) {
             return color::TRANSPARENT;
         }

@@ -1,7 +1,7 @@
 use num::NumCast;
 
 use crate::{
-    Result,
+    Result, cast,
     color::Color,
     colormap::{ColorMap, ColorMapDirection, ColorMapPreset, ProcessedColorMap},
     colormapper::{self, ColorMapper},
@@ -9,6 +9,13 @@ use crate::{
 use std::{
     collections::HashMap,
     ops::{Range, RangeInclusive},
+};
+
+#[cfg(feature = "simd")]
+use std::simd::{
+    LaneCount, Mask, Simd, SimdCast, SimdElement, SupportedLaneCount,
+    cmp::{SimdPartialEq, SimdPartialOrd},
+    num::SimdFloat,
 };
 
 pub const LANES: usize = 16;
@@ -65,36 +72,38 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         }
     }
 
-    fn is_unmappable(&self, value: f64, nodata: Option<f64>) -> bool {
-        value.is_nan() || Some(value) == nodata || (self.mapping_config.zero_is_nodata && value == 0.0)
+    fn is_unmappable<T: num::Float>(&self, value: T, nodata: Option<T>) -> bool {
+        value.is_nan() || Some(value) == nodata || (self.mapping_config.zero_is_nodata && value == T::zero())
     }
 
     #[cfg(feature = "simd")]
-    fn is_unmappable_simd<const N: usize>(
+    #[inline]
+    fn is_unmappable_simd<T, const N: usize>(
         &self,
-        value: std::simd::Simd<f64, N>,
-        nodata: Option<f64>,
-    ) -> std::simd::Mask<<u32 as std::simd::SimdElement>::Mask, N>
+        value: Simd<T, N>,
+        nodata: Option<T>,
+    ) -> <std::simd::Simd<T, N> as std::simd::num::SimdFloat>::Mask
     where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+        T: SimdElement + num::Zero,
+        Simd<T, N>: SimdPartialEq + SimdFloat,
+        LaneCount<N>: SupportedLaneCount,
+        <Simd<T, N> as SimdFloat>::Mask: std::ops::BitOrAssign<<Simd<T, N> as SimdPartialEq>::Mask>, // Oh boy
     {
-        use std::simd::{cmp::SimdPartialEq as _, num::SimdFloat};
-
         let mut mask = value.is_nan();
         if let Some(nodata) = nodata {
-            mask |= value.simd_eq(std::simd::Simd::splat(nodata));
+            mask |= value.simd_eq(Simd::splat(nodata));
         }
 
         if self.mapping_config.zero_is_nodata {
-            mask |= value.simd_eq(std::simd::Simd::splat(0.0));
+            mask |= value.simd_eq(Simd::splat(T::zero()));
         }
 
-        mask.cast()
+        mask
     }
 
-    pub fn color_for_value<T: Copy + num::NumCast>(&self, value: T, nodata: Option<f64>) -> Color {
-        let value = value.to_f64().unwrap_or(f64::NAN);
-        if self.is_unmappable(value, nodata) {
+    pub fn color_for_value<T: num::NumCast>(&self, value: T, nodata: Option<T>) -> Color {
+        let value = value.to_f32().unwrap_or(f32::NAN);
+        if self.is_unmappable(value, cast::option(nodata)) {
             return self.mapping_config.nodata_color;
         }
 
@@ -102,22 +111,25 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     }
 
     #[cfg(feature = "simd")]
-    pub fn color_for_value_simd<T: Copy + std::simd::SimdElement + std::simd::SimdCast>(
+    pub fn color_for_value_simd<T: num::NumCast + Copy + num::Zero + SimdElement + SimdCast>(
         &self,
         value: &std::simd::Simd<T, LANES>,
-        nodata: Option<f64>,
+        nodata: Option<T>,
         color_buffer: &mut std::simd::Simd<u32, LANES>,
     ) where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
+        std::simd::Simd<T, LANES>:
+            crate::simd::SimdCastPl<LANES> + SimdPartialEq + SimdPartialOrd + SimdFloat + std::convert::Into<Simd<f32, LANES>>,
+        <std::simd::Simd<T, LANES> as SimdFloat>::Mask: std::ops::Not,
+        <std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask: std::ops::BitAnd,
+        <Simd<T, LANES> as SimdFloat>::Mask: std::ops::BitOrAssign<<Simd<T, LANES> as SimdPartialEq>::Mask>, // Oh boy
+        <<Simd<T, LANES> as SimdFloat>::Mask as std::ops::Not>::Output: std::convert::Into<Mask<i32, LANES>>,
     {
         use crate::simd::SimdCastPl;
-        use std::simd::Simd;
 
-        let value: Simd<f64, LANES> = value.simd_cast();
-
+        let value: Simd<T, LANES> = value.simd_cast();
         let mappable_mask = !self.is_unmappable_simd(value, nodata);
-        let colors = self.mapper.color_for_numeric_value_simd(&value, &self.mapping_config);
-        colors.store_select(color_buffer.as_mut_array(), mappable_mask);
+        let colors = self.mapper.color_for_numeric_value_simd(&value.simd_cast(), &self.mapping_config);
+        colors.store_select(color_buffer.as_mut_array(), mappable_mask.into());
     }
 
     pub fn color_for_opt_value<T: Copy + num::NumCast>(&self, value: Option<T>) -> Color {
@@ -131,24 +143,23 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         self.mapper.color_for_string_value(value, &self.mapping_config)
     }
 
-    pub fn apply_to_data<T: Copy + num::NumCast, TNodata: Copy + num::NumCast>(&self, data: &[T], nodata: Option<TNodata>) -> Vec<Color> {
-        let nodata = nodata.map(|v| v.to_f64().unwrap_or(f64::NAN));
+    pub fn apply_to_data<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> Vec<Color> {
         data.iter().map(|&value| self.color_for_value(value, nodata)).collect()
     }
 
     #[cfg(feature = "simd")]
-    pub fn apply_to_data_simd<T: Copy + num::NumCast + std::simd::SimdElement + std::simd::SimdCast, TNodata: Copy + num::NumCast>(
-        &self,
-        data: &[T],
-        nodata: Option<TNodata>,
-    ) -> Vec<Color>
+    pub fn apply_to_data_simd<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> Vec<Color>
     where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
+        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES> + SimdPartialEq + SimdPartialOrd + SimdFloat,
+        <Simd<T, LANES> as SimdFloat>::Mask: std::ops::BitOrAssign<<Simd<T, LANES> as SimdPartialEq>::Mask>, // Oh boy
+        <std::simd::Simd<T, LANES> as SimdFloat>::Mask: std::ops::Not,
+        <std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask: std::ops::BitAnd,
+        <<Simd<T, LANES> as SimdFloat>::Mask as std::ops::Not>::Output: std::convert::Into<Mask<i32, LANES>>,
+        std::simd::Simd<f32, LANES>: From<std::simd::Simd<T, LANES>>,
     {
         use aligned_vec::avec;
 
         let mut colors = avec![self.mapping_config.nodata_color.to_bits(); data.len()];
-        let nodata = nodata.map(|v| v.to_f64().unwrap_or(f64::NAN));
 
         let (head, simd_vals, tail) = unsafe { data.align_to::<std::simd::Simd<T, LANES>>() };
         let (head_colors, simd_colors, tail_colors) = unsafe { colors.align_to_mut::<std::simd::Simd<u32, LANES>>() };
@@ -212,14 +223,14 @@ impl Default for Legend {
 }
 
 impl Legend {
-    pub fn linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+    pub fn linear(cmap_def: &ColorMap, value_range: Range<f32>, mapping_config: Option<MappingConfig>) -> Result<Self> {
         Ok(Legend::Linear(create_linear(cmap_def, value_range, mapping_config)?))
     }
 
     pub fn banded(
         category_count: usize,
         cmap_def: &ColorMap,
-        value_range: RangeInclusive<f64>,
+        value_range: RangeInclusive<f32>,
         mapping_config: Option<MappingConfig>,
     ) -> Result<Self> {
         Ok(Legend::Banded(create_banded(
@@ -230,7 +241,7 @@ impl Legend {
         )?))
     }
 
-    pub fn banded_manual_ranges(cmap_def: &ColorMap, value_range: Vec<Range<f64>>, mapping_config: Option<MappingConfig>) -> Result<Self> {
+    pub fn banded_manual_ranges(cmap_def: &ColorMap, value_range: Vec<Range<f32>>, mapping_config: Option<MappingConfig>) -> Result<Self> {
         Ok(Legend::Banded(create_banded_manual_ranges(cmap_def, value_range, mapping_config)?))
     }
 
@@ -258,7 +269,7 @@ impl Legend {
         Ok(Legend::CategoricString(create_categoric_string(string_map, mapping_config)?))
     }
 
-    pub fn apply<T: Copy + NumCast, TNodata: Copy + num::NumCast>(&self, data: &[T], nodata: Option<TNodata>) -> Vec<Color> {
+    pub fn apply<T: Copy + NumCast>(&self, data: &[T], nodata: Option<T>) -> Vec<Color> {
         match self {
             Legend::Linear(legend) => legend.apply_to_data(data, nodata),
             Legend::Banded(legend) => legend.apply_to_data(data, nodata),
@@ -267,7 +278,7 @@ impl Legend {
         }
     }
 
-    pub fn color_for_value<T: Copy + num::NumCast>(&self, value: T, nodata: Option<f64>) -> Color {
+    pub fn color_for_value<T: Copy + num::NumCast>(&self, value: T, nodata: Option<T>) -> Color {
         match self {
             Legend::Linear(legend) => legend.color_for_value(value, nodata),
             Legend::Banded(legend) => legend.color_for_value(value, nodata),
@@ -305,7 +316,7 @@ impl Legend {
 }
 
 /// Create a legend with linear color mapping
-pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_config: Option<MappingConfig>) -> Result<LinearLegend> {
+pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f32>, mapping_config: Option<MappingConfig>) -> Result<LinearLegend> {
     Ok(MappedLegend {
         mapper: colormapper::Linear::new(value_range, ProcessedColorMap::create(cmap_def)?),
         color_map_name: cmap_def.name(),
@@ -320,7 +331,7 @@ pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f64>, mapping_confi
 pub fn create_banded(
     category_count: usize,
     cmap_def: &ColorMap,
-    value_range: RangeInclusive<f64>,
+    value_range: RangeInclusive<f32>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<BandedLegend> {
     Ok(MappedLegend {
@@ -336,7 +347,7 @@ pub fn create_banded(
 /// Otherwise, the colors will be taken linearly from the colormap
 pub fn create_banded_manual_ranges(
     cmap_def: &ColorMap,
-    value_ranges: Vec<Range<f64>>,
+    value_ranges: Vec<Range<f32>>,
     mapping_config: Option<MappingConfig>,
 ) -> Result<BandedLegend> {
     let mapper = colormapper::Banded::with_manual_ranges(value_ranges, cmap_def)?;
@@ -406,7 +417,7 @@ mod tests {
         // Create a banded and categoric legend which should have the same colors for the same values
         // and verify that the colors match
         let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
-        let banded = create_banded(RANGE_WIDTH as usize, &cmap_def, 1.0..=RANGE_WIDTH as f64, None)?;
+        let banded = create_banded(RANGE_WIDTH as usize, &cmap_def, 1.0..=RANGE_WIDTH as f32, None)?;
         let categoric = create_categoric_for_value_range(&cmap_def, 1..=RANGE_WIDTH, None)?;
 
         for value in 1..=RANGE_WIDTH {
@@ -425,7 +436,7 @@ mod tests {
     fn banded_legend() -> Result<()> {
         use aligned_vec::AVec;
 
-        const RASTER_SIZE: usize = 33;
+        const RASTER_SIZE: usize = 4;
         use aligned_vec::CACHELINE_ALIGN;
 
         let input_data = AVec::<f32, aligned_vec::ConstAlign<CACHELINE_ALIGN>>::from_iter(
@@ -434,10 +445,10 @@ mod tests {
         );
         let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
 
-        let banded = create_banded(10, &cmap_def, 1.0..=(RASTER_SIZE * RASTER_SIZE) as f64, None)?;
+        let banded = create_banded(10, &cmap_def, 1.0..=(RASTER_SIZE * RASTER_SIZE) as f32, None)?;
 
-        let colors = banded.apply_to_data(&input_data, Option::<f32>::None);
-        let simd_colors = banded.apply_to_data_simd(&input_data, Option::<f32>::None);
+        let colors = banded.apply_to_data(&input_data, None);
+        let simd_colors = banded.apply_to_data_simd(&input_data, None);
 
         assert_eq!(colors.len(), input_data.len());
         assert_eq!(simd_colors, colors);

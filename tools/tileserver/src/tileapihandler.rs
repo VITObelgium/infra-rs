@@ -277,7 +277,7 @@ impl TileApiHandler {
 
     async fn fetch_tile_color_mapped(
         layer_meta: LayerMetadata,
-        value_range: Range<Option<f64>>,
+        value_range: Range<Option<f32>>,
         cmap: String,
         tile: Tile,
         dpi: u8,
@@ -351,8 +351,8 @@ impl TileApiHandler {
         params: HashMap<String, String>,
     ) -> Result<TileData> {
         let mut cmap = String::from("gray");
-        let mut min_value = Option::<f64>::None;
-        let mut max_value = Option::<f64>::None;
+        let mut min_value = Option::<f32>::None;
+        let mut max_value = Option::<f32>::None;
         let mut tile_format = Option::<TileFormat>::None;
         let mut tile_size = 256;
 
@@ -361,11 +361,11 @@ impl TileApiHandler {
         }
 
         if let Some(min_str) = params.get("min") {
-            min_value = min_str.parse::<f64>().ok();
+            min_value = min_str.parse::<f32>().ok();
         }
 
         if let Some(max_str) = params.get("max") {
-            max_value = max_str.parse::<f64>().ok();
+            max_value = max_str.parse::<f32>().ok();
         }
 
         if let Some(format) = params.get("tile_format") {
@@ -522,7 +522,7 @@ fn parse_classified_color_map_specification(cmap_name: &str) -> Result<inf::lege
         return Err(Error::Runtime("Invalid classified color map description".to_string()));
     }
 
-    let mut bands: Vec<Range<f64>> = Vec::new();
+    let mut bands: Vec<Range<f32>> = Vec::new();
     let mut colors = Vec::new();
     let classes: Vec<&str> = cmap_name[1..cmap_name.len() - 1].split(',').collect();
     for cl in classes {
@@ -584,7 +584,7 @@ fn parse_tile_filename(filename: &str) -> Result<(i32, u8, String)> {
     Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
 }
 
-fn create_legend(cmap_name: &str, min: f64, max: f64) -> Result<Legend> {
+fn create_legend(cmap_name: &str, min: f32, max: f32) -> Result<Legend> {
     if min > max {
         return Err(Error::Runtime("Minimum value is bigger than maximum value".to_string()));
     }

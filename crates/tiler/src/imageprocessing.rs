@@ -98,7 +98,7 @@ mod tests {
         let mut data = Vec::new();
         for _r in 0..HEIGHT {
             for c in 0..WIDTH {
-                data.push(cmap.get_color(c as f64 / WIDTH as f64));
+                data.push(cmap.get_color(c as f32 / WIDTH as f32));
             }
         }
 

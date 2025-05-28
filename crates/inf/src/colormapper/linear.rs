@@ -11,26 +11,26 @@ use super::ColorMapper;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Default, Clone, Debug)]
 pub struct Linear {
-    value_range: Range<f64>,
+    value_range: Range<f32>,
     color_map: ProcessedColorMap,
 }
 
 impl Linear {
-    pub fn new(value_range: Range<f64>, color_map: ProcessedColorMap) -> Self {
+    pub fn new(value_range: Range<f32>, color_map: ProcessedColorMap) -> Self {
         Linear { color_map, value_range }
     }
 }
 
 impl ColorMapper for Linear {
-    fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
-        const EDGE_TOLERANCE: f64 = 1e-4;
+    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
+        const EDGE_TOLERANCE: f32 = 1e-4;
 
         if value < self.value_range.start - EDGE_TOLERANCE {
             config.out_of_range_low_color.unwrap_or(self.color_map.get_color(0.0))
         } else if value > self.value_range.end + EDGE_TOLERANCE {
             config.out_of_range_high_color.unwrap_or(self.color_map.get_color(1.0))
         } else {
-            let value_0_1 = linear_map_to_float::<f64, f64>(value, self.value_range.start, self.value_range.end);
+            let value_0_1 = linear_map_to_float::<f32, f32>(value, self.value_range.start, self.value_range.end);
             self.color_map.get_color(value_0_1)
         }
     }
@@ -38,7 +38,7 @@ impl ColorMapper for Linear {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f64, N>,
+        value: &std::simd::Simd<f32, N>,
         config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
@@ -48,7 +48,7 @@ impl ColorMapper for Linear {
     }
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-        if let Ok(num_value) = value.parse::<f64>() {
+        if let Ok(num_value) = value.parse::<f32>() {
             self.color_for_numeric_value(num_value, config)
         } else {
             // Linear legend does not support string values

@@ -11,7 +11,7 @@ use super::ColorMapper;
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
 pub struct LegendBand {
-    pub range: Range<f64>,
+    pub range: Range<f32>,
     pub color: Color,
     pub name: String,
 }
@@ -20,13 +20,13 @@ impl PartialEq for LegendBand {
     fn eq(&self, other: &Self) -> bool {
         self.color == other.color
             && self.name == other.name
-            && (self.range.start - other.range.start).abs() <= f64::EPSILON
-            && (self.range.end - other.range.end).abs() <= f64::EPSILON
+            && (self.range.start - other.range.start).abs() <= f32::EPSILON
+            && (self.range.end - other.range.end).abs() <= f32::EPSILON
     }
 }
 
 impl LegendBand {
-    pub fn new(range: Range<f64>, color: Color, name: String) -> Self {
+    pub fn new(range: Range<f32>, color: Color, name: String) -> Self {
         LegendBand { range, color, name }
     }
 }
@@ -45,9 +45,9 @@ impl Banded {
         Banded { bands }
     }
 
-    pub fn with_equal_bands(band_count: usize, value_range: RangeInclusive<f64>, color_map: &ColorMap) -> Result<Self> {
+    pub fn with_equal_bands(band_count: usize, value_range: RangeInclusive<f32>, color_map: &ColorMap) -> Result<Self> {
         let mut entries = Vec::with_capacity(band_count);
-        let band_offset: f64 = (value_range.end() - value_range.start()) / (band_count as f64 - 1.0);
+        let band_offset: f32 = (value_range.end() - value_range.start()) / (band_count as f32 - 1.0);
         let mut band_pos = *value_range.start();
 
         if let ColorMap::ColorList(colors) = color_map {
@@ -70,7 +70,7 @@ impl Banded {
         } else {
             let cmap = ProcessedColorMap::create(color_map)?;
 
-            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
+            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f32 - 1.0) };
             let mut color_pos = 0.0;
 
             for _ in 0..band_count {
@@ -91,7 +91,7 @@ impl Banded {
         Ok(Banded { bands: entries })
     }
 
-    pub fn with_manual_ranges(value_ranges: Vec<Range<f64>>, color_map: &ColorMap) -> Result<Self> {
+    pub fn with_manual_ranges(value_ranges: Vec<Range<f32>>, color_map: &ColorMap) -> Result<Self> {
         let band_count = value_ranges.len();
         let mut entries = Vec::with_capacity(band_count);
 
@@ -107,7 +107,7 @@ impl Banded {
             }
         } else {
             let cmap = ProcessedColorMap::create(color_map)?;
-            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f64 - 1.0) };
+            let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f32 - 1.0) };
             let mut color_pos = 0.0;
 
             for range in value_ranges {
@@ -121,8 +121,8 @@ impl Banded {
 }
 
 impl ColorMapper for Banded {
-    fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
-        const EDGE_TOLERANCE: f64 = 1e-4;
+    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
+        const EDGE_TOLERANCE: f32 = 1e-4;
 
         for entry in &self.bands {
             if entry.range.contains(&value) {
@@ -149,7 +149,7 @@ impl ColorMapper for Banded {
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
         // No string value support, so convert to numeric value if possible or return nodata color
-        if let Ok(num_value) = value.parse::<f64>() {
+        if let Ok(num_value) = value.parse::<f32>() {
             self.color_for_numeric_value(num_value, config)
         } else {
             config.nodata_color
@@ -163,7 +163,7 @@ impl ColorMapper for Banded {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f64, N>,
+        value: &std::simd::Simd<f32, N>,
         config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
@@ -171,12 +171,17 @@ impl ColorMapper for Banded {
     {
         use std::simd::{Mask, Simd, cmp::SimdPartialOrd, num::SimdFloat};
 
+        use num::NumCast;
+
         let mut in_range_total = Mask::splat(false);
         let nodata_color = Simd::splat(config.nodata_color.to_bits());
         let mut colors = nodata_color;
 
         for entry in &self.bands {
-            let in_range = (value.simd_ge(Simd::splat(entry.range.start)) & value.simd_lt(Simd::splat(entry.range.end))).cast::<i32>();
+            let start = NumCast::from(entry.range.start).unwrap_or_default();
+            let end = NumCast::from(entry.range.end).unwrap_or_default();
+
+            let in_range = (*value).simd_ge(Simd::splat(start)) & (*value).simd_lt(Simd::splat(end));
             let band_color = Simd::splat(entry.color.to_bits());
 
             in_range_total |= in_range;
@@ -191,10 +196,13 @@ impl ColorMapper for Banded {
             let last_entry = self.bands.last().unwrap_or(first_entry);
             let edge_tolerance = Simd::splat(1e-4);
 
-            let lower_edge = (value - Simd::splat(first_entry.range.start)).abs().simd_lt(edge_tolerance);
-            let upper_edge = (value - Simd::splat(last_entry.range.end)).abs().simd_lt(edge_tolerance);
-            let out_of_range_low = value.simd_lt(Simd::splat(first_entry.range.start));
-            let out_of_range_high = value.simd_gt(Simd::splat(last_entry.range.end));
+            let start = first_entry.range.start;
+            let end = last_entry.range.end;
+
+            let lower_edge = (*value - Simd::splat(start)).abs().simd_lt(edge_tolerance);
+            let upper_edge = (*value - Simd::splat(end)).abs().simd_lt(edge_tolerance);
+            let out_of_range_low = value.simd_lt(Simd::splat(start));
+            let out_of_range_high = value.simd_gt(Simd::splat(end));
 
             colors = out_of_range_low.cast::<i32>().select(
                 Simd::splat(config.out_of_range_low_color.unwrap_or(first_entry.color).to_bits()),

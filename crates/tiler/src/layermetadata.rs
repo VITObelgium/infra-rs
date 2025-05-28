@@ -1,7 +1,7 @@
 use crate::tileformat::TileFormat;
 use gdal::raster::GdalDataType;
 use geo::ArrayDataType;
-use geo::{crs::Epsg, Coordinate, LatLonBounds};
+use geo::{Coordinate, LatLonBounds, crs::Epsg};
 use num::NumCast;
 use std::{collections::HashMap, path::PathBuf};
 
@@ -51,8 +51,8 @@ pub struct LayerMetadata {
     pub description: String,
     pub path: PathBuf,
     pub source_is_web_mercator: bool,
-    pub min_value: f64,
-    pub max_value: f64,
+    pub min_value: f32,
+    pub max_value: f32,
     pub min_zoom: i32,
     pub max_zoom: i32,
     pub nodata: Option<f64>,
@@ -156,8 +156,8 @@ pub struct TileJson {
     pub minzoom: i32,
     pub maxzoom: i32,
     pub bounds: [f64; 4],
-    pub minvalue: f64,
-    pub maxvalue: f64,
+    pub minvalue: f32,
+    pub maxvalue: f32,
     pub tiles: Vec<String>,
     #[cfg_attr(feature = "serde", serde(flatten))]
     pub additional_data: HashMap<String, String>,

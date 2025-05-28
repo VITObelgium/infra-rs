@@ -265,7 +265,7 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
             .to_string();
 
         if raster_count > 1 {
-            name.push_str(&format!(" - Band {:05}", band_nr));
+            name.push_str(&format!(" - Band {band_nr:05}"));
         }
 
         let mut layer_meta = LayerMetadata {
@@ -283,8 +283,8 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
             epsg,
             bounds: metadata_bounds_wgs84(meta).unwrap_or(LatLonBounds::world()).array(),
             description: String::new(),
-            min_value: f64::NAN,
-            max_value: f64::NAN,
+            min_value: f32::NAN,
+            max_value: f32::NAN,
             source_format: source_type_for_path(path),
             scheme: "xyz".to_string(),
             additional_data: Default::default(),
@@ -297,16 +297,16 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
 
             match raster_band.get_statistics(force, allow_approximation) {
                 Ok(Some(stats)) => {
-                    layer_meta.min_value = stats.min;
-                    layer_meta.max_value = stats.max;
+                    layer_meta.min_value = stats.min as f32;
+                    layer_meta.max_value = stats.max as f32;
                 }
                 Ok(None) => {
-                    log::warn!("No statistics available for band {}", band_nr);
+                    log::warn!("No statistics available for band {band_nr}");
                     layer_meta.min_value = 0.0;
-                    layer_meta.max_value = f64::MAX;
+                    layer_meta.max_value = f32::MAX;
                 }
                 Err(e) => {
-                    log::warn!("Failed to calculate statistics: {}", e);
+                    log::warn!("Failed to calculate statistics: {e}");
                 }
             }
         }

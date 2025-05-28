@@ -48,7 +48,7 @@ impl CategoricNumeric {
             let color_offset = if category_count == 1 {
                 0.0
             } else {
-                1.0 / (category_count as f64 - 1.0)
+                1.0 / (category_count as f32 - 1.0)
             };
 
             let mut color_pos = 0.0;
@@ -94,7 +94,7 @@ impl CategoricNumeric {
             let color_offset = if category_count == 1 {
                 0.0
             } else {
-                1.0 / (category_count as f64 - 1.0)
+                1.0 / (category_count as f32 - 1.0)
             };
             let mut color_pos = 0.0;
 
@@ -116,7 +116,7 @@ impl CategoricNumeric {
 }
 
 impl ColorMapper for CategoricNumeric {
-    fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
+    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
         if let Some(cat) = value.to_i64() {
             return self.categories.get(&cat).map_or(config.nodata_color, |cat| cat.color);
         }
@@ -127,7 +127,7 @@ impl ColorMapper for CategoricNumeric {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f64, N>,
+        value: &std::simd::Simd<f32, N>,
         config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
@@ -138,7 +138,7 @@ impl ColorMapper for CategoricNumeric {
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
         // No string value support, so convert to numeric value if possible or return nodata color
-        if let Ok(num_value) = value.parse::<f64>() {
+        if let Ok(num_value) = value.parse::<f32>() {
             self.color_for_numeric_value(num_value, config)
         } else {
             config.nodata_color
@@ -166,7 +166,7 @@ impl CategoricString {
 }
 
 impl ColorMapper for CategoricString {
-    fn color_for_numeric_value(&self, value: f64, config: &MappingConfig) -> Color {
+    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
         // Convert to string and match if possible
         self.color_for_string_value(value.to_string().as_str(), config)
     }
@@ -174,7 +174,7 @@ impl ColorMapper for CategoricString {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f64, N>,
+        value: &std::simd::Simd<f32, N>,
         config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
