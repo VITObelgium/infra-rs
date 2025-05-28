@@ -17,11 +17,39 @@ use super::ColorMapper;
 #[derive(Default, Clone, Debug)]
 pub struct CategoricNumeric {
     categories: HashMap<i64, LegendCategory>,
+    fast_lookup: Option<Vec<u32>>, // Fast lookup for numeric values
 }
 
 impl CategoricNumeric {
+    fn create_fast_lookup(categories: &HashMap<i64, LegendCategory>) -> Option<Vec<u32>> {
+        if categories.is_empty() {
+            return None;
+        }
+
+        #[cfg(not(feature = "simd"))]
+        return None; // SIMD support is required for fast lookup
+
+        #[cfg(feature = "simd")]
+        {
+            const MAX_LOOKUP_SIZE: i64 = 512; // Maximum size for fast lookup table
+
+            let max_cat = *categories.keys().max().expect("Categories should not be empty");
+            let min_cat = *categories.keys().min().expect("Categories should not be empty");
+            if min_cat < 0 || max_cat > MAX_LOOKUP_SIZE {
+                return None;
+            }
+
+            let mut lookup = vec![crate::color::TRANSPARENT.to_bits(); (max_cat + 1) as usize];
+            for (cat, legend_cat) in categories {
+                lookup[*cat as usize] = legend_cat.color.to_bits();
+            }
+            Some(lookup)
+        }
+    }
+
     pub fn new(categories: HashMap<i64, LegendCategory>) -> Self {
-        CategoricNumeric { categories }
+        let fast_lookup = CategoricNumeric::create_fast_lookup(&categories);
+        CategoricNumeric { categories, fast_lookup }
     }
 
     pub fn for_values(category_values: &[i64], color_map: &ColorMap) -> Result<Self> {
@@ -66,7 +94,8 @@ impl CategoricNumeric {
             }
         }
 
-        Ok(CategoricNumeric { categories })
+        let fast_lookup = CategoricNumeric::create_fast_lookup(&categories);
+        Ok(CategoricNumeric { categories, fast_lookup })
     }
 
     pub fn for_value_range(value_range: RangeInclusive<i64>, color_map: &ColorMap) -> Result<Self> {
@@ -111,11 +140,17 @@ impl CategoricNumeric {
             }
         }
 
-        Ok(CategoricNumeric { categories })
+        let fast_lookup = CategoricNumeric::create_fast_lookup(&categories);
+        Ok(CategoricNumeric { categories, fast_lookup })
     }
 }
 
 impl ColorMapper for CategoricNumeric {
+    fn simd_supported(&self) -> bool {
+        self.fast_lookup.is_some()
+    }
+
+    #[inline]
     fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
         if let Some(cat) = value.to_i64() {
             return self.categories.get(&cat).map_or(config.nodata_color, |cat| cat.color);
@@ -127,13 +162,21 @@ impl ColorMapper for CategoricNumeric {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        _value: &std::simd::Simd<f32, N>,
-        _config: &MappingConfig,
+        value: &std::simd::Simd<f32, N>,
+        config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
         std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
     {
-        todo!()
+        use std::simd::num::SimdFloat as _;
+        assert!(self.fast_lookup.is_some());
+
+        let mut result = std::simd::Simd::splat(config.nodata_color.to_bits());
+        if let Some(lookup) = &self.fast_lookup {
+            result = std::simd::Simd::gather_or(lookup, value.cast(), result);
+        }
+
+        result
     }
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
@@ -166,21 +209,14 @@ impl CategoricString {
 }
 
 impl ColorMapper for CategoricString {
+    fn simd_supported(&self) -> bool {
+        false // No SIMD support for string values
+    }
+
+    #[inline]
     fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
         // Convert to string and match if possible
         self.color_for_string_value(value.to_string().as_str(), config)
-    }
-
-    #[cfg(feature = "simd")]
-    fn color_for_numeric_value_simd<const N: usize>(
-        &self,
-        _value: &std::simd::Simd<f32, N>,
-        _config: &MappingConfig,
-    ) -> std::simd::Simd<u32, N>
-    where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
-    {
-        todo!()
     }
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {

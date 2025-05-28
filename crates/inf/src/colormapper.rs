@@ -17,12 +17,19 @@ pub trait ColorMapper: Default {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f32, N>,
-        config: &MappingConfig,
+        _value: &std::simd::Simd<f32, N>,
+        _config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount;
+        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+    {
+        panic!("No SIMD support for this color mapper");
+    }
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color;
     fn category_count(&self) -> usize;
+
+    fn simd_supported(&self) -> bool {
+        true
+    }
 }

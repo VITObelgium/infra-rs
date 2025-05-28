@@ -18,7 +18,7 @@ use std::simd::{
     num::SimdFloat,
 };
 
-pub const LANES: usize = 16;
+pub const LANES: usize = 8;
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -158,6 +158,11 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         std::simd::Simd<f32, LANES>: From<std::simd::Simd<T, LANES>>,
     {
         use aligned_vec::avec;
+
+        if !self.mapper.simd_supported() {
+            // Not all color mappers can support SIMD, so fall back to scalar processing
+            return self.apply_to_data(data, nodata);
+        }
 
         let mut colors = avec![self.mapping_config.nodata_color.to_bits(); data.len()];
 
@@ -470,10 +475,35 @@ mod tests {
         );
         let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
 
-        let banded = create_linear(&cmap_def, 1.0..(RASTER_SIZE * RASTER_SIZE) as f32, None)?;
+        let linear = create_linear(&cmap_def, 1.0..(RASTER_SIZE * RASTER_SIZE) as f32, None)?;
 
-        let colors = banded.apply_to_data(&input_data, None);
-        let simd_colors = banded.apply_to_data_simd(&input_data, None);
+        let colors = linear.apply_to_data(&input_data, None);
+        let simd_colors = linear.apply_to_data_simd(&input_data, None);
+
+        assert_eq!(colors.len(), input_data.len());
+        assert_eq!(simd_colors, colors);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "simd")]
+    #[test]
+    fn categoric_legend() -> Result<()> {
+        use aligned_vec::AVec;
+
+        const RASTER_SIZE: usize = 4;
+        use aligned_vec::CACHELINE_ALIGN;
+
+        let input_data = AVec::<f32, aligned_vec::ConstAlign<CACHELINE_ALIGN>>::from_iter(
+            CACHELINE_ALIGN,
+            (0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32),
+        );
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+
+        let categoric = create_categoric_for_value_range(&cmap_def, 1..=(RASTER_SIZE * RASTER_SIZE) as i64, None)?;
+
+        let colors = categoric.apply_to_data(&input_data, None);
+        let simd_colors = categoric.apply_to_data_simd(&input_data, None);
 
         assert_eq!(colors.len(), input_data.len());
         assert_eq!(simd_colors, colors);

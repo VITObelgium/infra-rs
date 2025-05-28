@@ -3,7 +3,7 @@ use aligned_vec::{AVec, CACHELINE_ALIGN, ConstAlign};
 use criterion::Criterion;
 use inf::{
     colormap::{ColorMap, ColorMapDirection, ColorMapPreset},
-    legend::{create_banded, create_linear},
+    legend::{create_banded, create_categoric_for_value_range, create_linear},
 };
 use num::NumCast;
 
@@ -16,7 +16,7 @@ pub fn bench_name<T: num::Num>(name: &str) -> String {
 
 const LANES: usize = inf::legend::LANES;
 
-pub fn bench_banded_colormap<T: num::Num + num::NumCast + Copy + std::simd::SimdElement + std::simd::SimdCast>(c: &mut Criterion)
+pub fn bench_colormap<T: num::Num + num::NumCast + Copy + std::simd::SimdElement + std::simd::SimdCast>(c: &mut Criterion)
 where
     std::simd::Simd<T, LANES>: inf::simd::SimdCastPl<LANES> + std::simd::cmp::SimdPartialOrd + std::simd::num::SimdFloat,
     <std::simd::Simd<T, LANES> as std::simd::num::SimdFloat>::Mask:
@@ -40,23 +40,7 @@ where
     c.bench_function(&bench_name::<T>("apply_banded_legend_simd"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_simd(&data, NumCast::from(99.0)));
     });
-}
 
-pub fn bench_linear_colormap<T: num::Num + num::NumCast + Copy + std::simd::SimdElement + std::simd::SimdCast>(c: &mut Criterion)
-where
-    std::simd::Simd<T, LANES>: inf::simd::SimdCastPl<LANES> + std::simd::cmp::SimdPartialOrd + std::simd::num::SimdFloat,
-    <std::simd::Simd<T, LANES> as std::simd::num::SimdFloat>::Mask:
-        std::ops::BitOrAssign<<std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask>, // Oh boy
-    <std::simd::Simd<T, LANES> as std::simd::num::SimdFloat>::Mask: std::ops::Not,
-    <std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask: std::ops::BitAnd,
-    <<std::simd::Simd<T, LANES> as std::simd::num::SimdFloat>::Mask as std::ops::Not>::Output:
-        std::convert::Into<std::simd::Mask<i32, LANES>>,
-    std::simd::Simd<f32, LANES>: std::convert::From<std::simd::Simd<T, LANES>>,
-{
-    let raster_size = RASTER_HEIGHT * RASTER_WIDTH;
-    let data = AVec::<T, ConstAlign<CACHELINE_ALIGN>>::from_iter(CACHELINE_ALIGN, (0..raster_size).map(|i| NumCast::from(i).unwrap()));
-
-    let cmap_def = ColorMap::Preset(ColorMapPreset::Turbo, ColorMapDirection::Regular);
     let legend = create_linear(&cmap_def, 0.0..100.0, None).unwrap();
 
     c.bench_function(&bench_name::<T>("apply_linear_legend"), |b| {
@@ -66,9 +50,18 @@ where
     c.bench_function(&bench_name::<T>("apply_linear_legend_simd"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_simd(&data, NumCast::from(99.0)));
     });
+
+    let legend = create_categoric_for_value_range(&cmap_def, 0..=300, None).unwrap();
+
+    c.bench_function(&bench_name::<T>("apply_categoric_legend"), |b| {
+        b.iter_with_large_drop(|| legend.apply_to_data(&data, NumCast::from(99.0)));
+    });
+
+    c.bench_function(&bench_name::<T>("apply_categoric_legend_simd"), |b| {
+        b.iter_with_large_drop(|| legend.apply_to_data_simd(&data, NumCast::from(99.0)));
+    });
 }
 
-criterion::criterion_group!(banded_benches_f32, bench_banded_colormap<f32>);
-criterion::criterion_group!(linear_benches_f32, bench_linear_colormap<f32>);
+criterion::criterion_group!(cmap_benches_f32, bench_colormap<f32>);
 
-criterion::criterion_main!(banded_benches_f32, linear_benches_f32);
+criterion::criterion_main!(cmap_benches_f32);
