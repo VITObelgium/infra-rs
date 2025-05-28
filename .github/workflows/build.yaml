@@ -41,6 +41,8 @@ jobs:
         run: just test_release
       - name: Run the unit tests with python feature enabled
         run: just test_release_py
+      - name: Run the unit tests with simd feature enabled
+        run: just test_simd
       - name: Build the docs
         run: just doc
       - name: Archive build logs

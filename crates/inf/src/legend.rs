@@ -18,7 +18,7 @@ use std::simd::{
     num::SimdFloat,
 };
 
-pub const LANES: usize = 16;
+pub const LANES: usize = 8;
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
