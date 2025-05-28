@@ -91,13 +91,13 @@ build: build_release
 test: test_release
 
 test_simd:
-  cargo nextest run -p inf --release --features=simd
+  cargo +nightly nextest run -p inf --release --features=simd
 
 rasterbench:
   cargo bench --bench rasterops --package=geo
 
 cmapbench:
-  cargo bench --bench colormapping --package=inf --features=simd
+  cargo +nightly bench --bench colormapping --package=inf --features=simd
 
 rasterbenchbaseline name:
   cargo bench --bench rasterops --package=geo -- --save-baseline {{name}}

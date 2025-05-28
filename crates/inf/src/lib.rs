@@ -1,5 +1,5 @@
 #![warn(clippy::unwrap_used)]
-#![feature(portable_simd)]
+#![cfg_attr(feature = "simd", feature(portable_simd))]
 extern crate approx;
 
 pub use error::Error;
