@@ -167,7 +167,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         let mut colors = avec![self.mapping_config.nodata_color.to_bits(); data.len()];
 
         let (head, simd_vals, tail) = unsafe { data.align_to::<std::simd::Simd<T, LANES>>() };
-        let (head_colors, simd_colors, tail_colors) = unsafe { colors.align_to_mut::<std::simd::Simd<u32, LANES>>() };
+        let (head_colors, simd_colors, tail_colors) = colors.as_simd_mut();
 
         assert!(head.len() == head_colors.len(), "Data alignment error");
 
