@@ -160,6 +160,7 @@ impl ColorMapper for CategoricNumeric {
     }
 
     #[cfg(feature = "simd")]
+    #[inline]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
         value: &std::simd::Simd<f32, N>,

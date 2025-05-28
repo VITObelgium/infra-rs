@@ -111,6 +111,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     }
 
     #[cfg(feature = "simd")]
+    #[inline]
     pub fn color_for_value_simd<T: num::NumCast + Copy + num::Zero + SimdElement + SimdCast>(
         &self,
         value: &std::simd::Simd<T, LANES>,

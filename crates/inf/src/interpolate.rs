@@ -1,5 +1,6 @@
 use num::{Float, Num, NumCast, One, ToPrimitive, Zero};
 
+#[inline]
 pub fn linear_map_to_float<T, TFloat>(value: T, min: T, max: T) -> TFloat
 where
     T: PartialOrd + Num + ToPrimitive + Into<TFloat> + Copy,
@@ -8,7 +9,7 @@ where
     //assert!(!(min.into().is_nan() || max.into().is_nan()));
     assert!(min <= max);
 
-    if min == max {
+    if min >= max {
         return TFloat::zero();
     }
 
@@ -33,7 +34,7 @@ where
 
     assert!(min <= max);
 
-    if min == max {
+    if min >= max {
         return std::simd::Simd::splat(0.0);
     }
 
