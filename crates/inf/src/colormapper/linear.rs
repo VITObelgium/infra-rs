@@ -22,6 +22,7 @@ impl Linear {
 }
 
 impl ColorMapper for Linear {
+    #[inline]
     fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
         const EDGE_TOLERANCE: f32 = 1e-4;
 
@@ -36,15 +37,32 @@ impl ColorMapper for Linear {
     }
 
     #[cfg(feature = "simd")]
+    #[inline]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        _value: &std::simd::Simd<f32, N>,
-        _config: &MappingConfig,
+        value: &std::simd::Simd<f32, N>,
+        config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
         std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
     {
-        todo!()
+        use std::simd::{Simd, cmp::SimdPartialOrd};
+
+        use crate::interpolate::linear_map_to_float_simd;
+
+        const EDGE_TOLERANCE: f32 = 1e-4;
+        let start = Simd::splat(self.value_range.start - EDGE_TOLERANCE);
+        let end = Simd::splat(self.value_range.end + EDGE_TOLERANCE);
+
+        let value_0_1 = linear_map_to_float_simd(*value, self.value_range.start, self.value_range.end);
+        let mut colors = self.color_map.get_color_simd(value_0_1);
+
+        let lower_range_color = Simd::splat(config.out_of_range_low_color.unwrap_or(self.color_map.get_color(0.0)).to_bits());
+        let upper_range_color = Simd::splat(config.out_of_range_high_color.unwrap_or(self.color_map.get_color(1.0)).to_bits());
+
+        colors = value.simd_lt(start).select(lower_range_color, colors);
+        colors = value.simd_gt(end).select(upper_range_color, colors);
+        colors
     }
 
     fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {

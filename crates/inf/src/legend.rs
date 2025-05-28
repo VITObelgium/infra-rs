@@ -18,7 +18,7 @@ use std::simd::{
     num::SimdFloat,
 };
 
-pub const LANES: usize = 8;
+pub const LANES: usize = 16;
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -436,7 +436,7 @@ mod tests {
     fn banded_legend() -> Result<()> {
         use aligned_vec::AVec;
 
-        const RASTER_SIZE: usize = 4;
+        const RASTER_SIZE: usize = 34;
         use aligned_vec::CACHELINE_ALIGN;
 
         let input_data = AVec::<f32, aligned_vec::ConstAlign<CACHELINE_ALIGN>>::from_iter(
@@ -446,6 +446,31 @@ mod tests {
         let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
 
         let banded = create_banded(10, &cmap_def, 1.0..=(RASTER_SIZE * RASTER_SIZE) as f32, None)?;
+
+        let colors = banded.apply_to_data(&input_data, None);
+        let simd_colors = banded.apply_to_data_simd(&input_data, None);
+
+        assert_eq!(colors.len(), input_data.len());
+        assert_eq!(simd_colors, colors);
+
+        Ok(())
+    }
+
+    #[cfg(feature = "simd")]
+    #[test]
+    fn linear_legend() -> Result<()> {
+        use aligned_vec::AVec;
+
+        const RASTER_SIZE: usize = 4;
+        use aligned_vec::CACHELINE_ALIGN;
+
+        let input_data = AVec::<f32, aligned_vec::ConstAlign<CACHELINE_ALIGN>>::from_iter(
+            CACHELINE_ALIGN,
+            (0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32),
+        );
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+
+        let banded = create_linear(&cmap_def, 1.0..(RASTER_SIZE * RASTER_SIZE) as f32, None)?;
 
         let colors = banded.apply_to_data(&input_data, None);
         let simd_colors = banded.apply_to_data_simd(&input_data, None);

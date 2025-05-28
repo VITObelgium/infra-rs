@@ -22,6 +22,32 @@ where
     (value.into() - min.into()) / range_width
 }
 
+#[cfg(feature = "simd")]
+#[inline]
+pub fn linear_map_to_float_simd<const N: usize>(value: std::simd::Simd<f32, N>, min: f32, max: f32) -> std::simd::Simd<f32, N>
+where
+    std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+{
+    use std::simd::Simd;
+    use std::simd::cmp::SimdPartialOrd;
+
+    assert!(min <= max);
+
+    if min == max {
+        return std::simd::Simd::splat(0.0);
+    }
+
+    let lower_edge = value.simd_lt(Simd::splat(min));
+    let upper_edge = value.simd_ge(Simd::splat(max));
+
+    let mut result = (value - Simd::splat(min)) / Simd::splat(max - min);
+
+    result = lower_edge.select(Simd::splat(0.0), result);
+    result = upper_edge.select(Simd::splat(1.0), result);
+
+    result
+}
+
 // pub fn linear_map_to_byte<T>(value: T, start: T, end: T, map_start: u8, map_end: u8) -> u8
 // where
 //     T: PartialOrd + Into<f32> + Copy,

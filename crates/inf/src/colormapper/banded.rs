@@ -121,6 +121,7 @@ impl Banded {
 }
 
 impl ColorMapper for Banded {
+    #[inline]
     fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
         const EDGE_TOLERANCE: f32 = 1e-4;
 
@@ -161,6 +162,7 @@ impl ColorMapper for Banded {
     }
 
     #[cfg(feature = "simd")]
+    #[inline]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
         value: &std::simd::Simd<f32, N>,

@@ -309,11 +309,32 @@ impl ProcessedColorMap {
         }
     }
 
+    #[inline]
     pub fn get_color(&self, value: f32) -> Color {
         if !(0.0..=1.0).contains(&value) {
             return color::TRANSPARENT;
         }
         self.cmap[(value * 255.0).round() as usize]
+    }
+
+    #[cfg(feature = "simd")]
+    #[inline]
+    pub fn get_color_simd<const N: usize>(&self, value: std::simd::Simd<f32, N>) -> std::simd::Simd<u32, N>
+    where
+        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+    {
+        use std::simd::Simd;
+        use std::simd::StdFloat;
+        use std::simd::cmp::SimdPartialOrd;
+        use std::simd::num::SimdFloat;
+
+        let transparent = std::simd::Simd::splat(color::TRANSPARENT.to_bits());
+        let out_of_range = value.simd_lt(Simd::splat(0.0)) | value.simd_gt(Simd::splat(1.0));
+        let indexes = (value * std::simd::Simd::splat(255.0)).round().cast::<usize>();
+
+        let cmap: &[u32] = unsafe { std::mem::transmute::<&[Color], &[u32]>(&self.cmap) };
+
+        std::simd::Simd::gather_select(cmap, (!out_of_range).cast(), indexes, transparent)
     }
 
     pub fn get_color_by_value(&self, value: u8) -> Color {

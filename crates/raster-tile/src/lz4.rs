@@ -31,6 +31,6 @@ pub(crate) fn decompress_tile_data<T: ArrayNum>(element_count: usize, source: &[
             }
             Ok(data)
         }
-        Err(err) => Err(Error::InvalidArgument(format!("Failed to decompress tile data: {}", err))),
+        Err(err) => Err(Error::InvalidArgument(format!("Failed to decompress tile data: {err}"))),
     }
 }
