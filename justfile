@@ -90,6 +90,9 @@ test_release_py: pybootstrap
 build: build_release
 test: test_release
 
+test_simd:
+  cargo nextest run -p inf --release --features=simd
+
 rasterbench:
   cargo bench --bench rasterops --package=geo
 

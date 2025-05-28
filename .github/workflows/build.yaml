@@ -17,6 +17,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable,nightly
       - uses: prefix-dev/setup-pixi@v0.8.8
       - uses: taiki-e/install-action@v2
         with:
