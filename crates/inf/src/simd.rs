@@ -1,4 +1,4 @@
-use std::simd::{LaneCount, Simd, SimdCast, SupportedLaneCount, num::SimdFloat};
+use std::simd::{LaneCount, Simd, SimdCast, SupportedLaneCount};
 
 pub trait SimdCastPl<const N: usize>
 where

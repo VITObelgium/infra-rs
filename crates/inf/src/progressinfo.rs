@@ -157,7 +157,7 @@ mod tests {
     fn func_with_payload_progres(progress: impl ProgressNotification<Payload = String>) -> Result<()> {
         progress.reset(10);
         for i in 0..10 {
-            progress.set_payload(format!("Progress: {}", i));
+            progress.set_payload(format!("Progress: {i}"));
             progress.tick()?;
         }
 

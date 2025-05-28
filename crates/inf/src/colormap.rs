@@ -136,8 +136,8 @@ impl ColorMap {
         match self {
             ColorMap::Named(name) => name.clone(),
             ColorMap::Preset(preset, direction) => match direction {
-                ColorMapDirection::Regular => format!("{}", preset),
-                ColorMapDirection::Reversed => format!("{}_r", preset),
+                ColorMapDirection::Regular => format!("{preset}"),
+                ColorMapDirection::Reversed => format!("{preset}_r"),
             },
             ColorMap::ColorList(_) => "Custom".to_string(),
         }
@@ -305,7 +305,7 @@ impl ProcessedColorMap {
         if let Ok(preset) = ColorMapPreset::from_str(&lowername) {
             Ok(ProcessedColorMap::create_for_preset(preset, direction))
         } else {
-            Err(Error::InvalidArgument(format!("Unsupported color map name: {}", name)))
+            Err(Error::InvalidArgument(format!("Unsupported color map name: {name}")))
         }
     }
 

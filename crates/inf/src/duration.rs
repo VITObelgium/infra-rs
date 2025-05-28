@@ -23,11 +23,11 @@ impl Recorder {
         if elapsed.as_secs() > 60 {
             let minutes = elapsed.as_secs() / 60;
             let seconds = elapsed.as_secs() - (minutes * 60);
-            format!("{} minutes {} seconds", minutes, seconds)
+            format!("{minutes} minutes {seconds} seconds")
         } else {
             let seconds = elapsed.as_secs();
             let milliseconds = elapsed.as_millis() - (seconds * 1000) as u128;
-            format!("{}.{:03} seconds", seconds, milliseconds)
+            format!("{seconds}.{milliseconds:03} seconds")
         }
     }
 }

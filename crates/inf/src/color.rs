@@ -38,7 +38,7 @@ impl Color {
     fn parse_hex(str: &str) -> Result<u8, Error> {
         match u8::from_str_radix(str, 16) {
             Ok(value) => Ok(value),
-            Err(_) => Err(Error::InvalidArgument(format!("Invalid hex color value: {}", str))),
+            Err(_) => Err(Error::InvalidArgument(format!("Invalid hex color value: {str}"))),
         }
     }
 
@@ -49,7 +49,7 @@ impl Color {
         }
 
         if !hex_string.starts_with('#') || (hex_string.len() != 7 && hex_string.len() != 9) {
-            return Err(Error::InvalidArgument(format!("Invalid color string: {}", hex_string)));
+            return Err(Error::InvalidArgument(format!("Invalid color string: {hex_string}")));
         }
 
         let offset = 1;

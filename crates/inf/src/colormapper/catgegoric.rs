@@ -127,8 +127,8 @@ impl ColorMapper for CategoricNumeric {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f32, N>,
-        config: &MappingConfig,
+        _value: &std::simd::Simd<f32, N>,
+        _config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
         std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
@@ -174,8 +174,8 @@ impl ColorMapper for CategoricString {
     #[cfg(feature = "simd")]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f32, N>,
-        config: &MappingConfig,
+        _value: &std::simd::Simd<f32, N>,
+        _config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
         std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
