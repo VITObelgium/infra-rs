@@ -101,7 +101,7 @@ impl WarpingTileProvider {
 
     fn verify_tile_dpi(dpi: u8) -> Result<()> {
         if !(Range { start: 1, end: 10 }).contains(&dpi) {
-            return Err(crate::Error::InvalidArgument(format!("Invalid dpi ratio {}", dpi)));
+            return Err(crate::Error::InvalidArgument(format!("Invalid dpi ratio {dpi}")));
         }
 
         Ok(())
@@ -185,7 +185,7 @@ impl WarpingTileProvider {
         self.meta
             .iter()
             .find(|m| m.id == id)
-            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
+            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {id}")))
     }
 }
 
@@ -199,7 +199,7 @@ impl TileProvider for WarpingTileProvider {
             .iter()
             .find(|m| m.id == id)
             .cloned()
-            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
+            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {id}")))
     }
 
     fn extent_value_range(&self, id: LayerId, extent: LatLonBounds, zoom: Option<i32>) -> Result<std::ops::Range<f64>> {

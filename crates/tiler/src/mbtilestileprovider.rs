@@ -33,7 +33,7 @@ fn parse_bounds(bounds: &str) -> Result<[f64; 4]> {
         }
     }
 
-    Err(Error::Runtime(format!("Invalid mbtiles bounds: {}", bounds)))
+    Err(Error::Runtime(format!("Invalid mbtiles bounds: {bounds}")))
 }
 
 impl MbtilesTileProvider {

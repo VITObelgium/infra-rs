@@ -35,7 +35,7 @@ fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -
 pub fn raster_pixel(raster_path: &Path, band_nr: usize, mut coord: Coordinate, layer_name: Option<&str>) -> Result<Option<f32>> {
     let mut open_opt: Vec<String> = Vec::new();
     if let Some(layer_name) = layer_name {
-        open_opt.push(format!("TABLE={}", layer_name));
+        open_opt.push(format!("TABLE={layer_name}"));
     }
 
     let meta = raster::io::dataset::read_file_metadata_with_options(raster_path, &open_opt)?;
@@ -103,7 +103,7 @@ pub fn source_type_for_path(path: &std::path::Path) -> LayerSourceType {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use geo::{CellSize};
+    use geo::CellSize;
     use path_macro::path;
 
     fn test_raster() -> std::path::PathBuf {
