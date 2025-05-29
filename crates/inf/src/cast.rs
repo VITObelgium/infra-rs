@@ -30,6 +30,17 @@ pub fn slice<To: NumCast>(from: &[impl NumCast + Copy]) -> Result<Vec<To>> {
         .collect()
 }
 
+pub fn reinterpret_vec<T: Sized, U: Sized>(mut data: Vec<T>) -> Vec<U> {
+    assert!(
+        std::mem::size_of::<T>() == std::mem::size_of::<U>(),
+        "Cannot reinterpret Vec<T> to Vec<U> because their sizes do not match"
+    );
+
+    // Safety: This is safe because we are reinterpreting the data as a different type
+    // and the size of the types must match.
+    unsafe { Vec::from_raw_parts(data.as_mut_ptr().cast::<U>(), data.len(), data.capacity()) }
+}
+
 /// # Safety
 /// Return a u8 slice to a vec of any type, only use this for structs that are #[repr(C)]
 /// Otherwise the slice will contain (uninitialized) padding bytes
