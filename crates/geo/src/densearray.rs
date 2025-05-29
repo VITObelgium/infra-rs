@@ -17,7 +17,7 @@ pub struct DenseArray<T: ArrayNum, Metadata: ArrayMetadata = RasterSize> {
     pub(super) data: Vec<T>,
 }
 
-/// Implementing Clone for `DenseArray`
+/// Clone for `DenseArray`
 /// When simd is enabled we need to ensure that the cloned vec is properly aligned.
 impl<T: Clone + ArrayNum, Metadata: Clone + ArrayMetadata> Clone for DenseArray<T, Metadata> {
     #[inline]

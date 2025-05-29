@@ -6,10 +6,10 @@ pub const LANES: usize = 4; // wasm SIMD128 (4 x f32 lanes)
 #[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
 pub const LANES: usize = 16; // AVX-512 512-bit (16 x f32 lanes)
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "avx2", not(target_feature = "avx512f")))]
 pub const LANES: usize = 8; // AVX2 256-bit (8 x f32 lanes)
 
-#[cfg(all(target_arch = "x86_64", target_feature = "sse2"))]
+#[cfg(all(target_arch = "x86_64", target_feature = "sse2", not(target_feature = "avx2")))]
 pub const LANES: usize = 4; // SSE2 128-bit (4 x f32 lanes)
 
 #[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
