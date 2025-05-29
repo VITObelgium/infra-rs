@@ -26,25 +26,19 @@ impl CategoricNumeric {
             return None;
         }
 
-        #[cfg(not(feature = "simd"))]
-        return None; // SIMD support is required for fast lookup
+        const MAX_LOOKUP_SIZE: i64 = 512; // Maximum size for fast lookup table
 
-        #[cfg(feature = "simd")]
-        {
-            const MAX_LOOKUP_SIZE: i64 = 512; // Maximum size for fast lookup table
-
-            let max_cat = *categories.keys().max().expect("Categories should not be empty");
-            let min_cat = *categories.keys().min().expect("Categories should not be empty");
-            if min_cat < 0 || max_cat > MAX_LOOKUP_SIZE {
-                return None;
-            }
-
-            let mut lookup = vec![crate::color::TRANSPARENT.to_bits(); (max_cat + 1) as usize];
-            for (cat, legend_cat) in categories {
-                lookup[*cat as usize] = legend_cat.color.to_bits();
-            }
-            Some(lookup)
+        let max_cat = *categories.keys().max().expect("Categories should not be empty");
+        let min_cat = *categories.keys().min().expect("Categories should not be empty");
+        if min_cat < 0 || max_cat > MAX_LOOKUP_SIZE {
+            return None;
         }
+
+        let mut lookup = vec![crate::color::TRANSPARENT.to_bits(); (max_cat + 1) as usize];
+        for (cat, legend_cat) in categories {
+            lookup[*cat as usize] = legend_cat.color.to_bits();
+        }
+        Some(lookup)
     }
 
     pub fn new(categories: HashMap<i64, LegendCategory>) -> Self {
@@ -147,13 +141,29 @@ impl CategoricNumeric {
 
 impl ColorMapper for CategoricNumeric {
     fn simd_supported(&self) -> bool {
-        self.fast_lookup.is_some()
+        #[cfg(feature = "simd")]
+        {
+            // SIMD support is available only if fast lookup is created
+            self.fast_lookup.is_some()
+        }
+
+        #[cfg(not(feature = "simd"))]
+        {
+            false
+        }
     }
 
     #[inline]
     fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
         if let Some(cat) = value.to_i64() {
-            return self.categories.get(&cat).map_or(config.nodata_color, |cat| cat.color);
+            if let Some(lookup) = &self.fast_lookup {
+                // Fast lookup for numeric values
+                if cat >= 0 && (cat as usize) < lookup.len() {
+                    return Color::from(lookup[cat as usize]);
+                }
+            } else {
+                return self.categories.get(&cat).map_or(config.nodata_color, |cat| cat.color);
+            }
         }
 
         config.nodata_color

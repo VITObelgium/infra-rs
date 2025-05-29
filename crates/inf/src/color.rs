@@ -26,6 +26,13 @@ impl AsRef<u8> for Color {
     }
 }
 
+impl From<u32> for Color {
+    fn from(value: u32) -> Self {
+        // SAFETY: `u32` is a plain old datatype so we can always transmute to it since Color is four bytes.
+        unsafe { std::mem::transmute(value) }
+    }
+}
+
 impl Color {
     pub const fn rgb(r: u8, g: u8, b: u8) -> Color {
         Color::rgba(r, g, b, 255)
