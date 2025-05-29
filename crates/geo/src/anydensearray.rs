@@ -90,7 +90,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         let ras: Result<DenseArray<T, Metadata>> = self.try_into();
         match ras {
             Ok(ras) => ras.unary_mut(op),
-            Err(e) => panic!("Unreachable code: {}", e),
+            Err(e) => panic!("Unreachable code: {e}"),
         }
     }
 

@@ -5,15 +5,45 @@ use crate::{
     raster::{self},
 };
 use approx::{AbsDiffEq, RelativeEq};
+use inf::allocate;
 use num::NumCast;
 
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::NODATA`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct DenseArray<T: ArrayNum, Metadata: ArrayMetadata = RasterSize> {
     pub(super) meta: Metadata,
     pub(super) data: Vec<T>,
+}
+
+/// Implementing Clone for `DenseArray`
+/// When simd is enabled we need to ensure that the cloned vec is properly aligned.
+impl<T: Clone + ArrayNum, Metadata: Clone + ArrayMetadata> Clone for DenseArray<T, Metadata> {
+    #[inline]
+    fn clone(&self) -> DenseArray<T, Metadata> {
+        #[cfg(feature = "simd")]
+        {
+            let mut data = allocate::aligned_vec_with_capacity(self.data.len());
+            unsafe {
+                // SAFETY: We allocated with len capacituy, so we can safely set the length
+                data.set_len(self.data.len());
+            }
+            data.copy_from_slice(self.data.as_slice());
+
+            DenseArray {
+                meta: Clone::clone(&self.meta),
+                data,
+            }
+        }
+
+        #[cfg(not(feature = "simd"))]
+        // If simd is not enabled, we can just clone the data directly
+        DenseArray {
+            meta: Clone::clone(&self.meta),
+            data: Clone::clone(&self.data),
+        }
+    }
 }
 
 impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
@@ -115,7 +145,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         Self: Sized,
         Iter: Iterator<Item = Option<T>>,
     {
-        let mut data = Vec::with_capacity(meta.size().cell_count());
+        let mut data = allocate::aligned_vec_with_capacity(meta.size().cell_count());
         for val in iter {
             data.push(val.unwrap_or(T::NODATA));
         }
@@ -130,7 +160,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     fn filled_with(val: Option<T>, meta: Metadata) -> Self {
         if let Some(val) = val {
             let cell_count = meta.size().cell_count();
-            DenseArray::new(meta, vec![val; cell_count]).expect("Raster size bug")
+            DenseArray::new(meta, allocate::aligned_vec_filled_with(val, cell_count)).expect("Raster size bug")
         } else {
             DenseArray::filled_with_nodata(meta)
         }
@@ -138,7 +168,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
 
     fn filled_with_nodata(meta: Metadata) -> Self {
         let cell_count = meta.size().cell_count();
-        DenseArray::new(meta, vec![T::NODATA; cell_count]).expect("Raster size bug")
+        DenseArray::new(meta, allocate::aligned_vec_filled_with(T::NODATA, cell_count)).expect("Raster size bug")
     }
 
     /// Returns the metadata reference.

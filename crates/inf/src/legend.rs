@@ -12,11 +12,7 @@ use std::{
 };
 
 #[cfg(feature = "simd")]
-use std::simd::{
-    LaneCount, Mask, Simd, SimdCast, SimdElement, SupportedLaneCount,
-    cmp::{SimdPartialEq, SimdPartialOrd},
-    num::SimdFloat,
-};
+use std::simd::{LaneCount, Simd, SimdCast, SimdElement, SupportedLaneCount, cmp::SimdPartialEq, num::SimdFloat};
 
 pub const LANES: usize = 8;
 
@@ -78,16 +74,13 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
 
     #[cfg(feature = "simd")]
     #[inline]
-    fn is_unmappable_simd<T, const N: usize>(
+    fn is_unmappable_simd<const N: usize>(
         &self,
-        value: Simd<T, N>,
-        nodata: Option<T>,
-    ) -> <std::simd::Simd<T, N> as std::simd::num::SimdFloat>::Mask
+        value: Simd<f32, N>,
+        nodata: Option<f32>,
+    ) -> <std::simd::Simd<f32, N> as std::simd::cmp::SimdPartialEq>::Mask
     where
-        T: SimdElement + num::Zero,
-        Simd<T, N>: SimdPartialEq + SimdFloat,
         LaneCount<N>: SupportedLaneCount,
-        <Simd<T, N> as SimdFloat>::Mask: std::ops::BitOrAssign<<Simd<T, N> as SimdPartialEq>::Mask>, // Oh boy
     {
         let mut mask = value.is_nan();
         if let Some(nodata) = nodata {
@@ -95,7 +88,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         }
 
         if self.mapping_config.zero_is_nodata {
-            mask |= value.simd_eq(Simd::splat(T::zero()));
+            mask |= value.simd_eq(Simd::splat(0.0));
         }
 
         mask
@@ -118,19 +111,14 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         nodata: Option<T>,
         color_buffer: &mut std::simd::Simd<u32, LANES>,
     ) where
-        std::simd::Simd<T, LANES>:
-            crate::simd::SimdCastPl<LANES> + SimdPartialEq + SimdPartialOrd + SimdFloat + std::convert::Into<Simd<f32, LANES>>,
-        <std::simd::Simd<T, LANES> as SimdFloat>::Mask: std::ops::Not,
-        <std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask: std::ops::BitAnd,
-        <Simd<T, LANES> as SimdFloat>::Mask: std::ops::BitOrAssign<<Simd<T, LANES> as SimdPartialEq>::Mask>, // Oh boy
-        <<Simd<T, LANES> as SimdFloat>::Mask as std::ops::Not>::Output: std::convert::Into<Mask<i32, LANES>>,
+        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
     {
         use crate::simd::SimdCastPl;
 
         let value: Simd<T, LANES> = value.simd_cast();
-        let mappable_mask = !self.is_unmappable_simd(value, nodata);
+        let mappable_mask = !self.is_unmappable_simd(value.simd_cast(), cast::option::<f32>(nodata));
         let colors = self.mapper.color_for_numeric_value_simd(&value.simd_cast(), &self.mapping_config);
-        colors.store_select(color_buffer.as_mut_array(), mappable_mask.into());
+        colors.store_select(color_buffer.as_mut_array(), mappable_mask);
     }
 
     pub fn color_for_opt_value<T: Copy + num::NumCast>(&self, value: Option<T>) -> Color {
@@ -151,23 +139,18 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     #[cfg(feature = "simd")]
     pub fn apply_to_data_simd<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> Vec<Color>
     where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES> + SimdPartialEq + SimdPartialOrd + SimdFloat,
-        <Simd<T, LANES> as SimdFloat>::Mask: std::ops::BitOrAssign<<Simd<T, LANES> as SimdPartialEq>::Mask>, // Oh boy
-        <std::simd::Simd<T, LANES> as SimdFloat>::Mask: std::ops::Not,
-        <std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask: std::ops::BitAnd,
-        <<Simd<T, LANES> as SimdFloat>::Mask as std::ops::Not>::Output: std::convert::Into<Mask<i32, LANES>>,
-        std::simd::Simd<f32, LANES>: From<std::simd::Simd<T, LANES>>,
+        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
     {
-        use aligned_vec::avec;
+        use crate::allocate;
 
         if !self.mapper.simd_supported() {
             // Not all color mappers can support SIMD, so fall back to scalar processing
             return self.apply_to_data(data, nodata);
         }
 
-        let mut colors = avec![self.mapping_config.nodata_color.to_bits(); data.len()];
+        let mut colors = allocate::aligned_vec_filled_with(self.mapping_config.nodata_color.to_bits(), data.len());
 
-        let (head, simd_vals, tail) = unsafe { data.align_to::<std::simd::Simd<T, LANES>>() };
+        let (head, simd_vals, tail) = data.as_simd();
         let (head_colors, simd_colors, tail_colors) = colors.as_simd_mut();
 
         assert!(head.len() == head_colors.len(), "Data alignment error");
@@ -281,6 +264,23 @@ impl Legend {
             Legend::Banded(legend) => legend.apply_to_data(data, nodata),
             Legend::CategoricNumeric(legend) => legend.apply_to_data(data, nodata),
             Legend::CategoricString(legend) => legend.apply_to_data(data, nodata),
+        }
+    }
+
+    #[cfg(feature = "simd")]
+    pub fn apply_simd<T: Copy + num::Zero + NumCast + std::simd::SimdElement + std::simd::SimdCast>(
+        &self,
+        data: &[T],
+        nodata: Option<T>,
+    ) -> Vec<Color>
+    where
+        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
+    {
+        match self {
+            Legend::Linear(legend) => legend.apply_to_data_simd(data, nodata),
+            Legend::Banded(legend) => legend.apply_to_data_simd(data, nodata),
+            Legend::CategoricNumeric(legend) => legend.apply_to_data_simd(data, nodata),
+            Legend::CategoricString(legend) => legend.apply_to_data_simd(data, nodata),
         }
     }
 

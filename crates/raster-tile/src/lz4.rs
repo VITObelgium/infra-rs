@@ -1,4 +1,5 @@
 use geo::ArrayNum;
+use inf::allocate;
 
 use crate::{Error, Result};
 
@@ -10,7 +11,7 @@ pub(crate) fn compress_tile_data<T: ArrayNum>(source: &[T]) -> Result<Vec<u8>> {
 }
 
 pub(crate) fn decompress_tile_data<T: ArrayNum>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
-    let mut data = Vec::<T>::with_capacity(element_count);
+    let mut data = allocate::aligned_vec_with_capacity::<T>(element_count);
 
     // Safety: The T array is initialized with the capacity of element_count, so it is safe to transmute the slice to a byte slice
     let data_bytes = unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<u8>(), element_count * std::mem::size_of::<T>()) };

@@ -1,13 +1,13 @@
 use crate::{
-    array::{ArrayMetadata, Columns, Rows},
     Cell, RasterSize,
+    array::{ArrayMetadata, Columns, Rows},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
 
 use crate::{
-    crs::{self, Epsg},
     Error, LatLonBounds, Point, Rect, Result, Tile,
+    crs::{self, Epsg},
 };
 
 #[cfg(feature = "gdal")]
@@ -374,7 +374,7 @@ impl GeoReference {
 
     pub fn projection_frienly_name(&self) -> String {
         if let Some(epsg) = self.projected_epsg() {
-            format!("{}", epsg)
+            format!("{epsg}")
         } else {
             String::new()
         }
@@ -523,7 +523,7 @@ impl GeoReference {
         /// Create a new `GeoReference` that is aligned to the XYZ tile grid used for serving tiles.
         /// Such an aligned grid is used as a warping target for rasters from which tiles can be extracted
         /// and served as XYZ tiles.
-        use crate::{crs, Tile};
+        use crate::{Tile, crs};
 
         if self.projection.is_empty() {
             return Err(Error::InvalidArgument(
@@ -640,7 +640,7 @@ impl std::fmt::Display for GeoReference {
         )?;
 
         if let Some(nodata) = self.nodata {
-            write!(f, " NoData: {}", nodata)?;
+            write!(f, " NoData: {nodata}")?;
         }
 
         if !self.projection.is_empty() {
@@ -864,79 +864,91 @@ mod tests {
             Option::<f64>::None,
         );
 
-        assert!(meta1
-            .intersects(&GeoReference::with_origin(
-                "",
-                RasterSize::with_rows_cols(Rows(4), Columns(4)),
-                Point::new(10.0, 10.0),
-                CellSize::square(5.0),
-                Option::<f64>::None,
-            ))
-            .unwrap());
+        assert!(
+            meta1
+                .intersects(&GeoReference::with_origin(
+                    "",
+                    RasterSize::with_rows_cols(Rows(4), Columns(4)),
+                    Point::new(10.0, 10.0),
+                    CellSize::square(5.0),
+                    Option::<f64>::None,
+                ))
+                .unwrap()
+        );
 
-        assert!(!&meta1
-            .intersects(&GeoReference::with_origin(
-                "",
-                RasterSize::with_rows_cols(Rows(4), Columns(4)),
-                Point::new(30.0, 30.0),
-                CellSize::square(5.0),
-                Option::<f64>::None
-            ))
-            .unwrap());
+        assert!(
+            !&meta1
+                .intersects(&GeoReference::with_origin(
+                    "",
+                    RasterSize::with_rows_cols(Rows(4), Columns(4)),
+                    Point::new(30.0, 30.0),
+                    CellSize::square(5.0),
+                    Option::<f64>::None
+                ))
+                .unwrap()
+        );
 
-        assert!(meta1
-            .intersects(&GeoReference::with_origin(
-                String::new(),
+        assert!(
+            meta1
+                .intersects(&GeoReference::with_origin(
+                    String::new(),
+                    RasterSize::with_rows_cols(Rows(4), Columns(4)),
+                    Point::new(11.0, 10.0),
+                    CellSize::square(5.0),
+                    Option::<f64>::None
+                ))
+                .is_err_and(|e| {
+                    assert_eq!(
+                        e.to_string(),
+                        "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"
+                    );
+                    true
+                })
+        );
+
+        assert!(
+            meta1
+                .intersects(&GeoReference::with_origin(
+                    String::new(),
+                    RasterSize::with_rows_cols(Rows(4), Columns(4)),
+                    Point::new(10.0, 11.0),
+                    CellSize::square(5.0),
+                    Option::<f64>::None
+                ))
+                .is_err_and(|e| {
+                    assert_eq!(
+                        e.to_string(),
+                        "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"
+                    );
+                    true
+                })
+        );
+
+        assert!(
+            GeoReference::with_origin(
+                "",
                 RasterSize::with_rows_cols(Rows(4), Columns(4)),
                 Point::new(11.0, 10.0),
                 CellSize::square(5.0),
                 Option::<f64>::None
-            ))
-            .is_err_and(|e| {
-                assert_eq!(
-                    e.to_string(),
-                    "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"
-                );
-                true
-            }));
+            )
+            .intersects(&meta1)
+            .is_err_and(|e| e.to_string()
+                == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }")
+        );
 
-        assert!(meta1
-            .intersects(&GeoReference::with_origin(
-                String::new(),
+        assert!(
+            GeoReference::with_origin(
+                "",
                 RasterSize::with_rows_cols(Rows(4), Columns(4)),
                 Point::new(10.0, 11.0),
                 CellSize::square(5.0),
                 Option::<f64>::None
-            ))
-            .is_err_and(|e| {
-                assert_eq!(
-                    e.to_string(),
-                    "Invalid argument: Extents cellsize does not match CellSize { x: 10.0, y: -10.0 } <-> CellSize { x: 5.0, y: -5.0 }"
-                );
-                true
-            }));
-
-        assert!(GeoReference::with_origin(
-            "",
-            RasterSize::with_rows_cols(Rows(4), Columns(4)),
-            Point::new(11.0, 10.0),
-            CellSize::square(5.0),
-            Option::<f64>::None
-        )
-        .intersects(&meta1)
-        .is_err_and(|e| e.to_string()
-            == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
-
-        assert!(GeoReference::with_origin(
-            "",
-            RasterSize::with_rows_cols(Rows(4), Columns(4)),
-            Point::new(10.0, 11.0),
-            CellSize::square(5.0),
-            Option::<f64>::None
-        )
-        .intersects(&meta1)
-        .is_err_and(|e| e.to_string()
-            == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }"));
+            )
+            .intersects(&meta1)
+            .is_err_and(|e| e.to_string()
+                == "Invalid argument: Extents cellsize does not match CellSize { x: 5.0, y: -5.0 } <-> CellSize { x: 10.0, y: -10.0 }")
+        );
     }
 
     #[test]
@@ -981,7 +993,7 @@ mod tests {
     fn test_tile_for_coordinate() {
         use core::f32;
 
-        use crate::{crs, Coordinate, SpatialReference, Tile};
+        use crate::{Coordinate, SpatialReference, Tile, crs};
 
         let coord = Coordinate::latlon(51.0, 4.0);
         let tile = Tile::for_coordinate(coord, 9);

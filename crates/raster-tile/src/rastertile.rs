@@ -101,6 +101,7 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
 
     #[cfg(feature = "float_png")]
     fn from_png_bytes(buffer: &[u8]) -> Result<Self> {
+        use inf::cast;
         use num::NumCast;
 
         let (data, (width, height), pixel_format) = crate::imageprocessing::decode_png(buffer)?;
@@ -111,18 +112,17 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
             return Err(Error::InvalidArgument("Only RGBA png data is supported".into()));
         }
 
-        if data.len() != width * height * std::mem::size_of::<f32>() {
+        if data.len() != width * height {
             return Err(Error::InvalidArgument("Invalid png tile data length".into()));
         }
 
         if T::TYPE != ArrayDataType::Float32 {
-            let float_slice = unsafe { ::core::slice::from_raw_parts(data.as_ptr().cast::<T>(), data.len() / 4) };
-            Ok(Self::new(Meta::with_rows_cols(height, width), Vec::from(float_slice)).expect("Raster size bug"))
+            let float_vec = cast::reinterpret_vec::<f32, T>(data);
+            Ok(Self::new(Meta::with_rows_cols(height, width), float_vec).expect("Raster size bug"))
         } else {
-            let float_slice = unsafe { ::core::slice::from_raw_parts(data.as_ptr().cast::<f32>(), data.len() / 4) };
             Ok(Self::from_iter_opt(
                 Meta::with_rows_cols(height, width),
-                float_slice.iter().map(|f| if f.is_nan() { None } else { NumCast::from(*f) }),
+                data.iter().map(|f| if f.is_nan() { None } else { NumCast::from(*f) }),
             )
             .expect("Raster size bug"))
         }

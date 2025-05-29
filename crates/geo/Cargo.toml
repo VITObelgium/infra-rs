@@ -52,6 +52,7 @@ python      = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 serde       = ["dep:serde"]
 specta      = ["dep:specta"]
 vector      = ["dep:geos", "dep:rayon", "geozero/with-geos"]
+simd        = ["inf/simd"]
 
 [package.metadata.vcpkg]
 dependencies = [
