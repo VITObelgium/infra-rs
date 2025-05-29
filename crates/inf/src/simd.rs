@@ -1,4 +1,4 @@
-use std::simd::{LaneCount, Simd, SimdCast, SupportedLaneCount};
+use std::simd::{LaneCount, SimdCast, SupportedLaneCount, prelude::*};
 
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 pub const LANES: usize = 4; // wasm SIMD128 (4 x f32 lanes)

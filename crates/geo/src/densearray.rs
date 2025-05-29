@@ -136,7 +136,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     }
 
     fn new_process_nodata(meta: Self::Metadata, mut data: Vec<Self::Pixel>) -> Result<Self> {
-        densearrayutil::process_nodata(&mut data, meta.nodata());
+        densearrayutil::process_nodata(&mut data, inf::cast::option(meta.nodata()));
         Self::new(meta, data)
     }
 

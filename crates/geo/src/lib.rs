@@ -1,4 +1,5 @@
 #![warn(clippy::unwrap_used)]
+#![cfg_attr(feature = "simd", feature(portable_simd))]
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
 mod anydensearray;
@@ -53,9 +54,17 @@ pub use {coordinatetransformer::CoordinateTransformer, runtimeconfiguration::Run
 #[doc(inline)]
 pub use {
     anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayMetadata, array::Columns, array::Rows, array::Window,
-    arraydatatype::ArrayDataType, arraynum::ArrayNum, cell::Cell, cell::CellIterator, coordinate::Coordinate, densearray::DenseArray,
-    error::Error, georeference::CellSize, georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata, rastersize::RasterSize,
-    rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
+    arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell, cell::CellIterator, coordinate::Coordinate,
+    densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata,
+    rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };
+
+#[doc(inline)]
+#[cfg(feature = "simd")]
+pub use arraynum::ArrayNumSimd;
+
+#[doc(inline)]
+#[cfg(feature = "simd")]
+pub use nodata::simd::NodataSimd;
 
 pub type Point<T = f64> = geo_types::Point<T>;

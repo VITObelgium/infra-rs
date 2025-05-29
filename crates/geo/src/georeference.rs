@@ -1013,11 +1013,11 @@ mod tests {
             Some(f32::NAN),
         );
 
-        println!("{:?} {:?}", tile_meta, coord);
+        println!("{tile_meta:?} {coord:?}");
         let cell = tile_meta.point_to_cell(coord.into());
-        println!("{:?}", cell);
+        println!("{cell:?}");
         let ll = tile_meta.cell_lower_left(cell);
-        println!("{:?}", ll);
+        println!("{ll:?}");
         tile_meta.set_extent(ll, RasterSize::with_rows_cols(Rows(1), Columns(1)), tile_meta.cell_size());
     }
 }

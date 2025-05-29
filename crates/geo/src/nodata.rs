@@ -12,8 +12,76 @@ pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
         self == Self::NODATA
     }
 
+    #[inline]
+    fn is_nodata_cb(val: Self) -> bool {
+        val == Self::NODATA
+    }
+
+    /// For importing foreign data that may contain nodata values not adhereing to the predefined `Self::NODATA` value.
+    fn init_nodata(&mut self, nodata: Self) {
+        if *self == nodata {
+            *self = Self::NODATA;
+        }
+    }
+
+    /// For exporting the data to a format where the nodata value does not match the predefined `Self::NODATA` value.
+    fn flatten_nodata(&mut self, nodata: Self) {
+        if *self == Self::NODATA {
+            *self = nodata;
+        }
+    }
+
     fn has_nan() -> bool;
     fn is_nan(self) -> bool;
+}
+
+#[cfg(feature = "simd")]
+pub mod simd {
+    use super::*;
+    pub trait NodataSimd: std::simd::cmp::SimdPartialEq {
+        const NODATA_SIMD: Self;
+
+        /// For importing foreign data that may contain nodata values not adhereing to the predefined `Self::NODATA` value.
+        fn init_nodata(&mut self, nodata: Self);
+        /// For exporting the data to a format where the nodata value does not match the predefined `Self::NODATA` value.
+        fn flatten_nodata(&mut self, nodata: Self);
+    }
+
+    macro_rules! impl_nodata_simd {
+        ( $t:ident ) => {
+            impl<const N: usize> NodataSimd for std::simd::Simd<$t, N>
+            where
+                std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+            {
+                const NODATA_SIMD: Self = std::simd::Simd::splat($t::NODATA);
+
+                fn init_nodata(&mut self, nodata: Self) {
+                    use std::simd::cmp::SimdPartialEq as _;
+
+                    let nodata_mask = self.simd_eq(nodata);
+                    *self = nodata_mask.select(Self::NODATA_SIMD, *self);
+                }
+
+                fn flatten_nodata(&mut self, nodata: Self) {
+                    use std::simd::cmp::SimdPartialEq as _;
+
+                    let nodata_mask = self.simd_eq(Self::NODATA_SIMD);
+                    *self = nodata_mask.select(nodata, *self);
+                }
+            }
+        };
+    }
+
+    impl_nodata_simd!(u8);
+    impl_nodata_simd!(i8);
+    impl_nodata_simd!(u16);
+    impl_nodata_simd!(i16);
+    impl_nodata_simd!(u32);
+    impl_nodata_simd!(i32);
+    impl_nodata_simd!(u64);
+    impl_nodata_simd!(i64);
+    impl_nodata_simd!(f32);
+    impl_nodata_simd!(f64);
 }
 
 impl Nodata for u8 {

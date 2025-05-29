@@ -2,9 +2,9 @@
 #[generic_tests::define]
 mod tests {
     use crate::{
+        Array, ArrayNumScalar, DenseArray, RasterSize,
         array::{Columns, Rows},
-        testutils::{create_vec, NOD},
-        Array, ArrayNum, DenseArray, RasterSize,
+        testutils::{NOD, create_vec},
     };
 
     use num::Zero;

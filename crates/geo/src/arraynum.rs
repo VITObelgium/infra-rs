@@ -1,7 +1,6 @@
 use crate::{ArrayDataType, Nodata};
 
-// Type requirements for data in rasters
-pub trait ArrayNum:
+pub trait ArrayNumScalar:
     Copy
     + Nodata
     + num::Num
@@ -56,6 +55,15 @@ pub trait ArrayNum:
         *self = self.div_nodata_aware(other);
     }
 }
+
+#[cfg(feature = "simd")]
+pub trait ArrayNumSimd: std::simd::SimdElement {}
+
+#[cfg(not(feature = "simd"))]
+pub trait ArrayNum: ArrayNumScalar {}
+
+#[cfg(feature = "simd")]
+pub trait ArrayNum: ArrayNumScalar + ArrayNumSimd {}
 
 macro_rules! add_nodata_impl {
     () => {
@@ -234,9 +242,9 @@ macro_rules! div_fp_nodata_impl {
     };
 }
 
-macro_rules! arraynum_signed_impl {
+macro_rules! impl_arraynum_scalar_signed {
     ($t:ty, $raster_type:ident) => {
-        impl ArrayNum for $t {
+        impl ArrayNumScalar for $t {
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
@@ -245,12 +253,16 @@ macro_rules! arraynum_signed_impl {
             mul_nodata_impl!();
             div_nodata_impl!();
         }
+
+        impl ArrayNum for $t {}
+        #[cfg(feature = "simd")]
+        impl ArrayNumSimd for $t {}
     };
 }
 
-macro_rules! arraynum_unsigned_impl {
+macro_rules! impl_arraynum_scalar_unsigned {
     ($t:ty, $raster_type:ident) => {
-        impl ArrayNum for $t {
+        impl ArrayNumScalar for $t {
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = false;
 
@@ -259,12 +271,16 @@ macro_rules! arraynum_unsigned_impl {
             mul_nodata_impl!();
             div_nodata_impl!();
         }
+
+        impl ArrayNum for $t {}
+        #[cfg(feature = "simd")]
+        impl ArrayNumSimd for $t {}
     };
 }
 
-macro_rules! arraynum_fp_impl {
+macro_rules! impl_arraynum_scalar_fp {
     ($t:ty, $raster_type:ident) => {
-        impl ArrayNum for $t {
+        impl ArrayNumScalar for $t {
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
@@ -273,17 +289,20 @@ macro_rules! arraynum_fp_impl {
             mul_fp_nodata_impl!();
             div_fp_nodata_impl!();
         }
+
+        impl ArrayNum for $t {}
+        #[cfg(feature = "simd")]
+        impl ArrayNumSimd for $t {}
     };
 }
 
-arraynum_signed_impl!(i8, Int8);
-arraynum_signed_impl!(i16, Int16);
-arraynum_signed_impl!(i32, Int32);
-arraynum_signed_impl!(i64, Int64);
-arraynum_unsigned_impl!(u8, Uint8);
-arraynum_unsigned_impl!(u16, Uint16);
-arraynum_unsigned_impl!(u32, Uint32);
-arraynum_unsigned_impl!(u64, Uint64);
-
-arraynum_fp_impl!(f32, Float32);
-arraynum_fp_impl!(f64, Float64);
+impl_arraynum_scalar_signed!(i8, Int8);
+impl_arraynum_scalar_signed!(i16, Int16);
+impl_arraynum_scalar_signed!(i32, Int32);
+impl_arraynum_scalar_signed!(i64, Int64);
+impl_arraynum_scalar_unsigned!(u8, Uint8);
+impl_arraynum_scalar_unsigned!(u16, Uint16);
+impl_arraynum_scalar_unsigned!(u32, Uint32);
+impl_arraynum_scalar_unsigned!(u64, Uint64);
+impl_arraynum_scalar_fp!(f32, Float32);
+impl_arraynum_scalar_fp!(f64, Float64);

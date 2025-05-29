@@ -1,13 +1,15 @@
-use crate::densearrayutil;
-use crate::raster;
-use crate::raster::RasterIO;
 use crate::Array;
 use crate::ArrayMetadata;
 use crate::ArrayNum;
 use crate::DenseArray;
 use crate::GeoReference;
 use crate::Result;
+use crate::densearrayutil;
+use crate::raster;
+use crate::raster::RasterIO;
 use gdal::raster::GdalType;
+use inf::allocate;
+use inf::cast;
 
 impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T, Metadata> {
     fn read(path: &std::path::Path) -> Result<Self> {
@@ -18,9 +20,9 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
         let ds = raster::io::dataset::open_read_only(path)?;
         let (cols, rows) = ds.raster_size();
 
-        let mut data: Vec<T> = vec![T::zero(); cols * rows];
+        let mut data: Vec<T> = allocate::aligned_vec_filled_with(T::zero(), rows * cols);
         let metadata = raster::io::dataset::read_band(&ds, band_index, data.as_mut_slice())?;
-        densearrayutil::process_nodata(&mut data, metadata.nodata());
+        densearrayutil::process_nodata(&mut data, cast::option(metadata.nodata()));
 
         Self::new(Metadata::with_geo_reference(metadata), data)
     }
@@ -31,9 +33,9 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
     fn read_bounds(path: &std::path::Path, bounds: &GeoReference, band_index: usize) -> Result<Self> {
         let ds = gdal::Dataset::open(path)?;
         let (cols, rows) = ds.raster_size();
-        let mut data: Vec<T> = vec![T::zero(); rows * cols];
+        let mut data: Vec<T> = allocate::aligned_vec_filled_with(T::zero(), rows * cols);
         let dst_meta = raster::io::dataset::read_band_region(&ds, band_index, bounds, &mut data)?;
-        densearrayutil::process_nodata(&mut data, dst_meta.nodata());
+        densearrayutil::process_nodata(&mut data, cast::option(dst_meta.nodata()));
 
         Self::new(Metadata::with_geo_reference(dst_meta), data)
     }
