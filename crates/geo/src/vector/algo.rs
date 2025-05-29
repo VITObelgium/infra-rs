@@ -4,6 +4,7 @@ use crate::{ArrayNum, Error, Result, raster};
 use crate::{GeoReference, gdalinterop, vector::io::FeatureDefinitionExtension};
 use gdal::vector::Feature;
 use gdal::{raster::GdalType, vector::LayerAccess};
+use inf::allocate;
 
 use super::{BurnValue, geometrytype::GeometryType, io};
 
@@ -155,7 +156,7 @@ pub fn rasterize_with_cli_options<T: ArrayNum + GdalType>(
 ) -> Result<(GeoReference, Vec<T>)> {
     let gdal_options = RasterizeOptionsWrapper::new(options)?;
 
-    let data = vec![meta.nodata_as::<T>()?.unwrap_or(T::zero()); meta.rows() * meta.columns()];
+    let data = allocate::aligned_vec_filled_with(meta.nodata_as::<T>()?.unwrap_or(T::zero()), meta.rows() * meta.columns());
     let mut mem_ds = raster::io::dataset::create_in_memory_with_data::<T>(meta, &data)?;
 
     raster::io::dataset::metadata_to_dataset_band(&mut mem_ds, meta, 1)?;
