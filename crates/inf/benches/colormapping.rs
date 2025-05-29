@@ -14,7 +14,7 @@ pub fn bench_name<T: num::Num>(name: &str) -> String {
     format!("{}_{}", name, std::any::type_name::<T>())
 }
 
-const LANES: usize = inf::legend::LANES;
+const LANES: usize = inf::simd::LANES;
 
 pub fn bench_colormap<T: num::Num + num::NumCast + Copy + std::simd::SimdElement + std::simd::SimdCast>(c: &mut Criterion)
 where

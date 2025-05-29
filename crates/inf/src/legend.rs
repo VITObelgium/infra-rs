@@ -14,7 +14,8 @@ use std::{
 #[cfg(feature = "simd")]
 use std::simd::{LaneCount, Simd, SimdCast, SimdElement, SupportedLaneCount, cmp::SimdPartialEq, num::SimdFloat};
 
-pub const LANES: usize = 8;
+#[cfg(feature = "simd")]
+pub const LANES: usize = crate::simd::LANES;
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
