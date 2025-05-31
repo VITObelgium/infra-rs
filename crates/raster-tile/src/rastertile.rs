@@ -104,24 +104,22 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
         use inf::cast;
         use num::NumCast;
 
-        let (data, (width, height), pixel_format) = crate::imageprocessing::decode_png(buffer)?;
-        let width = Columns(width as i32);
-        let height = Rows(height as i32);
+        let (data, raster_size, pixel_format) = crate::imageprocessing::decode_png(buffer)?;
 
         if pixel_format != png::ColorType::Rgba {
             return Err(Error::InvalidArgument("Only RGBA png data is supported".into()));
         }
 
-        if data.len() != width * height {
+        if data.len() != raster_size.cell_count() {
             return Err(Error::InvalidArgument("Invalid png tile data length".into()));
         }
 
         if T::TYPE != ArrayDataType::Float32 {
             let float_vec = cast::reinterpret_vec::<f32, T>(data);
-            Ok(Self::new(Meta::with_rows_cols(height, width), float_vec).expect("Raster size bug"))
+            Ok(Self::new(Meta::with_size(raster_size), float_vec).expect("Raster size bug"))
         } else {
             Ok(Self::from_iter_opt(
-                Meta::with_rows_cols(height, width),
+                Meta::with_size(raster_size),
                 data.iter().map(|f| if f.is_nan() { None } else { NumCast::from(*f) }),
             )
             .expect("Raster size bug"))
