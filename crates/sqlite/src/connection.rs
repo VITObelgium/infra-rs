@@ -45,13 +45,10 @@ impl Connection {
     pub fn prepare_statement(&self, sql: &str) -> Result<Statement> {
         let mut stmt: *mut libsqlite3_sys::sqlite3_stmt = std::ptr::null_mut();
         let c_sql = std::ffi::CString::new(sql)?;
-        let mut rc =
-            unsafe { libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
+        let mut rc = unsafe { libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
         while rc == libsqlite3_sys::SQLITE_BUSY {
             sleep(Duration::from_micros(1));
-            rc = unsafe {
-                libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut())
-            };
+            rc = unsafe { libsqlite3_sys::sqlite3_prepare_v2(self.db, c_sql.as_ptr(), -1, &mut stmt, std::ptr::null_mut()) };
         }
         if rc != libsqlite3_sys::SQLITE_OK {
             return Err(Error::DatabaseError(self.last_error()));
@@ -73,8 +70,7 @@ impl Connection {
     }
 
     pub fn execute_sql_file(&self, sql_path: &Path) -> Result<()> {
-        let sql_contents =
-            std::fs::read_to_string(sql_path).map_err(|e| Error::Runtime(format!("Failed to open sql file: {}", e)))?;
+        let sql_contents = std::fs::read_to_string(sql_path).map_err(|e| Error::Runtime(format!("Failed to open sql file: {e}")))?;
         self.execute_sql_statements(&sql_contents)
     }
 
