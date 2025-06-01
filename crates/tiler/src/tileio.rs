@@ -105,7 +105,7 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
     let mut data = DenseArray::zeros(RasterSize::with_rows_cols(Rows(scaled_size), Columns(scaled_size)));
     let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
-    raster::io::dataset::read_band(&ds, 1, data.as_mut())?;
+    raster::io::dataset::read_band(&ds, 1, data.vec_mut())?;
     Ok(data)
 }
 

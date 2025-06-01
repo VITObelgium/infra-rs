@@ -9,7 +9,7 @@ where
 {
     value
         .to_f64()
-        .ok_or_else(|| Error::InvalidArgument(format!("Failed to convert raster value to f64: '{:?}'", value)))
+        .ok_or_else(|| Error::InvalidArgument(format!("Failed to convert raster value to f64: '{value:?}'")))
 }
 
 pub(crate) fn array_quantiles<T>(data: &[T], quantile_vals: &[f64]) -> Result<Option<Vec<f64>>>
@@ -93,7 +93,7 @@ where
 mod tests {
 
     use crate::{
-        CellSize, GeoReference, Point, RasterSize,
+        ArrayInterop, CellSize, GeoReference, Point, RasterSize,
         array::{Columns, Rows},
         raster::{DenseRaster, algo},
         testutils::NOD,
@@ -112,7 +112,7 @@ mod tests {
         );
 
         #[rustfmt::skip]
-        let raster = DenseRaster::<f64>::new_process_nodata(
+        let raster = DenseRaster::<f64>::new_init_nodata(
             meta,
             vec![
                 NOD, NOD,
@@ -138,7 +138,7 @@ mod tests {
 
         {
             #[rustfmt::skip]
-            let raster = DenseRaster::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_init_nodata(
                 meta.clone(),
                 vec![
                     3.0, 1.0,
@@ -153,7 +153,7 @@ mod tests {
 
         {
             #[rustfmt::skip]
-            let raster = DenseRaster::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_init_nodata(
                 meta,
                 vec![
                     3.0, 1.0,
@@ -192,7 +192,7 @@ mod tests {
         );
 
         #[rustfmt::skip]
-            let raster = DenseRaster::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_init_nodata(
                 meta,
                 vec![
                     3.0, 1.0,

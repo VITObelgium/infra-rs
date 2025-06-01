@@ -149,11 +149,6 @@ pub trait Array:
     /// If this is not the case `Array::new_process_nodata` should be used instead.
     fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
 
-    /// Create a new raster with the given metadata and data buffer.
-    /// The nodata value from the provided Metadata will be used to convert all the values in the
-    /// data buffer that match the nodata value to the internal nodata value.
-    fn new_process_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
-
     /// Create a new raster from an iterator of optional pixels where None values will become nodata.
     fn from_iter_opt<Iter>(meta: Self::Metadata, iter: Iter) -> Result<Self>
     where
@@ -284,6 +279,19 @@ pub trait Array:
 pub trait ArrayCopy<T: ArrayNum, Rhs = Self> {
     /// Create a new raster with the same metadata and data as the provided raster.
     fn new_with_dimensions_of(ras: &Rhs, fill: T) -> Self;
+}
+
+pub trait ArrayInterop: Sized {
+    type Pixel: ArrayNum;
+    type Metadata: ArrayMetadata;
+
+    /// Create a new raster with the given metadata and data buffer.
+    /// The nodata value from the provided Metadata will be used to convert all the values in the
+    /// data buffer that match the nodata value to the internal nodata value.
+    fn new_init_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
+
+    fn init_nodata(&mut self);
+    fn restore_nodata(&mut self);
 }
 
 pub fn check_dimensions(lhs: &impl Array, rhs: &impl Array) -> Result<()> {

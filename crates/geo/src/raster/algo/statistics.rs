@@ -90,7 +90,7 @@ mod tests {
     use approx::assert_relative_eq;
 
     use crate::{
-        CellSize, GeoReference, Point, RasterSize,
+        ArrayInterop as _, CellSize, GeoReference, Point, RasterSize,
         array::{Columns, Rows},
         raster::{DenseRaster, algo},
         testutils::NOD,
@@ -109,7 +109,7 @@ mod tests {
         );
 
         #[rustfmt::skip]
-        let raster = DenseRaster::<f64>::new_process_nodata(
+        let raster = DenseRaster::<f64>::new_init_nodata(
             meta,
             vec![
                 NOD, NOD,
@@ -135,7 +135,7 @@ mod tests {
 
         {
             #[rustfmt::skip]
-            let raster = DenseRaster::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_init_nodata(
                 meta.clone(),
                 vec![
                     3.0, 1.0,
@@ -151,7 +151,7 @@ mod tests {
         {
             // even number of values
             #[rustfmt::skip]
-            let raster = DenseRaster::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_init_nodata(
                 meta.clone(),
                 vec![
                     3.0, 1.0,
@@ -175,7 +175,7 @@ mod tests {
         {
             // odd number of values
             #[rustfmt::skip]
-            let raster = DenseRaster::<f64>::new_process_nodata(
+            let raster = DenseRaster::<f64>::new_init_nodata(
                 meta,
                 vec![
                     3.0, 2.0,

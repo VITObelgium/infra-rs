@@ -32,19 +32,10 @@ pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
 //     }
 // }
 
-#[cfg(feature = "gdal")]
-pub fn flatten_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<f64>) -> crate::Result<()> {
-    let nodata_value = inf::cast::option::<T>(nodata);
-
-    if let Some(nodata) = nodata_value {
-        for x in data.iter_mut() {
-            if x.is_nodata() {
-                *x = nodata;
-            }
-        }
+pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<f64>) {
+    if let Some(nodata) = inf::cast::option::<T>(nodata) {
+        data.iter_mut().for_each(|v| v.restore_nodata(nodata));
     }
-
-    Ok(())
 }
 
 // #[cfg(feature = "simd")]

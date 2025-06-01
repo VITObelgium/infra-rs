@@ -222,17 +222,19 @@ pub mod dataset {
         Ok(dst_meta)
     }
 
-    /// Read the full band from the dataset into the provided data buffer.
-    /// The data buffer should be pre-allocated and have the correct size.
+    /// Read the full band from the dataset into the provided Vec.
+    /// The vec will be resized to the correct lenght so it can be empty.
     /// The band index is 1-based.
-    pub fn read_band<T: GdalType + num::NumCast>(dataset: &gdal::Dataset, band_index: usize, dst_data: &mut [T]) -> Result<GeoReference> {
+    pub fn read_band<T: GdalType + num::NumCast>(
+        dataset: &gdal::Dataset,
+        band_index: usize,
+        dst_data: &mut Vec<T>,
+    ) -> Result<GeoReference> {
         let raster_band = dataset.rasterband(band_index)?;
         let meta = read_band_metadata(dataset, band_index)?;
 
         check_if_metadata_fits::<T>(meta.nodata(), raster_band.band_type())?;
-        if dst_data.len() != meta.rows() * meta.columns() {
-            return Err(Error::InvalidArgument("Invalid data buffer provided: incorrect size".to_string()));
-        }
+        dst_data.reserve_exact(meta.raster_size().cell_count() - dst_data.capacity());
 
         let cut_out = CutOut {
             rows: meta.rows().count(),
@@ -241,9 +243,16 @@ pub mod dataset {
         };
 
         read_region_from_dataset(band_index, &cut_out, dataset, dst_data, meta.columns().count())?;
+        unsafe {
+            // Safety: The full buffer was written by `read_region_from_dataset`
+            dst_data.set_len(meta.raster_size().cell_count());
+        };
         Ok(meta)
     }
 
+    /// Read a subregion into the provided data buffer.
+    /// The buffer should be allocated and have the correct size.
+    /// The band index is 1-based.
     fn read_region_from_dataset<T: GdalType>(
         band_nr: usize,
         cut: &CutOut,

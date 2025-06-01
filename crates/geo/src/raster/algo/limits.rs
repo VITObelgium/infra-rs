@@ -21,7 +21,7 @@ where
 mod unspecialized_generictests {
 
     use crate::{
-        CellSize, GeoReference, Point, RasterSize,
+        ArrayInterop, CellSize, GeoReference, Point, RasterSize,
         array::{Columns, Rows},
         raster::DenseRaster,
         testutils::NOD,
@@ -97,7 +97,10 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference>>() {
+    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference>>()
+    where
+        R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
+    {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
@@ -107,7 +110,7 @@ mod unspecialized_generictests {
         );
 
         #[rustfmt::skip]
-        let raster = R::WithPixelType::<f64>::new_process_nodata(
+        let raster = R::WithPixelType::<f64>::new_init_nodata(
             meta,
             vec![
                 NOD, 0.0, -10.0,

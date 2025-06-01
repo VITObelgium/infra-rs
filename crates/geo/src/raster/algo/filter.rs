@@ -33,7 +33,7 @@ where
 mod unspecialized_generictests {
 
     use crate::{
-        CellSize, GeoReference, Point, RasterSize,
+        ArrayInterop, CellSize, GeoReference, Point, RasterSize, Result,
         array::{Columns, Rows},
         raster::DenseRaster,
         testutils::NOD,
@@ -42,7 +42,7 @@ mod unspecialized_generictests {
     use super::*;
 
     #[test]
-    fn test_filter_empty<R: Array<Pixel = u8, Metadata = GeoReference>>() {
+    fn test_filter_empty<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(0), Columns(0)),
@@ -51,12 +51,16 @@ mod unspecialized_generictests {
             Some(NOD),
         );
 
-        let mut raster = R::WithPixelType::<f64>::new(meta.clone(), vec![]).unwrap();
+        let mut raster = R::WithPixelType::<f64>::new(meta.clone(), vec![])?;
         filter(&mut raster, &[1.0, 2.0]);
+        Ok(())
     }
 
     #[test]
-    fn test_filter_single_element<R: Array<Pixel = u8, Metadata = GeoReference>>() {
+    fn test_filter_single_element<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()>
+    where
+        R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
+    {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(1), Columns(1)),
@@ -65,17 +69,22 @@ mod unspecialized_generictests {
             Some(NOD),
         );
 
-        let mut raster = R::WithPixelType::<f64>::new_process_nodata(meta.clone(), vec![5.0]).unwrap();
+        let mut raster = R::WithPixelType::<f64>::new_init_nodata(meta.clone(), vec![5.0])?;
 
         filter(&mut raster, &[5.0]);
         assert_eq!(raster.value(0), Some(5.0));
 
         filter(&mut raster, &[1.0]);
         assert_eq!(raster.value(0), None);
+
+        Ok(())
     }
 
     #[test]
-    fn test_filter_multiple_elements<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() {
+    fn test_filter_multiple_elements<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    where
+        R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
+    {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
@@ -85,32 +94,37 @@ mod unspecialized_generictests {
         );
 
         #[rustfmt::skip]
-        let mut raster = R::WithPixelType::<f64>::new_process_nodata(
+        let mut raster = R::WithPixelType::<f64>::new_init_nodata(
             meta.clone(),
             vec![
                 1.0, 2.0, 2.0,
                 3.0, 4.0, 5.0,
                 1.0, 2.0, 9.0,
             ],
-        ).unwrap();
+        )?;
 
         filter(&mut raster, &[5.0]);
 
         #[rustfmt::skip]
-        let expected = R::WithPixelType::<f64>::new_process_nodata(
+        let expected = R::WithPixelType::<f64>::new_init_nodata(
             meta.clone(),
             vec![
                 NOD, NOD, NOD,
                 NOD, NOD, 5.0,
                 NOD, NOD, NOD,
             ],
-        ).unwrap();
+        )?;
 
         assert_eq!(expected, raster);
+
+        Ok(())
     }
 
     #[test]
-    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() {
+    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    where
+        R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
+    {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
@@ -120,27 +134,29 @@ mod unspecialized_generictests {
         );
 
         #[rustfmt::skip]
-        let mut raster = R::WithPixelType::<f64>::new_process_nodata(
+        let mut raster = R::WithPixelType::<f64>::new_init_nodata(
             meta.clone(),
             vec![
                 NOD, 4.0, -10.0,
                 3.0, NOD, 0.0,
                 1.0, 21.0, NOD,
             ],
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
-        let expected = R::WithPixelType::<f64>::new_process_nodata(
+        let expected = R::WithPixelType::<f64>::new_init_nodata(
             meta,
             vec![
                 NOD, NOD, -10.0,
                 NOD, NOD,   NOD,
                 NOD, 21.0,  NOD,
             ],
-        ).unwrap();
+        )?;
 
         filter(&mut raster, &[-10.0, 21.0, 2.0]);
         assert_eq!(raster, expected);
+
+        Ok(())
     }
 
     #[instantiate_tests(<DenseRaster<u8>>)]

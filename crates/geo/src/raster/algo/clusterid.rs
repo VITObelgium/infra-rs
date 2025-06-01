@@ -642,9 +642,11 @@ mod genericgeotests {
 
 #[cfg(test)]
 mod tests {
+    use crate::Result;
+
     #[cfg(feature = "gdal")]
     #[test]
-    fn test_cluster_id_with_obstacles() {
+    fn test_cluster_id_with_obstacles() -> Result<()> {
         use super::*;
         use crate::raster::DenseRaster;
         use crate::raster::RasterIO;
@@ -652,12 +654,13 @@ mod tests {
 
         let test_data_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data");
 
-        let categories = DenseRaster::<i32>::read(&test_data_dir.join("clusteridwithobstacles_categories.tif")).unwrap();
-        let obstacles = DenseRaster::<u8>::read(&test_data_dir.join("clusteridwithobstacles_obstacles.tif")).unwrap();
-        let expected = DenseRaster::<i32>::read(&test_data_dir.join("reference/clusteridwithobstacles.tif")).unwrap();
+        let categories = DenseRaster::<i32>::read(&test_data_dir.join("clusteridwithobstacles_categories.tif"))?;
+        let obstacles = DenseRaster::<u8>::read(&test_data_dir.join("clusteridwithobstacles_obstacles.tif"))?;
+        let expected = DenseRaster::<i32>::read(&test_data_dir.join("reference/clusteridwithobstacles.tif"))?;
 
         let result = cluster_id_with_obstacles(&categories, &obstacles).unwrap();
 
         assert_eq!(expected, result);
+        Ok(())
     }
 }

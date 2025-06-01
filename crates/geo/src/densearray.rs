@@ -1,6 +1,6 @@
 use crate::{
     Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, Error, RasterSize, Result,
-    array::{Columns, Rows, Window},
+    array::{ArrayInterop, Columns, Rows, Window},
     densearrayiterators, densearrayutil,
     raster::{self},
 };
@@ -98,6 +98,10 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     fn cell_index(&self, cell: Cell) -> usize {
         (cell.row * self.columns().count() + cell.col) as usize
     }
+
+    pub fn vec_mut(&mut self) -> &mut Vec<T> {
+        &mut self.data
+    }
 }
 
 impl<T: ArrayNum, Metadata: ArrayMetadata> AsRef<[T]> for DenseArray<T, Metadata> {
@@ -133,11 +137,6 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         }
 
         Ok(DenseArray { meta, data })
-    }
-
-    fn new_process_nodata(meta: Self::Metadata, mut data: Vec<Self::Pixel>) -> Result<Self> {
-        densearrayutil::process_nodata(&mut data, inf::cast::option(meta.nodata()));
-        Self::new(meta, data)
     }
 
     fn from_iter_opt<Iter>(meta: Metadata, iter: Iter) -> Result<Self>
@@ -287,6 +286,27 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     fn cast_to<U: ArrayNum>(&self) -> <DenseArray<T, Metadata> as Array>::WithPixelType<U> {
         DenseArray::from_iter_opt(self.metadata().clone(), self.iter_opt().map(|v| v.and_then(|v| NumCast::from(v))))
             .expect("Raster size bug")
+    }
+}
+
+impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metadata> {
+    type Pixel = <Self as Array>::Pixel;
+    type Metadata = <Self as Array>::Metadata;
+
+    fn new_init_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self> {
+        let mut raster = Self::new(meta, data)?;
+        raster.init_nodata();
+        Ok(raster)
+    }
+
+    fn init_nodata(&mut self) {
+        let nodata = inf::cast::option(self.metadata().nodata());
+        densearrayutil::process_nodata(self.as_mut_slice(), nodata);
+    }
+
+    fn restore_nodata(&mut self) {
+        let nodata = inf::cast::option(self.metadata().nodata());
+        densearrayutil::restore_nodata(&mut self.data, nodata);
     }
 }
 

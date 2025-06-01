@@ -25,8 +25,8 @@ pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
     }
 
     /// For exporting the data to a format where the nodata value does not match the predefined `Self::NODATA` value.
-    fn flatten_nodata(&mut self, nodata: Self) {
-        if *self == Self::NODATA {
+    fn restore_nodata(&mut self, nodata: Self) {
+        if self.is_nodata() {
             *self = nodata;
         }
     }
@@ -98,7 +98,7 @@ pub mod simd {
         /// For importing foreign data that may contain nodata values not adhereing to the predefined `Self::NODATA` value.
         fn init_nodata(&mut self, nodata: Self);
         /// For exporting the data to a format where the nodata value does not match the predefined `Self::NODATA` value.
-        fn flatten_nodata(&mut self, nodata: Self);
+        fn restore_nodata(&mut self, nodata: Self);
     }
 
     macro_rules! impl_nodata_simd {
@@ -118,10 +118,35 @@ pub mod simd {
                     *self = nodata_mask.select(Self::NODATA_SIMD, *self);
                 }
 
-                fn flatten_nodata(&mut self, nodata: Self) {
+                fn restore_nodata(&mut self, nodata: Self) {
                     use std::simd::cmp::SimdPartialEq as _;
 
                     let nodata_mask = self.simd_eq(Self::NODATA_SIMD);
+                    *self = nodata_mask.select(nodata, *self);
+                }
+            }
+        };
+    }
+
+    macro_rules! impl_nodata_simd_fp {
+        ( $t:ident ) => {
+            impl NodataSimd for Simd<$t, LANES>
+            where
+                LaneCount<LANES>: SupportedLaneCount,
+            {
+                type Scalar = $t;
+                type Simd = std::simd::Simd<$t, LANES>;
+                const NODATA_SIMD: Self = Simd::splat($t::NODATA);
+
+                fn init_nodata(&mut self, nodata: Self) {
+                    use SimdPartialEq as _;
+
+                    let nodata_mask = self.simd_eq(nodata);
+                    *self = nodata_mask.select(Self::NODATA_SIMD, *self);
+                }
+
+                fn restore_nodata(&mut self, nodata: Self) {
+                    let nodata_mask = self.is_nan();
                     *self = nodata_mask.select(nodata, *self);
                 }
             }
@@ -136,6 +161,6 @@ pub mod simd {
     impl_nodata_simd!(i32);
     impl_nodata_simd!(u64);
     impl_nodata_simd!(i64);
-    impl_nodata_simd!(f32);
-    impl_nodata_simd!(f64);
+    impl_nodata_simd_fp!(f32);
+    impl_nodata_simd_fp!(f64);
 }
