@@ -1,58 +1,58 @@
 [package]
 edition = "2024"
-name = "geo"
+name    = "geo"
 version = "0.1.0"
 
 [[bench]]
 harness = false
-name = "rasterops"
+name    = "rasterops"
 
 [dependencies]
-approx = "0.5"
-bon = "3.6"
-gdal = { version = "0.18", optional = true }
-gdal-sys = { version = "0.11", optional = true }
-geo-types = { version = "0.7", features = ["approx"] }
-geos = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
-geozero = { version = "0.14" }
-inf = { path = "../inf" }
-itertools = "0.14"
-log = "0.4"
-num = "0.4"
-rayon = { version = "1.10", optional = true }
-thiserror = "2.0"
+approx        = "0.5"
+bon           = "3.6"
+gdal          = { version = "0.18", optional = true }
+gdal-sys      = { version = "0.11", optional = true }
+geo-types     = { version = "0.7", features = ["approx"] }
+geos          = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
+geozero       = { version = "0.14" }
+inf           = { path = "../inf" }
+itertools     = "0.14"
+log           = "0.4"
+num           = "0.4"
+rayon         = { version = "1.10", optional = true }
+thiserror     = "2.0"
 vector_derive = { path = "vector_derive", optional = true }
 #proj4rs = { version = "0.1" }
-arrow = { version = "55", optional = true }
-pyo3 = { version = "0.24", optional = true }
-serde = { version = "1.0", features = ["derive"], optional = true }
+arrow  = { version = "55", optional = true }
+pyo3   = { version = "0.24", optional = true }
+serde  = { version = "1.0", features = ["derive"], optional = true }
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
 
 [dev-dependencies]
-ctor = "0.4"
-env_logger = "0.11"
+ctor          = "0.4"
+env_logger    = "0.11"
 generic-tests = "0.1"
-path_macro = "1.0"
-tempdir = "0.3"
-test-log = "0.2"
+path_macro    = "1.0"
+tempdir       = "0.3"
+test-log      = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
 criterion = "0.6"
 
 [features]
-arrow = ["dep:arrow"]
-default = ["derive"]
-derive = ["dep:vector_derive"]
-gdal = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
+arrow       = ["dep:arrow"]
+default     = ["derive"]
+derive      = ["dep:vector_derive"]
+gdal        = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
 gdal-static = ["gdal"]
-python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
-serde = ["dep:serde"]
-specta = ["dep:specta"]
-vector = ["dep:geos", "dep:rayon", "geozero/with-geos"]
-simd = ["inf/simd"]
+python      = ["arrow", "arrow/pyarrow", "dep:pyo3"]
+serde       = ["dep:serde"]
+simd        = ["inf/simd"]
+specta      = ["dep:specta"]
+vector      = ["dep:geos", "dep:rayon", "geozero/with-geos"]
 
 [package.metadata.vcpkg]
 dependencies = [
