@@ -1,14 +1,14 @@
 use num::{Bounded, NumCast, Zero};
 
 use crate::raster::algo::clusterutils::handle_time_cell;
-use crate::{array, ArrayNum};
 use crate::{
-    raster::{
-        algo::clusterutils::{visit_neighbour_cells, visit_neighbour_diag_cells, MARK_DONE},
-        DenseRaster,
-    },
     Array, ArrayCopy, Cell, DenseArray, Error, GeoReference, Result,
+    raster::{
+        DenseRaster,
+        algo::clusterutils::{MARK_DONE, visit_neighbour_cells, visit_neighbour_diag_cells},
+    },
 };
+use crate::{ArrayNum, array};
 
 use super::clusterutils::{FiLo, MARK_BORDER, MARK_TODO};
 use super::nodata;
@@ -1005,18 +1005,18 @@ where
 #[cfg(test)]
 #[generic_tests::define]
 mod unspecialized_generictests {
-    use approx::{assert_abs_diff_eq, assert_relative_eq, RelativeEq};
+    use approx::{RelativeEq, assert_abs_diff_eq, assert_relative_eq};
 
     use crate::{
+        CellSize, Point, RasterSize,
         array::{Columns, Rows},
         testutils::NOD,
-        CellSize, Point, RasterSize,
     };
 
     use super::*;
 
     #[test]
-    fn distance<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>()
+    fn distance<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
     where
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>>,
     {
@@ -1038,7 +1038,7 @@ mod unspecialized_generictests {
                 3, 0, 0, 1, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f32>::new(
@@ -1050,13 +1050,15 @@ mod unspecialized_generictests {
                   0.0, 100.000, 100.000,   0.000, 100.000, 200.000, 300.000, 400.000, 500.000, 600.000,
                 100.0, 141.421, 141.421, 100.000, 141.421, 241.421, 341.421, 441.421, 541.421, 641.421,
             ]
-        ).unwrap();
+        )?;
 
         assert_abs_diff_eq!(expected, &super::distance(&raster), epsilon = 0.001);
+
+        Ok(())
     }
 
     #[test]
-    fn distance_all_ones<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>()
+    fn distance_all_ones<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
     where
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>>,
     {
@@ -1078,7 +1080,7 @@ mod unspecialized_generictests {
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
             ],
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f32>::new(
@@ -1090,13 +1092,15 @@ mod unspecialized_generictests {
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             ]
-        ).unwrap();
+        )?;
 
         assert_abs_diff_eq!(expected, &super::distance(&raster));
+
+        Ok(())
     }
 
     #[test]
-    fn distance_with_obstacles<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>()
+    fn distance_with_obstacles<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
     where
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
@@ -1118,7 +1122,7 @@ mod unspecialized_generictests {
                 3, 0, 0, 1, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
@@ -1130,7 +1134,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ],
-        ).unwrap();
+        )?;
 
         const INF: f32 = f32::INFINITY;
 
@@ -1144,17 +1148,19 @@ mod unspecialized_generictests {
                     0.0,   100.0, 100.000,   0.0, 100.000, 200.000,     INF, 482.843, 582.843, 682.843,
                   100.0, 141.421, 141.421, 100.0, 141.421, 241.421, 341.421, 441.421, 541.421, 641.421,
             ]
-        ).unwrap();
+        )?;
 
         assert_relative_eq!(
             expected,
-            &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Exclude).unwrap(),
+            &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Exclude)?,
             epsilon = 0.001
         );
+
+        Ok(())
     }
 
     #[test]
-    fn distance_with_obstacles_only_diagonal_path<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>()
+    fn distance_with_obstacles_only_diagonal_path<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
     where
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
@@ -1176,7 +1182,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
             ],
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
@@ -1188,7 +1194,7 @@ mod unspecialized_generictests {
                 1, 1, 1, 0, 1, 1, 0, 1, 1, 1,
                 1, 1, 1, 1, 0, 0, 1, 1, 1, 1,
             ],
-        ).unwrap();
+        )?;
 
         const INF: f32 = f32::INFINITY;
 
@@ -1204,11 +1210,11 @@ mod unspecialized_generictests {
                         INF,       INF,       INF, 100.0, 0.0, 0.0, 100.0,       INF,       INF,       INF,
                         INF,       INF,       INF,   INF, 0.0, 0.0,   INF,       INF,       INF,       INF,
                 ]
-            ).unwrap();
+            )?;
 
             assert_relative_eq!(
                 expected,
-                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Include).unwrap(),
+                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Include)?,
                 epsilon = 0.0001
             );
         }
@@ -1225,18 +1231,20 @@ mod unspecialized_generictests {
                     INF, INF, INF, 100.0, 0.0, 0.0, 100.0, INF, INF, INF,
                     INF, INF, INF,   INF, 0.0, 0.0,   INF, INF, INF, INF,
                 ]
-            ).unwrap();
+            )?;
 
             assert_relative_eq!(
                 expected,
-                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Exclude).unwrap(),
+                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Exclude)?,
                 epsilon = 0.0001
             );
         }
+
+        Ok(())
     }
 
     #[test]
-    fn distance_with_obstacles_only_diagonal_barrier<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>()
+    fn distance_with_obstacles_only_diagonal_barrier<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
     where
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
@@ -1258,7 +1266,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
             ],
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
@@ -1270,7 +1278,7 @@ mod unspecialized_generictests {
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
             ],
-        ).unwrap();
+        )?;
 
         const INF: f32 = f32::INFINITY;
 
@@ -1286,11 +1294,11 @@ mod unspecialized_generictests {
                     582.843, 482.843, 382.843,     INF, 100.0, 100.0,     INF, 382.843, 482.843, 582.843,
                     624.264, 524.264, 482.843,     INF,   0.0,   0.0,     INF, 482.843, 524.264, 624.264,
                 ]
-            ).unwrap();
+            )?;
 
             assert_relative_eq!(
                 expected,
-                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Include).unwrap(),
+                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Include)?,
                 epsilon = 0.001
             );
         }
@@ -1307,14 +1315,16 @@ mod unspecialized_generictests {
                     INF,     INF,     INF,     INF, 100.0, 100.0,     INF,     INF,     INF, INF,
                     INF,     INF,     INF,     INF,   0.0,   0.0,     INF,     INF,     INF, INF,
                 ]
-            ).unwrap();
+            )?;
 
             assert_relative_eq!(
                 expected,
-                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Exclude).unwrap(),
+                &super::distance_with_obstacles(&targets, &barrier, BarrierDiagonals::Exclude)?,
                 epsilon = 0.001
             );
         }
+
+        Ok(())
     }
 
     #[instantiate_tests(<DenseRaster<u8>>)]

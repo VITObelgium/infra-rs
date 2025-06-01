@@ -21,7 +21,7 @@ where
 mod unspecialized_generictests {
 
     use crate::{
-        ArrayInterop, CellSize, GeoReference, Point, RasterSize,
+        ArrayInterop, CellSize, GeoReference, Point, RasterSize, Result,
         array::{Columns, Rows},
         raster::DenseRaster,
         testutils::NOD,
@@ -30,7 +30,7 @@ mod unspecialized_generictests {
     use super::*;
 
     #[test]
-    fn test_min_max_empty<R: Array<Pixel = u8, Metadata = GeoReference>>() {
+    fn test_min_max_empty<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(0), Columns(0)),
@@ -44,14 +44,16 @@ mod unspecialized_generictests {
             meta.clone(),
             vec![
             ],
-        ).unwrap();
+        )?;
 
         let range = min_max(&raster);
         assert_eq!(range, 0.0..0.0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_min_max_single_element<R: Array<Pixel = u8, Metadata = GeoReference>>() {
+    fn test_min_max_single_element<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(1), Columns(1)),
@@ -66,14 +68,16 @@ mod unspecialized_generictests {
             vec![
                 5.0,
             ],
-        ).unwrap();
+        )?;
 
         let range = min_max(&raster);
         assert_eq!(range, 5.0..5.0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_min_max_multiple_elements<R: Array<Pixel = u8, Metadata = GeoReference>>() {
+    fn test_min_max_multiple_elements<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
@@ -90,14 +94,16 @@ mod unspecialized_generictests {
                 0.0, 0.0, 0.0,
                 1.0, 2.0, 0.0,
             ],
-        ).unwrap();
+        )?;
 
         let range = min_max(&raster);
         assert_eq!(range, 0.0..2.0);
+
+        Ok(())
     }
 
     #[test]
-    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference>>()
+    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()>
     where
         R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
     {
@@ -117,10 +123,12 @@ mod unspecialized_generictests {
                 0.0, NOD, 0.0,
                 1.0, 21.0, NOD,
             ],
-        ).unwrap();
+        )?;
 
         let range = min_max(&raster);
         assert_eq!(range, -10.0..21.0);
+
+        Ok(())
     }
 
     #[instantiate_tests(<DenseRaster<u8>>)]

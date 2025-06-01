@@ -14,18 +14,17 @@ where
 #[cfg(test)]
 #[generic_tests::define]
 mod generictests {
-    use num::NumCast;
 
     use crate::{
+        DenseArray, RasterSize, Result,
         array::{Columns, Rows},
-        testutils::{create_vec, NOD},
-        DenseArray, RasterSize,
+        testutils::{NOD, create_vec, number_cast},
     };
 
     use super::*;
 
     #[test]
-    fn replace_value<R: Array<Metadata = RasterSize>>() {
+    fn replace_value<R: Array<Metadata = RasterSize>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let mut raster = R::new(
@@ -37,7 +36,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::new(
@@ -49,10 +48,12 @@ mod generictests {
                  9.0,  9.0,  5.0,  8.0,
                  3.0,  NOD,  9.0,  NOD,
             ]),
-        ).unwrap();
+        )?;
 
-        super::replace_value(&mut raster, NumCast::from(4.0).unwrap(), NumCast::from(9.0).unwrap());
+        super::replace_value(&mut raster, number_cast(4.0), number_cast(9.0));
         assert_eq!(expected, raster);
+
+        Ok(())
     }
 
     #[instantiate_tests(<DenseArray<i8>>)]

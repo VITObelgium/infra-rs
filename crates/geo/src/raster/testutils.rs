@@ -1,6 +1,6 @@
 use crate::GeoReference;
-use approx::relative_eq;
 use RasterSize;
+use approx::relative_eq;
 
 pub const NOD: f64 = 255.0;
 
@@ -21,5 +21,3 @@ pub fn compare_fp_vectors(a: &[f64], b: &[f64]) -> bool {
         relative_eq!(a, b)
     })
 }
-
-

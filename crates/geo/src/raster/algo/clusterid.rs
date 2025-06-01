@@ -467,7 +467,7 @@ mod generictests {
     use super::*;
 
     #[test]
-    fn test_cluster_id<R: Array<Metadata = RasterSize>>()
+    fn test_cluster_id<R: Array<Metadata = RasterSize>>() -> Result<()>
     where
         R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
@@ -482,7 +482,7 @@ mod generictests {
                 1.0, 1.0, 5.0, 5.0,
                 1.0, 1.0, 5.0, 1.0,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
@@ -494,13 +494,15 @@ mod generictests {
                 4, 4, 5, 5,
                 4, 4, 5, 6
             ]
-        ).unwrap();
+        )?;
 
         assert_eq!(expected, cluster_id(&raster, ClusterDiagonals::Exclude));
+
+        Ok(())
     }
 
     #[test]
-    fn test_cluster_id_border_values<R: Array<Metadata = RasterSize>>()
+    fn test_cluster_id_border_values<R: Array<Metadata = RasterSize>>() -> Result<()>
     where
         R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
@@ -515,7 +517,7 @@ mod generictests {
                 4.0, 9.0, 9.0, 7.0,
                 5.0, 6.0, 7.0, 8.0,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
@@ -527,9 +529,11 @@ mod generictests {
                 10,  6,  6, 11,
                 12, 13, 14, 15,
             ]
-        ).unwrap();
+        )?;
 
         assert_eq!(expected, cluster_id(&raster, ClusterDiagonals::Exclude));
+
+        Ok(())
     }
 
     #[instantiate_tests(<DenseArray<i8>>)]
@@ -570,7 +574,7 @@ mod genericgeotests {
     use super::*;
 
     #[test]
-    fn test_fuzzy_cluster_id<R: Array<Metadata = GeoReference>>()
+    fn test_fuzzy_cluster_id<R: Array<Metadata = GeoReference>>() -> Result<()>
     where
         R::WithPixelType<i32>: ArrayCopy<i32, R>,
     {
@@ -593,7 +597,7 @@ mod genericgeotests {
                 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 1.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<i32>::new(
@@ -610,9 +614,11 @@ mod genericgeotests {
                 5, 0, 6, 0, 7, 0, 8, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             ]
-        ).unwrap();
+        )?;
 
         assert_eq!(expected, fuzzy_cluster_id(&raster, 1.42_f32 * meta.cell_size_x() as f32));
+
+        Ok(())
     }
 
     #[instantiate_tests(<DenseRaster<i8>>)]
@@ -658,7 +664,7 @@ mod tests {
         let obstacles = DenseRaster::<u8>::read(&test_data_dir.join("clusteridwithobstacles_obstacles.tif"))?;
         let expected = DenseRaster::<i32>::read(&test_data_dir.join("reference/clusteridwithobstacles.tif"))?;
 
-        let result = cluster_id_with_obstacles(&categories, &obstacles).unwrap();
+        let result = cluster_id_with_obstacles(&categories, &obstacles)?;
 
         assert_eq!(expected, result);
         Ok(())

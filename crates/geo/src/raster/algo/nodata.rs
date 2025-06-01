@@ -51,12 +51,11 @@ pub fn is_data<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelTy
 #[cfg(test)]
 #[generic_tests::define]
 mod generictests {
-    use num::NumCast;
 
     use crate::{
         DenseArray, RasterSize, Result,
         array::{Columns, Rows},
-        testutils::{NOD, create_vec},
+        testutils::{NOD, create_vec, number_cast},
     };
 
     use super::*;
@@ -88,7 +87,7 @@ mod generictests {
             ]),
         )?;
 
-        assert_eq!(expected, super::replace_nodata(&raster, NumCast::from(44.0).unwrap()));
+        assert_eq!(expected, super::replace_nodata(&raster, number_cast(44.0)));
 
         Ok(())
     }
@@ -120,7 +119,7 @@ mod generictests {
             ]),
         )?;
 
-        super::replace_value_by_nodata(&mut raster, NumCast::from(4.0).unwrap());
+        super::replace_value_by_nodata(&mut raster, number_cast(4.0));
         assert_eq!(expected, raster);
 
         Ok(())

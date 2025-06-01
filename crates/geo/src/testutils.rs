@@ -14,6 +14,10 @@ pub fn workspace_test_data_dir() -> PathBuf {
     path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data")
 }
 
+pub fn number_cast<T: ArrayNum>(val: f64) -> T {
+    num::NumCast::from(val).expect("F64 could not be convertd to the specified type")
+}
+
 pub fn create_vec<T: num::NumCast + ArrayNum>(data: &[f64]) -> Vec<T> {
     data.iter()
         .map(|&v| {
