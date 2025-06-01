@@ -54,7 +54,7 @@ mod generictests {
     use num::NumCast;
 
     use crate::{
-        DenseArray, RasterSize,
+        DenseArray, RasterSize, Result,
         array::{Columns, Rows},
         testutils::{NOD, create_vec},
     };
@@ -62,7 +62,7 @@ mod generictests {
     use super::*;
 
     #[test]
-    fn replace_nodata<R: Array<Metadata = RasterSize>>() {
+    fn replace_nodata<R: Array<Metadata = RasterSize>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
@@ -74,7 +74,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::new(
@@ -86,13 +86,15 @@ mod generictests {
                  4.0,  4.0,  5.0,  8.0,
                  3.0, 44.0,  4.0, 44.0,
             ]),
-        ).unwrap();
+        )?;
 
         assert_eq!(expected, super::replace_nodata(&raster, NumCast::from(44.0).unwrap()));
+
+        Ok(())
     }
 
     #[test]
-    fn replace_value_by_nodata<R: Array<Metadata = RasterSize>>() {
+    fn replace_value_by_nodata<R: Array<Metadata = RasterSize>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let mut raster = R::new(
@@ -104,7 +106,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::new(
@@ -116,14 +118,16 @@ mod generictests {
                  NOD,  NOD,  5.0,  8.0,
                  3.0,  NOD,  NOD,  NOD,
             ]),
-        ).unwrap();
+        )?;
 
         super::replace_value_by_nodata(&mut raster, NumCast::from(4.0).unwrap());
         assert_eq!(expected, raster);
+
+        Ok(())
     }
 
     #[test]
-    fn is_nodata<R: Array<Metadata = RasterSize>>() {
+    fn is_nodata<R: Array<Metadata = RasterSize>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
@@ -135,7 +139,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
@@ -147,13 +151,15 @@ mod generictests {
                  0,  0,  0,  0,
                  0,  1,  0,  1,
             ],
-        ).unwrap();
+        )?;
 
         assert_eq!(expected, super::is_nodata(&raster));
+
+        Ok(())
     }
 
     #[test]
-    fn is_data<R: Array<Metadata = RasterSize>>() {
+    fn is_data<R: Array<Metadata = RasterSize>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
@@ -165,7 +171,7 @@ mod generictests {
                 4.0, 4.0,  5.0, 8.0,
                 3.0, NOD,  4.0, NOD,
             ]),
-        ).unwrap();
+        )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
@@ -177,9 +183,11 @@ mod generictests {
                  1,  1,  1,  1,
                  1,  0,  1,  0,
             ],
-        ).unwrap();
+        )?;
 
         assert_eq!(expected, super::is_data(&raster));
+
+        Ok(())
     }
 
     #[instantiate_tests(<DenseArray<i8>>)]

@@ -44,8 +44,7 @@ where
                     }
                 }
                 Err(e) => Err(crate::Error::InvalidArgument(format!(
-                    "Python object is not a valid arrow array {}",
-                    e
+                    "Python object is not a valid arrow array {e}"
                 ))),
             }
         })
