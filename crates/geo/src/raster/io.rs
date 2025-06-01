@@ -377,7 +377,7 @@ pub mod dataset {
             },
             "GDALCreateCopy",
         )
-        .map_err(|err| Error::Runtime(format!("Failed to write raster to disk: {}", err)))?;
+        .map_err(|err| Error::Runtime(format!("Failed to write raster to disk: {err}")))?;
 
         unsafe { gdal_sys::GDALClose(ds_handle) };
 

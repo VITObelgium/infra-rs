@@ -1,6 +1,6 @@
 use gdal::spatial_ref::AxisMappingStrategy;
 
-use crate::{crs::Epsg, Error, Result};
+use crate::{Error, Result, crs::Epsg};
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SpatialReference {
@@ -78,7 +78,7 @@ impl SpatialReference {
 /// Single shot version of `SpatialReference::to_wkt`
 pub fn projection_from_epsg(epsg: Epsg) -> Result<String> {
     if let Err(e) = SpatialReference::from_epsg(epsg) {
-        log::error!("Error creating spatial reference: {}", e);
+        log::error!("Error creating spatial reference: {e}");
     }
 
     let spatial_ref = SpatialReference::from_epsg(epsg)?;
