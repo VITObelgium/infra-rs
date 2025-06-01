@@ -418,7 +418,7 @@ mod tests {
     use crate::colormap::ColorMapPreset;
 
     #[test]
-    fn test_compare_banded_categoric() -> Result<()> {
+    fn compare_banded_categoric() -> Result<()> {
         const RANGE_WIDTH: i64 = 100;
 
         // Create a banded and categoric legend which should have the same colors for the same values

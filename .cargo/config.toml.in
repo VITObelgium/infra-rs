@@ -9,10 +9,17 @@ PYO3_PYTHON = { value = ".pixi/envs/default/@PYTHON_EXE@", relative = true }
 rustflags = ["-C", "target-feature=+crt-static+avx2"]
 
 [target.x86_64-apple-darwin]
-rustflags = ["-C", "target-feature=+avx2", "-C", "link-arg=-mmacosx-version-min=15.0"]
+rustflags = [
+    "-C", "target-feature=+avx2",
+    "-C", "link-arg=-mmacosx-version-min=15.0",
+    "-C", "link-arg=-Wl,-rpath,@WORKSPACE_ROOT@/.pixi/envs/default/lib/"
+]
 
 [target.aarch64-apple-darwin]
-rustflags = ["-C", "link-arg=-mmacosx-version-min=15.0"]
+rustflags = [
+    "-C", "link-arg=-mmacosx-version-min=15.0",
+    "-C", "link-arg=-Wl,-rpath,@WORKSPACE_ROOT@/.pixi/envs/default/lib/"
+]
 
 [target.'cfg(all())']
 rustflags = [

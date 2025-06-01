@@ -66,7 +66,9 @@ mod tests {
 
     #[ctor::ctor]
     fn init() {
+        pyo3::prepare_freethreaded_python();
         pyo3::Python::with_gil(|py| {
+            pyo3::prepare_freethreaded_python();
             if py.import("pyarrow").is_err() {
                 panic!("PyArrow is not installed in the current python environment. Run 'pip install pyarrow' to install it.");
             }
