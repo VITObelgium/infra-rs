@@ -6,7 +6,7 @@ PKG_CONFIG_PATH = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@/lib/pk
 PYO3_PYTHON = { value = ".pixi/envs/default/@PYTHON_EXE@", relative = true }
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "target-feature=+crt-static,+avx2"]
+rustflags = ["-C", "target-feature=+crt-static"]
 
 [target.x86_64-apple-darwin]
 rustflags = ["-C", "target-feature=+avx2", "-C", "link-arg=-mmacosx-version-min=15.0"]

@@ -47,36 +47,36 @@ pub fn flatten_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<f64>) -> crate
     Ok(())
 }
 
-#[cfg(feature = "simd")]
-mod simd {
-    use inf::simd::LANES;
+// #[cfg(feature = "simd")]
+// mod simd {
+//     use inf::simd::LANES;
 
-    use crate::{Nodata, NodataSimd};
-    use std::simd::{SimdElement, prelude::*};
+//     use crate::{Nodata, NodataSimd};
+//     use std::simd::{SimdElement, prelude::*};
 
-    use crate::ArrayNum;
+//     use crate::ArrayNum;
 
-    pub fn unary_simd<T: SimdElement>(data: &mut [T], cb_scalar: impl Fn(&mut T), cb_simd: impl Fn(&mut Simd<T, LANES>))
-    where
-        std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
-    {
-        let (head, simd_vals, tail) = data.as_simd_mut();
+//     pub fn unary_simd<T: SimdElement>(data: &mut [T], cb_scalar: impl Fn(&mut T), cb_simd: impl Fn(&mut Simd<T, LANES>))
+//     where
+//         std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
+//     {
+//         let (head, simd_vals, tail) = data.as_simd_mut();
 
-        head.iter_mut().for_each(&cb_scalar);
-        simd_vals.iter_mut().for_each(cb_simd);
-        tail.iter_mut().for_each(cb_scalar);
-    }
+//         head.iter_mut().for_each(&cb_scalar);
+//         simd_vals.iter_mut().for_each(cb_simd);
+//         tail.iter_mut().for_each(cb_scalar);
+//     }
 
-    pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: T)
-    where
-        std::simd::Simd<T, LANES>: NodataSimd,
-    {
-        let nodata_simd = Simd::splat(nodata);
+//     pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: T)
+//     where
+//         std::simd::Simd<T, LANES>: NodataSimd,
+//     {
+//         let nodata_simd = Simd::splat(nodata);
 
-        unary_simd(
-            data,
-            |v| Nodata::init_nodata(v, nodata),
-            |v| NodataSimd::init_nodata(v, nodata_simd),
-        );
-    }
-}
+//         unary_simd(
+//             data,
+//             |v| Nodata::init_nodata(v, nodata),
+//             |v| NodataSimd::init_nodata(v, nodata_simd),
+//         );
+//     }
+// }
