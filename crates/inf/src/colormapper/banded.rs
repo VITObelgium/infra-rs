@@ -165,7 +165,7 @@ impl ColorMapper for Banded {
     #[inline]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f32, N>,
+        value: std::simd::Simd<f32, N>,
         config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
@@ -183,7 +183,7 @@ impl ColorMapper for Banded {
             let start = NumCast::from(entry.range.start).unwrap_or_default();
             let end = NumCast::from(entry.range.end).unwrap_or_default();
 
-            let in_range = (*value).simd_ge(Simd::splat(start)) & (*value).simd_lt(Simd::splat(end));
+            let in_range = value.simd_ge(Simd::splat(start)) & value.simd_lt(Simd::splat(end));
             let band_color = Simd::splat(entry.color.to_bits());
 
             in_range_total |= in_range;
@@ -201,8 +201,8 @@ impl ColorMapper for Banded {
             let start = first_entry.range.start;
             let end = last_entry.range.end;
 
-            let lower_edge = (*value - Simd::splat(start)).abs().simd_lt(edge_tolerance);
-            let upper_edge = (*value - Simd::splat(end)).abs().simd_lt(edge_tolerance);
+            let lower_edge = (value - Simd::splat(start)).abs().simd_lt(edge_tolerance);
+            let upper_edge = (value - Simd::splat(end)).abs().simd_lt(edge_tolerance);
             let out_of_range_low = value.simd_lt(Simd::splat(start));
             let out_of_range_high = value.simd_gt(Simd::splat(end));
 

@@ -56,7 +56,7 @@ pub use {
     anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayMetadata, array::Columns, array::Rows, array::Window,
     arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell, cell::CellIterator, coordinate::Coordinate,
     densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference, latlonbounds::LatLonBounds, nodata::Nodata,
-    rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
+    raster::RasterNodataCompatibility, rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };
 
 #[doc(inline)]

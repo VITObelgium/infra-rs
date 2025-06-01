@@ -50,3 +50,12 @@ where
     /// Write the full raster to disk
     fn write(&mut self, path: &std::path::Path) -> Result;
 }
+
+/// Trait for raster types that can handle nodata values and need te exchanged with external code
+/// that does not use the default nodata value for the type.
+pub trait RasterNodataCompatibility {
+    /// Initialize the value with the nodata value if it matches the nodata condition
+    fn init_nodata();
+    /// Restore the original metadata nodata value from the metadata
+    fn restore_nodata();
+}

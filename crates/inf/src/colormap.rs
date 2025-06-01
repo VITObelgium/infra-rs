@@ -323,10 +323,8 @@ impl ProcessedColorMap {
     where
         std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
     {
-        use std::simd::Simd;
         use std::simd::StdFloat;
-        use std::simd::cmp::SimdPartialOrd;
-        use std::simd::num::SimdFloat;
+        use std::simd::prelude::*;
 
         let transparent = std::simd::Simd::splat(color::TRANSPARENT.to_bits());
         let out_of_range = value.simd_lt(Simd::splat(0.0)) | value.simd_gt(Simd::splat(1.0));

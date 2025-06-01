@@ -118,7 +118,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
 
         let value: Simd<T, LANES> = value.simd_cast();
         let mappable_mask = !self.is_unmappable_simd(value.simd_cast(), cast::option::<f32>(nodata));
-        let colors = self.mapper.color_for_numeric_value_simd(&value.simd_cast(), &self.mapping_config);
+        let colors = self.mapper.color_for_numeric_value_simd(value.simd_cast(), &self.mapping_config);
         colors.store_select(color_buffer.as_mut_array(), mappable_mask);
     }
 

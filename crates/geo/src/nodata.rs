@@ -35,10 +35,64 @@ pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
     fn is_nan(self) -> bool;
 }
 
+macro_rules! impl_nodata_fixed_point {
+    ( $t:ident, $nodata:ident ) => {
+        impl Nodata for $t {
+            const NODATA: $t = $t::$nodata;
+
+            fn has_nan() -> bool {
+                false
+            }
+
+            fn is_nan(self) -> bool {
+                false
+            }
+        }
+    };
+}
+
+macro_rules! impl_nodata_floating_point {
+    ( $t:ident ) => {
+        impl Nodata for $t {
+            const NODATA: $t = $t::NAN;
+
+            fn is_nodata(self) -> bool {
+                self.is_nan()
+            }
+
+            fn has_nan() -> bool {
+                true
+            }
+
+            fn is_nan(self) -> bool {
+                self.is_nan()
+            }
+        }
+    };
+}
+
+impl_nodata_fixed_point!(u8, MAX);
+impl_nodata_fixed_point!(u16, MAX);
+impl_nodata_fixed_point!(u32, MAX);
+impl_nodata_fixed_point!(u64, MAX);
+impl_nodata_fixed_point!(i8, MIN);
+impl_nodata_fixed_point!(i16, MIN);
+impl_nodata_fixed_point!(i32, MIN);
+impl_nodata_fixed_point!(i64, MIN);
+
+impl_nodata_floating_point!(f32);
+impl_nodata_floating_point!(f64);
+
 #[cfg(feature = "simd")]
 pub mod simd {
     use super::*;
+    use std::simd::{LaneCount, SupportedLaneCount, prelude::*};
+
+    const LANES: usize = inf::simd::LANES;
+
     pub trait NodataSimd: std::simd::cmp::SimdPartialEq {
+        type Scalar;
+        type Simd;
         const NODATA_SIMD: Self;
 
         /// For importing foreign data that may contain nodata values not adhereing to the predefined `Self::NODATA` value.
@@ -49,14 +103,16 @@ pub mod simd {
 
     macro_rules! impl_nodata_simd {
         ( $t:ident ) => {
-            impl<const N: usize> NodataSimd for std::simd::Simd<$t, N>
+            impl NodataSimd for Simd<$t, LANES>
             where
-                std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
+                LaneCount<LANES>: SupportedLaneCount,
             {
-                const NODATA_SIMD: Self = std::simd::Simd::splat($t::NODATA);
+                type Scalar = $t;
+                type Simd = std::simd::Simd<$t, LANES>;
+                const NODATA_SIMD: Self = Simd::splat($t::NODATA);
 
                 fn init_nodata(&mut self, nodata: Self) {
-                    use std::simd::cmp::SimdPartialEq as _;
+                    use SimdPartialEq as _;
 
                     let nodata_mask = self.simd_eq(nodata);
                     *self = nodata_mask.select(Self::NODATA_SIMD, *self);
@@ -82,132 +138,4 @@ pub mod simd {
     impl_nodata_simd!(i64);
     impl_nodata_simd!(f32);
     impl_nodata_simd!(f64);
-}
-
-impl Nodata for u8 {
-    const NODATA: u8 = u8::MAX;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for u16 {
-    const NODATA: u16 = u16::MAX;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for u32 {
-    const NODATA: u32 = u32::MAX;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for u64 {
-    const NODATA: u64 = u64::MAX;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for i8 {
-    const NODATA: i8 = i8::MIN;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for i16 {
-    const NODATA: i16 = i16::MIN;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for i32 {
-    const NODATA: i32 = i32::MIN;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for i64 {
-    const NODATA: i64 = i64::MIN;
-
-    fn has_nan() -> bool {
-        false
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for f32 {
-    const NODATA: f32 = f32::NAN;
-
-    fn is_nodata(self) -> bool {
-        self.is_nan()
-    }
-
-    fn has_nan() -> bool {
-        true
-    }
-
-    fn is_nan(self) -> bool {
-        false
-    }
-}
-
-impl Nodata for f64 {
-    const NODATA: f64 = f64::NAN;
-
-    fn is_nodata(self) -> bool {
-        self.is_nan()
-    }
-
-    fn has_nan() -> bool {
-        true
-    }
-
-    fn is_nan(self) -> bool {
-        self.is_nan()
-    }
 }

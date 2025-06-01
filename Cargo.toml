@@ -1,7 +1,7 @@
 [package]
+edition = "2024"
 name    = "infra-rs"
 version = "0.2.1"
-edition = "2024"
 
 [workspace]
 members = [
@@ -17,37 +17,37 @@ members = [
 ]
 
 [dependencies]
-inf    = { path = "./crates/inf" }
 geo    = { path = "./crates/geo" }
-tiler  = { path = "./crates/tiler", optional = true }
-sqlite = { path = "./crates/sqlite", optional = true }
+inf    = { path = "./crates/inf" }
 pyo3   = { version = "*", optional = true }
+sqlite = { path = "./crates/sqlite", optional = true }
+tiler  = { path = "./crates/tiler", optional = true }
 
 [features]
-tiler       = ["dep:tiler"]
 arrow       = ["geo/arrow"]
-sqlite      = ["dep:sqlite"]
 gdal        = ["geo/gdal"]
 gdal-static = ["geo/gdal-static"]
-serde       = ["inf/serde"]
 python      = ["pyo3/auto-initialize"]
+serde       = ["inf/serde"]
+sqlite      = ["dep:sqlite"]
+tiler       = ["dep:tiler"]
 
 [package.metadata.vcpkg]
-git = "https://github.com/microsoft/vcpkg"
-rev = "ce613c4"
-overlay-triplets-path = "vcpkg-overlay/triplets"
 dependencies = [
     "gdal[core,netcdf,zstd]",
     "hdf5[core,zlib]",
     "netcdf-c[core,netcdf-4,hdf5]",
     "tiff[core,lzma,zstd]",
 ] # needed to run the geo tests
+git = "https://github.com/microsoft/vcpkg"
+overlay-triplets-path = "vcpkg-overlay/triplets"
+rev = "ce613c4"
 
 [package.metadata.vcpkg.target]
 #aarch64-apple-darwin = { triplet = "arm64-osx-debugsymbols" }
 #x86_64-pc-windows-msvc = { triplet = "x64-windows-static-debugsymbols" }
-x86_64-apple-darwin    = { triplet = "x64-osx-release" }
 aarch64-apple-darwin   = { triplet = "arm64-osx-release" }
+x86_64-apple-darwin    = { triplet = "x64-osx-release" }
 x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 
 [patch.crates-io]

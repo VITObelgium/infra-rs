@@ -40,7 +40,7 @@ impl ColorMapper for Linear {
     #[inline]
     fn color_for_numeric_value_simd<const N: usize>(
         &self,
-        value: &std::simd::Simd<f32, N>,
+        value: std::simd::Simd<f32, N>,
         config: &MappingConfig,
     ) -> std::simd::Simd<u32, N>
     where
@@ -54,7 +54,7 @@ impl ColorMapper for Linear {
         let start = Simd::splat(self.value_range.start - EDGE_TOLERANCE);
         let end = Simd::splat(self.value_range.end + EDGE_TOLERANCE);
 
-        let value_0_1 = linear_map_to_float_simd(*value, self.value_range.start, self.value_range.end);
+        let value_0_1 = linear_map_to_float_simd(value, self.value_range.start, self.value_range.end);
         let mut colors = self.color_map.get_color_simd(value_0_1);
 
         let lower_range_color = Simd::splat(config.out_of_range_low_color.unwrap_or(self.color_map.get_color(0.0)).to_bits());

@@ -1,8 +1,5 @@
 use crate::ArrayNum;
 
-#[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
-
 /// Process nodata values in the data array
 /// This means replacing all the values that match the nodata value with the default nodata value for the type T
 /// as defined by the [`crate::Nodata`] trait
@@ -11,7 +8,7 @@ pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
     if let Some(nodata) = nodata {
         if nodata.is_nan() || nodata == T::NODATA {
             // the nodata value for floats is also nan, so no processing required
-            // or the nodata value matches the default nodata value for the type
+            // if the nodata value matches the default nodata value for the type
             return;
         }
 
