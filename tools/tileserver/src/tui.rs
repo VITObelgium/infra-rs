@@ -5,24 +5,20 @@ use crossterm::terminal::{self, EnterAlternateScreen, LeaveAlternateScreen};
 use event::{Event, EventHandler};
 use ratatui::backend::Backend;
 use ratatui::prelude::CrosstermBackend;
-use ratatui::{crossterm, Terminal};
+use ratatui::{Terminal, crossterm};
 use std::io;
 use std::panic;
 use tokio::sync::broadcast::Receiver;
 
-use crate::tileapihandler::StatusEvent;
 use crate::Result;
+use crate::tileapihandler::StatusEvent;
 
 mod app;
 mod event;
 mod handler;
 mod ui;
 
-pub async fn launch(
-    router: Router,
-    listener: tokio::net::TcpListener,
-    mut status_rx: Receiver<StatusEvent>,
-) -> Result<()> {
+pub async fn launch(router: Router, listener: tokio::net::TcpListener, mut status_rx: Receiver<StatusEvent>) -> Result<()> {
     let mut app = App::new();
 
     let backend = CrosstermBackend::new(std::io::stdout());
@@ -49,7 +45,7 @@ pub async fn launch(
             match ev {
               Ok(Event::Key(key_event)) => handler::handle_key_events(key_event, &mut app)?,
               Ok(Event::Mouse(_) | Event::Resize(_, _) | Event::Tick) => {}
-              Err(err) => panic!("Error: {:?}", err),
+              Err(err) => panic!("Error: {err:?}"),
             }
           }
           Ok(status) = status_rx.recv() => {

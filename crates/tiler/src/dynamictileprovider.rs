@@ -31,7 +31,7 @@ impl DynamicTileProvider {
     fn layer_data(&self, id: LayerId) -> Result<&LayerMetadata> {
         self.layers
             .get(&id)
-            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {}", id)))
+            .ok_or(Error::InvalidArgument(format!("Invalid layer id: {id}")))
     }
 
     pub fn reset(&mut self) {

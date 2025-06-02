@@ -25,14 +25,14 @@ fn encode_png(colors: &[Color], width: u32, height: u32) -> Result<Vec<u8>> {
 
         let mut writer = encoder
             .write_header()
-            .map_err(|e| Error::Runtime(format!("Failed to write Png header: {}", e)))?;
+            .map_err(|e| Error::Runtime(format!("Failed to write Png header: {e}")))?;
 
         writer
             .write_image_data(unsafe { vec_as_u8_slice(colors) })
-            .map_err(|e| Error::Runtime(format!("Failed to write Png data: {}", e)))?;
+            .map_err(|e| Error::Runtime(format!("Failed to write Png data: {e}")))?;
         writer
             .finish()
-            .map_err(|e| Error::Runtime(format!("Failed to finish Png writer: {}", e)))?;
+            .map_err(|e| Error::Runtime(format!("Failed to finish Png writer: {e}")))?;
     }
 
     Ok(data)

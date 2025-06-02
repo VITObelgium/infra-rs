@@ -41,7 +41,7 @@ pub fn write_tiles_to_mbtiles(
                 break;
             }
             Err(e) => {
-                log::error!("Error updating progress: {:?}", e);
+                log::error!("Error updating progress: {e:?}");
                 break;
             }
         }
@@ -93,7 +93,7 @@ pub fn create_mbtiles(
     let storage_thread = std::thread::spawn(|| match write_tiles_to_mbtiles(mbtiles_meta, output, rx, progress) {
         Ok(_) => {}
         Err(e) => {
-            log::error!("Error writing tiles to mbtiles: {:?}", e);
+            log::error!("Error writing tiles to mbtiles: {e:?}");
         }
     });
 
@@ -131,14 +131,14 @@ pub fn create_mbtiles(
                         match tx.send((tile, tile_data)) {
                             Ok(_) => {}
                             Err(e) => {
-                                log::error!("Error sending tile data: {:?}", e);
+                                log::error!("Error sending tile data: {e:?}");
                             }
                         }
 
                         return tile.direct_children().to_vec();
                     }
                 }
-                Err(e) => log::error!("Error getting tile data for {:?}", e),
+                Err(e) => log::error!("Error getting tile data for {e:?}"),
             }
 
             Vec::default()

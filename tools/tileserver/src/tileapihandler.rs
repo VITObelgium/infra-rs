@@ -64,7 +64,7 @@ impl State {
 fn parse_layer_id(layer: &str) -> Result<LayerId> {
     Ok(layer
         .parse::<u64>()
-        .map_err(|_| Error::InvalidArgument(format!("Invalid layer id: {}", layer)))?
+        .map_err(|_| Error::InvalidArgument(format!("Invalid layer id: {layer}")))?
         .into())
 }
 
@@ -150,7 +150,7 @@ fn parse_coordinate(val: &str) -> Result<f64> {
     if let Ok(val) = val.parse::<f64>() {
         Ok(val)
     } else {
-        Err(Error::InvalidArgument(format!("Invalid coordinate value: {}", val)))
+        Err(Error::InvalidArgument(format!("Invalid coordinate value: {val}")))
     }
 }
 
@@ -162,14 +162,14 @@ fn parse_coordinate_param(query_params: &HashMap<String, String>, lat_name: &str
         });
     }
 
-    Err(Error::InvalidArgument(format!("Missing {} or {} parameter", lat_name, lon_name)))
+    Err(Error::InvalidArgument(format!("Missing {lat_name} or {lon_name} parameter")))
 }
 
 fn host_header(headers: &axum::http::HeaderMap) -> Result<&str> {
     if let Some(host) = headers.get("host") {
         match host.to_str() {
             Ok(host) => Ok(host),
-            Err(err) => Err(Error::Runtime(format!("Failed to parse the HOST header: {}", err))),
+            Err(err) => Err(Error::Runtime(format!("Failed to parse the HOST header: {err}"))),
         }
     } else {
         Err(Error::Runtime("Failed to extract the HOST header".to_string()))
@@ -494,7 +494,7 @@ impl TileApiHandler {
                 if zoom_int <= u8::MAX as i32 {
                     zoom = Some(zoom_int);
                 } else {
-                    return Err(Error::InvalidArgument(format!("Invalid zoom level: {}", zoom_int)));
+                    return Err(Error::InvalidArgument(format!("Invalid zoom level: {zoom_int}")));
                 }
             }
         }
@@ -571,7 +571,7 @@ fn parse_tile_filename(filename: &str) -> Result<(i32, u8, String)> {
                 return Err(Error::InvalidArgument(format!("Invalid DPI ratio: {}", num_ratio_split[1])));
             }
         } else if num_ratio_split.len() != 1 {
-            return Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)));
+            return Err(Error::InvalidArgument(format!("Invalid tile filename {filename}")));
         }
 
         let y_index = num_ratio_split[0]
@@ -581,7 +581,7 @@ fn parse_tile_filename(filename: &str) -> Result<(i32, u8, String)> {
         return Ok((y_index, dpi_ratio, extension.to_string()));
     }
 
-    Err(Error::InvalidArgument(format!("Invalid tile filename {}", filename)))
+    Err(Error::InvalidArgument(format!("Invalid tile filename {filename}")))
 }
 
 fn create_legend(cmap_name: &str, min: f32, max: f32) -> Result<Legend> {

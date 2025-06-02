@@ -70,7 +70,7 @@ fn bounds_from_coords(coord1: &str, coord2: &str) -> Result<geo::LatLonBounds> {
 
 fn format_quantiles(quantiles: &Option<Vec<f64>>) -> String {
     match quantiles {
-        Some(q) => format!("{:?}", q),
+        Some(q) => format!("{q:?}"),
         _ => "No quantiles available".to_string(),
     }
 }
@@ -143,7 +143,7 @@ async fn main() -> Result<()> {
                     let bytes = response
                         .bytes()
                         .await
-                        .map_err(|err| Error::Runtime(format!("Failed to read tile data: {}", err)))?;
+                        .map_err(|err| Error::Runtime(format!("Failed to read tile data: {err}")))?;
 
                     if bytes.is_empty() {
                         Ok(DenseArray::<f32>::filled_with_nodata(raster_size))
@@ -151,7 +151,7 @@ async fn main() -> Result<()> {
                         Ok(DenseArray::<f32>::from_tile_bytes_autodetect_format_with_cast(bytes.as_ref())?)
                     }
                 }
-                Err(err) => Err(Error::Runtime(format!("Failed to fetch tile: {}", err))),
+                Err(err) => Err(Error::Runtime(format!("Failed to fetch tile: {err}"))),
             }
         },
     )
