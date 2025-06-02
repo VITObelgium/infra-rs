@@ -104,6 +104,12 @@ rasterbench:
 cmapbench:
   cargo +nightly bench --bench colormapping --package=inf --features=simd
 
+simdbench:
+  cargo +nightly bench --bench simd --package=geo --features=simd,gdal-static
+
+nosimdbench:
+  cargo +nightly bench --bench simd --package=geo  --features=gdal-static
+
 rasterbenchbaseline name:
   cargo bench --bench rasterops --package=geo -- --save-baseline {{name}}
 

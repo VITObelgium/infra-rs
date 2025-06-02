@@ -8,6 +8,9 @@ use approx::{AbsDiffEq, RelativeEq};
 use inf::allocate;
 use num::NumCast;
 
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
+
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::NODATA`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
@@ -293,12 +296,14 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metada
     type Pixel = <Self as Array>::Pixel;
     type Metadata = <Self as Array>::Metadata;
 
+    #[simd_macro::simd_bounds]
     fn new_init_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self> {
         let mut raster = Self::new(meta, data)?;
         raster.init_nodata();
         Ok(raster)
     }
 
+    #[simd_macro::simd_bounds]
     fn init_nodata(&mut self) {
         let nodata = inf::cast::option(self.metadata().nodata());
         densearrayutil::process_nodata(self.as_mut_slice(), nodata);

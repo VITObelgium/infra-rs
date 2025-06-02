@@ -18,6 +18,7 @@ pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
     }
 
     /// For importing foreign data that may contain nodata values not adhereing to the predefined `Self::NODATA` value.
+    #[inline]
     fn init_nodata(&mut self, nodata: Self) {
         if *self == nodata {
             *self = Self::NODATA;
@@ -25,6 +26,7 @@ pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
     }
 
     /// For exporting the data to a format where the nodata value does not match the predefined `Self::NODATA` value.
+    #[inline]
     fn restore_nodata(&mut self, nodata: Self) {
         if self.is_nodata() {
             *self = nodata;
@@ -111,6 +113,7 @@ pub mod simd {
                 type Simd = std::simd::Simd<$t, LANES>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);
 
+                #[inline]
                 fn init_nodata(&mut self, nodata: Self) {
                     use SimdPartialEq as _;
 
@@ -118,6 +121,7 @@ pub mod simd {
                     *self = nodata_mask.select(Self::NODATA_SIMD, *self);
                 }
 
+                #[inline]
                 fn restore_nodata(&mut self, nodata: Self) {
                     use std::simd::cmp::SimdPartialEq as _;
 
@@ -138,6 +142,7 @@ pub mod simd {
                 type Simd = std::simd::Simd<$t, LANES>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);
 
+                #[inline]
                 fn init_nodata(&mut self, nodata: Self) {
                     use SimdPartialEq as _;
 
@@ -145,6 +150,7 @@ pub mod simd {
                     *self = nodata_mask.select(Self::NODATA_SIMD, *self);
                 }
 
+                #[inline]
                 fn restore_nodata(&mut self, nodata: Self) {
                     let nodata_mask = self.is_nan();
                     *self = nodata_mask.select(nodata, *self);

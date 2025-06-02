@@ -1,4 +1,4 @@
-use crate::{Array, Cell, ArrayNum};
+use crate::{Array, ArrayNum, Cell};
 
 use crate::{Error, GeoReference, Result};
 
@@ -33,10 +33,14 @@ impl<T: ArrayNum> RasterDiffResult<T> {
     }
 }
 
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
+
 #[cfg(feature = "gdal")]
 /// Compare two raster files and return a list of cell mismatches
 /// The two rasters must have the same cell size and be aligned
 /// Only the intersection of the two rasters will be compared
+#[simd_macro::simd_bounds]
 pub fn raster_files_intersection_diff<T: ArrayNum + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,
@@ -60,6 +64,7 @@ pub fn raster_files_intersection_diff<T: ArrayNum + gdal::raster::GdalType>(
 #[cfg(feature = "gdal")]
 /// Compare two raster files and return a list of cell mismatches
 /// The two rasters must have the same extent, size, cell size and be aligned
+#[simd_macro::simd_bounds]
 pub fn raster_files_diff<T: ArrayNum + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,

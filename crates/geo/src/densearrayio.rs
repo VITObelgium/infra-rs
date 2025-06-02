@@ -10,6 +10,10 @@ use crate::raster::RasterIO;
 use gdal::raster::GdalType;
 use inf::allocate;
 
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
+
+#[simd_macro::simd_bounds]
 impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T, Metadata> {
     fn read(path: &std::path::Path) -> Result<Self> {
         Self::read_band(path, 1)

@@ -1,6 +1,9 @@
 use crate::{Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
 use std::fmt::Debug;
 
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
+
 pub trait ArrayMetadata: Clone + Debug {
     fn size(&self) -> RasterSize;
     fn nodata(&self) -> Option<f64>;
@@ -288,9 +291,12 @@ pub trait ArrayInterop: Sized {
     /// Create a new raster with the given metadata and data buffer.
     /// The nodata value from the provided Metadata will be used to convert all the values in the
     /// data buffer that match the nodata value to the internal nodata value.
+    #[simd_macro::simd_bounds(Self::Pixel)]
     fn new_init_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
 
+    #[simd_macro::simd_bounds(Self::Pixel)]
     fn init_nodata(&mut self);
+
     fn restore_nodata(&mut self);
 }
 
