@@ -24,7 +24,7 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
         let (cols, rows) = ds.raster_size();
 
         // read_band will take care of setting the data len
-        let mut data: Vec<T> = allocate::aligned_vec_with_capacity(rows * cols);
+        let mut data = allocate::aligned_vec_with_capacity::<T>(rows * cols);
         let metadata = raster::io::dataset::read_band(&ds, band_index, &mut data)?;
         Self::new_init_nodata(Metadata::with_geo_reference(metadata), data)
     }
@@ -35,7 +35,7 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
     fn read_bounds(path: &std::path::Path, bounds: &GeoReference, band_index: usize) -> Result<Self> {
         let ds = gdal::Dataset::open(path)?;
         let (cols, rows) = ds.raster_size();
-        let mut data: Vec<T> = allocate::aligned_vec_with_capacity(rows * cols);
+        let mut data = allocate::aligned_vec_with_capacity::<T>(rows * cols);
         let dst_meta = raster::io::dataset::read_band_region(&ds, band_index, bounds, &mut data)?;
         unsafe {
             // Safety: if read_band_region succeeds, it has written all rows * cols elements to `data`

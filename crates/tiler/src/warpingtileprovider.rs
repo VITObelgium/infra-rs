@@ -2,6 +2,7 @@ use std::ops::Range;
 
 use gdal::raster::GdalType;
 
+use inf::allocate::AlignedVec;
 use inf::legend::Legend;
 
 use geo::raster::io::RasterFormat;
@@ -21,7 +22,7 @@ use crate::{
     tileproviderfactory::TileProviderOptions,
 };
 
-fn raw_tile_to_vito_tile_format<T: ArrayNum>(data: Vec<T>, width: Columns, height: Rows) -> Result<TileData> {
+fn raw_tile_to_vito_tile_format<T: ArrayNum>(data: AlignedVec<T>, width: Columns, height: Rows) -> Result<TileData> {
     let raster_tile = DenseArray::new(RasterSize::with_rows_cols(height, width), data)?;
 
     Ok(TileData::new(

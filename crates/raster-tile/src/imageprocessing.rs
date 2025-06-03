@@ -1,5 +1,5 @@
 use geo::{Columns, RasterSize, Rows};
-use inf::allocate;
+use inf::allocate::{self, AlignedVec};
 
 use crate::Result;
 
@@ -13,7 +13,7 @@ use std::io::Cursor;
 /// # Returns
 /// - `Ok((Vec<f32>, (u32, u32)))`: The decoded image data as a vector of floats and its dimensions (width, height).
 /// - `Err(DecodingError)`: An error if the decoding fails.
-pub fn decode_png(data: &[u8]) -> Result<(Vec<f32>, RasterSize, png::ColorType)> {
+pub fn decode_png(data: &[u8]) -> Result<(AlignedVec<f32>, RasterSize, png::ColorType)> {
     let mut decoder_options = png::DecodeOptions::default();
     decoder_options.set_ignore_checksums(true);
     decoder_options.set_ignore_text_chunk(true);

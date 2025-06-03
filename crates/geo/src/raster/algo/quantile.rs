@@ -92,6 +92,8 @@ where
 #[cfg(test)]
 mod tests {
 
+    use inf::allocate;
+
     use crate::{
         ArrayInterop, CellSize, GeoReference, Point, RasterSize,
         array::{Columns, Rows},
@@ -114,11 +116,11 @@ mod tests {
         #[rustfmt::skip]
         let raster = DenseRaster::<f64>::new_init_nodata(
             meta,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 NOD, NOD,
                 NOD, NOD,
                 NOD, NOD,
-            ],
+            ]),
         )?;
 
         assert!(algo::quantiles(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?.is_none());
@@ -140,11 +142,11 @@ mod tests {
             #[rustfmt::skip]
             let raster = DenseRaster::<f64>::new_init_nodata(
                 meta.clone(),
-                vec![
+                allocate::aligned_vec_from_slice(&[
                     3.0, 1.0,
                     4.0, NOD,
                     1.0, 2.0,
-                    ],
+                    ]),
                 )?;
 
             let quants = algo::quantiles(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?.expect("Quantiles should have a value");
@@ -155,11 +157,11 @@ mod tests {
             #[rustfmt::skip]
             let raster = DenseRaster::<f64>::new_init_nodata(
                 meta,
-                vec![
+                allocate::aligned_vec_from_slice(&[
                     3.0, 1.0,
                     4.0, 7.0,
                     1.0, 2.0,
-                    ],
+                    ]),
                 )?;
 
             let quants = algo::quantiles(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?.expect("Quantiles should have a value");
@@ -194,14 +196,14 @@ mod tests {
         #[rustfmt::skip]
             let raster = DenseRaster::<f64>::new_init_nodata(
                 meta,
-                vec![
+                allocate::aligned_vec_from_slice(&[
                     3.0, 1.0,
                     -1.0, -3.0,
                     -4.0, -7.0,
                     4.0, 7.0,
                     -1.0, 2.0,
                     1.0, -2.0,
-                    ],
+                    ]),
                 )?;
 
         let (neg_quants, pos_quants) = algo::quantiles_neg_pos(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?;

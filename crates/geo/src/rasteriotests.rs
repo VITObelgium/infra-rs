@@ -104,6 +104,7 @@ mod generictests {
 
 #[cfg(test)]
 mod tests {
+    use inf::allocate;
     use tempdir::TempDir;
 
     use crate::{
@@ -150,12 +151,12 @@ mod tests {
         #[rustfmt::skip]
         let expected = DenseRaster::<f32>::new_init_nodata(
             GeoReference::without_spatial_reference(RasterSize::with_rows_cols(Rows(4), Columns(5)), Some(f64::NAN)),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0.0, 1.0, 2.0, 3.0, 4.0,
                 5.0, 6.0, 7.0, 8.0, 9.0,
                 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, f32::NAN, f32::NAN, 0.0,
-            ],
+            ]),
         )?;
 
         let mut raster = DenseRaster::<f32>::read(&raster_path)?;
@@ -193,12 +194,12 @@ mod tests {
         #[rustfmt::skip]
         let expected = DenseRaster::<f32>::new_init_nodata(
             GeoReference::without_spatial_reference(RasterSize::with_rows_cols(Rows(4), Columns(5)), Some(f64::NAN)),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 f32::NAN, 1.0, 2.0, 3.0, 4.0,
                 5.0, 6.0, 7.0, 8.0, 9.0,
                 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, f32::NAN, f32::NAN, 0.0,
-            ],
+            ]),
         )?;
 
         let first_cell = Cell::from_row_col(0, 0);

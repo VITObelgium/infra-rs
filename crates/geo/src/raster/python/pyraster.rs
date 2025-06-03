@@ -5,17 +5,17 @@ use arrow::{
 };
 
 use crate::{
-    array::{Columns, Rows},
     ArrayNum,
+    array::{Columns, Rows},
 };
 use pyo3::{pyclass, pymethods};
 
 use crate::{
-    raster::{
-        arrow::arrowutil::{self, ArrowType},
-        DenseRaster,
-    },
     GeoReference, RasterSize,
+    raster::{
+        DenseRaster,
+        arrow::arrowutil::{self, ArrowType},
+    },
 };
 
 #[derive(Clone)]
@@ -92,7 +92,7 @@ impl PyRaster {
         T::TArrow: ArrowPrimitiveType<Native = T>,
         arrow::array::PrimitiveArray<<T as arrowutil::ArrowType>::TArrow>: std::convert::From<std::vec::Vec<T>>,
     {
-        let (meta, data) = raster.into_raw_parts();
+        let (meta, data) = raster.to_raw_parts();
         let arr = PrimitiveArray::<T::TArrow>::from(data);
 
         let array: &PrimitiveArray<T::TArrow> = arr.as_any().downcast_ref().expect("Failed to downcast arrow array");

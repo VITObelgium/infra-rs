@@ -52,6 +52,8 @@ pub fn is_data<RasterType: Array>(input: &RasterType) -> RasterType::WithPixelTy
 #[generic_tests::define]
 mod generictests {
 
+    use inf::allocate;
+
     use crate::{
         DenseArray, RasterSize, Result,
         array::{Columns, Rows},
@@ -143,13 +145,13 @@ mod generictests {
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
             size,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                  1,  1,  0,  0,
                  0,  0,  0,  0,
                  0,  0,  1,  0,
                  0,  0,  0,  0,
                  0,  1,  0,  1,
-            ],
+            ]),
         )?;
 
         assert_eq!(expected, super::is_nodata(&raster));
@@ -175,13 +177,13 @@ mod generictests {
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
             size,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                  0,  0,  1,  1,
                  1,  1,  1,  1,
                  1,  1,  0,  1,
                  1,  1,  1,  1,
                  1,  0,  1,  0,
-            ],
+            ]),
         )?;
 
         assert_eq!(expected, super::is_data(&raster));

@@ -82,10 +82,10 @@ test_release:
 test_debug_simd:
   cargo +nightly nextest run --profile ci --workspace --features=simd,serde,gdal-static,arrow,derive,vector
 
-test_release_simd:
-  cargo +nightly nextest run --profile ci --workspace --release --features=simd,serde,gdal-static,derive,vector
+test_release_simd testfilter:
+  cargo +nightly nextest run --profile ci --workspace --release --features=simd,serde,gdal-static,derive,vector '{{testfilter}}'
 
-test_release_slow:
+test_release_slow :
   cargo nextest run --profile slow --workspace --release --features=serde,gdal-static,derive,vector
 
 test_debug_py: pybootstrap
@@ -96,7 +96,7 @@ test_release_py: pybootstrap
 
 build: build_release
 test: test_release
-test_simd: test_release_simd
+test_simd testfilter="": (test_release_simd testfilter)
 
 rasterbench:
   cargo bench --bench rasterops --package=geo

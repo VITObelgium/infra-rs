@@ -1,7 +1,8 @@
 use num::NumCast;
 
+use crate::allocate::AlignedVec;
 use crate::{
-    Result, cast,
+    Result, allocate, cast,
     color::Color,
     colormap::{ColorMap, ColorMapDirection, ColorMapPreset, ProcessedColorMap},
     colormapper::{self, ColorMapper},
@@ -133,12 +134,16 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         self.mapper.color_for_string_value(value, &self.mapping_config)
     }
 
-    pub fn apply_to_data<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> Vec<Color> {
-        data.iter().map(|&value| self.color_for_value(value, nodata)).collect()
+    pub fn apply_to_data<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+        allocate::aligned_vec_from_iter(data.iter().map(|&value| self.color_for_value(value, nodata)))
     }
 
     #[cfg(feature = "simd")]
-    pub fn apply_to_data_simd<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> Vec<Color>
+    pub fn apply_to_data_simd<T: num::NumCast + num::Zero + SimdElement + SimdCast>(
+        &self,
+        data: &[T],
+        nodata: Option<T>,
+    ) -> AlignedVec<Color>
     where
         std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
     {
@@ -174,11 +179,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         }
 
         // SAFETY: colors and data have the same length, and colors is already filled with u32 color bits
-        let colors_ptr = colors.as_mut_ptr().cast::<Color>();
-        let len = colors.len();
-        let capacity = colors.capacity();
-        std::mem::forget(colors); // prevent drop of colors Vec<u32>
-        unsafe { Vec::from_raw_parts(colors_ptr, len, capacity) }
+        unsafe { allocate::reinterpret_aligned_vec::<u32, Color>(colors) }
     }
 }
 
@@ -259,7 +260,7 @@ impl Legend {
         Ok(Legend::CategoricString(create_categoric_string(string_map, mapping_config)?))
     }
 
-    pub fn apply<T: Copy + NumCast>(&self, data: &[T], nodata: Option<T>) -> Vec<Color> {
+    pub fn apply<T: Copy + NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         match self {
             Legend::Linear(legend) => legend.apply_to_data(data, nodata),
             Legend::Banded(legend) => legend.apply_to_data(data, nodata),
@@ -273,7 +274,7 @@ impl Legend {
         &self,
         data: &[T],
         nodata: Option<T>,
-    ) -> Vec<Color>
+    ) -> AlignedVec<Color>
     where
         std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
     {
@@ -466,15 +467,11 @@ mod tests {
     #[cfg(feature = "simd")]
     #[test]
     fn linear_legend() -> Result<()> {
-        use aligned_vec::AVec;
+        use crate::allocate;
 
         const RASTER_SIZE: usize = 4;
-        use aligned_vec::CACHELINE_ALIGN;
 
-        let input_data = AVec::<f32, aligned_vec::ConstAlign<CACHELINE_ALIGN>>::from_iter(
-            CACHELINE_ALIGN,
-            (0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32),
-        );
+        let input_data = allocate::aligned_vec_from_iter((0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32));
         let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
 
         let linear = create_linear(&cmap_def, 1.0..(RASTER_SIZE * RASTER_SIZE) as f32, None)?;

@@ -5,7 +5,7 @@ use crate::{
     raster::{self},
 };
 use approx::{AbsDiffEq, RelativeEq};
-use inf::allocate;
+use inf::allocate::{self, AlignedVec};
 use num::NumCast;
 
 #[cfg(feature = "simd")]
@@ -17,7 +17,7 @@ const LANES: usize = inf::simd::LANES;
 #[derive(Debug)]
 pub struct DenseArray<T: ArrayNum, Metadata: ArrayMetadata = RasterSize> {
     pub(super) meta: Metadata,
-    pub(super) data: Vec<T>,
+    pub(super) data: AlignedVec<T>,
 }
 
 /// Clone for `DenseArray`
@@ -53,16 +53,27 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     pub fn empty() -> Self {
         DenseArray {
             meta: Metadata::with_rows_cols(Rows(0), Columns(0)),
-            data: Vec::new(),
+            data: allocate::new_aligned_vec(),
         }
     }
 
-    pub fn into_raw_parts(self) -> (Metadata, Vec<T>) {
+    pub fn into_raw_parts(self) -> (Metadata, AlignedVec<T>) {
         (self.meta, self.data)
     }
 
+    pub fn to_raw_parts(self) -> (Metadata, Vec<T>) {
+        #[cfg(feature = "simd")]
+        return (self.meta.clone(), self.data.to_vec());
+        #[cfg(not(feature = "simd"))]
+        return (self.meta, self.data);
+    }
+
     pub fn unary<TDest: ArrayNum>(&self, op: impl Fn(T) -> TDest) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
-        DenseArray::new(self.metadata().clone(), self.data.iter().map(|&a| op(a)).collect()).expect("Raster size bug")
+        DenseArray::new(
+            self.metadata().clone(),
+            allocate::aligned_vec_from_iter(self.data.iter().map(|&a| op(a))),
+        )
+        .expect("Raster size bug")
     }
 
     pub fn unary_inplace(&mut self, op: impl Fn(&mut T)) {
@@ -81,7 +92,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     ) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
         raster::algo::assert_dimensions(self, other);
 
-        let data = self.data.iter().zip(other.data.iter()).map(|(&a, &b)| op(a, b)).collect();
+        let data = allocate::aligned_vec_from_iter(self.data.iter().zip(other.data.iter()).map(|(&a, &b)| op(a, b)));
 
         DenseArray::new(self.metadata().clone(), data).expect("Raster size bug")
     }
@@ -102,7 +113,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         (cell.row * self.columns().count() + cell.col) as usize
     }
 
-    pub fn vec_mut(&mut self) -> &mut Vec<T> {
+    pub fn vec_mut(&mut self) -> &mut AlignedVec<T> {
         &mut self.data
     }
 }
@@ -121,7 +132,11 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> AsMut<[T]> for DenseArray<T, Metadata
 
 impl<T: ArrayNum, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayCopy<T, R> for DenseArray<T, Metadata> {
     fn new_with_dimensions_of(ras: &R, fill: T) -> Self {
-        DenseArray::new(ras.metadata().clone(), vec![fill; ras.size().cell_count()]).expect("Raster size bug")
+        DenseArray::new(
+            ras.metadata().clone(),
+            allocate::aligned_vec_filled_with(fill, ras.size().cell_count()),
+        )
+        .expect("Raster size bug")
     }
 }
 
@@ -130,7 +145,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     type WithPixelType<U: ArrayNum> = DenseArray<U, Metadata>;
     type Metadata = Metadata;
 
-    fn new(meta: Metadata, data: Vec<T>) -> Result<Self> {
+    fn new(meta: Metadata, data: AlignedVec<T>) -> Result<Self> {
         if meta.size().cell_count() != data.len() {
             return Err(Error::InvalidArgument(format!(
                 "Data length does not match the number of cells in the metadata: {} != {}",
@@ -297,7 +312,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metada
     type Metadata = <Self as Array>::Metadata;
 
     #[simd_macro::simd_bounds]
-    fn new_init_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self> {
+    fn new_init_nodata(meta: Self::Metadata, data: AlignedVec<Self::Pixel>) -> Result<Self> {
         let mut raster = Self::new(meta, data)?;
         raster.init_nodata();
         Ok(raster)
@@ -416,7 +431,7 @@ mod tests {
     fn cast_dense_raster() {
         let ras = DenseArray::new(
             RasterSize::with_rows_cols(Rows(2), Columns(2)),
-            vec![1, 2, <i32 as Nodata>::NODATA, 4],
+            allocate::aligned_vec_from_slice(&[1, 2, <i32 as Nodata>::NODATA, 4]),
         )
         .unwrap();
 

@@ -32,6 +32,8 @@ where
 #[generic_tests::define]
 mod unspecialized_generictests {
 
+    use inf::allocate;
+
     use crate::{
         ArrayInterop, CellSize, GeoReference, Point, RasterSize, Result,
         array::{Columns, Rows},
@@ -51,7 +53,7 @@ mod unspecialized_generictests {
             Some(NOD),
         );
 
-        let mut raster = R::WithPixelType::<f64>::new(meta.clone(), vec![])?;
+        let mut raster = R::WithPixelType::<f64>::new(meta.clone(), allocate::new_aligned_vec())?;
         filter(&mut raster, &[1.0, 2.0]);
         Ok(())
     }
@@ -69,7 +71,7 @@ mod unspecialized_generictests {
             Some(NOD),
         );
 
-        let mut raster = R::WithPixelType::<f64>::new_init_nodata(meta.clone(), vec![5.0])?;
+        let mut raster = R::WithPixelType::<f64>::new_init_nodata(meta.clone(), allocate::aligned_vec_filled_with(5.0, 1))?;
 
         filter(&mut raster, &[5.0]);
         assert_eq!(raster.value(0), Some(5.0));
@@ -96,11 +98,11 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let mut raster = R::WithPixelType::<f64>::new_init_nodata(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 1.0, 2.0, 2.0,
                 3.0, 4.0, 5.0,
                 1.0, 2.0, 9.0,
-            ],
+            ]),
         )?;
 
         filter(&mut raster, &[5.0]);
@@ -108,11 +110,11 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f64>::new_init_nodata(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 NOD, NOD, NOD,
                 NOD, NOD, 5.0,
                 NOD, NOD, NOD,
-            ],
+            ]),
         )?;
 
         assert_eq!(expected, raster);
@@ -136,21 +138,21 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let mut raster = R::WithPixelType::<f64>::new_init_nodata(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 NOD, 4.0, -10.0,
                 3.0, NOD, 0.0,
                 1.0, 21.0, NOD,
-            ],
+            ]),
         )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f64>::new_init_nodata(
             meta,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 NOD, NOD, -10.0,
                 NOD, NOD,   NOD,
                 NOD, 21.0,  NOD,
-            ],
+            ]),
         )?;
 
         filter(&mut raster, &[-10.0, 21.0, 2.0]);

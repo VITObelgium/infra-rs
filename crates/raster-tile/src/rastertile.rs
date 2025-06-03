@@ -101,7 +101,6 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
 
     #[cfg(feature = "float_png")]
     fn from_png_bytes(buffer: &[u8]) -> Result<Self> {
-        use inf::cast;
         use num::NumCast;
 
         let (data, raster_size, pixel_format) = crate::imageprocessing::decode_png(buffer)?;
@@ -115,7 +114,8 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
         }
 
         if T::TYPE != ArrayDataType::Float32 {
-            let float_vec = cast::reinterpret_vec::<f32, T>(data);
+            // Safety: The data is a valid slice of f32 values, so it is safe to reinterpret it
+            let float_vec = unsafe { inf::allocate::reinterpret_aligned_vec::<f32, T>(data) };
             Ok(Self::new(Meta::with_size(raster_size), float_vec).expect("Raster size bug"))
         } else {
             Ok(Self::from_iter_opt(
@@ -325,6 +325,7 @@ impl<T: ArrayMetadata> RasterTileIO for AnyDenseArray<T> {
 #[cfg(test)]
 mod tests {
     use geo::RasterSize;
+    use inf::allocate;
 
     use super::*;
 
@@ -334,7 +335,7 @@ mod tests {
 
     #[test]
     fn encode_decode_u32() {
-        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>()).unwrap();
+        let tile = DenseArray::new(TILE_SIZE, allocate::aligned_vec_from_iter(0..(TILE_WIDTH * TILE_HEIGHT) as u32)).unwrap();
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
 
@@ -353,7 +354,7 @@ mod tests {
         const TILE_HEIGHT: usize = 10;
         const TILE_SIZE: RasterSize = RasterSize::with_rows_cols(Rows(10), Columns(10));
 
-        let tile = DenseArray::new(TILE_SIZE, (0..(TILE_WIDTH * TILE_HEIGHT) as u8).collect::<Vec<u8>>()).unwrap();
+        let tile = DenseArray::new(TILE_SIZE, allocate::aligned_vec_from_iter(0..(TILE_WIDTH * TILE_HEIGHT) as u8)).unwrap();
 
         let encoded = tile.encode_raster_tile(CompressionAlgorithm::Lz4Block).unwrap();
         let decoded = DenseArray::<u8>::from_raster_tile_bytes(&encoded).unwrap();

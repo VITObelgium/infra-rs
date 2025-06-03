@@ -1,5 +1,5 @@
 use geo::ArrayNum;
-use inf::allocate;
+use inf::allocate::{self, AlignedVec};
 
 use crate::{Error, Result};
 
@@ -10,7 +10,7 @@ pub(crate) fn compress_tile_data<T: ArrayNum>(source: &[T]) -> Result<Vec<u8>> {
     Ok(lz4_flex::compress(source_bytes))
 }
 
-pub(crate) fn decompress_tile_data<T: ArrayNum>(element_count: usize, source: &[u8]) -> Result<Vec<T>> {
+pub(crate) fn decompress_tile_data<T: ArrayNum>(element_count: usize, source: &[u8]) -> Result<AlignedVec<T>> {
     let mut data = allocate::aligned_vec_with_capacity::<T>(element_count);
 
     // Safety: The T array is initialized with the capacity of element_count, so it is safe to transmute the slice to a byte slice

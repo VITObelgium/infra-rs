@@ -93,6 +93,7 @@ struct CutOut {
 
 pub mod dataset {
     use gdal::Metadata;
+    use inf::allocate::AlignedVec;
 
     use crate::{
         ArrayNum, Nodata, RasterSize,
@@ -228,7 +229,7 @@ pub mod dataset {
     pub fn read_band<T: GdalType + num::NumCast>(
         dataset: &gdal::Dataset,
         band_index: usize,
-        dst_data: &mut Vec<T>,
+        dst_data: &mut AlignedVec<T>,
     ) -> Result<GeoReference> {
         let raster_band = dataset.rasterband(band_index)?;
         let meta = read_band_metadata(dataset, band_index)?;

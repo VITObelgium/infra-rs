@@ -4,7 +4,7 @@ use crate::{ArrayNum, Error, Result, raster};
 use crate::{GeoReference, gdalinterop, vector::io::FeatureDefinitionExtension};
 use gdal::vector::Feature;
 use gdal::{raster::GdalType, vector::LayerAccess};
-use inf::allocate;
+use inf::allocate::{self, AlignedVec};
 
 use super::{BurnValue, geometrytype::GeometryType, io};
 
@@ -130,7 +130,7 @@ pub fn rasterize<T: ArrayNum + GdalType + ToString>(
     ds: &gdal::Dataset,
     meta: &GeoReference,
     options: RasterizeOptions<T>,
-) -> Result<(GeoReference, Vec<T>)> {
+) -> Result<(GeoReference, AlignedVec<T>)> {
     if options.add {
         if let Some(nodata_value) = options.meta.nodata() {
             if nodata_value.is_nan() {
@@ -153,7 +153,7 @@ pub fn rasterize_with_cli_options<T: ArrayNum + GdalType>(
     ds: &gdal::Dataset,
     meta: &GeoReference,
     options: &[String],
-) -> Result<(GeoReference, Vec<T>)> {
+) -> Result<(GeoReference, AlignedVec<T>)> {
     let gdal_options = RasterizeOptionsWrapper::new(options)?;
 
     let data = allocate::aligned_vec_filled_with(meta.nodata_as::<T>()?.unwrap_or(T::zero()), meta.rows() * meta.columns());

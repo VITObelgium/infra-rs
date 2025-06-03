@@ -1,3 +1,5 @@
+use inf::allocate::AlignedVec;
+
 use crate::{Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
 use std::fmt::Debug;
 
@@ -150,7 +152,7 @@ pub trait Array:
     /// Create a new raster with the given metadata and data buffer.
     /// Important! The nodata value is assumed to be the default value for the pixel type.
     /// If this is not the case `Array::new_process_nodata` should be used instead.
-    fn new(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
+    fn new(meta: Self::Metadata, data: AlignedVec<Self::Pixel>) -> Result<Self>;
 
     /// Create a new raster from an iterator of optional pixels where None values will become nodata.
     fn from_iter_opt<Iter>(meta: Self::Metadata, iter: Iter) -> Result<Self>
@@ -292,7 +294,7 @@ pub trait ArrayInterop: Sized {
     /// The nodata value from the provided Metadata will be used to convert all the values in the
     /// data buffer that match the nodata value to the internal nodata value.
     #[simd_macro::simd_bounds(Self::Pixel)]
-    fn new_init_nodata(meta: Self::Metadata, data: Vec<Self::Pixel>) -> Result<Self>;
+    fn new_init_nodata(meta: Self::Metadata, data: AlignedVec<Self::Pixel>) -> Result<Self>;
 
     #[simd_macro::simd_bounds(Self::Pixel)]
     fn init_nodata(&mut self);

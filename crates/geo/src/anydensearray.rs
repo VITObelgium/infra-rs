@@ -1,4 +1,4 @@
-use inf::cast;
+use inf::{allocate, cast};
 
 use crate::{
     Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
@@ -344,13 +344,12 @@ where
     Metadata: ArrayMetadata,
 {
     if TDest::TYPE == T::TYPE {
-        let ptr = raster.data.as_ptr() as *mut TDest;
-        let len = raster.data.len();
-        let cap = raster.data.capacity();
-        std::mem::forget(raster.data); // Avoid dropping the original Vec
+        let (meta, data) = raster.into_raw_parts();
 
         // Safety: We just checked that TDest and T are the same type
-        Ok(DenseArray::new(raster.meta, unsafe { Vec::from_raw_parts(ptr, len, cap) })?)
+        Ok(DenseArray::new(meta, unsafe {
+            allocate::reinterpret_aligned_vec::<T, TDest>(data)
+        })?)
     } else {
         Err(Error::InvalidArgument(format!("Type mismatch: {} != {}", TDest::TYPE, T::TYPE)))
     }
@@ -457,7 +456,7 @@ mod tests {
 
         let raster = DenseArray::new(
             RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
-            (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
+            allocate::aligned_vec_from_iter(0..(TILE_WIDTH * TILE_HEIGHT) as u32),
         )
         .unwrap();
 
@@ -482,7 +481,7 @@ mod tests {
 
         let raster = DenseArray::new(
             RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
-            (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
+            allocate::aligned_vec_from_iter(0..(TILE_WIDTH * TILE_HEIGHT) as u32),
         )
         .unwrap();
 

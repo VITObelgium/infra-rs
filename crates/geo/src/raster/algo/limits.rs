@@ -20,6 +20,8 @@ where
 #[generic_tests::define]
 mod unspecialized_generictests {
 
+    use inf::allocate;
+
     use crate::{
         ArrayInterop, CellSize, GeoReference, Point, RasterSize, Result,
         array::{Columns, Rows},
@@ -42,8 +44,7 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let raster = R::WithPixelType::<f64>::new(
             meta.clone(),
-            vec![
-            ],
+            allocate::new_aligned_vec(),
         )?;
 
         let range = min_max(&raster);
@@ -65,9 +66,9 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let raster = R::WithPixelType::<f64>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 5.0,
-            ],
+            ]),
         )?;
 
         let range = min_max(&raster);
@@ -89,11 +90,11 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let raster = R::WithPixelType::<f64>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0,
                 1.0, 2.0, 0.0,
-            ],
+            ]),
         )?;
 
         let range = min_max(&raster);
@@ -118,11 +119,11 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let raster = R::WithPixelType::<f64>::new_init_nodata(
             meta,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 NOD, 0.0, -10.0,
                 0.0, NOD, 0.0,
                 1.0, 21.0, NOD,
-            ],
+            ]),
         )?;
 
         let range = min_max(&raster);

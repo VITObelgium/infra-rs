@@ -1006,6 +1006,7 @@ where
 #[generic_tests::define]
 mod unspecialized_generictests {
     use approx::{RelativeEq, assert_abs_diff_eq, assert_relative_eq};
+    use inf::allocate;
 
     use crate::{
         CellSize, Point, RasterSize,
@@ -1031,25 +1032,25 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let raster = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
                 3, 0, 0, 1, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ],
+            ]),
         )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f32>::new(
             meta,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 200.0, 200.000, 241.421, 282.843, 341.421, 382.843, 424.264, 524.264, 624.264, 724.264,
                 100.0, 100.000, 141.421, 200.000, 241.421, 282.843, 382.843, 482.843, 582.843, 682.843,
                   0.0,   0.000, 100.000, 100.000, 141.421, 241.421, 341.421, 441.421, 541.421, 641.421,
                   0.0, 100.000, 100.000,   0.000, 100.000, 200.000, 300.000, 400.000, 500.000, 600.000,
                 100.0, 141.421, 141.421, 100.000, 141.421, 241.421, 341.421, 441.421, 541.421, 641.421,
-            ]
+            ])
         )?;
 
         assert_abs_diff_eq!(expected, &super::distance(&raster), epsilon = 0.001);
@@ -1073,25 +1074,25 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let raster = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
                 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
-            ],
+            ]),
         )?;
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f32>::new(
             meta,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
                 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-            ]
+            ])
         )?;
 
         assert_abs_diff_eq!(expected, &super::distance(&raster));
@@ -1115,25 +1116,25 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let targets = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 1, 2, 0, 0, 0, 0, 0, 0, 0, 0,
                 3, 0, 0, 1, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ],
+            ]),
         )?;
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
                 1, 1, 1, 0, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ],
+            ]),
         )?;
 
         const INF: f32 = f32::INFINITY;
@@ -1141,13 +1142,13 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f32>::new(
             meta,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 541.421, 441.421, 341.421, 300.0, 341.421, 382.843,     INF, 782.843, 824.264, 865.685,
                     INF,     INF,     INF, 200.0, 241.421, 282.843,     INF, 682.843, 724.264, 765.685,
                     0.0,     0.0, 100.000, 100.0, 141.421, 241.421,     INF, 582.843, 624.264, 724.264,
                     0.0,   100.0, 100.000,   0.0, 100.000, 200.000,     INF, 482.843, 582.843, 682.843,
                   100.0, 141.421, 141.421, 100.0, 141.421, 241.421, 341.421, 441.421, 541.421, 641.421,
-            ]
+            ])
         )?;
 
         assert_relative_eq!(
@@ -1175,25 +1176,25 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let targets = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
-            ],
+            ]),
         )?;
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0, 1, 1, 1, 1, 1, 1, 1, 1, 0,
                 1, 0, 1, 1, 1, 1, 1, 1, 0, 1,
                 1, 1, 0, 1, 1, 1, 1, 0, 1, 1,
                 1, 1, 1, 0, 1, 1, 0, 1, 1, 1,
                 1, 1, 1, 1, 0, 0, 1, 1, 1, 1,
-            ],
+            ]),
         )?;
 
         const INF: f32 = f32::INFINITY;
@@ -1203,13 +1204,13 @@ mod unspecialized_generictests {
             #[rustfmt::skip]
             let expected = R::WithPixelType::<f32>::new(
                 meta.clone(),
-                vec![
-                    524.26401,       INF,       INF,   INF, INF, INF,   INF,       INF,       INF,  524.2641,
+                allocate::aligned_vec_from_slice(&[
+                  524.26401,       INF,       INF,   INF, INF, INF,   INF,       INF,       INF,  524.2641,
                         INF, 382.84273,       INF,   INF, INF, INF,   INF,       INF, 382.84273,       INF,
                         INF,       INF, 241.42136,   INF, INF, INF,   INF, 241.42137,       INF,       INF,
                         INF,       INF,       INF, 100.0, 0.0, 0.0, 100.0,       INF,       INF,       INF,
                         INF,       INF,       INF,   INF, 0.0, 0.0,   INF,       INF,       INF,       INF,
-                ]
+                ])
             )?;
 
             assert_relative_eq!(
@@ -1224,13 +1225,13 @@ mod unspecialized_generictests {
             #[rustfmt::skip]
             let expected = R::WithPixelType::<f32>::new(
                 meta.clone(),
-                vec![
+                allocate::aligned_vec_from_slice(&[
                     INF, INF, INF,   INF, INF, INF,   INF, INF, INF, INF,
                     INF, INF, INF,   INF, INF, INF,   INF, INF, INF, INF,
                     INF, INF, INF,   INF, INF, INF,   INF, INF, INF, INF,
                     INF, INF, INF, 100.0, 0.0, 0.0, 100.0, INF, INF, INF,
                     INF, INF, INF,   INF, 0.0, 0.0,   INF, INF, INF, INF,
-                ]
+                ])
             )?;
 
             assert_relative_eq!(
@@ -1259,25 +1260,25 @@ mod unspecialized_generictests {
         #[rustfmt::skip]
         let targets = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
                 0, 0, 0, 0, 1, 1, 0, 0, 0, 0,
-            ],
+            ]),
         )?;
 
         #[rustfmt::skip]
         let barrier = R::WithPixelType::<u8>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 1, 0, 0, 0, 0, 0, 0, 0, 0, 1,
                 0, 1, 0, 0, 0, 0, 0, 0, 1, 0,
                 0, 0, 1, 0, 0, 0, 0, 1, 0, 0,
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
                 0, 0, 0, 1, 0, 0, 1, 0, 0, 0,
-            ],
+            ]),
         )?;
 
         const INF: f32 = f32::INFINITY;
@@ -1287,13 +1288,13 @@ mod unspecialized_generictests {
             #[rustfmt::skip]
             let expected = R::WithPixelType::<f32>::new(
                 meta.clone(),
-                vec![
+                allocate::aligned_vec_from_slice(&[
                         INF, 524.264, 482.843, 441.421, 400.0, 400.0, 441.421, 482.843, 524.264,     INF,
                     665.685,     INF, 382.843, 341.421, 300.0, 300.0, 341.421, 382.843,     INF, 665.685,
                     624.264, 524.264,     INF, 241.421, 200.0, 200.0, 241.421,     INF, 524.264, 624.264,
                     582.843, 482.843, 382.843,     INF, 100.0, 100.0,     INF, 382.843, 482.843, 582.843,
                     624.264, 524.264, 482.843,     INF,   0.0,   0.0,     INF, 482.843, 524.264, 624.264,
-                ]
+                ])
             )?;
 
             assert_relative_eq!(
@@ -1308,13 +1309,13 @@ mod unspecialized_generictests {
             #[rustfmt::skip]
             let expected = R::WithPixelType::<f32>::new(
                 meta.clone(),
-                vec![
+                allocate::aligned_vec_from_slice(&[
                     INF, 524.264, 482.843, 441.421, 400.0, 400.0, 441.421, 482.843, 524.264, INF,
                     INF,     INF, 382.843, 341.421, 300.0, 300.0, 341.421, 382.843,     INF, INF,
                     INF,     INF,     INF, 241.421, 200.0, 200.0, 241.421,     INF,     INF, INF,
                     INF,     INF,     INF,     INF, 100.0, 100.0,     INF,     INF,     INF, INF,
                     INF,     INF,     INF,     INF,   0.0,   0.0,     INF,     INF,     INF, INF,
-                ]
+                ])
             )?;
 
             assert_relative_eq!(

@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use approx::relative_eq;
+use inf::allocate::{self, AlignedVec};
 use path_macro::path;
 
 use crate::{
@@ -18,16 +19,17 @@ pub fn number_cast<T: ArrayNum>(val: f64) -> T {
     num::NumCast::from(val).expect("F64 could not be convertd to the specified type")
 }
 
-pub fn create_vec<T: num::NumCast + ArrayNum>(data: &[f64]) -> Vec<T> {
-    data.iter()
-        .map(|&v| {
-            if relative_eq!(v, NOD) {
-                T::NODATA
-            } else {
-                num::NumCast::from(v).unwrap()
-            }
-        })
-        .collect()
+pub fn create_vec<T: num::NumCast + ArrayNum>(data: &[f64]) -> AlignedVec<T> {
+    let mut vec = allocate::aligned_vec_with_capacity(data.len());
+    for &v in data.iter() {
+        if relative_eq!(v, NOD) {
+            vec.push(T::NODATA);
+        } else {
+            vec.push(num::NumCast::from(v).expect("f64 could not be converted to the specified type"));
+        }
+    }
+
+    vec
 }
 
 pub fn compare_fp_vectors(a: &[f64], b: &[f64]) -> bool {

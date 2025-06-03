@@ -458,6 +458,8 @@ where
 #[cfg(test)]
 #[generic_tests::define]
 mod generictests {
+    use inf::allocate;
+
     use crate::{
         RasterSize,
         array::{Columns, Rows},
@@ -487,13 +489,13 @@ mod generictests {
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
             size,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 1, 1, 1, 1,
                 1, 1, 2, 3,
                 3, 3, 3, 3,
                 4, 4, 5, 5,
                 4, 4, 5, 6
-            ]
+            ])
         )?;
 
         assert_eq!(expected, cluster_id(&raster, ClusterDiagonals::Exclude));
@@ -522,13 +524,13 @@ mod generictests {
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
             size,
-            vec![
+            allocate::aligned_vec_from_slice(&[
                  1,  2,  3,  4,
                  5,  6,  6,  7,
                  8,  6,  6,  9,
                 10,  6,  6, 11,
                 12, 13, 14, 15,
-            ]
+            ])
         )?;
 
         assert_eq!(expected, cluster_id(&raster, ClusterDiagonals::Exclude));
@@ -564,6 +566,8 @@ mod generictests {
 #[cfg(test)]
 #[generic_tests::define]
 mod genericgeotests {
+    use inf::allocate;
+
     use crate::{
         RasterSize,
         array::{Columns, Rows},
@@ -602,7 +606,7 @@ mod genericgeotests {
         #[rustfmt::skip]
         let expected = R::WithPixelType::<i32>::new(
             meta.clone(),
-            vec![
+            allocate::aligned_vec_from_slice(&[
                 1, 1, 1, 1, 1, 0, 0, 0, 0, 0,
                 1, 1, 0, 1, 0, 0, 2, 0, 2, 0,
                 1, 0, 0, 1, 0, 0, 0, 2, 0, 0,
@@ -613,7 +617,7 @@ mod genericgeotests {
                 0, 0, 0, 0, 0, 0, 0, 0, 4, 0,
                 5, 0, 6, 0, 7, 0, 8, 0, 0, 0,
                 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            ]
+            ])
         )?;
 
         assert_eq!(expected, fuzzy_cluster_id(&raster, 1.42_f32 * meta.cell_size_x() as f32));

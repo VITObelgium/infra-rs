@@ -37,10 +37,10 @@ where
                     );
 
                     if arrow_array.is_nullable() {
-                        let data = arrow_array.iter().map(|v| v.unwrap_or(T::NODATA)).collect();
+                        let data = inf::allocate::aligned_vec_from_iter(arrow_array.iter().map(|v| v.unwrap_or(T::NODATA)));
                         DenseRaster::new(geo_reference, data)
                     } else {
-                        DenseRaster::new(geo_reference, arrow_array.values().to_vec())
+                        DenseRaster::new(geo_reference, inf::allocate::aligned_vec_from_slice(arrow_array.values().as_ref()))
                     }
                 }
                 Err(e) => Err(crate::Error::InvalidArgument(format!(
