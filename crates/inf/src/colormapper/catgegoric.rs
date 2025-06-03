@@ -8,7 +8,12 @@ use crate::{
     legend::{LegendCategory, MappingConfig},
 };
 
-use super::ColorMapper;
+#[cfg(feature = "simd")]
+use super::UnmappableColorsSimd;
+use super::{ColorMapper, UnmappableColors};
+
+#[cfg(feature = "simd")]
+const LANES: usize = crate::simd::LANES;
 
 /// Categoric numeric color mapper (single numeric value → color)
 /// Contains a number of categories that map to a color
@@ -154,7 +159,7 @@ impl ColorMapper for CategoricNumeric {
     }
 
     #[inline]
-    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
+    fn color_for_numeric_value(&self, value: f32, unmappable_colors: &UnmappableColors) -> Color {
         if let Some(cat) = value.to_i64() {
             if let Some(lookup) = &self.fast_lookup {
                 // Fast lookup for numeric values
@@ -162,45 +167,49 @@ impl ColorMapper for CategoricNumeric {
                     return Color::from(lookup[cat as usize]);
                 }
             } else {
-                return self.categories.get(&cat).map_or(config.nodata_color, |cat| cat.color);
+                return self.categories.get(&cat).map_or(unmappable_colors.nodata, |cat| cat.color);
             }
         }
 
-        config.nodata_color
+        unmappable_colors.nodata
     }
 
     #[cfg(feature = "simd")]
     #[inline]
-    fn color_for_numeric_value_simd<const N: usize>(
+    fn color_for_numeric_value_simd(
         &self,
-        value: std::simd::Simd<f32, N>,
-        config: &MappingConfig,
-    ) -> std::simd::Simd<u32, N>
-    where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
-    {
+        value: std::simd::Simd<f32, LANES>,
+        unmappable_colors: &UnmappableColorsSimd,
+    ) -> std::simd::Simd<u32, LANES> {
         use std::simd::num::SimdFloat as _;
         assert!(self.fast_lookup.is_some());
 
-        let mut result = std::simd::Simd::splat(config.nodata_color.to_bits());
         if let Some(lookup) = &self.fast_lookup {
-            result = std::simd::Simd::gather_or(lookup, value.cast(), result);
+            std::simd::Simd::gather_or(lookup, value.cast(), unmappable_colors.nodata)
+        } else {
+            unmappable_colors.nodata
         }
-
-        result
     }
 
-    fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
+    fn color_for_string_value(&self, value: &str, unmappable_colors: &UnmappableColors) -> Color {
         // No string value support, so convert to numeric value if possible or return nodata color
         if let Ok(num_value) = value.parse::<f32>() {
-            self.color_for_numeric_value(num_value, config)
+            self.color_for_numeric_value(num_value, unmappable_colors)
         } else {
-            config.nodata_color
+            unmappable_colors.nodata
         }
     }
 
     fn category_count(&self) -> usize {
         self.categories.len()
+    }
+
+    fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
+        UnmappableColors {
+            nodata: config.nodata_color,
+            low: config.out_of_range_low_color.unwrap_or(config.nodata_color),
+            high: config.out_of_range_high_color.unwrap_or(config.nodata_color),
+        }
     }
 }
 
@@ -225,16 +234,24 @@ impl ColorMapper for CategoricString {
     }
 
     #[inline]
-    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
+    fn color_for_numeric_value(&self, value: f32, unmappable_colors: &UnmappableColors) -> Color {
         // Convert to string and match if possible
-        self.color_for_string_value(value.to_string().as_str(), config)
+        self.color_for_string_value(value.to_string().as_str(), unmappable_colors)
     }
 
-    fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
-        self.categories.get(value).map_or(config.nodata_color, |cat| cat.color)
+    fn color_for_string_value(&self, value: &str, unmappable_colors: &UnmappableColors) -> Color {
+        self.categories.get(value).map_or(unmappable_colors.nodata, |cat| cat.color)
     }
 
     fn category_count(&self) -> usize {
         self.categories.len()
+    }
+
+    fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
+        UnmappableColors {
+            nodata: config.nodata_color,
+            low: config.out_of_range_low_color.unwrap_or(config.nodata_color),
+            high: config.out_of_range_high_color.unwrap_or(config.nodata_color),
+        }
     }
 }

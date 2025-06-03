@@ -1,6 +1,9 @@
 use num::NumCast;
 
 use crate::allocate::AlignedVec;
+use crate::colormapper::UnmappableColors;
+#[cfg(feature = "simd")]
+use crate::colormapper::UnmappableColorsSimd;
 use crate::{
     Result, allocate, cast,
     color::Color,
@@ -97,12 +100,16 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     }
 
     pub fn color_for_value<T: num::NumCast>(&self, value: T, nodata: Option<T>) -> Color {
+        self.color_for_value_precomputed_unmappable(value, nodata, &self.mapper.compute_unmappable_colors(&self.mapping_config))
+    }
+
+    fn color_for_value_precomputed_unmappable<T: num::NumCast>(&self, value: T, nodata: Option<T>, unmappable: &UnmappableColors) -> Color {
         let value = value.to_f32().unwrap_or(f32::NAN);
         if self.is_unmappable(value, cast::option(nodata)) {
-            return self.mapping_config.nodata_color;
+            return unmappable.nodata;
         }
 
-        self.mapper.color_for_numeric_value(value, &self.mapping_config)
+        self.mapper.color_for_numeric_value(value, unmappable)
     }
 
     #[cfg(feature = "simd")]
@@ -115,11 +122,27 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     ) where
         std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
     {
+        let unmappable = self.mapper.compute_unmappable_colors_simd(&self.mapping_config);
+        self.color_for_value_simd_precomputed_unmappable(value, nodata, color_buffer, &unmappable);
+    }
+
+    #[cfg(feature = "simd")]
+    #[inline]
+    pub fn color_for_value_simd_precomputed_unmappable<T: num::NumCast + Copy + num::Zero + SimdElement + SimdCast>(
+        &self,
+        value: &std::simd::Simd<T, LANES>,
+        nodata: Option<T>,
+        color_buffer: &mut std::simd::Simd<u32, LANES>,
+        unmappable: &UnmappableColorsSimd,
+    ) where
+        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
+    {
         use crate::simd::SimdCastPl;
 
         let value: Simd<T, LANES> = value.simd_cast();
         let mappable_mask = !self.is_unmappable_simd(value.simd_cast(), cast::option::<f32>(nodata));
-        let colors = self.mapper.color_for_numeric_value_simd(value.simd_cast(), &self.mapping_config);
+
+        let colors = self.mapper.color_for_numeric_value_simd(value.simd_cast(), unmappable);
         colors.store_select(color_buffer.as_mut_array(), mappable_mask);
     }
 
@@ -131,14 +154,29 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     }
 
     pub fn color_for_string_value(&self, value: &str) -> Color {
-        self.mapper.color_for_string_value(value, &self.mapping_config)
+        self.mapper
+            .color_for_string_value(value, &self.mapper.compute_unmappable_colors(&self.mapping_config))
     }
 
+    #[cfg(feature = "simd")]
+    pub fn apply_to_data<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color>
+    where
+        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
+    {
+        self.apply_to_data_simd(data, nodata)
+    }
+
+    #[cfg(not(feature = "simd"))]
     pub fn apply_to_data<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+        self.apply_to_data_scalar(data, nodata)
+    }
+
+    pub fn apply_to_data_scalar<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         allocate::aligned_vec_from_iter(data.iter().map(|&value| self.color_for_value(value, nodata)))
     }
 
     #[cfg(feature = "simd")]
+    #[inline]
     pub fn apply_to_data_simd<T: num::NumCast + num::Zero + SimdElement + SimdCast>(
         &self,
         data: &[T],
@@ -151,7 +189,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
 
         if !self.mapper.simd_supported() {
             // Not all color mappers can support SIMD, so fall back to scalar processing
-            return self.apply_to_data(data, nodata);
+            return self.apply_to_data_scalar(data, nodata);
         }
 
         let mut colors = allocate::aligned_vec_filled_with(self.mapping_config.nodata_color.to_bits(), data.len());
@@ -161,21 +199,22 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
 
         assert!(head.len() == head_colors.len(), "Data alignment error");
 
+        let unmappable = self.mapper.compute_unmappable_colors(&self.mapping_config);
+        let unmappable_simd = self.mapper.compute_unmappable_colors_simd(&self.mapping_config);
+
         // scalar head
         for val in head.iter().zip(head_colors) {
-            let color = self.color_for_value(*val.0, nodata);
-            *val.1 = color.to_bits();
+            *val.1 = self.color_for_value_precomputed_unmappable(*val.0, nodata, &unmappable).to_bits();
         }
 
         // simd body
         for (val_chunk, color_chunk) in simd_vals.iter().zip(simd_colors) {
-            self.color_for_value_simd(val_chunk, nodata, color_chunk);
+            self.color_for_value_simd_precomputed_unmappable(val_chunk, nodata, color_chunk, &unmappable_simd);
         }
 
         // scalar tail
         for val in tail.iter().zip(tail_colors) {
-            let color = self.color_for_value(*val.0, nodata);
-            *val.1 = color.to_bits();
+            *val.1 = self.color_for_value_precomputed_unmappable(*val.0, nodata, &unmappable).to_bits();
         }
 
         // SAFETY: colors and data have the same length, and colors is already filled with u32 color bits
@@ -260,12 +299,25 @@ impl Legend {
         Ok(Legend::CategoricString(create_categoric_string(string_map, mapping_config)?))
     }
 
-    pub fn apply<T: Copy + NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+    #[cfg(feature = "simd")]
+    pub fn apply<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color>
+    where
+        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
+    {
         match self {
             Legend::Linear(legend) => legend.apply_to_data(data, nodata),
             Legend::Banded(legend) => legend.apply_to_data(data, nodata),
             Legend::CategoricNumeric(legend) => legend.apply_to_data(data, nodata),
             Legend::CategoricString(legend) => legend.apply_to_data(data, nodata),
+        }
+    }
+
+    pub fn apply_scalar<T: Copy + NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+        match self {
+            Legend::Linear(legend) => legend.apply_to_data_scalar(data, nodata),
+            Legend::Banded(legend) => legend.apply_to_data_scalar(data, nodata),
+            Legend::CategoricNumeric(legend) => legend.apply_to_data_scalar(data, nodata),
+            Legend::CategoricString(legend) => legend.apply_to_data_scalar(data, nodata),
         }
     }
 

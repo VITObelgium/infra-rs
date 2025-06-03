@@ -74,7 +74,7 @@ pub fn raw_tile_to_png_color_mapped<T: ArrayNum>(
     Ok(TileData::new(
         TileFormat::Png,
         PixelFormat::Rgba,
-        encode_png(&legend.apply(raw_data, nodata), width as u32, height as u32)?,
+        encode_png(&legend.apply_scalar(raw_data, nodata), width as u32, height as u32)?,
     ))
 }
 

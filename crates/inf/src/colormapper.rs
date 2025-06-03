@@ -10,23 +10,50 @@ pub(crate) use catgegoric::CategoricNumeric;
 pub(crate) use catgegoric::CategoricString;
 pub(crate) use linear::Linear;
 
+#[cfg(feature = "simd")]
+const LANES: usize = crate::simd::LANES;
+
+pub struct UnmappableColors {
+    pub nodata: Color,
+    pub low: Color,
+    pub high: Color,
+}
+
+#[cfg(feature = "simd")]
+pub struct UnmappableColorsSimd {
+    pub nodata: std::simd::Simd<u32, LANES>,
+    pub low: std::simd::Simd<u32, LANES>,
+    pub high: std::simd::Simd<u32, LANES>,
+}
+
 /// Trait for implementing color mappers
 pub trait ColorMapper: Default {
-    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color;
+    fn color_for_numeric_value(&self, value: f32, unmappable_colors: &UnmappableColors) -> Color;
+
+    fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors;
+    #[cfg(feature = "simd")]
+    fn compute_unmappable_colors_simd(&self, config: &MappingConfig) -> UnmappableColorsSimd {
+        use std::simd::Simd;
+
+        let edge_colors = self.compute_unmappable_colors(config);
+
+        UnmappableColorsSimd {
+            nodata: Simd::splat(edge_colors.nodata.to_bits()),
+            low: Simd::splat(edge_colors.low.to_bits()),
+            high: Simd::splat(edge_colors.high.to_bits()),
+        }
+    }
 
     #[cfg(feature = "simd")]
-    fn color_for_numeric_value_simd<const N: usize>(
+    fn color_for_numeric_value_simd(
         &self,
-        _value: std::simd::Simd<f32, N>,
-        _config: &MappingConfig,
-    ) -> std::simd::Simd<u32, N>
-    where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
-    {
+        _value: std::simd::Simd<f32, LANES>,
+        _unmappable_colors: &UnmappableColorsSimd,
+    ) -> std::simd::Simd<u32, LANES> {
         panic!("No SIMD support for this color mapper");
     }
 
-    fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color;
+    fn color_for_string_value(&self, value: &str, unmappable_colors: &UnmappableColors) -> Color;
     fn category_count(&self) -> usize;
 
     fn simd_supported(&self) -> bool {

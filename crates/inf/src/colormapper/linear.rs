@@ -5,6 +5,12 @@ use crate::legend::MappingConfig;
 use std::ops::Range;
 
 use super::ColorMapper;
+use super::UnmappableColors;
+#[cfg(feature = "simd")]
+use super::UnmappableColorsSimd;
+
+#[cfg(feature = "simd")]
+const LANES: usize = crate::simd::LANES;
 
 /// Linear color mapper
 /// each value gets its color based on the position in the configured value range
@@ -22,14 +28,22 @@ impl Linear {
 }
 
 impl ColorMapper for Linear {
+    fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
+        UnmappableColors {
+            nodata: config.nodata_color,
+            low: config.out_of_range_low_color.unwrap_or_else(|| self.color_map.get_color(0.0)),
+            high: config.out_of_range_high_color.unwrap_or_else(|| self.color_map.get_color(1.0)),
+        }
+    }
+
     #[inline]
-    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
+    fn color_for_numeric_value(&self, value: f32, unmappable_colors: &UnmappableColors) -> Color {
         const EDGE_TOLERANCE: f32 = 1e-4;
 
         if value < self.value_range.start - EDGE_TOLERANCE {
-            config.out_of_range_low_color.unwrap_or(self.color_map.get_color(0.0))
+            unmappable_colors.low
         } else if value > self.value_range.end + EDGE_TOLERANCE {
-            config.out_of_range_high_color.unwrap_or(self.color_map.get_color(1.0))
+            unmappable_colors.high
         } else {
             let value_0_1 = linear_map_to_float::<f32, f32>(value, self.value_range.start, self.value_range.end);
             self.color_map.get_color(value_0_1)
@@ -38,14 +52,11 @@ impl ColorMapper for Linear {
 
     #[cfg(feature = "simd")]
     #[inline]
-    fn color_for_numeric_value_simd<const N: usize>(
+    fn color_for_numeric_value_simd(
         &self,
-        value: std::simd::Simd<f32, N>,
-        config: &MappingConfig,
-    ) -> std::simd::Simd<u32, N>
-    where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
-    {
+        value: std::simd::Simd<f32, LANES>,
+        unmappable: &UnmappableColorsSimd,
+    ) -> std::simd::Simd<u32, LANES> {
         use std::simd::{Simd, cmp::SimdPartialOrd};
 
         use crate::interpolate::linear_map_to_float_simd;
@@ -57,20 +68,17 @@ impl ColorMapper for Linear {
         let value_0_1 = linear_map_to_float_simd(value, self.value_range.start, self.value_range.end);
         let mut colors = self.color_map.get_color_simd(value_0_1);
 
-        let lower_range_color = Simd::splat(config.out_of_range_low_color.unwrap_or(self.color_map.get_color(0.0)).to_bits());
-        let upper_range_color = Simd::splat(config.out_of_range_high_color.unwrap_or(self.color_map.get_color(1.0)).to_bits());
-
-        colors = value.simd_lt(start).select(lower_range_color, colors);
-        colors = value.simd_gt(end).select(upper_range_color, colors);
+        colors = value.simd_lt(start).select(unmappable.low, colors);
+        colors = value.simd_gt(end).select(unmappable.high, colors);
         colors
     }
 
-    fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
+    fn color_for_string_value(&self, value: &str, unmappable: &UnmappableColors) -> Color {
         if let Ok(num_value) = value.parse::<f32>() {
-            self.color_for_numeric_value(num_value, config)
+            self.color_for_numeric_value(num_value, unmappable)
         } else {
             // Linear legend does not support string values
-            config.nodata_color
+            unmappable.nodata
         }
     }
 

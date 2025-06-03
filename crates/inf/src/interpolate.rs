@@ -34,10 +34,6 @@ where
 
     assert!(min <= max);
 
-    if min >= max {
-        return std::simd::Simd::splat(0.0);
-    }
-
     let lower_edge = value.simd_lt(Simd::splat(min));
     let upper_edge = value.simd_ge(Simd::splat(max));
 
@@ -46,7 +42,7 @@ where
     result = lower_edge.select(Simd::splat(0.0), result);
     result = upper_edge.select(Simd::splat(1.0), result);
 
-    result
+    lower_edge.simd_ge(upper_edge).select(Simd::splat(0.0), result)
 }
 
 // pub fn linear_map_to_byte<T>(value: T, start: T, end: T, map_start: u8, map_end: u8) -> u8

@@ -19,13 +19,10 @@ const LANES: usize = inf::simd::LANES;
 pub fn bench_colormap<T: num::Num + num::NumCast + Copy + std::simd::SimdElement + std::simd::SimdCast>(c: &mut Criterion)
 where
     std::simd::Simd<T, LANES>: inf::simd::SimdCastPl<LANES> + std::simd::cmp::SimdPartialOrd + std::simd::num::SimdFloat,
-    <std::simd::Simd<T, LANES> as std::simd::num::SimdFloat>::Mask:
-        std::ops::BitOrAssign<<std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask>, // Oh boy
     <std::simd::Simd<T, LANES> as std::simd::num::SimdFloat>::Mask: std::ops::Not,
     <std::simd::Simd<T, LANES> as std::simd::cmp::SimdPartialEq>::Mask: std::ops::BitAnd,
     <<std::simd::Simd<T, LANES> as std::simd::num::SimdFloat>::Mask as std::ops::Not>::Output:
         std::convert::Into<std::simd::Mask<i32, LANES>>,
-    std::simd::Simd<f32, LANES>: std::convert::From<std::simd::Simd<T, LANES>>,
 {
     let raster_size = RASTER_HEIGHT * RASTER_WIDTH;
     let data = AVec::<T, ConstAlign<CACHELINE_ALIGN>>::from_iter(CACHELINE_ALIGN, (0..raster_size).map(|i| NumCast::from(i).unwrap()));
@@ -34,7 +31,7 @@ where
     let legend = create_banded(10, &cmap_def, 0.0..=100.0, None).unwrap();
 
     c.bench_function(&bench_name::<T>("apply_banded_legend"), |b| {
-        b.iter_with_large_drop(|| legend.apply_to_data(&data, NumCast::from(99.0)));
+        b.iter_with_large_drop(|| legend.apply_to_data_scalar(&data, NumCast::from(99.0)));
     });
 
     c.bench_function(&bench_name::<T>("apply_banded_legend_simd"), |b| {
@@ -44,7 +41,7 @@ where
     let legend = create_linear(&cmap_def, 0.0..100.0, None).unwrap();
 
     c.bench_function(&bench_name::<T>("apply_linear_legend"), |b| {
-        b.iter_with_large_drop(|| legend.apply_to_data(&data, NumCast::from(99.0)));
+        b.iter_with_large_drop(|| legend.apply_to_data_scalar(&data, NumCast::from(99.0)));
     });
 
     c.bench_function(&bench_name::<T>("apply_linear_legend_simd"), |b| {
@@ -54,7 +51,7 @@ where
     let legend = create_categoric_for_value_range(&cmap_def, 0..=300, None).unwrap();
 
     c.bench_function(&bench_name::<T>("apply_categoric_legend"), |b| {
-        b.iter_with_large_drop(|| legend.apply_to_data(&data, NumCast::from(99.0)));
+        b.iter_with_large_drop(|| legend.apply_to_data_scalar(&data, NumCast::from(99.0)));
     });
 
     c.bench_function(&bench_name::<T>("apply_categoric_legend_simd"), |b| {

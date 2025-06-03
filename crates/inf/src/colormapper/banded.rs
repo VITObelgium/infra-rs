@@ -6,7 +6,12 @@ use crate::{
     legend::MappingConfig,
 };
 
-use super::ColorMapper;
+#[cfg(feature = "simd")]
+use super::UnmappableColorsSimd;
+use super::{ColorMapper, UnmappableColors};
+
+#[cfg(feature = "simd")]
+const LANES: usize = crate::simd::LANES;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
@@ -122,7 +127,7 @@ impl Banded {
 
 impl ColorMapper for Banded {
     #[inline]
-    fn color_for_numeric_value(&self, value: f32, config: &MappingConfig) -> Color {
+    fn color_for_numeric_value(&self, value: f32, unmappable_colors: &UnmappableColors) -> Color {
         const EDGE_TOLERANCE: f32 = 1e-4;
 
         for entry in &self.bands {
@@ -135,25 +140,25 @@ impl ColorMapper for Banded {
             if (value - first_entry.range.start).abs() < EDGE_TOLERANCE {
                 return first_entry.color;
             } else if value < first_entry.range.start {
-                return config.out_of_range_low_color.unwrap_or(first_entry.color);
+                return unmappable_colors.low;
             } else if let Some(last_entry) = self.bands.last() {
                 if (value - last_entry.range.end).abs() < EDGE_TOLERANCE {
                     return last_entry.color;
                 } else if value > last_entry.range.end {
-                    return config.out_of_range_high_color.unwrap_or(last_entry.color);
+                    return unmappable_colors.high;
                 }
             }
         }
 
-        config.nodata_color
+        unmappable_colors.nodata
     }
 
-    fn color_for_string_value(&self, value: &str, config: &MappingConfig) -> Color {
+    fn color_for_string_value(&self, value: &str, unmappable_colors: &UnmappableColors) -> Color {
         // No string value support, so convert to numeric value if possible or return nodata color
         if let Ok(num_value) = value.parse::<f32>() {
-            self.color_for_numeric_value(num_value, config)
+            self.color_for_numeric_value(num_value, unmappable_colors)
         } else {
-            config.nodata_color
+            unmappable_colors.nodata
         }
     }
 
@@ -163,21 +168,17 @@ impl ColorMapper for Banded {
 
     #[cfg(feature = "simd")]
     #[inline]
-    fn color_for_numeric_value_simd<const N: usize>(
+    fn color_for_numeric_value_simd(
         &self,
-        value: std::simd::Simd<f32, N>,
-        config: &MappingConfig,
-    ) -> std::simd::Simd<u32, N>
-    where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
-    {
+        value: std::simd::Simd<f32, LANES>,
+        unmappable_colors: &UnmappableColorsSimd,
+    ) -> std::simd::Simd<u32, LANES> {
         use std::simd::{Mask, Simd, cmp::SimdPartialOrd, num::SimdFloat};
 
         use num::NumCast;
 
         let mut in_range_total = Mask::splat(false);
-        let nodata_color = Simd::splat(config.nodata_color.to_bits());
-        let mut colors = nodata_color;
+        let mut colors = unmappable_colors.nodata;
 
         for entry in &self.bands {
             let start = NumCast::from(entry.range.start).unwrap_or_default();
@@ -206,20 +207,30 @@ impl ColorMapper for Banded {
             let out_of_range_low = value.simd_lt(Simd::splat(start));
             let out_of_range_high = value.simd_gt(Simd::splat(end));
 
-            colors = out_of_range_low.cast::<i32>().select(
-                Simd::splat(config.out_of_range_low_color.unwrap_or(first_entry.color).to_bits()),
-                colors,
-            );
-
-            colors = out_of_range_high.cast::<i32>().select(
-                Simd::splat(config.out_of_range_high_color.unwrap_or(last_entry.color).to_bits()),
-                colors,
-            );
-
+            colors = out_of_range_low.cast::<i32>().select(unmappable_colors.low, colors);
+            colors = out_of_range_high.cast::<i32>().select(unmappable_colors.high, colors);
             colors = lower_edge.cast::<i32>().select(Simd::splat(first_entry.color.to_bits()), colors);
             colors = upper_edge.cast::<i32>().select(Simd::splat(last_entry.color.to_bits()), colors);
         }
 
         colors
+    }
+
+    fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
+        let low = config.out_of_range_low_color.unwrap_or_else(|| match self.bands.first() {
+            Some(first_entry) => first_entry.color,
+            None => config.nodata_color,
+        });
+
+        let high = config.out_of_range_high_color.unwrap_or_else(|| match self.bands.last() {
+            Some(last_entry) => last_entry.color,
+            None => config.nodata_color,
+        });
+
+        UnmappableColors {
+            nodata: config.nodata_color,
+            low,
+            high,
+        }
     }
 }
