@@ -101,6 +101,8 @@ vcpkg_cmake_configure(
         -DGDAL_CHECK_PACKAGE_NetCDF_NAMES=netCDF
         -DGDAL_CHECK_PACKAGE_NetCDF_TARGETS=netCDF::netcdf
         -DGDAL_CHECK_PACKAGE_QHULL_NAMES=Qhull
+        -DGDAL_CHECK_PACKAGE_ZSTD_NAMES=zstd
+        -DGDAL_CHECK_PACKAGE_ZSTD_TARGETS=zstd::libzstd
         "-DGDAL_CHECK_PACKAGE_QHULL_TARGETS=${qhull_target}"
         "-DQHULL_LIBRARY=${qhull_target}"
         "-DCMAKE_PROJECT_INCLUDE=${CMAKE_CURRENT_LIST_DIR}/cmake-project-include.cmake"
