@@ -175,14 +175,12 @@ impl ColorMapper for Banded {
     ) -> std::simd::Simd<u32, LANES> {
         use std::simd::{Mask, Simd, cmp::SimdPartialOrd, num::SimdFloat};
 
-        use num::NumCast;
-
         let mut in_range_total = Mask::splat(false);
         let mut colors = unmappable_colors.nodata;
 
         for entry in &self.bands {
-            let start = NumCast::from(entry.range.start).unwrap_or_default();
-            let end = NumCast::from(entry.range.end).unwrap_or_default();
+            let start = entry.range.start;
+            let end = entry.range.end;
 
             let in_range = value.simd_ge(Simd::splat(start)) & value.simd_lt(Simd::splat(end));
             let band_color = Simd::splat(entry.color.to_bits());
@@ -191,7 +189,7 @@ impl ColorMapper for Banded {
             colors = in_range.select(band_color, colors);
 
             if in_range_total.all() {
-                break;
+                return colors;
             }
         }
 
@@ -202,15 +200,15 @@ impl ColorMapper for Banded {
             let start = first_entry.range.start;
             let end = last_entry.range.end;
 
-            let lower_edge = (value - Simd::splat(start)).abs().simd_lt(edge_tolerance);
-            let upper_edge = (value - Simd::splat(end)).abs().simd_lt(edge_tolerance);
-            let out_of_range_low = value.simd_lt(Simd::splat(start));
-            let out_of_range_high = value.simd_gt(Simd::splat(end));
+            let lower_edge = (value - Simd::splat(start)).abs().simd_lt(edge_tolerance).cast::<i32>();
+            let upper_edge = (value - Simd::splat(end)).abs().simd_lt(edge_tolerance).cast::<i32>();
+            let out_of_range_low = value.simd_lt(Simd::splat(start)).cast::<i32>();
+            let out_of_range_high = value.simd_gt(Simd::splat(end)).cast::<i32>();
 
-            colors = out_of_range_low.cast::<i32>().select(unmappable_colors.low, colors);
-            colors = out_of_range_high.cast::<i32>().select(unmappable_colors.high, colors);
-            colors = lower_edge.cast::<i32>().select(Simd::splat(first_entry.color.to_bits()), colors);
-            colors = upper_edge.cast::<i32>().select(Simd::splat(last_entry.color.to_bits()), colors);
+            colors = out_of_range_low.select(unmappable_colors.low, colors);
+            colors = out_of_range_high.select(unmappable_colors.high, colors);
+            colors = lower_edge.select(Simd::splat(first_entry.color.to_bits()), colors);
+            colors = upper_edge.select(Simd::splat(last_entry.color.to_bits()), colors);
         }
 
         colors
