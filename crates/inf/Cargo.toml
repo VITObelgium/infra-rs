@@ -8,14 +8,13 @@ harness = false
 name    = "colormapping"
 
 [dependencies]
-aligned-vec = { version = "0.6", optional = true }
-approx      = "0.5"
-log         = "0.4"
-num         = "0.4"
-serde       = { version = "1.0", features = ["derive"], optional = true }
-specta      = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
-strum       = { version = "0.27", features = ["derive"] }
-thiserror   = "2.0"
+approx    = "0.5"
+log       = "0.4"
+num       = "0.4"
+serde     = { version = "1.0", features = ["derive"], optional = true }
+specta    = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
+strum     = { version = "0.27", features = ["derive"] }
+thiserror = "2.0"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 wasm-bindgen = "0.2"
@@ -30,6 +29,7 @@ test-log      = "0.2"
 criterion = "0.6"
 
 [features]
-serde  = ["dep:serde"]
-simd   = ["dep:aligned-vec"]
-specta = ["dep:specta"]
+default = []
+serde   = ["dep:serde"]
+simd    = []
+specta  = ["dep:specta"]

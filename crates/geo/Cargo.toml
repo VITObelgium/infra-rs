@@ -12,7 +12,6 @@ harness = false
 name    = "simd"
 
 [dependencies]
-aligned-vec   = { version = "0.6", optional = true }
 approx        = "0.5"
 bon           = "3.6"
 gdal          = { version = "0.18", optional = true }
@@ -56,7 +55,7 @@ gdal        = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
 gdal-static = ["gdal"]
 python      = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 serde       = ["dep:serde"]
-simd        = ["inf/simd", "simd_macro/simd", "dep:aligned-vec"]
+simd        = ["inf/simd", "simd_macro/simd"]
 specta      = ["dep:specta"]
 vector      = ["dep:geos", "dep:rayon", "geozero/with-geos"]
 

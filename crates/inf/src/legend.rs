@@ -494,15 +494,9 @@ mod tests {
     #[cfg(feature = "simd")]
     #[test]
     fn banded_legend() -> Result<()> {
-        use aligned_vec::AVec;
-
         const RASTER_SIZE: usize = 34;
-        use aligned_vec::CACHELINE_ALIGN;
 
-        let input_data = AVec::<f32, aligned_vec::ConstAlign<CACHELINE_ALIGN>>::from_iter(
-            CACHELINE_ALIGN,
-            (0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32),
-        );
+        let input_data = allocate::aligned_vec_from_iter((0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32));
         let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
 
         let banded = create_banded(10, &cmap_def, 1.0..=(RASTER_SIZE * RASTER_SIZE) as f32, None)?;
@@ -540,15 +534,9 @@ mod tests {
     #[cfg(feature = "simd")]
     #[test]
     fn categoric_legend() -> Result<()> {
-        use aligned_vec::AVec;
-
         const RASTER_SIZE: usize = 4;
-        use aligned_vec::CACHELINE_ALIGN;
 
-        let input_data = AVec::<f32, aligned_vec::ConstAlign<CACHELINE_ALIGN>>::from_iter(
-            CACHELINE_ALIGN,
-            (0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32),
-        );
+        let input_data = allocate::aligned_vec_from_iter((0..RASTER_SIZE * RASTER_SIZE).map(|v| v as f32));
         let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
 
         let categoric = create_categoric_for_value_range(&cmap_def, 1..=(RASTER_SIZE * RASTER_SIZE) as i64, None)?;

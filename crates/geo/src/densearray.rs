@@ -61,9 +61,9 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         (self.meta, self.data)
     }
 
-    pub fn to_raw_parts(self) -> (Metadata, Vec<T>) {
+    pub fn into_raw_parts_global_alloc(self) -> (Metadata, Vec<T>) {
         #[cfg(feature = "simd")]
-        return (self.meta.clone(), self.data.to_vec());
+        return (self.meta, self.data.to_vec_in(std::alloc::Global));
         #[cfg(not(feature = "simd"))]
         return (self.meta, self.data);
     }

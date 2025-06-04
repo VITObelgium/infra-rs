@@ -1,5 +1,5 @@
 #[cfg(feature = "simd")]
-pub type AlignedVec<T> = aligned_vec::AVec<T>;
+pub type AlignedVec<T> = Vec<T, allocator::CacheAligned>;
 #[cfg(not(feature = "simd"))]
 pub type AlignedVec<T> = Vec<T>;
 
@@ -7,7 +7,7 @@ pub type AlignedVec<T> = Vec<T>;
 /// Otherwise a regular Vec is created.
 pub fn new_aligned_vec<T>() -> AlignedVec<T> {
     #[cfg(feature = "simd")]
-    return aligned_vec::AVec::<T>::new(aligned_vec::CACHELINE_ALIGN);
+    return Vec::new_in(allocator::CacheAligned);
 
     #[cfg(not(feature = "simd"))]
     return Vec::new();
@@ -17,7 +17,7 @@ pub fn new_aligned_vec<T>() -> AlignedVec<T> {
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_with_capacity<T>(capacity: usize) -> AlignedVec<T> {
     #[cfg(feature = "simd")]
-    return aligned_vec::AVec::<T>::with_capacity(aligned_vec::CACHELINE_ALIGN, capacity);
+    return Vec::with_capacity_in(capacity, allocator::CacheAligned);
 
     #[cfg(not(feature = "simd"))]
     return Vec::with_capacity(capacity);
@@ -27,7 +27,11 @@ pub fn aligned_vec_with_capacity<T>(capacity: usize) -> AlignedVec<T> {
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_from_iter<T, I: IntoIterator<Item = T>>(iter: I) -> AlignedVec<T> {
     #[cfg(feature = "simd")]
-    return aligned_vec::AVec::<T>::from_iter(aligned_vec::CACHELINE_ALIGN, iter);
+    {
+        let mut vec = new_aligned_vec();
+        iter.into_iter().for_each(|item| vec.push(item));
+        vec
+    }
 
     #[cfg(not(feature = "simd"))]
     return Vec::from_iter(iter);
@@ -37,7 +41,7 @@ pub fn aligned_vec_from_iter<T, I: IntoIterator<Item = T>>(iter: I) -> AlignedVe
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_from_slice<T: Copy>(slice: &[T]) -> AlignedVec<T> {
     #[cfg(feature = "simd")]
-    return aligned_vec::AVec::<T>::from_slice(aligned_vec::CACHELINE_ALIGN, slice);
+    return slice.to_vec_in(allocator::CacheAligned);
 
     #[cfg(not(feature = "simd"))]
     return slice.to_vec();
@@ -47,7 +51,11 @@ pub fn aligned_vec_from_slice<T: Copy>(slice: &[T]) -> AlignedVec<T> {
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_filled_with<T: Copy>(val: T, len: usize) -> AlignedVec<T> {
     #[cfg(feature = "simd")]
-    return aligned_vec::avec![val; len];
+    {
+        let mut vec = aligned_vec_with_capacity(len);
+        vec.resize(len, val);
+        vec
+    }
 
     #[cfg(not(feature = "simd"))]
     return vec![val; len];
@@ -64,9 +72,9 @@ pub unsafe fn reinterpret_aligned_vec<T: Sized, TDest: Sized>(data: AlignedVec<T
 
     #[cfg(feature = "simd")]
     {
-        let (ptr, align, len, cap) = data.into_raw_parts();
+        let (ptr, len, cap) = data.into_raw_parts();
 
-        unsafe { aligned_vec::AVec::from_raw_parts(ptr.cast::<TDest>(), align, len, cap) }
+        unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>(), len, cap, allocator::CacheAligned) }
     }
 
     #[cfg(not(feature = "simd"))]
@@ -77,5 +85,32 @@ pub unsafe fn reinterpret_aligned_vec<T: Sized, TDest: Sized>(data: AlignedVec<T
         std::mem::forget(data); // Avoid dropping the original Vec
 
         unsafe { Vec::from_raw_parts(ptr, len, cap) }
+    }
+}
+
+#[cfg(feature = "simd")]
+pub mod allocator {
+    use std::alloc::{AllocError, Layout};
+
+    const CACHELINE_ALIGN: usize = 64; // Common cache line size
+
+    #[derive(Clone)]
+    pub struct CacheAligned;
+
+    unsafe impl std::alloc::Allocator for CacheAligned {
+        fn allocate(&self, layout: Layout) -> Result<std::ptr::NonNull<[u8]>, AllocError> {
+            let aligned_layout = Layout::from_size_align(layout.size(), CACHELINE_ALIGN).map_err(|_| AllocError)?;
+
+            let ptr = unsafe { std::alloc::alloc(aligned_layout) };
+
+            let ptr = std::ptr::NonNull::new(ptr).ok_or(std::alloc::AllocError)?;
+            // SAFETY: we just allocated `layout.size()` bytes.
+            Ok(std::ptr::NonNull::slice_from_raw_parts(ptr, layout.size()))
+        }
+
+        unsafe fn deallocate(&self, ptr: std::ptr::NonNull<u8>, layout: std::alloc::Layout) {
+            let aligned_layout = Layout::from_size_align(layout.size(), CACHELINE_ALIGN).expect("Invalid layout for cache line alignment");
+            unsafe { std::alloc::dealloc(ptr.as_ptr(), aligned_layout) };
+        }
     }
 }

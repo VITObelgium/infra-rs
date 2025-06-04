@@ -1,7 +1,7 @@
 #![feature(portable_simd)]
-use aligned_vec::{AVec, CACHELINE_ALIGN, ConstAlign};
 use criterion::Criterion;
 use inf::{
+    allocate::{self},
     colormap::{ColorMap, ColorMapDirection, ColorMapPreset},
     legend::{create_banded, create_categoric_for_value_range, create_linear},
 };
@@ -25,7 +25,7 @@ where
         std::convert::Into<std::simd::Mask<i32, LANES>>,
 {
     let raster_size = RASTER_HEIGHT * RASTER_WIDTH;
-    let data = AVec::<T, ConstAlign<CACHELINE_ALIGN>>::from_iter(CACHELINE_ALIGN, (0..raster_size).map(|i| NumCast::from(i).unwrap()));
+    let data = allocate::aligned_vec_from_iter((0..raster_size).map(|i| NumCast::from(i).unwrap()));
 
     let cmap_def = ColorMap::Preset(ColorMapPreset::Turbo, ColorMapDirection::Regular);
     let legend = create_banded(10, &cmap_def, 0.0..=100.0, None).unwrap();

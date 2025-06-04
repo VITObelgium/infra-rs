@@ -92,7 +92,7 @@ impl PyRaster {
         T::TArrow: ArrowPrimitiveType<Native = T>,
         arrow::array::PrimitiveArray<<T as arrowutil::ArrowType>::TArrow>: std::convert::From<std::vec::Vec<T>>,
     {
-        let (meta, data) = raster.to_raw_parts();
+        let (meta, data) = raster.into_raw_parts_global_alloc();
         let arr = PrimitiveArray::<T::TArrow>::from(data);
 
         let array: &PrimitiveArray<T::TArrow> = arr.as_any().downcast_ref().expect("Failed to downcast arrow array");
