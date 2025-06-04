@@ -299,6 +299,7 @@ pub trait ArrayInterop: Sized {
     #[simd_macro::simd_bounds(Self::Pixel)]
     fn init_nodata(&mut self);
 
+    #[simd_macro::simd_bounds(Self::Pixel)]
     fn restore_nodata(&mut self);
 }
 

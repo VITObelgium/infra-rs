@@ -324,6 +324,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metada
         densearrayutil::process_nodata(self.as_mut_slice(), nodata);
     }
 
+    #[simd_macro::simd_bounds]
     fn restore_nodata(&mut self) {
         let nodata = inf::cast::option(self.metadata().nodata());
         densearrayutil::restore_nodata(&mut self.data, nodata);

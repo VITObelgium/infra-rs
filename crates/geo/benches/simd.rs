@@ -29,6 +29,10 @@ pub fn simd<T: ArrayNum>(c: &mut Criterion) {
     c.bench_function(&bench_name::<T>("init_nodata"), |b| {
         b.iter_batched_ref(create_raster, |lhs| lhs.init_nodata(), BatchSize::LargeInput);
     });
+
+    c.bench_function(&bench_name::<T>("restore_nodata"), |b| {
+        b.iter_batched_ref(create_raster, |lhs| lhs.restore_nodata(), BatchSize::LargeInput);
+    });
 }
 
 criterion::criterion_group!(benches_i32, simd<i32>);

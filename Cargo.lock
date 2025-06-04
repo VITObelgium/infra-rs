@@ -1268,6 +1268,7 @@ dependencies = [
  "approx",
  "arrow",
  "bon",
+ "cfg-if",
  "criterion",
  "ctor",
  "env_logger",

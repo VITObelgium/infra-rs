@@ -117,8 +117,7 @@ pub mod simd {
                 fn init_nodata(&mut self, nodata: Self) {
                     use SimdPartialEq as _;
 
-                    let nodata_mask = self.simd_eq(nodata);
-                    *self = nodata_mask.select(Self::NODATA_SIMD, *self);
+                    *self = self.simd_eq(nodata).select(Self::NODATA_SIMD, *self);
                 }
 
                 #[inline]
@@ -146,14 +145,12 @@ pub mod simd {
                 fn init_nodata(&mut self, nodata: Self) {
                     use SimdPartialEq as _;
 
-                    let nodata_mask = self.simd_eq(nodata);
-                    *self = nodata_mask.select(Self::NODATA_SIMD, *self);
+                    *self = self.simd_eq(nodata).select(Self::NODATA_SIMD, *self);
                 }
 
                 #[inline]
                 fn restore_nodata(&mut self, nodata: Self) {
-                    let nodata_mask = self.is_nan();
-                    *self = nodata_mask.select(nodata, *self);
+                    *self = self.is_nan().select(nodata, *self);
                 }
             }
         };
