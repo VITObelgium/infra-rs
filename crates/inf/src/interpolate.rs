@@ -3,19 +3,18 @@ use num::{Float, Num, NumCast, One, ToPrimitive, Zero};
 #[inline]
 pub fn linear_map_to_float<T, TFloat>(value: T, min: T, max: T) -> TFloat
 where
-    T: PartialOrd + Num + ToPrimitive + Into<TFloat> + Copy,
+    T: Float + PartialOrd + Num + ToPrimitive + Into<TFloat> + Copy,
     TFloat: Float + Zero + One,
 {
-    //assert!(!(min.into().is_nan() || max.into().is_nan()));
-    assert!(min <= max);
+    debug_assert!(min <= max);
 
-    if min >= max {
+    if min > max {
         return TFloat::zero();
     }
 
-    if value < min {
+    if value <= min {
         return TFloat::zero();
-    } else if value > max {
+    } else if value >= max {
         return TFloat::one();
     }
 
@@ -34,7 +33,7 @@ where
 
     debug_assert!(min <= max);
 
-    let lower_edge = value.simd_lt(Simd::splat(min));
+    let lower_edge = value.simd_le(Simd::splat(min));
     let upper_edge = value.simd_ge(Simd::splat(max));
 
     let result = (value - Simd::splat(min)) / Simd::splat(max - min);
@@ -60,3 +59,95 @@ where
 //     let mapped = (map_start as f32 + (map_width as f32 * pos)).clamp(0.0, u8::MAX as f32);
 //     mapped.try_into().unwrap_or(map_start)
 // }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_negative_range() {
+        assert_eq!(linear_map_to_float::<f32, f32>(-1.2f32, -1.2f32, 1.2f32), 0.0f32);
+        assert_eq!(linear_map_to_float::<f32, f32>(0.0f32, -1.2f32, 1.2f32), 0.5f32);
+        assert_eq!(linear_map_to_float::<f32, f32>(1.2f32, -1.2f32, 1.2f32), 1.0f32);
+    }
+
+    #[test]
+    fn test_value_below_min() {
+        assert_eq!(linear_map_to_float::<f32, f32>(-2.0f32, -1.0f32, 1.0f32), 0.0f32);
+    }
+
+    #[test]
+    fn test_value_above_max() {
+        assert_eq!(linear_map_to_float::<f32, f32>(2.0f32, -1.0f32, 1.0f32), 1.0);
+    }
+
+    #[test]
+    fn test_value_at_min() {
+        assert_eq!(linear_map_to_float::<f32, f32>(-1.0f32, -1.0f32, 1.0f32), 0.0);
+    }
+
+    #[test]
+    fn test_value_at_max() {
+        assert_eq!(linear_map_to_float::<f32, f32>(1.0f32, -1.0f32, 1.0f32), 1.0);
+    }
+
+    #[test]
+    fn test_zero_range() {
+        assert_eq!(linear_map_to_float::<f32, f32>(0.0, 1.0, 1.0), 0.0);
+        assert_eq!(linear_map_to_float::<f32, f32>(1.0, 1.0, 1.0), 0.0);
+        assert_eq!(linear_map_to_float::<f32, f32>(2.0, 1.0, 1.0), 1.0);
+    }
+
+    #[cfg(feature = "simd")]
+    mod simd_tests {
+        use std::simd::prelude::*;
+
+        #[test]
+        fn test_negative_range_simd() {
+            let values = Simd::from_array([-1.2f32, 0.0, 1.2]);
+            let expected = Simd::from_array([0.0, 0.5, 1.0]);
+            let result = super::linear_map_to_float_simd::<3>(values, -1.2, 1.2);
+            assert_eq!(result, expected);
+        }
+
+        #[test]
+        fn test_value_below_min_simd() {
+            let values = Simd::from_array([-2.0f32, -1.0, 0.0]);
+            let expected = Simd::from_array([0.0, 0.0, 0.5]);
+            let result = super::linear_map_to_float_simd::<3>(values, -1.0, 1.0);
+            assert_eq!(result, expected);
+        }
+
+        #[test]
+        fn test_value_above_max_simd() {
+            let values = Simd::from_array([2.0f32, 1.0, 0.0]);
+            let expected = Simd::from_array([1.0, 1.0, 0.5]);
+            let result = super::linear_map_to_float_simd::<3>(values, -1.0, 1.0);
+            assert_eq!(result, expected);
+        }
+
+        #[test]
+        fn test_value_at_min_simd() {
+            let values = Simd::from_array([-1.0f32, 0.0, 1.0]);
+            let expected = Simd::from_array([0.0, 0.5, 1.0]);
+            let result = super::linear_map_to_float_simd::<3>(values, -1.0, 1.0);
+            assert_eq!(result, expected);
+        }
+
+        #[test]
+        fn test_value_at_max_simd() {
+            let values = Simd::from_array([1.0f32, -1.0, 0.0]);
+            let expected = Simd::from_array([1.0, 0.0, 0.5]);
+            let result = super::linear_map_to_float_simd::<3>(values, -1.0, 1.0);
+            assert_eq!(result, expected);
+        }
+
+        #[test]
+        fn test_zero_range_simd() {
+            let values = Simd::from_array([0.0f32, 1.0, 2.0]);
+            let expected = Simd::from_array([0.0, 0.0, 1.0]);
+            let result = super::linear_map_to_float_simd::<3>(values, 1.0, 1.0);
+            assert_eq!(result, expected);
+        }
+    }
+}
