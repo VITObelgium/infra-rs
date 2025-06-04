@@ -32,14 +32,13 @@ where
     use std::simd::cmp::SimdPartialOrd;
     use std::simd::prelude::*;
 
-    assert!(min <= max);
+    debug_assert!(min <= max);
 
     let lower_edge = value.simd_lt(Simd::splat(min));
     let upper_edge = value.simd_ge(Simd::splat(max));
 
-    let mut result = (value - Simd::splat(min)) / Simd::splat(max - min);
-    result = lower_edge.select(Simd::splat(0.0), upper_edge.select(Simd::splat(1.0), result));
-    Mask::splat(min > max).select(Simd::splat(0.0), result)
+    let result = (value - Simd::splat(min)) / Simd::splat(max - min);
+    lower_edge.select(Simd::splat(0.0), upper_edge.select(Simd::splat(1.0), result))
 }
 
 // pub fn linear_map_to_byte<T>(value: T, start: T, end: T, map_start: u8, map_end: u8) -> u8
