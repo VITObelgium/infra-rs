@@ -6,22 +6,22 @@ PKG_CONFIG_PATH = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@/lib/pk
 PYO3_PYTHON = { value = ".pixi/envs/default/@PYTHON_EXE@", relative = true }
 
 [target.x86_64-pc-windows-msvc]
-rustflags = ["-C", "target-feature=+crt-static", "-C", "target-feature=+avx2"]
+rustflags = ["-Ctarget-feature=+crt-static", "-Ctarget-feature=+avx2"]
 
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "target-feature=+avx2"]
+rustflags = ["-Ctarget-feature=+avx2"]
 
 [target.x86_64-apple-darwin]
 rustflags = [
-    "-C", "target-feature=+avx2",
-    "-C", "link-arg=-mmacosx-version-min=15.0",
-    "-C", "link-arg=-Wl,-rpath,@WORKSPACE_ROOT@/.pixi/envs/default/lib/"
+    "-Ctarget-feature=+avx2",
+    "-Clink-arg=-mmacosx-version-min=15.0",
+    "-Clink-arg=-Wl,-rpath,@WORKSPACE_ROOT@/.pixi/envs/default/lib/"
 ]
 
 [target.aarch64-apple-darwin]
 rustflags = [
-    "-C", "link-arg=-mmacosx-version-min=15.0",
-    "-C", "link-arg=-Wl,-rpath,@WORKSPACE_ROOT@/.pixi/envs/default/lib/"
+    "-Clink-arg=-mmacosx-version-min=15.0",
+    "-Clink-arg=-Wl,-rpath,@WORKSPACE_ROOT@/.pixi/envs/default/lib/"
 ]
 
 [target.'cfg(all())']
