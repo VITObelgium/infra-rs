@@ -140,10 +140,14 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         use crate::simd::SimdCastPl;
 
         let value: Simd<T, LANES> = value.simd_cast();
-        let mappable_mask = !self.is_unmappable_simd(value.simd_cast(), cast::option::<f32>(nodata));
+        let unmappable_mask = self.is_unmappable_simd(value.simd_cast(), cast::option::<f32>(nodata));
+        if unmappable_mask.all() {
+            *color_buffer = unmappable.nodata;
+            return;
+        }
 
         let colors = self.mapper.color_for_numeric_value_simd(value.simd_cast(), unmappable);
-        colors.store_select(color_buffer.as_mut_array(), mappable_mask);
+        *color_buffer = unmappable_mask.select(unmappable.nodata, colors);
     }
 
     pub fn color_for_opt_value<T: Copy + num::NumCast>(&self, value: Option<T>) -> Color {
@@ -192,7 +196,9 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
             return self.apply_to_data_scalar(data, nodata);
         }
 
-        let mut colors = allocate::aligned_vec_filled_with(self.mapping_config.nodata_color.to_bits(), data.len());
+        let mut colors = allocate::aligned_vec_with_capacity(data.len());
+        // Safety: all the cells in `colors` will be filled with u32 color bits, no need to initialize them
+        unsafe { colors.set_len(data.len()) };
 
         let (head, simd_vals, tail) = data.as_simd();
         let (head_colors, simd_colors, tail_colors) = colors.as_simd_mut();
