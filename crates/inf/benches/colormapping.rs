@@ -30,33 +30,42 @@ where
     let cmap_def = ColorMap::Preset(ColorMapPreset::Turbo, ColorMapDirection::Regular);
     let legend = create_banded(10, &cmap_def, 0.0..=100.0, None).unwrap();
 
-    c.bench_function(&bench_name::<T>("apply_banded_legend"), |b| {
+    let mut group = c.benchmark_group("Banded");
+    group.bench_function(&bench_name::<T>("apply_banded_legend"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_scalar(&data, NumCast::from(99.0)));
     });
 
-    c.bench_function(&bench_name::<T>("apply_banded_legend_simd"), |b| {
+    group.bench_function(&bench_name::<T>("apply_banded_legend_simd"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_simd(&data, NumCast::from(99.0)));
     });
 
+    group.finish();
+
+    let mut group = c.benchmark_group("Linear");
     let legend = create_linear(&cmap_def, 0.0..100.0, None).unwrap();
 
-    c.bench_function(&bench_name::<T>("apply_linear_legend"), |b| {
+    group.bench_function(&bench_name::<T>("apply_linear_legend"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_scalar(&data, NumCast::from(99.0)));
     });
 
-    c.bench_function(&bench_name::<T>("apply_linear_legend_simd"), |b| {
+    group.bench_function(&bench_name::<T>("apply_linear_legend_simd"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_simd(&data, NumCast::from(99.0)));
     });
 
+    group.finish();
+
+    let mut group = c.benchmark_group("Categoric");
     let legend = create_categoric_for_value_range(&cmap_def, 0..=300, None).unwrap();
 
-    c.bench_function(&bench_name::<T>("apply_categoric_legend"), |b| {
+    group.bench_function(&bench_name::<T>("apply_categoric_legend"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_scalar(&data, NumCast::from(99.0)));
     });
 
-    c.bench_function(&bench_name::<T>("apply_categoric_legend_simd"), |b| {
+    group.bench_function(&bench_name::<T>("apply_categoric_legend_simd"), |b| {
         b.iter_with_large_drop(|| legend.apply_to_data_simd(&data, NumCast::from(99.0)));
     });
+
+    group.finish();
 }
 
 criterion::criterion_group!(cmap_benches_f32, bench_colormap<f32>);
