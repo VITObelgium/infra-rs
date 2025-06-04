@@ -38,10 +38,7 @@ where
     let upper_edge = value.simd_ge(Simd::splat(max));
 
     let mut result = (value - Simd::splat(min)) / Simd::splat(max - min);
-
-    result = lower_edge.select(Simd::splat(0.0), result);
-    result = upper_edge.select(Simd::splat(1.0), result);
-
+    result = lower_edge.select(Simd::splat(0.0), upper_edge.select(Simd::splat(1.0), result));
     lower_edge.simd_ge(upper_edge).select(Simd::splat(0.0), result)
 }
 
