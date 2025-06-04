@@ -12,6 +12,62 @@ where
         .ok_or_else(|| Error::InvalidArgument(format!("Failed to convert raster value to f64: '{value:?}'")))
 }
 
+mod simd {
+    use std::simd::{Simd, SimdElement, cmp::SimdPartialEq};
+
+    const LANES: usize = inf::simd::LANES;
+
+    pub fn simd_filter_out(slice: &[f32], filter_value: f32) -> Vec<f32>
+    where
+        std::simd::Simd<f32, LANES>: SimdPartialEq,
+    {
+        let mut result = Vec::with_capacity(slice.len());
+
+        // as_simd splits the slice into (head, simd_chunks, tail)
+        let (head, simd_chunks, tail) = slice.as_simd::<LANES>();
+
+        // Process the head (elements before alignment)
+        for &item in head {
+            if item != filter_value {
+                result.push(item);
+            }
+        }
+
+        let filter_vec = Simd::splat(filter_value);
+        // Buffer for one SIMD chunk of filtered values
+        let mut out_buf = [filter_value; LANES];
+
+        for chunk in simd_chunks {
+            let mask = chunk.simd_ne(filter_vec);
+
+            // Get the indices of the selected elements
+            let mut write_indices = [0usize; LANES];
+            let mut write_count = 0;
+            for (i, keep) in mask.to_array().iter().enumerate() {
+                if *keep {
+                    write_indices[write_count] = i;
+                    write_count += 1;
+                }
+            }
+
+            // Scatter the kept elements into the buffer
+            chunk.scatter_select(&mut out_buf, mask.cast(), Simd::from_array(write_indices));
+
+            // Push only the kept elements from the buffer to result
+            result.extend_from_slice(&out_buf[..write_count]);
+        }
+
+        // Process the tail (elements after the last SIMD chunk)
+        for &item in tail {
+            if item != filter_value {
+                result.push(item);
+            }
+        }
+
+        result
+    }
+}
+
 pub(crate) fn array_quantiles<T>(data: &[T], quantile_vals: &[f64]) -> Result<Option<Vec<f64>>>
 where
     T: ArrayNum,
