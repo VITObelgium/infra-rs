@@ -66,11 +66,11 @@ impl ColorMapper for Linear {
         let end = Simd::splat(self.value_range.end + EDGE_TOLERANCE);
 
         let value_0_1 = linear_map_to_float_simd(value, self.value_range.start, self.value_range.end);
-        let mut colors = self.color_map.get_color_simd(value_0_1);
+        let colors = self.color_map.get_color_simd(value_0_1);
 
-        colors = value.simd_lt(start).select(unmappable.low, colors);
-        colors = value.simd_gt(end).select(unmappable.high, colors);
-        colors
+        value
+            .simd_lt(start)
+            .select(unmappable.low, value.simd_gt(end).select(unmappable.high, colors))
     }
 
     fn color_for_string_value(&self, value: &str, unmappable: &UnmappableColors) -> Color {
