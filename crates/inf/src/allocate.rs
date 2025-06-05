@@ -82,6 +82,7 @@ pub unsafe fn reinterpret_aligned_vec<T: Sized, TDest: Sized>(data: AlignedVec<T
         let ptr = data.as_ptr() as *mut TDest;
         let len = data.len();
         let cap = data.capacity();
+        #[allow(clippy::mem_forget)] // No longer needed when Vec::into_raw_parts is stable
         std::mem::forget(data); // Avoid dropping the original Vec
 
         unsafe { Vec::from_raw_parts(ptr, len, cap) }
