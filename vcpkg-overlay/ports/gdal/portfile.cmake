@@ -27,6 +27,7 @@ vcpkg_check_features(OUT_FEATURE_OPTIONS FEATURE_OPTIONS
         cfitsio          GDAL_USE_CFITSIO
         curl             GDAL_USE_CURL
         expat            GDAL_USE_EXPAT
+        expat            OGR_ENABLE_DRIVER_XLSX
         freexl           GDAL_USE_FREEXL
         geos             GDAL_USE_GEOS
         core             GDAL_USE_GEOTIFF
