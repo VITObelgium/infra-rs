@@ -326,13 +326,13 @@ impl ProcessedColorMap {
         use std::simd::StdFloat;
         use std::simd::prelude::*;
 
-        let transparent = std::simd::Simd::splat(color::TRANSPARENT.to_bits());
-        let out_of_range = value.simd_lt(Simd::splat(0.0)) | value.simd_gt(Simd::splat(1.0));
-        let indexes = (value * std::simd::Simd::splat(255.0)).round().cast::<usize>();
+        let transparent = Simd::splat(color::TRANSPARENT.to_bits());
+        let in_range = value.simd_ge(Simd::splat(0.0)) | value.simd_le(Simd::splat(1.0));
+        let indexes = (value * Simd::splat(255.0)).round().cast::<usize>();
 
         let cmap: &[u32] = unsafe { std::mem::transmute::<&[Color], &[u32]>(&self.cmap) };
 
-        std::simd::Simd::gather_select(cmap, (!out_of_range).cast(), indexes, transparent)
+        Simd::gather_select(cmap, in_range.cast(), indexes, transparent)
     }
 
     pub fn get_color_by_value(&self, value: u8) -> Color {
