@@ -252,7 +252,8 @@ impl Default for Legend {
             colormapper::Linear::new(
                 Range { start: 0.0, end: 255.0 },
                 ProcessedColorMap::create_for_preset(ColorMapPreset::Gray, ColorMapDirection::Regular),
-            ),
+            )
+            .unwrap(), // Will never fail since the range is valid
             MappingConfig::default(),
         ))
     }
@@ -384,7 +385,7 @@ impl Legend {
 /// Create a legend with linear color mapping
 pub fn create_linear(cmap_def: &ColorMap, value_range: Range<f32>, mapping_config: Option<MappingConfig>) -> Result<LinearLegend> {
     Ok(MappedLegend {
-        mapper: colormapper::Linear::new(value_range, ProcessedColorMap::create(cmap_def)?),
+        mapper: colormapper::Linear::new(value_range, ProcessedColorMap::create(cmap_def)?)?,
         color_map_name: cmap_def.name(),
         mapping_config: mapping_config.unwrap_or_default(),
         ..Default::default()

@@ -1,7 +1,7 @@
-use crate::Color;
 use crate::colormap::ProcessedColorMap;
 use crate::interpolate::linear_map_to_float;
 use crate::legend::MappingConfig;
+use crate::{Color, Error, Result};
 use std::ops::Range;
 
 use super::ColorMapper;
@@ -22,8 +22,15 @@ pub struct Linear {
 }
 
 impl Linear {
-    pub fn new(value_range: Range<f32>, color_map: ProcessedColorMap) -> Self {
-        Linear { color_map, value_range }
+    pub fn new(value_range: Range<f32>, color_map: ProcessedColorMap) -> Result<Self> {
+        if value_range.start > value_range.end {
+            return Err(Error::InvalidArgument(format!(
+                "Invalid linear color mapper value range: start ({}) must be less than end ({})",
+                value_range.start, value_range.end
+            )));
+        }
+
+        Ok(Linear { color_map, value_range })
     }
 }
 

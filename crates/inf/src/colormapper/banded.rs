@@ -51,6 +51,14 @@ impl Banded {
     }
 
     pub fn with_equal_bands(band_count: usize, value_range: RangeInclusive<f32>, color_map: &ColorMap) -> Result<Self> {
+        if value_range.start() >= value_range.end() {
+            return Err(Error::InvalidArgument(format!(
+                "Invalid banded color mapper value range: start ({}) must be less than end ({})",
+                value_range.start(),
+                value_range.end()
+            )));
+        }
+
         let mut entries = Vec::with_capacity(band_count);
         let band_offset: f32 = (value_range.end() - value_range.start()) / (band_count as f32 - 1.0);
         let mut band_pos = *value_range.start();
@@ -99,6 +107,13 @@ impl Banded {
     pub fn with_manual_ranges(value_ranges: Vec<Range<f32>>, color_map: &ColorMap) -> Result<Self> {
         let band_count = value_ranges.len();
         let mut entries = Vec::with_capacity(band_count);
+
+        if let Some(invalid_range) = value_ranges.iter().find(|r| r.start >= r.end) {
+            return Err(Error::InvalidArgument(format!(
+                "Invalid range: start ({}) must be less than end ({})",
+                invalid_range.start, invalid_range.end
+            )));
+        }
 
         if let ColorMap::ColorList(colors) = color_map {
             if colors.len() != value_ranges.len() {
