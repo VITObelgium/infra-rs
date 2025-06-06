@@ -1,5 +1,5 @@
 use crate::{Error, Result};
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 use num::NumCast;
 
@@ -22,6 +22,13 @@ pub fn range<To: NumCast>(from: Range<impl NumCast>) -> Result<Range<To>> {
         start: NumCast::from(from.start).ok_or_else(|| Error::Runtime("Impossible range cast".into()))?,
         end: NumCast::from(from.end).ok_or_else(|| Error::Runtime("Impossible range cast".into()))?,
     })
+}
+
+pub fn inclusive_range<To: NumCast>(from: RangeInclusive<impl NumCast + Copy>) -> Result<RangeInclusive<To>> {
+    Ok(RangeInclusive::new(
+        NumCast::from(*from.start()).ok_or_else(|| Error::Runtime("Impossible range cast".into()))?,
+        NumCast::from(*from.end()).ok_or_else(|| Error::Runtime("Impossible range cast".into()))?,
+    ))
 }
 
 pub fn slice<To: NumCast>(from: &[impl NumCast + Copy]) -> Result<Vec<To>> {
