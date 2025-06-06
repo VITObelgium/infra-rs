@@ -248,11 +248,11 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
             .fold(0.0, |acc, x| acc + x.to_f64().unwrap_or(0.0))
     }
 
-    fn iter(&self) -> std::slice::Iter<T> {
+    fn iter(&self) -> std::slice::Iter<'_, T> {
         self.data.iter()
     }
 
-    fn iter_mut(&mut self) -> std::slice::IterMut<T> {
+    fn iter_mut(&mut self) -> std::slice::IterMut<'_, T> {
         self.data.iter_mut()
     }
 

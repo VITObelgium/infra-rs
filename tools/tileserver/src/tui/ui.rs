@@ -9,7 +9,7 @@ use tui_logger::{TuiLoggerLevelOutput, TuiLoggerWidget};
 
 use super::app::App;
 
-fn layer_metadata_rows(layer: Option<&LayerMetadata>) -> Vec<Row> {
+fn layer_metadata_rows(layer: Option<&LayerMetadata>) -> Vec<Row<'_>> {
     match layer {
         Some(layer) => vec![
             Row::new(vec!["Id".to_string(), layer.id.to_string()]),
