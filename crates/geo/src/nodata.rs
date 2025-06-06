@@ -4,7 +4,7 @@ use num::ToPrimitive;
 /// Typically used for pixel values in rasters, where a specific value indicates that the pixel does not contain valid data.
 /// Floating point types may use NaN as the no-data value, while integer types typically use their maximum value for unsigned types
 /// and minimum value for signed types.
-pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
+pub trait Nodata: ToPrimitive + PartialEq + PartialOrd + Sized + Copy {
     const NODATA: Self;
 
     #[inline]
@@ -31,6 +31,16 @@ pub trait Nodata: ToPrimitive + PartialEq + Sized + Copy {
         if self.is_nodata() {
             *self = nodata;
         }
+    }
+
+    #[inline]
+    fn nodata_min(&self, other: Self) -> Self {
+        if other.is_nodata() || *self < other { *self } else { other }
+    }
+
+    #[inline]
+    fn nodata_max(&self, other: Self) -> Self {
+        if other.is_nodata() || *self > other { *self } else { other }
     }
 
     fn has_nan() -> bool;

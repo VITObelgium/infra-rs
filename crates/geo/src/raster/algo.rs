@@ -44,6 +44,11 @@ pub use {
     statistics::RasterStats, statistics::statistics,
 };
 
+#[cfg(feature = "simd")]
+pub mod simd {
+    pub use {super::limits::simd::min, super::limits::simd::min_max};
+}
+
 pub use {nodata::is_data, nodata::is_nodata, nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::replace_value_by_nodata};
 
 pub use rasterdiff::RasterCellMismatch;

@@ -51,7 +51,7 @@ pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
 }
 
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
-mod simd {
+pub mod simd {
     use inf::simd::LANES;
 
     use crate::{Nodata, NodataSimd};
@@ -59,7 +59,20 @@ mod simd {
 
     use crate::ArrayNum;
 
-    pub fn unary_simd<T: SimdElement>(data: &mut [T], cb_scalar: impl Fn(&mut T), cb_simd: impl Fn(&mut Simd<T, LANES>))
+    pub fn unary_simd<T: SimdElement>(data: &[T], mut cb_scalar: impl FnMut(&T), cb_simd: impl FnMut(&Simd<T, LANES>))
+    where
+        std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
+    {
+        let (head, simd_vals, tail) = data.as_simd();
+
+        debug_assert!(head.is_empty(), "Data alignment error");
+
+        head.iter().for_each(&mut cb_scalar);
+        simd_vals.iter().for_each(cb_simd);
+        tail.iter().for_each(cb_scalar);
+    }
+
+    pub fn unary_simd_mut<T: SimdElement>(data: &mut [T], cb_scalar: impl Fn(&mut T), cb_simd: impl Fn(&mut Simd<T, LANES>))
     where
         std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
     {
@@ -76,7 +89,7 @@ mod simd {
     where
         std::simd::Simd<T, LANES>: NodataSimd,
     {
-        unary_simd(
+        unary_simd_mut(
             data,
             |v| Nodata::init_nodata(v, nodata),
             |v| NodataSimd::init_nodata(v, Simd::splat(nodata)),
@@ -87,7 +100,7 @@ mod simd {
     where
         std::simd::Simd<T, LANES>: NodataSimd,
     {
-        unary_simd(
+        unary_simd_mut(
             data,
             |v| Nodata::restore_nodata(v, nodata),
             |v| NodataSimd::restore_nodata(v, Simd::splat(nodata)),

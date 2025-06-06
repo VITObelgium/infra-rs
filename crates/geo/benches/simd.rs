@@ -3,7 +3,10 @@ use criterion::{BatchSize, Criterion};
 
 #[cfg(feature = "simd")]
 use geo::NodataSimd;
-use geo::{Array, ArrayInterop as _, ArrayNum, Columns, GeoReference, RasterSize, Rows, raster::DenseRaster};
+use geo::{
+    Array, ArrayInterop as _, ArrayNum, Columns, GeoReference, RasterSize, Rows,
+    raster::{DenseRaster, algo},
+};
 use num::NumCast;
 
 const RASTER_WIDTH: Columns = Columns(1024);
@@ -35,6 +38,51 @@ pub fn simd<T: ArrayNum>(c: &mut Criterion) {
     });
 }
 
+pub fn min_max_f32(c: &mut Criterion) {
+    let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
+    let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
+
+    let create_raster =
+        || DenseRaster::<f32>::from_iter_opt(geo_ref.clone(), (0..RASTER_WIDTH * RASTER_HEIGHT).map(|x| Some(x as f32))).unwrap();
+    let mut group = c.benchmark_group("MinMax");
+
+    group.bench_function("min_max", |b| {
+        b.iter_batched_ref(
+            create_raster,
+            |lhs| {
+                let min_max = algo::min_max(lhs);
+                assert!(min_max.start < min_max.end);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("min_max_simd", |b| {
+        b.iter_batched_ref(
+            create_raster,
+            |lhs| {
+                let min_max = algo::simd::min_max(lhs);
+                assert!(min_max.start < min_max.end);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("min_simd", |b| {
+        b.iter_batched_ref(
+            create_raster,
+            |lhs| {
+                let min = algo::simd::min(lhs);
+                assert!(min == 0.0);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.finish();
+}
+
 criterion::criterion_group!(benches_i32, simd<i32>);
 criterion::criterion_group!(benches_f32, simd<f32>);
-criterion::criterion_main!(benches_i32, benches_f32);
+criterion::criterion_group!(algobenches_f32, min_max_f32);
+criterion::criterion_main!(algobenches_f32);

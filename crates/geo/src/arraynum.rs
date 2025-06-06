@@ -57,7 +57,7 @@ pub trait ArrayNumScalar:
 }
 
 #[cfg(feature = "simd")]
-pub trait ArrayNumSimd: std::simd::SimdElement {}
+pub trait ArrayNumSimd: std::simd::SimdElement + std::simd::SimdCast {}
 
 #[cfg(not(feature = "simd"))]
 pub trait ArrayNum: ArrayNumScalar {}
