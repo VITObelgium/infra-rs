@@ -240,6 +240,21 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         Ok(())
     }
 
+    pub fn len(&self) -> usize {
+        match self {
+            AnyDenseArray::U8(raster) => raster.len(),
+            AnyDenseArray::U16(raster) => raster.len(),
+            AnyDenseArray::U32(raster) => raster.len(),
+            AnyDenseArray::U64(raster) => raster.len(),
+            AnyDenseArray::I8(raster) => raster.len(),
+            AnyDenseArray::I16(raster) => raster.len(),
+            AnyDenseArray::I32(raster) => raster.len(),
+            AnyDenseArray::I64(raster) => raster.len(),
+            AnyDenseArray::F32(raster) => raster.len(),
+            AnyDenseArray::F64(raster) => raster.len(),
+        }
+    }
+
     #[cfg(feature = "gdal")]
     pub fn write(&mut self, path: &std::path::Path) -> Result<()> {
         use crate::raster::RasterIO;
