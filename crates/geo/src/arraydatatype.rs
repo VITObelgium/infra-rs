@@ -1,7 +1,7 @@
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg_attr(target_arch = "wasm32", derive(tsify::Tsify), tsify(from_wasm_abi, into_wasm_abi))]
+#[cfg_attr(any(feature = "serde", target_arch = "wasm32"), derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 #[repr(u8)]
 pub enum ArrayDataType {
     Int8 = 0,

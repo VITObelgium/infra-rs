@@ -3,15 +3,15 @@ use geo_types::Point;
 
 /// Represents a wgs84 point in the raster (lat, lon)
 #[derive(Debug, PartialEq, Clone, Copy)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(any(feature = "serde", target_arch = "wasm32"), derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
+#[cfg_attr(target_arch = "wasm32", derive(tsify::Tsify))]
+#[cfg_attr(target_arch = "wasm32", tsify(into_wasm_abi, from_wasm_abi))]
 pub struct Coordinate {
     pub latitude: f64,
     pub longitude: f64,
 }
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 impl Coordinate {
     pub fn latlon(lat: f64, lon: f64) -> Self {
         Coordinate {
@@ -59,11 +59,7 @@ impl Coordinate {
 
         let delta = max - min;
         let wrapped = min + (value - min).rem_euclid(delta);
-        if value < min {
-            wrapped + delta
-        } else {
-            wrapped
-        }
+        if value < min { wrapped + delta } else { wrapped }
     }
 
     pub fn distance(&self, other: &Coordinate) -> f64 {

@@ -7,9 +7,11 @@ use std::str::FromStr;
 #[cfg(feature = "serde")]
 use crate::bigarray::BigArray;
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(target_arch = "wasm32", derive(tsify::Tsify), tsify(from_wasm_abi))]
+#[cfg_attr(any(feature = "serde", target_arch = "wasm32"), derive(serde::Serialize, serde::Deserialize))]
 pub enum ColorMapDirection {
+    #[cfg_attr(target_arch = "wasm32", tsify(from_wasm_abi))]
     #[default]
     Regular,
     Reversed,
@@ -61,8 +63,9 @@ impl Default for ProcessedColorMap {
 
 #[derive(Debug, Clone, Copy, PartialEq, strum::EnumString, strum::Display)]
 #[strum(serialize_all = "lowercase")]
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen::prelude::wasm_bindgen)]
+#[cfg_attr(target_arch = "wasm32", derive(tsify::Tsify), tsify(from_wasm_abi))]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
+#[cfg_attr(any(feature = "serde", target_arch = "wasm32"), derive(serde::Serialize, serde::Deserialize))]
 pub enum ColorMapPreset {
     Bone,
     Cool,
