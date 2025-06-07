@@ -18,6 +18,8 @@ where
 
 #[cfg(feature = "simd")]
 pub mod simd {
+    use simd_macro::simd_bounds;
+
     use crate::NodataSimd;
 
     use super::*;
@@ -48,7 +50,7 @@ pub mod simd {
         min.min(simd_min.reduce_min())
     }
 
-    #[simd_macro::simd_bounds]
+    #[simd_bounds(R::Pixel)]
     pub fn min_max<R, T, Meta>(ras: &R) -> Range<T>
     where
         T: ArrayNum,
@@ -100,10 +102,10 @@ mod unspecialized_generictests {
     use super::*;
 
     #[test]
-    #[simd_bounds]
-    fn test_min_max_empty<R, T: ArrayNum>() -> Result<()>
+    #[simd_bounds(R::Pixel)]
+    fn test_min_max_empty<R>() -> Result<()>
     where
-        R: Array<Pixel = T, Metadata = GeoReference>,
+        R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference>,
     {
         let meta = GeoReference::with_origin(
@@ -127,10 +129,10 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_macro::simd_bounds]
-    fn test_min_max_single_element<R, T: ArrayNum>() -> Result<()>
+    #[simd_bounds(R::Pixel)]
+    fn test_min_max_single_element<R>() -> Result<()>
     where
-        R: Array<Pixel = T, Metadata = GeoReference>,
+        R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference>,
     {
         let meta = GeoReference::with_origin(
@@ -154,10 +156,10 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_macro::simd_bounds]
-    fn test_min_max_multiple_elements<R, T: ArrayNum>() -> Result<()>
+    #[simd_bounds(R::Pixel)]
+    fn test_min_max_multiple_elements<R>() -> Result<()>
     where
-        R: Array<Pixel = T, Metadata = GeoReference>,
+        R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference>,
     {
         let meta = GeoReference::with_origin(
@@ -193,10 +195,10 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_macro::simd_bounds]
-    fn test_min_max_multiple_elements_nodata<R, T: ArrayNum>() -> Result<()>
+    #[simd_bounds(R::Pixel)]
+    fn test_min_max_multiple_elements_nodata<R>() -> Result<()>
     where
-        R: Array<Pixel = T, Metadata = GeoReference>,
+        R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference> + ArrayInterop<Pixel = f64, Metadata = GeoReference>,
     {
         let meta = GeoReference::with_origin(
@@ -223,9 +225,9 @@ mod unspecialized_generictests {
         Ok(())
     }
 
-    #[instantiate_tests(<DenseRaster<u8>, u8>)]
+    #[instantiate_tests(<DenseRaster<u8>>)]
     mod denserasteru8 {}
 
-    #[instantiate_tests(<DenseRaster<f32>, f32>)]
+    #[instantiate_tests(<DenseRaster<f32>>)]
     mod denserasterf32 {}
 }
