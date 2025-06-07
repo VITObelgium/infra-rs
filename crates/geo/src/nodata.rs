@@ -97,20 +97,27 @@ impl_nodata_floating_point!(f64);
 
 #[cfg(feature = "simd")]
 pub mod simd {
+
     use super::*;
     use std::simd::{LaneCount, SupportedLaneCount, prelude::*};
 
     const LANES: usize = inf::simd::LANES;
 
-    pub trait NodataSimd: std::simd::cmp::SimdPartialEq {
-        type Scalar;
-        type Simd;
+    pub trait NodataSimd: std::simd::cmp::SimdPartialEq + Sized {
+        type Scalar: std::simd::SimdElement;
+        type NodataMask;
         const NODATA_SIMD: Self;
 
         /// For importing foreign data that may contain nodata values not adhereing to the predefined `Self::NODATA` value.
         fn init_nodata(&mut self, nodata: Self);
         /// For exporting the data to a format where the nodata value does not match the predefined `Self::NODATA` value.
         fn restore_nodata(&mut self, nodata: Self);
+
+        fn is_nodata(&self) -> Self::NodataMask;
+        fn nodata_min(&self, other: Self) -> Self;
+        fn nodata_max(&self, other: Self) -> Self;
+        fn reduce_min_without_nodata_check(&self) -> Self::Scalar;
+        fn reduce_max_without_nodata_check(&self) -> Self::Scalar;
     }
 
     macro_rules! impl_nodata_simd {
@@ -120,7 +127,7 @@ pub mod simd {
                 LaneCount<LANES>: SupportedLaneCount,
             {
                 type Scalar = $t;
-                type Simd = std::simd::Simd<$t, LANES>;
+                type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, LANES>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);
 
                 #[inline]
@@ -132,10 +139,43 @@ pub mod simd {
 
                 #[inline]
                 fn restore_nodata(&mut self, nodata: Self) {
-                    use std::simd::cmp::SimdPartialEq as _;
+                    use SimdPartialEq as _;
 
                     let nodata_mask = self.simd_eq(Self::NODATA_SIMD);
                     *self = nodata_mask.select(nodata, *self);
+                }
+
+                #[inline]
+                fn is_nodata(&self) -> Self::Mask {
+                    self.simd_eq(Self::NODATA_SIMD)
+                }
+
+                #[inline]
+                fn nodata_min(&self, other: Self) -> Self
+                where
+                    Self: SimdOrd,
+                {
+                    let nodata_mask = self.is_nodata() | other.is_nodata();
+                    nodata_mask.select(Self::NODATA_SIMD, self.simd_min(other))
+                }
+
+                #[inline]
+                fn nodata_max(&self, other: Self) -> Self
+                where
+                    Self: SimdOrd,
+                {
+                    let nodata_mask = self.is_nodata() | other.is_nodata();
+                    nodata_mask.select(Self::NODATA_SIMD, self.simd_max(other))
+                }
+
+                #[inline]
+                fn reduce_min_without_nodata_check(&self) -> Self::Scalar {
+                    self.reduce_min()
+                }
+
+                #[inline]
+                fn reduce_max_without_nodata_check(&self) -> Self::Scalar {
+                    self.reduce_max()
                 }
             }
         };
@@ -148,7 +188,7 @@ pub mod simd {
                 LaneCount<LANES>: SupportedLaneCount,
             {
                 type Scalar = $t;
-                type Simd = std::simd::Simd<$t, LANES>;
+                type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, LANES>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);
 
                 #[inline]
@@ -161,6 +201,41 @@ pub mod simd {
                 #[inline]
                 fn restore_nodata(&mut self, nodata: Self) {
                     *self = self.is_nan().select(nodata, *self);
+                }
+
+                #[inline]
+                fn is_nodata(&self) -> Self::Mask {
+                    self.is_nan()
+                }
+
+                #[inline]
+                fn nodata_min(&self, other: Self) -> Self
+                where
+                    Self: SimdFloat,
+                {
+                    // SimdFloat::simd_min already handles NaN correctly,
+                    // so we can use it directly without using a nodata mask.
+                    self.simd_min(other)
+                }
+
+                #[inline]
+                fn nodata_max(&self, other: Self) -> Self
+                where
+                    Self: SimdFloat,
+                {
+                    // SimdFloat::simd_max already handles NaN correctly,
+                    // so we can use it directly without using a nodata mask.
+                    self.simd_max(other)
+                }
+
+                #[inline]
+                fn reduce_min_without_nodata_check(&self) -> Self::Scalar {
+                    self.reduce_min()
+                }
+
+                #[inline]
+                fn reduce_max_without_nodata_check(&self) -> Self::Scalar {
+                    self.reduce_max()
                 }
             }
         };

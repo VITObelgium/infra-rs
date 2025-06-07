@@ -1,4 +1,4 @@
-use crate::{arrayops, ArrayMetadata, ArrayNum, DenseArray};
+use crate::{ArrayMetadata, ArrayNum, DenseArray, arrayops};
 
 /// Macro to generate numeric raster operations.
 macro_rules! dense_raster_op {

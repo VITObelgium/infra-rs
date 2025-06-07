@@ -3,9 +3,6 @@ use inf::allocate::AlignedVec;
 use crate::{Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
 use std::fmt::Debug;
 
-#[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
-
 pub trait ArrayMetadata: Clone + Debug {
     fn size(&self) -> RasterSize;
     fn nodata(&self) -> Option<f64>;
@@ -98,6 +95,14 @@ impl Window {
     }
 }
 
+pub trait ArrayIsEqual {
+    type To: ?Sized;
+}
+
+impl<T: ?Sized> ArrayIsEqual for T {
+    type To = Self;
+}
+
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Array:
@@ -140,10 +145,13 @@ pub trait Array:
 // + for<'a> std::ops::Div<&'a Self, Output = Self>
 {
     type Pixel: ArrayNum;
+
+    //#[cfg(feature = "simd")]
+    //type SimdPixel: NodataSimd<Scalar = Self::Pixel>;
+
     type Metadata: ArrayMetadata;
 
-    // Type alias for a raster of the the same array implementor type but with a different pixel type
-    type WithPixelType<U: ArrayNum>: Array<Pixel = U, Metadata = Self::Metadata>;
+    type WithPixelType<TDest: ArrayNum>: Array<Pixel = TDest, Metadata = Self::Metadata>;
 
     //
     // Creation functions
@@ -278,7 +286,7 @@ pub trait Array:
     /// Assigns the value to all the elements of the raster, even nodata
     fn fill(&mut self, val: Self::Pixel);
 
-    fn cast_to<U: ArrayNum>(&self) -> Self::WithPixelType<U>;
+    fn cast_to<TDest: ArrayNum>(&self) -> Self::WithPixelType<TDest>;
 }
 
 pub trait ArrayCopy<T: ArrayNum, Rhs = Self> {
@@ -286,20 +294,14 @@ pub trait ArrayCopy<T: ArrayNum, Rhs = Self> {
     fn new_with_dimensions_of(ras: &Rhs, fill: T) -> Self;
 }
 
-pub trait ArrayInterop: Sized {
-    type Pixel: ArrayNum;
-    type Metadata: ArrayMetadata;
-
+pub trait ArrayInterop: Array + Sized {
     /// Create a new raster with the given metadata and data buffer.
     /// The nodata value from the provided Metadata will be used to convert all the values in the
     /// data buffer that match the nodata value to the internal nodata value.
-    #[simd_macro::simd_bounds(Self::Pixel)]
     fn new_init_nodata(meta: Self::Metadata, data: AlignedVec<Self::Pixel>) -> Result<Self>;
 
-    #[simd_macro::simd_bounds(Self::Pixel)]
     fn init_nodata(&mut self);
 
-    #[simd_macro::simd_bounds(Self::Pixel)]
     fn restore_nodata(&mut self);
 }
 

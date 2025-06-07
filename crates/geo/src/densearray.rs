@@ -68,7 +68,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         return (self.meta, self.data);
     }
 
-    pub fn unary<TDest: ArrayNum>(&self, op: impl Fn(T) -> TDest) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
+    pub fn unary(&self, op: impl Fn(T) -> T) -> Self {
         DenseArray::new(
             self.metadata().clone(),
             allocate::aligned_vec_from_iter(self.data.iter().map(|&a| op(a))),
@@ -85,11 +85,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         self
     }
 
-    pub fn binary<TDest: ArrayNum>(
-        &self,
-        other: &Self,
-        op: impl Fn(T, T) -> TDest,
-    ) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
+    pub fn binary(&self, other: &Self, op: impl Fn(T, T) -> T) -> Self {
         raster::algo::assert_dimensions(self, other);
 
         let data = allocate::aligned_vec_from_iter(self.data.iter().zip(other.data.iter()).map(|(&a, &b)| op(a, b)));
@@ -142,8 +138,8 @@ impl<T: ArrayNum, R: Array<Metadata = Metadata>, Metadata: ArrayMetadata> ArrayC
 
 impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     type Pixel = T;
-    type WithPixelType<U: ArrayNum> = DenseArray<U, Metadata>;
     type Metadata = Metadata;
+    type WithPixelType<TDest: ArrayNum> = DenseArray<TDest, Metadata>;
 
     fn new(meta: Metadata, data: AlignedVec<T>) -> Result<Self> {
         if meta.size().cell_count() != data.len() {
@@ -301,30 +297,25 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         self.data.iter_mut().for_each(|x| *x = val);
     }
 
-    fn cast_to<U: ArrayNum>(&self) -> <DenseArray<T, Metadata> as Array>::WithPixelType<U> {
+    fn cast_to<TDest: ArrayNum>(&self) -> Self::WithPixelType<TDest> {
         DenseArray::from_iter_opt(self.metadata().clone(), self.iter_opt().map(|v| v.and_then(|v| NumCast::from(v))))
             .expect("Raster size bug")
     }
 }
 
+#[simd_macro::simd_bounds]
 impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metadata> {
-    type Pixel = <Self as Array>::Pixel;
-    type Metadata = <Self as Array>::Metadata;
-
-    #[simd_macro::simd_bounds]
     fn new_init_nodata(meta: Self::Metadata, data: AlignedVec<Self::Pixel>) -> Result<Self> {
         let mut raster = Self::new(meta, data)?;
         raster.init_nodata();
         Ok(raster)
     }
 
-    #[simd_macro::simd_bounds]
     fn init_nodata(&mut self) {
         let nodata = inf::cast::option(self.metadata().nodata());
         densearrayutil::process_nodata(self.as_mut_slice(), nodata);
     }
 
-    #[simd_macro::simd_bounds]
     fn restore_nodata(&mut self) {
         let nodata = inf::cast::option(self.metadata().nodata());
         densearrayutil::restore_nodata(&mut self.data, nodata);

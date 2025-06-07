@@ -1,15 +1,7 @@
-use arrow::{
-    array::{Array, ArrayData, PrimitiveArray},
-    datatypes::ArrowPrimitiveType,
-    pyarrow::PyArrowType,
-};
-
 use crate::{
     ArrayNum,
     array::{Columns, Rows},
 };
-use pyo3::{pyclass, pymethods};
-
 use crate::{
     GeoReference, RasterSize,
     raster::{
@@ -17,6 +9,12 @@ use crate::{
         arrow::arrowutil::{self, ArrowType},
     },
 };
+use arrow::{
+    array::{Array, ArrayData, PrimitiveArray},
+    datatypes::ArrowPrimitiveType,
+    pyarrow::PyArrowType,
+};
+use pyo3::{pyclass, pymethods};
 
 #[derive(Clone)]
 #[pyclass(name = "RasterMetadata")]

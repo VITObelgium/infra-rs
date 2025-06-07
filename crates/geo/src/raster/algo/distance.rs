@@ -1,5 +1,3 @@
-use num::{Bounded, NumCast, Zero};
-
 use crate::raster::algo::clusterutils::handle_time_cell;
 use crate::{
     Array, ArrayCopy, Cell, DenseArray, Error, GeoReference, Result,
@@ -9,6 +7,7 @@ use crate::{
     },
 };
 use crate::{ArrayNum, array};
+use num::{Bounded, NumCast, Zero};
 
 use super::clusterutils::{FiLo, MARK_BORDER, MARK_TODO};
 use super::nodata;
@@ -1059,8 +1058,9 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn distance_all_ones<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    fn distance_all_ones<R>() -> Result<()>
     where
+        R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>>,
     {
         let meta = GeoReference::with_origin(
@@ -1101,8 +1101,9 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn distance_with_obstacles<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    fn distance_with_obstacles<R>() -> Result<()>
     where
+        R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
         let meta = GeoReference::with_origin(
@@ -1161,8 +1162,9 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn distance_with_obstacles_only_diagonal_path<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    fn distance_with_obstacles_only_diagonal_path<R>() -> Result<()>
     where
+        R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
         let meta = GeoReference::with_origin(
@@ -1245,8 +1247,9 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn distance_with_obstacles_only_diagonal_barrier<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    fn distance_with_obstacles_only_diagonal_barrier<R>() -> Result<()>
     where
+        R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
         let meta = GeoReference::with_origin(

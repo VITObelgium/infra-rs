@@ -2577,6 +2577,7 @@ dependencies = [
  "num",
  "path_macro",
  "png",
+ "simd_macro",
  "thiserror 2.0.12",
  "tokio",
  "wasm-bindgen",

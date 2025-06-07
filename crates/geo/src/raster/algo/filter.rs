@@ -44,7 +44,10 @@ mod unspecialized_generictests {
     use super::*;
 
     #[test]
-    fn test_filter_empty<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()> {
+    fn test_filter_empty<R>() -> Result<()>
+    where
+        R: Array<Metadata = GeoReference>,
+    {
         let meta = GeoReference::with_origin(
             "",
             RasterSize::with_rows_cols(Rows(0), Columns(0)),
@@ -59,9 +62,10 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_filter_single_element<R: Array<Pixel = u8, Metadata = GeoReference>>() -> Result<()>
+    fn test_filter_single_element<R>() -> Result<()>
     where
-        R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
+        R: Array<Pixel = u8, Metadata = GeoReference>,
+        R::WithPixelType<f64>: ArrayInterop,
     {
         let meta = GeoReference::with_origin(
             "",
@@ -83,9 +87,10 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_filter_multiple_elements<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    fn test_filter_multiple_elements<R>() -> Result<()>
     where
-        R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
+        R: Array<Metadata = GeoReference>,
+        R::WithPixelType<f64>: ArrayInterop,
     {
         let meta = GeoReference::with_origin(
             "",
@@ -123,9 +128,10 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    fn test_min_max_multiple_elements_nodata<R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>>() -> Result<()>
+    fn test_min_max_multiple_elements_nodata<R>() -> Result<()>
     where
-        R::WithPixelType<f64>: ArrayInterop<Pixel = f64, Metadata = GeoReference>,
+        R: Array<Metadata = GeoReference>,
+        R::WithPixelType<f64>: ArrayInterop,
     {
         let meta = GeoReference::with_origin(
             "",

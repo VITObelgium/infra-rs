@@ -53,6 +53,7 @@ pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
 #[cfg(all(feature = "simd", target_arch = "aarch64"))]
 pub mod simd {
     use inf::simd::LANES;
+    use simd_macro::simd_bounds;
 
     use crate::{Nodata, NodataSimd};
     use std::simd::{SimdElement, prelude::*};
@@ -85,10 +86,8 @@ pub mod simd {
         tail.iter_mut().for_each(cb_scalar);
     }
 
-    pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: T)
-    where
-        std::simd::Simd<T, LANES>: NodataSimd,
-    {
+    #[simd_bounds]
+    pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: T) {
         unary_simd_mut(
             data,
             |v| Nodata::init_nodata(v, nodata),
@@ -96,10 +95,8 @@ pub mod simd {
         );
     }
 
-    pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: T)
-    where
-        std::simd::Simd<T, LANES>: NodataSimd,
-    {
+    #[simd_bounds]
+    pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: T) {
         unary_simd_mut(
             data,
             |v| Nodata::restore_nodata(v, nodata),

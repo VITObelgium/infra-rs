@@ -69,11 +69,11 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     /// If the type of the array does not match the type of the operation, the internal raster is first cast
     /// to the type of the operation.
     /// The operation is applied to each element of the array, also the nodata cells.
-    pub fn unary<T: ArrayNum, TDest: ArrayNum>(&self, op: impl Fn(T) -> TDest) -> DenseArray<TDest, Metadata> {
+    pub fn unary<T: ArrayNum>(&self, op: impl Fn(T) -> T) -> DenseArray<T, Metadata> {
         let lhs: Result<&DenseArray<T, Metadata>> = self.try_into();
 
         match lhs {
-            Ok(lhs) => lhs.unary::<TDest>(op),
+            Ok(lhs) => lhs.unary(op),
             Err(_) => self.cast_to::<T>().unary(op),
         }
     }
@@ -106,12 +106,12 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         Ok(())
     }
 
-    pub fn binary_op<T: ArrayNum, TDest: ArrayNum>(&self, other: &Self, op: impl Fn(T, T) -> TDest) -> DenseArray<TDest, Metadata> {
+    pub fn binary_op<T: ArrayNum>(&self, other: &Self, op: impl Fn(T, T) -> T) -> DenseArray<T, Metadata> {
         let lhs: Result<&DenseArray<T, Metadata>> = self.try_into();
         let rhs: Result<&DenseArray<T, Metadata>> = other.try_into();
 
         match (lhs, rhs) {
-            (Ok(lhs), Ok(rhs)) => lhs.binary::<TDest>(rhs, op),
+            (Ok(lhs), Ok(rhs)) => lhs.binary(rhs, op),
             (Err(_), Err(_)) => self.cast_to::<T>().binary(&other.cast_to::<T>(), op),
             (Ok(lhs), Err(_)) => lhs.binary(&other.cast_to::<T>(), op),
             (Err(_), Ok(rhs)) => self.cast_to::<T>().binary(rhs, op),
@@ -238,6 +238,21 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
 
         Ok(())
+    }
+
+    pub fn is_empty(&self) -> bool {
+        match self {
+            AnyDenseArray::U8(raster) => raster.is_empty(),
+            AnyDenseArray::U16(raster) => raster.is_empty(),
+            AnyDenseArray::U32(raster) => raster.is_empty(),
+            AnyDenseArray::U64(raster) => raster.is_empty(),
+            AnyDenseArray::I8(raster) => raster.is_empty(),
+            AnyDenseArray::I16(raster) => raster.is_empty(),
+            AnyDenseArray::I32(raster) => raster.is_empty(),
+            AnyDenseArray::I64(raster) => raster.is_empty(),
+            AnyDenseArray::F32(raster) => raster.is_empty(),
+            AnyDenseArray::F64(raster) => raster.is_empty(),
+        }
     }
 
     pub fn len(&self) -> usize {
@@ -405,16 +420,16 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> TryFrom<AnyDenseArray<Metadata>> for 
 
     fn try_from(value: AnyDenseArray<Metadata>) -> Result<Self> {
         match value {
-            AnyDenseArray::U8(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::U16(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::U32(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::U64(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::I8(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::I16(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::I32(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::I64(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::F32(raster) => dense_array_as::<T, _, _>(raster),
-            AnyDenseArray::F64(raster) => dense_array_as::<T, _, _>(raster),
+            AnyDenseArray::U8(raster) => dense_array_as::<T, u8, _>(raster),
+            AnyDenseArray::U16(raster) => dense_array_as::<T, u16, _>(raster),
+            AnyDenseArray::U32(raster) => dense_array_as::<T, u32, _>(raster),
+            AnyDenseArray::U64(raster) => dense_array_as::<T, u64, _>(raster),
+            AnyDenseArray::I8(raster) => dense_array_as::<T, i8, _>(raster),
+            AnyDenseArray::I16(raster) => dense_array_as::<T, i16, _>(raster),
+            AnyDenseArray::I32(raster) => dense_array_as::<T, i32, _>(raster),
+            AnyDenseArray::I64(raster) => dense_array_as::<T, i64, _>(raster),
+            AnyDenseArray::F32(raster) => dense_array_as::<T, f32, _>(raster),
+            AnyDenseArray::F64(raster) => dense_array_as::<T, f64, _>(raster),
         }
     }
 }
