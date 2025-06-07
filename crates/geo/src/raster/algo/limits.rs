@@ -23,18 +23,18 @@ pub mod simd {
     use crate::NodataSimd;
 
     use super::*;
-    use crate::{Nodata as _, densearrayutil};
+    use crate::densearrayutil;
     use std::simd::prelude::*;
 
     const LANES: usize = inf::simd::LANES;
 
-    pub fn min<R, Meta>(ras: &R) -> f32
+    #[simd_bounds]
+    pub fn min<R, T, Meta>(ras: &R) -> T
     where
-        R: Array<Pixel = f32, Metadata = Meta>,
+        T: ArrayNum,
+        R: Array<Pixel = T, Metadata = Meta>,
     {
-        use num::Float;
-
-        let mut min = f32::max_value();
+        let mut min = T::max_value();
         let mut simd_min = Simd::splat(min);
 
         densearrayutil::simd::unary_simd(
@@ -43,11 +43,33 @@ pub mod simd {
                 min = min.nodata_min(v);
             },
             |v| {
-                simd_min = v.is_nan().select(simd_min, v.simd_min(simd_min));
+                simd_min = v.nodata_mask().select(simd_min, v.nodata_min(simd_min));
             },
         );
 
-        min.min(simd_min.reduce_min())
+        min.nodata_min(simd_min.reduce_min_without_nodata_check())
+    }
+
+    #[simd_bounds]
+    pub fn max<R, T, Meta>(ras: &R) -> T
+    where
+        T: ArrayNum,
+        R: Array<Pixel = T, Metadata = Meta>,
+    {
+        let mut max = T::min_value();
+        let mut simd_max = Simd::splat(max);
+
+        densearrayutil::simd::unary_simd(
+            ras.as_slice(),
+            |&v| {
+                max = max.nodata_max(v);
+            },
+            |v| {
+                simd_max = v.nodata_mask().select(simd_max, v.nodata_max(simd_max));
+            },
+        );
+
+        max.nodata_max(simd_max.reduce_max_without_nodata_check())
     }
 
     #[simd_bounds(R::Pixel)]
@@ -249,6 +271,8 @@ mod unspecialized_generictests {
 
         let range_simd = simd::min_max(&raster);
         assert_eq!(range_simd, cast::range(range)?);
+        assert_eq!(range_simd.start, simd::min(&raster));
+        assert_eq!(range_simd.end, simd::max(&raster));
 
         Ok(())
     }
