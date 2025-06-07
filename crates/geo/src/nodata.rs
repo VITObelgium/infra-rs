@@ -113,7 +113,7 @@ pub mod simd {
         /// For exporting the data to a format where the nodata value does not match the predefined `Self::NODATA` value.
         fn restore_nodata(&mut self, nodata: Self);
 
-        fn is_nodata(&self) -> Self::NodataMask;
+        fn nodata_mask(&self) -> Self::NodataMask;
         fn nodata_min(&self, other: Self) -> Self;
         fn nodata_max(&self, other: Self) -> Self;
         fn reduce_min_without_nodata_check(&self) -> Self::Scalar;
@@ -146,7 +146,7 @@ pub mod simd {
                 }
 
                 #[inline]
-                fn is_nodata(&self) -> Self::Mask {
+                fn nodata_mask(&self) -> Self::Mask {
                     self.simd_eq(Self::NODATA_SIMD)
                 }
 
@@ -155,8 +155,9 @@ pub mod simd {
                 where
                     Self: SimdOrd,
                 {
-                    let nodata_mask = self.is_nodata() | other.is_nodata();
-                    nodata_mask.select(Self::NODATA_SIMD, self.simd_min(other))
+                    let mut res = self.simd_min(other);
+                    res = self.nodata_mask().select(other, res);
+                    other.nodata_mask().select(*self, res)
                 }
 
                 #[inline]
@@ -164,8 +165,10 @@ pub mod simd {
                 where
                     Self: SimdOrd,
                 {
-                    let nodata_mask = self.is_nodata() | other.is_nodata();
-                    nodata_mask.select(Self::NODATA_SIMD, self.simd_max(other))
+                    let mut res = self.simd_max(other);
+                    // In fields that are nodata, take the other value
+                    res = self.nodata_mask().select(other, res);
+                    other.nodata_mask().select(*self, res)
                 }
 
                 #[inline]
@@ -204,7 +207,7 @@ pub mod simd {
                 }
 
                 #[inline]
-                fn is_nodata(&self) -> Self::Mask {
+                fn nodata_mask(&self) -> Self::Mask {
                     self.is_nan()
                 }
 

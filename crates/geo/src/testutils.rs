@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use approx::relative_eq;
 use inf::allocate::{self, AlignedVec};
+use num::NumCast;
 use path_macro::path;
+use rand::distr::{Uniform, uniform::SampleUniform};
 
 use crate::{
     ArrayNum, GeoReference, RasterSize,
@@ -29,6 +31,17 @@ pub fn create_vec<T: num::NumCast + ArrayNum>(data: &[f64]) -> AlignedVec<T> {
         }
     }
 
+    vec
+}
+
+pub fn create_random_vec<T: num::NumCast + ArrayNum + SampleUniform>(size: RasterSize) -> AlignedVec<T> {
+    use rand::distr::Distribution;
+
+    let mut rng = rand::rng();
+    let mut vec = allocate::aligned_vec_with_capacity(size.cell_count());
+    let uniform =
+        Uniform::new::<T, T>(NumCast::from(0).unwrap(), NumCast::from(255).unwrap()).expect("Failed to create uniform distribution");
+    (0..size.cell_count()).for_each(|_| vec.push(uniform.sample(&mut rng)));
     vec
 }
 

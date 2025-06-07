@@ -69,7 +69,7 @@ pub mod simd {
                 max = max.nodata_max(v);
             },
             |v| {
-                let nodata: <std::simd::Simd<T, LANES> as NodataSimd>::NodataMask = v.is_nodata();
+                let nodata: <std::simd::Simd<T, LANES> as NodataSimd>::NodataMask = v.nodata_mask();
                 simd_min = nodata.select(simd_min, v.nodata_min(simd_min));
                 simd_max = nodata.select(simd_max, v.nodata_max(simd_max));
             },
@@ -221,6 +221,34 @@ mod unspecialized_generictests {
 
         let range = min_max(&raster);
         assert_eq!(range, cast::range(-10.0..21.0)?);
+
+        Ok(())
+    }
+
+    #[test]
+    #[simd_bounds(R::Pixel)]
+    #[cfg(feature = "simd")]
+    fn test_min_max_random_elements<R>() -> Result<()>
+    where
+        R: Array<Metadata = GeoReference> + ArrayInterop,
+        R::Pixel: rand::distr::uniform::SampleUniform,
+    {
+        let meta = GeoReference::with_origin(
+            "",
+            RasterSize::with_rows_cols(Rows(130), Columns(333)),
+            Point::new(0.0, 0.0),
+            CellSize::square(100.0),
+            Some(NOD),
+        );
+
+        #[rustfmt::skip]
+        let size = meta.raster_size() ;
+        let raster = R::new_init_nodata(meta, testutils::create_random_vec(size))?.cast_to::<R::Pixel>();
+
+        let range = min_max(&raster);
+
+        let range_simd = simd::min_max(&raster);
+        assert_eq!(range_simd, cast::range(range)?);
 
         Ok(())
     }
