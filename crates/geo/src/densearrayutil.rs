@@ -50,7 +50,7 @@ pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
     }
 }
 
-#[cfg(all(feature = "simd", target_arch = "aarch64"))]
+#[cfg(feature = "simd")]
 pub mod simd {
     use inf::simd::LANES;
     use simd_macro::simd_bounds;
@@ -87,6 +87,7 @@ pub mod simd {
     }
 
     #[simd_bounds]
+    #[allow(dead_code)]
     pub fn init_nodata<T: ArrayNum + SimdElement>(data: &mut [T], nodata: T) {
         unary_simd_mut(
             data,
@@ -96,6 +97,7 @@ pub mod simd {
     }
 
     #[simd_bounds]
+    #[allow(dead_code)]
     pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: T) {
         unary_simd_mut(
             data,
