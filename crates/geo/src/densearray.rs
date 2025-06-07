@@ -313,7 +313,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metada
 
     fn init_nodata(&mut self) {
         let nodata = inf::cast::option(self.metadata().nodata());
-        densearrayutil::process_nodata(self.as_mut_slice(), nodata);
+        densearrayutil::init_nodata(self.as_mut_slice(), nodata);
     }
 
     fn restore_nodata(&mut self) {

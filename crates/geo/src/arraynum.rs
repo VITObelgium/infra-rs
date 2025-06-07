@@ -1,4 +1,9 @@
+#[cfg(feature = "simd")]
+use crate::NodataSimd;
 use crate::{ArrayDataType, Nodata};
+
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
 
 pub trait ArrayNumScalar:
     Copy
@@ -57,7 +62,17 @@ pub trait ArrayNumScalar:
 }
 
 #[cfg(feature = "simd")]
-pub trait ArrayNumSimd: std::simd::SimdElement + std::simd::SimdCast {}
+pub trait ArrayNumSimd: std::simd::SimdElement + std::simd::SimdCast {
+    type Simd: NodataSimd;
+}
+
+#[cfg(feature = "simd")]
+impl<T: std::simd::SimdElement + std::simd::SimdCast> ArrayNumSimd for T
+where
+    std::simd::Simd<T, LANES>: NodataSimd,
+{
+    type Simd = std::simd::Simd<T, LANES>;
+}
 
 #[cfg(not(feature = "simd"))]
 pub trait ArrayNum: ArrayNumScalar {}
@@ -255,8 +270,6 @@ macro_rules! impl_arraynum_scalar_signed {
         }
 
         impl ArrayNum for $t {}
-        #[cfg(feature = "simd")]
-        impl ArrayNumSimd for $t {}
     };
 }
 
@@ -273,8 +286,6 @@ macro_rules! impl_arraynum_scalar_unsigned {
         }
 
         impl ArrayNum for $t {}
-        #[cfg(feature = "simd")]
-        impl ArrayNumSimd for $t {}
     };
 }
 
@@ -291,8 +302,6 @@ macro_rules! impl_arraynum_scalar_fp {
         }
 
         impl ArrayNum for $t {}
-        #[cfg(feature = "simd")]
-        impl ArrayNumSimd for $t {}
     };
 }
 

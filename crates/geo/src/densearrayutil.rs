@@ -7,7 +7,7 @@ const LANES: usize = inf::simd::LANES;
 /// This means replacing all the values that match the nodata value with the default nodata value for the type T
 /// as defined by the [`crate::Nodata`] trait
 #[simd_macro::simd_bounds]
-pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
+pub fn init_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
     if let Some(nodata) = nodata {
         if nodata.is_nan() || nodata == T::NODATA {
             // the nodata value for floats is also nan, so no processing required
@@ -18,7 +18,7 @@ pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
         cfg_if::cfg_if! {
             if #[cfg(all(feature = "simd", target_arch = "aarch64"))] {
                 // For aarch64, we use the SIMD implementation directly (twice as fast as the scalar implementation on apple M2)
-                simd::process_nodata(data, nodata);
+                simd::init_nodata(data, nodata);
             } else {
                 // For other architectures, we rely on the cimpiler auto-vectorization (verified to be faster than the SIMD implementation for avx2)
                 for v in data.iter_mut() { v.init_nodata(nodata); }
@@ -87,7 +87,7 @@ pub mod simd {
     }
 
     #[simd_bounds]
-    pub fn process_nodata<T: ArrayNum>(data: &mut [T], nodata: T) {
+    pub fn init_nodata<T: ArrayNum + SimdElement>(data: &mut [T], nodata: T) {
         unary_simd_mut(
             data,
             |v| Nodata::init_nodata(v, nodata),
