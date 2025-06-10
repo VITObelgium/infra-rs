@@ -28,6 +28,58 @@ where
     }
 }
 
+#[cfg(feature = "simd")]
+pub mod simd {
+    use simd_macro::simd_bounds;
+
+    use super::*;
+    use crate::densearrayutil;
+    use std::simd::prelude::*;
+
+    const LANES: usize = inf::simd::LANES;
+
+    #[simd_bounds]
+    pub fn filter_value<R, T, Meta>(ras: &mut R, value: T)
+    where
+        T: ArrayNum,
+        R: Array<Pixel = T, Metadata = Meta>,
+    {
+        let filter_val = Simd::splat(value);
+        densearrayutil::simd::unary_simd_mut(
+            ras.as_mut_slice(),
+            |v| {
+                if *v != value {
+                    *v = T::NODATA;
+                }
+            },
+            |v| *v = (*v).simd_ne(filter_val).select(Simd::splat(T::NODATA), *v),
+        );
+    }
+
+    #[simd_bounds]
+    pub fn filter<R, T>(ras: &mut R, values_to_include: &[T])
+    where
+        R: Array<Pixel = T>,
+        T: ArrayNum,
+    {
+        densearrayutil::simd::unary_simd_mut(
+            ras.as_mut_slice(),
+            |v| {
+                if !values_to_include.contains(v) {
+                    *v = T::NODATA;
+                }
+            },
+            |v| {
+                let mut mask = Mask::splat(false);
+                for filter_val in values_to_include {
+                    mask |= (*v).simd_eq(Simd::splat(*filter_val));
+                }
+                *v = (!mask).select(Simd::splat(T::NODATA), *v);
+            },
+        );
+    }
+}
+
 #[cfg(test)]
 #[generic_tests::define]
 mod unspecialized_generictests {
@@ -57,7 +109,17 @@ mod unspecialized_generictests {
         );
 
         let mut raster = R::WithPixelType::<f64>::new(meta.clone(), allocate::new_aligned_vec())?;
+        #[cfg(feature = "simd")]
+        let mut simd_raster = raster.clone();
+
         filter(&mut raster, &[1.0, 2.0]);
+
+        #[cfg(feature = "simd")]
+        {
+            simd::filter(&mut simd_raster, &[1.0, 2.0]);
+            assert_eq!(raster, simd_raster);
+        }
+
         Ok(())
     }
 
@@ -76,12 +138,23 @@ mod unspecialized_generictests {
         );
 
         let mut raster = R::WithPixelType::<f64>::new_init_nodata(meta.clone(), allocate::aligned_vec_filled_with(5.0, 1))?;
+        #[cfg(feature = "simd")]
+        let mut simd_raster = raster.clone();
 
         filter(&mut raster, &[5.0]);
         assert_eq!(raster.value(0), Some(5.0));
 
         filter(&mut raster, &[1.0]);
         assert_eq!(raster.value(0), None);
+
+        #[cfg(feature = "simd")]
+        {
+            simd::filter(&mut simd_raster, &[5.0]);
+            assert_eq!(simd_raster.value(0), Some(5.0));
+
+            simd::filter(&mut simd_raster, &[1.0]);
+            assert_eq!(simd_raster.value(0), None);
+        }
 
         Ok(())
     }
@@ -110,6 +183,9 @@ mod unspecialized_generictests {
             ]),
         )?;
 
+        #[cfg(feature = "simd")]
+        let mut simd_raster = raster.clone();
+
         filter(&mut raster, &[5.0]);
 
         #[rustfmt::skip]
@@ -124,11 +200,17 @@ mod unspecialized_generictests {
 
         assert_eq!(expected, raster);
 
+        #[cfg(feature = "simd")]
+        {
+            simd::filter(&mut simd_raster, &[5.0]);
+            assert_eq!(raster, simd_raster);
+        }
+
         Ok(())
     }
 
     #[test]
-    fn test_min_max_multiple_elements_nodata<R>() -> Result<()>
+    fn test_filter_multiple_elements_nodata<R>() -> Result<()>
     where
         R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: ArrayInterop,
@@ -151,6 +233,9 @@ mod unspecialized_generictests {
             ]),
         )?;
 
+        #[cfg(feature = "simd")]
+        let mut simd_raster = raster.clone();
+
         #[rustfmt::skip]
         let expected = R::WithPixelType::<f64>::new_init_nodata(
             meta,
@@ -163,6 +248,12 @@ mod unspecialized_generictests {
 
         filter(&mut raster, &[-10.0, 21.0, 2.0]);
         assert_eq!(raster, expected);
+
+        #[cfg(feature = "simd")]
+        {
+            simd::filter(&mut simd_raster, &[-10.0, 21.0, 2.0]);
+            assert_eq!(raster, simd_raster);
+        }
 
         Ok(())
     }

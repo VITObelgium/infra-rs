@@ -38,42 +38,122 @@ pub fn simd<T: ArrayNum>(c: &mut Criterion) {
     });
 }
 
-pub fn min_max_f32(c: &mut Criterion) {
+pub fn min_max(c: &mut Criterion) {
     let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
     let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
 
-    let create_raster =
+    let create_f32_raster =
         || DenseRaster::<f32>::from_iter_opt(geo_ref.clone(), (0..RASTER_WIDTH * RASTER_HEIGHT).map(|x| Some(x as f32))).unwrap();
+    let create_i32_raster =
+        || DenseRaster::<i32>::from_iter_opt(geo_ref.clone(), (0..RASTER_WIDTH * RASTER_HEIGHT).map(|x| Some(x as i32))).unwrap();
     let mut group = c.benchmark_group("MinMax");
 
     group.bench_function("min_max", |b| {
         b.iter_batched_ref(
-            create_raster,
+            create_f32_raster,
             |lhs| {
-                let min_max = algo::min_max(lhs);
-                assert!(min_max.start < min_max.end);
+                let min_max = algo::min_max(lhs).unwrap();
+                assert!(min_max.start() < min_max.end());
             },
             BatchSize::LargeInput,
         );
     });
 
-    group.bench_function("min_max_simd", |b| {
+    group.bench_function("min_max_simd_f32", |b| {
         b.iter_batched_ref(
-            create_raster,
+            create_f32_raster,
             |lhs| {
-                let min_max = algo::simd::min_max(lhs);
-                assert!(min_max.start < min_max.end);
+                if let Some(min_max) = algo::simd::min_max(lhs) {
+                    assert!(min_max.start() < min_max.end());
+                }
             },
             BatchSize::LargeInput,
         );
     });
 
-    group.bench_function("min_simd", |b| {
+    group.bench_function("min_max_simd_i32", |b| {
         b.iter_batched_ref(
-            create_raster,
+            create_i32_raster,
+            |lhs| {
+                if let Some(min_max) = algo::simd::min_max(lhs) {
+                    assert!(min_max.start() < min_max.end());
+                }
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("min_simd_f32", |b| {
+        b.iter_batched_ref(
+            create_f32_raster,
             |lhs| {
                 let min = algo::simd::min(lhs);
-                assert!(min == 0.0);
+                assert!(min == Some(0.0));
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("min_simd_i32", |b| {
+        b.iter_batched_ref(
+            create_i32_raster,
+            |lhs| {
+                let min = algo::simd::min(lhs);
+                assert!(min == Some(0));
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.finish();
+}
+
+pub fn filter(c: &mut Criterion) {
+    let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
+    let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
+
+    let create_f32_raster =
+        || DenseRaster::<f32>::from_iter_opt(geo_ref.clone(), (0..RASTER_WIDTH * RASTER_HEIGHT).map(|x| Some(x as f32))).unwrap();
+    let mut group = c.benchmark_group("Filter single value");
+
+    group.bench_function("filter_value", |b| {
+        b.iter_batched_ref(
+            create_f32_raster,
+            |lhs| {
+                algo::filter_value(lhs, 3.0);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("filter_value_simd", |b| {
+        b.iter_batched_ref(
+            create_f32_raster,
+            |lhs| {
+                algo::simd::filter_value(lhs, 3.0);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.finish();
+    let mut group = c.benchmark_group("Filter multiple value");
+
+    group.bench_function("filter", |b| {
+        b.iter_batched_ref(
+            create_f32_raster,
+            |lhs| {
+                algo::filter(lhs, &[1.0, 2.0, 3.0, 10.0, 11.0]);
+            },
+            BatchSize::LargeInput,
+        );
+    });
+
+    group.bench_function("filter_simd", |b| {
+        b.iter_batched_ref(
+            create_f32_raster,
+            |lhs| {
+                algo::simd::filter(lhs, &[1.0, 2.0, 3.0, 10.0, 11.0]);
             },
             BatchSize::LargeInput,
         );
@@ -84,5 +164,5 @@ pub fn min_max_f32(c: &mut Criterion) {
 
 criterion::criterion_group!(benches_i32, simd<i32>);
 criterion::criterion_group!(benches_f32, simd<f32>);
-criterion::criterion_group!(algobenches_f32, min_max_f32);
+criterion::criterion_group!(algobenches_f32, min_max, filter);
 criterion::criterion_main!(algobenches_f32);
