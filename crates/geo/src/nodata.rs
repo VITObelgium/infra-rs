@@ -142,13 +142,13 @@ pub mod simd {
     }
 
     macro_rules! impl_nodata_simd {
-        ( $t:ident, $numtrait:ident ) => {
-            impl NodataSimd for Simd<$t, LANES>
+        ( $t:ident, $numtrait:ident, $lanes: ident ) => {
+            impl NodataSimd for Simd<$t, $lanes>
             where
-                LaneCount<LANES>: SupportedLaneCount,
+                LaneCount<$lanes>: SupportedLaneCount,
             {
                 type Scalar = $t;
-                type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, LANES>;
+                type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, $lanes>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);
 
                 #[inline]
@@ -242,13 +242,13 @@ pub mod simd {
     }
 
     macro_rules! impl_nodata_simd_fp {
-        ( $t:ident ) => {
-            impl NodataSimd for Simd<$t, LANES>
+        ( $t:ident, $lanes: ident ) => {
+            impl NodataSimd for Simd<$t, $lanes>
             where
-                LaneCount<LANES>: SupportedLaneCount,
+                LaneCount<$lanes>: SupportedLaneCount,
             {
                 type Scalar = $t;
-                type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, LANES>;
+                type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, $lanes>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);
 
                 #[inline]
@@ -334,16 +334,39 @@ pub mod simd {
         };
     }
 
-    impl_nodata_simd!(u8, SimdUint);
-    impl_nodata_simd!(i8, SimdInt);
-    impl_nodata_simd!(u16, SimdUint);
-    impl_nodata_simd!(i16, SimdInt);
-    impl_nodata_simd!(u32, SimdUint);
-    impl_nodata_simd!(i32, SimdInt);
-    impl_nodata_simd!(u64, SimdUint);
-    impl_nodata_simd!(i64, SimdInt);
-    impl_nodata_simd_fp!(f32);
-    impl_nodata_simd_fp!(f64);
+    impl_nodata_simd!(u8, SimdUint, LANES);
+    impl_nodata_simd!(i8, SimdInt, LANES);
+    impl_nodata_simd!(u16, SimdUint, LANES);
+    impl_nodata_simd!(i16, SimdInt, LANES);
+    impl_nodata_simd!(u32, SimdUint, LANES);
+    impl_nodata_simd!(i32, SimdInt, LANES);
+    impl_nodata_simd!(u64, SimdUint, LANES);
+    impl_nodata_simd!(i64, SimdInt, LANES);
+    impl_nodata_simd_fp!(f32, LANES);
+    impl_nodata_simd_fp!(f64, LANES);
+
+    #[cfg(not(any(
+        all(target_arch = "wasm32", target_feature = "simd128"),
+        all(target_arch = "x86_64", target_feature = "sse2", not(target_feature = "avx2")),
+        all(target_arch = "aarch64", target_feature = "neon")
+    )))]
+    mod testsimd {
+        /// The tests use a hard coded lane count of 4
+        /// Make sure the nodata trait is implemented for the types used in the tests if the lane count is for the current architecture is not 4
+        use super::*;
+
+        const TEST_LANES: usize = 4;
+        impl_nodata_simd!(u8, SimdUint, TEST_LANES);
+        impl_nodata_simd!(i8, SimdInt, TEST_LANES);
+        impl_nodata_simd!(u16, SimdUint, TEST_LANES);
+        impl_nodata_simd!(i16, SimdInt, TEST_LANES);
+        impl_nodata_simd!(u32, SimdUint, TEST_LANES);
+        impl_nodata_simd!(i32, SimdInt, TEST_LANES);
+        impl_nodata_simd!(u64, SimdUint, TEST_LANES);
+        impl_nodata_simd!(i64, SimdInt, TEST_LANES);
+        impl_nodata_simd_fp!(f32, TEST_LANES);
+        impl_nodata_simd_fp!(f64, TEST_LANES);
+    }
 
     #[cfg(test)]
     mod tests {
