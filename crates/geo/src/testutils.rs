@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{ops::RangeInclusive, path::PathBuf};
 
 use approx::relative_eq;
 use inf::allocate::{self, AlignedVec};
@@ -34,14 +34,45 @@ pub fn create_vec<T: num::NumCast + ArrayNum>(data: &[f64]) -> AlignedVec<T> {
     vec
 }
 
-pub fn create_random_vec<T: num::NumCast + ArrayNum + SampleUniform>(size: RasterSize) -> AlignedVec<T> {
+pub fn create_random_vec<T: num::NumCast + ArrayNum + SampleUniform>(size: RasterSize, value_range: RangeInclusive<f64>) -> AlignedVec<T> {
     use rand::distr::Distribution;
 
     let mut rng = rand::rng();
     let mut vec = allocate::aligned_vec_with_capacity(size.cell_count());
-    let uniform =
-        Uniform::new::<T, T>(NumCast::from(0).unwrap(), NumCast::from(255).unwrap()).expect("Failed to create uniform distribution");
+    let uniform = Uniform::new_inclusive::<T, T>(
+        NumCast::from(*value_range.start()).unwrap_or_else(|| {
+            panic!(
+                "Failed to convert start of range to type {} ({})",
+                std::any::type_name::<T>(),
+                *value_range.start()
+            )
+        }),
+        NumCast::from(*value_range.end()).unwrap_or_else(|| {
+            panic!(
+                "Failed to convert end of range to type {} ({})",
+                std::any::type_name::<T>(),
+                *value_range.end()
+            )
+        }),
+    )
+    .expect("Failed to create uniform distribution");
     (0..size.cell_count()).for_each(|_| vec.push(uniform.sample(&mut rng)));
+    vec
+}
+
+pub fn create_random_vec_with_nodata<T>(size: RasterSize, value_range: RangeInclusive<f64>, nodata_count: usize) -> AlignedVec<T>
+where
+    T: num::NumCast + ArrayNum + SampleUniform,
+{
+    use rand::distr::Distribution;
+
+    let mut rng = rand::rng();
+    let mut vec = create_random_vec(size, value_range);
+
+    let uniform = Uniform::new(0, size.cell_count()).expect("Failed to create uniform distribution");
+    (0..nodata_count).for_each(|_| {
+        vec[uniform.sample(&mut rng)] = T::NODATA;
+    });
     vec
 }
 

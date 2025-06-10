@@ -1,4 +1,3 @@
-#![warn(clippy::unwrap_used)]
 #![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
 
 pub type Result<T = ()> = std::result::Result<T, Error>;

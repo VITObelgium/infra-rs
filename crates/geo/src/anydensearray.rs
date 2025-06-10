@@ -208,18 +208,18 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
-    pub fn min_max(&self) -> Result<std::ops::Range<f64>> {
+    pub fn min_max(&self) -> Result<Option<std::ops::RangeInclusive<f64>>> {
         Ok(match self {
-            AnyDenseArray::U8(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::U16(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::U32(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::U64(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::I8(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::I16(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::I32(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::I64(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::F32(raster) => cast::range::<f64>(algo::min_max(raster))?,
-            AnyDenseArray::F64(raster) => cast::range::<f64>(algo::min_max(raster))?,
+            AnyDenseArray::U8(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::U16(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::U32(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::U64(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::I8(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::I16(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::I32(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::I64(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::F32(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
+            AnyDenseArray::F64(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
         })
     }
 
