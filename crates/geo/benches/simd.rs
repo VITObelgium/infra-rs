@@ -2,11 +2,9 @@
 
 #[cfg(feature = "simd")]
 mod bench {
-
     use criterion::{BatchSize, Criterion};
 
     #[cfg(feature = "simd")]
-    use geo::NodataSimd;
     use geo::{
         Array, ArrayInterop as _, ArrayNum, Columns, GeoReference, RasterSize, Rows,
         raster::{DenseRaster, algo},
@@ -26,7 +24,7 @@ mod bench {
         return format!("{}_{:?}", name, T::TYPE);
     }
 
-    #[simd_macro::simd_bounds]
+    #[simd_macro::geo_simd_bounds]
     pub fn simd<T: ArrayNum>(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
         let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
@@ -173,7 +171,7 @@ mod bench {
 }
 
 #[cfg(feature = "simd")]
-criterion::criterion_main!(cmap_benches_f32);
+criterion::criterion_main!(bench::algobenches_f32);
 
 #[cfg(not(feature = "simd"))]
 fn main() {
