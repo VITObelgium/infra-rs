@@ -52,7 +52,11 @@ pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
 
 #[cfg(feature = "simd")]
 pub mod simd {
-    use inf::simd::LANES;
+    use inf::{
+        allocate::{self, AlignedVec},
+        simd::LANES,
+    };
+
     use simd_macro::simd_bounds;
 
     use crate::{Nodata, NodataSimd};
@@ -71,6 +75,45 @@ pub mod simd {
         head.iter().for_each(&mut cb_scalar);
         simd_vals.iter().for_each(cb_simd);
         tail.iter().for_each(cb_scalar);
+    }
+
+    pub fn binary_simd<T: SimdElement>(
+        lhs: &[T],
+        rhs: &[T],
+        cb_scalar: impl Fn(T, T) -> T,
+        cb_simd: impl Fn(Simd<T, LANES>, Simd<T, LANES>) -> Simd<T, LANES>,
+    ) -> AlignedVec<T>
+    where
+        std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
+    {
+        assert_eq!(lhs.len(), rhs.len(), "Binary op requires equal length arrays");
+
+        let mut result = allocate::aligned_vec_with_capacity(lhs.len());
+        // Safety: We will write every element in the result
+        unsafe { result.set_len(lhs.len()) };
+
+        let (head1, simd_vals1, tail1) = lhs.as_simd();
+        let (head2, simd_vals2, tail2) = rhs.as_simd();
+        let (head_res, simd_vals_res, tail_res) = result.as_simd_mut();
+
+        debug_assert!(head1.is_empty() && head2.is_empty(), "Data alignment error");
+
+        head_res.iter_mut().zip(head1.iter().zip(head2.iter())).for_each(|(res, (a, b))| {
+            *res = cb_scalar(*a, *b);
+        });
+
+        simd_vals_res
+            .iter_mut()
+            .zip(simd_vals1.iter().zip(simd_vals2.iter()))
+            .for_each(|(res, (a, b))| {
+                *res = cb_simd(*a, *b);
+            });
+
+        tail_res.iter_mut().zip(tail1.iter().zip(tail2.iter())).for_each(|(res, (a, b))| {
+            *res = cb_scalar(*a, *b);
+        });
+
+        result
     }
 
     pub fn unary_simd_mut<T: SimdElement>(data: &mut [T], cb_scalar: impl Fn(&mut T), cb_simd: impl Fn(&mut Simd<T, LANES>))

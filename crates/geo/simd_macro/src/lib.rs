@@ -39,11 +39,11 @@ fn simd_bounds_impl(attr: TokenStream, item: TokenStream, crate_local: bool) -> 
     for typ in &types {
         if crate_local {
             predicates.push(syn::parse_quote! {
-                std::simd::Simd<#typ, LANES>: crate::NodataSimd<Scalar = #typ, NodataMask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>> + std::simd::cmp::SimdPartialEq<Mask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>>
+                std::simd::Simd<#typ, LANES>: crate::NodataSimd<Scalar = #typ, NodataMask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>> + std::simd::cmp::SimdPartialEq<Mask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>> + std::ops::Add<Output = std::simd::Simd<#typ, LANES>> + std::ops::Sub<Output = std::simd::Simd<#typ, LANES>> + std::ops::Mul<Output = std::simd::Simd<#typ, LANES>> + std::ops::Div<Output = std::simd::Simd<#typ, LANES>>
             });
         } else {
             predicates.push(syn::parse_quote! {
-                std::simd::Simd<#typ, LANES>: ::geo::NodataSimd<Scalar = #typ, NodataMask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>> + std::simd::cmp::SimdPartialEq<Mask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>>
+                std::simd::Simd<#typ, LANES>: geo::NodataSimd<Scalar = #typ, NodataMask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>> + std::simd::cmp::SimdPartialEq<Mask = std::simd::Mask<<#typ as std::simd::SimdElement>::Mask, LANES>> + std::ops::Add<Output = std::simd::Simd<#typ, LANES>> + std::ops::Sub<Output = std::simd::Simd<#typ, LANES>> + std::ops::Mul<Output = std::simd::Simd<#typ, LANES>> + std::ops::Div<Output = std::simd::Simd<#typ, LANES>>
             });
         }
     }

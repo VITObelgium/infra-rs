@@ -33,7 +33,7 @@ impl<T: ArrayNum> RasterDiffResult<T> {
     }
 }
 
-#[cfg(feature = "simd")]
+#[cfg(all(feature = "simd", feature = "gdal"))]
 const LANES: usize = inf::simd::LANES;
 
 #[cfg(feature = "gdal")]

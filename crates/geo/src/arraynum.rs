@@ -64,14 +64,49 @@ pub trait ArrayNumScalar:
 #[cfg(feature = "simd")]
 pub trait ArrayNumSimd: std::simd::SimdElement + std::simd::SimdCast {
     type Simd: NodataSimd;
+
+    fn add_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES>;
+    fn sub_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES>;
+    fn mul_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES>;
+    fn div_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES>;
 }
 
 #[cfg(feature = "simd")]
-impl<T: std::simd::SimdElement + std::simd::SimdCast> ArrayNumSimd for T
+#[simd_macro::simd_bounds]
+impl<T: std::simd::SimdElement + std::simd::SimdCast + num::Zero> ArrayNumSimd for T
 where
     std::simd::Simd<T, LANES>: NodataSimd,
 {
     type Simd = std::simd::Simd<T, LANES>;
+
+    #[inline]
+    fn add_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES> {
+        let nodata = lhs.nodata_mask() | rhs.nodata_mask();
+        nodata.select(Self::Simd::NODATA_SIMD, lhs + rhs)
+    }
+
+    #[inline]
+    fn sub_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES> {
+        let nodata = lhs.nodata_mask() | rhs.nodata_mask();
+        nodata.select(Self::Simd::NODATA_SIMD, lhs - rhs)
+    }
+
+    #[inline]
+    fn mul_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES> {
+        let nodata = lhs.nodata_mask() | rhs.nodata_mask();
+        nodata.select(Self::Simd::NODATA_SIMD, lhs * rhs)
+    }
+
+    #[inline]
+    fn div_nodata_aware_simd(lhs: std::simd::Simd<Self, LANES>, mut rhs: std::simd::Simd<Self, LANES>) -> std::simd::Simd<Self, LANES> {
+        use std::simd::cmp::SimdPartialEq as _;
+
+        // Replace any zero values in rhs with NODATA_SIMD to avoid division by zero
+        rhs = rhs.simd_eq(Self::Simd::splat(T::zero())).select(Self::Simd::NODATA_SIMD, rhs);
+
+        let nodata = lhs.nodata_mask() | rhs.nodata_mask();
+        nodata.select(Self::Simd::NODATA_SIMD, lhs / rhs)
+    }
 }
 
 #[cfg(not(feature = "simd"))]

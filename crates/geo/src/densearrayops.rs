@@ -24,7 +24,14 @@ macro_rules! dense_raster_op {
             type Output = DenseArray<T, Metadata>;
 
             fn $op_fn(self, other: &DenseArray<T, Metadata>) -> DenseArray<T, Metadata> {
-                self.binary(other, |x, y| x.$op_nodata_fn(y))
+                #[cfg(feature = "simd")]
+                return self.binary_simd(
+                    other,
+                    |x, y| x.$op_nodata_fn(y),
+                    |x, y| paste::paste! { T::[<$op_nodata_fn _simd>](x, y) },
+                );
+                #[cfg(not(feature = "simd"))]
+                return self.binary(other, |x, y| x.$op_nodata_fn(y));
             }
         }
 

@@ -101,6 +101,9 @@ test_simd testfilter="": (test_release_simd testfilter)
 rasterbench:
   cargo bench --bench rasterops --package=geo
 
+rasterbenchsimd:
+  cargo +nightly bench --bench rasterops --package=geo --features=simd
+
 cmapbench:
   cargo +nightly bench --bench colormapping --package=inf --features=simd
 

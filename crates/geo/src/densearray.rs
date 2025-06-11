@@ -101,6 +101,18 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         DenseArray::new(self.metadata().clone(), data).expect("Raster size bug")
     }
 
+    #[cfg(feature = "simd")]
+    pub fn binary_simd(
+        &self,
+        other: &Self,
+        op_scalar: impl Fn(T, T) -> T,
+        op_simd: impl Fn(std::simd::Simd<T, LANES>, std::simd::Simd<T, LANES>) -> std::simd::Simd<T, LANES>,
+    ) -> Self {
+        raster::algo::assert_dimensions(self, other);
+        let res = densearrayutil::simd::binary_simd(self.as_slice(), other.as_slice(), op_scalar, op_simd);
+        DenseArray::new(self.metadata().clone(), res).expect("Raster size bug")
+    }
+
     pub fn binary_to<TDest: ArrayNum>(
         &self,
         other: &Self,

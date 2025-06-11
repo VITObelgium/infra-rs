@@ -3,7 +3,7 @@ use crate::GeoReference;
 
 pub type DenseRaster<T> = DenseArray<T, GeoReference>;
 
-#[cfg(feature = "simd")]
+#[cfg(all(feature = "simd", feature = "gdal"))]
 const LANES: usize = inf::simd::LANES;
 
 #[cfg(feature = "gdal")]
