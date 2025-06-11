@@ -170,7 +170,17 @@ pub fn read_dataframe_rows_cb(
     let ds = dataset::open_read_only_with_options(path, data_frame_open_options)?;
     let mut ds_layer;
     if let Some(layer_name) = layer {
-        ds_layer = ds.layer_by_name(layer_name)?;
+        ds_layer = match ds.layer_by_name(layer_name) {
+            Ok(layer) => layer,
+            Err(err) => {
+                log::debug!("{err}");
+                return Err(Error::InvalidArgument(format!(
+                    "Layer '{}' not found in dataset '{}'",
+                    layer_name,
+                    path.to_string_lossy()
+                )));
+            }
+        };
     } else {
         ds_layer = ds.layer(0)?;
     }
@@ -181,7 +191,15 @@ pub fn read_dataframe_rows_cb(
 
     let column_indexes: Vec<usize> = columns
         .iter()
-        .map(|name| Ok(ds_layer.defn().field_index(name)?))
+        .map(|name| match ds_layer.defn().field_index(name) {
+            Ok(index) => Ok(index),
+            Err(_) => Err(Error::InvalidArgument(format!(
+                "Field '{}' not found in layer '{}', available fields: {}",
+                name,
+                ds_layer.name(),
+                ds_layer.defn().fields().map(|f| f.name()).collect::<Vec<String>>().join(", ")
+            ))),
+        })
         .collect::<Result<Vec<usize>>>()?;
 
     for feature in ds_layer.features() {
