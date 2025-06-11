@@ -118,7 +118,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
-    pub fn binary_op_as<T: ArrayNum, TDest: ArrayNum>(&self, other: &Self, op: impl Fn(T, T) -> TDest) -> DenseArray<TDest, Metadata> {
+    pub fn binary_op_to<TDest: ArrayNum, T: ArrayNum>(&self, other: &Self, op: impl Fn(T, T) -> TDest) -> DenseArray<TDest, Metadata> {
         let lhs: Result<&DenseArray<T, Metadata>> = self.try_into();
         let rhs: Result<&DenseArray<T, Metadata>> = other.try_into();
 
