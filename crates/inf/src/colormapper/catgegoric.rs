@@ -204,6 +204,16 @@ impl ColorMapper for CategoricNumeric {
         self.categories.len()
     }
 
+    fn value_range(&self) -> RangeInclusive<f32> {
+        let mut categories = self.categories.keys().collect::<Vec<_>>();
+        categories.sort();
+
+        let start = **categories.first().unwrap_or(&&0) as f32;
+        let end = **categories.last().unwrap_or(&&0) as f32;
+
+        start..=end
+    }
+
     fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
         UnmappableColors {
             nodata: config.nodata_color,
@@ -245,6 +255,10 @@ impl ColorMapper for CategoricString {
 
     fn category_count(&self) -> usize {
         self.categories.len()
+    }
+
+    fn value_range(&self) -> RangeInclusive<f32> {
+        0.0..=0.0
     }
 
     fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {

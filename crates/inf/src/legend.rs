@@ -162,6 +162,10 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
             .color_for_string_value(value, &self.mapper.compute_unmappable_colors(&self.mapping_config))
     }
 
+    pub fn value_range(&self) -> RangeInclusive<f32> {
+        self.mapper.value_range()
+    }
+
     #[cfg(feature = "simd")]
     pub fn apply_to_data<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color>
     where
@@ -378,6 +382,15 @@ impl Legend {
             Legend::Banded(legend) => legend.title.as_str(),
             Legend::CategoricNumeric(legend) => legend.title.as_str(),
             Legend::CategoricString(legend) => legend.title.as_str(),
+        }
+    }
+
+    pub fn value_range(&self) -> RangeInclusive<f32> {
+        match self {
+            Legend::Linear(legend) => legend.value_range(),
+            Legend::Banded(legend) => legend.value_range(),
+            Legend::CategoricNumeric(legend) => legend.value_range(),
+            Legend::CategoricString(legend) => legend.value_range(),
         }
     }
 }

@@ -2,7 +2,7 @@ use crate::colormap::ProcessedColorMap;
 use crate::interpolate::linear_map_to_float;
 use crate::legend::MappingConfig;
 use crate::{Color, Error, Result};
-use std::ops::Range;
+use std::ops::{Range, RangeInclusive};
 
 use super::ColorMapper;
 use super::UnmappableColors;
@@ -91,5 +91,9 @@ impl ColorMapper for Linear {
 
     fn category_count(&self) -> usize {
         1
+    }
+
+    fn value_range(&self) -> RangeInclusive<f32> {
+        RangeInclusive::new(self.value_range.start, self.value_range.end)
     }
 }

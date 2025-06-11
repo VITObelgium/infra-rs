@@ -229,6 +229,13 @@ impl ColorMapper for Banded {
         colors
     }
 
+    fn value_range(&self) -> RangeInclusive<f32> {
+        let start = self.bands.first().map_or(0.0, |b| b.range.start);
+        let end = self.bands.last().map_or(0.0, |b| b.range.end);
+
+        start..=end
+    }
+
     fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
         let low = config.out_of_range_low_color.unwrap_or_else(|| match self.bands.first() {
             Some(first_entry) => first_entry.color,
