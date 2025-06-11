@@ -123,10 +123,10 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         let rhs: Result<&DenseArray<T, Metadata>> = other.try_into();
 
         match (lhs, rhs) {
-            (Ok(lhs), Ok(rhs)) => lhs.binary_as(rhs, op),
-            (Err(_), Err(_)) => self.cast_to::<T>().binary_as(&other.cast_to::<T>(), op),
-            (Ok(lhs), Err(_)) => lhs.binary_as(&other.cast_to::<T>(), op),
-            (Err(_), Ok(rhs)) => self.cast_to::<T>().binary_as(rhs, op),
+            (Ok(lhs), Ok(rhs)) => lhs.binary_to(rhs, op),
+            (Err(_), Err(_)) => self.cast_to::<T>().binary_to(&other.cast_to::<T>(), op),
+            (Ok(lhs), Err(_)) => lhs.binary_to(&other.cast_to::<T>(), op),
+            (Err(_), Ok(rhs)) => self.cast_to::<T>().binary_to(rhs, op),
         }
     }
 

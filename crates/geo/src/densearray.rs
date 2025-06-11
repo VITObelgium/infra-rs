@@ -76,6 +76,14 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         .expect("Raster size bug")
     }
 
+    pub fn unary_to<TDest: ArrayNum>(&self, op: impl Fn(T) -> TDest) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
+        DenseArray::new(
+            self.metadata().clone(),
+            allocate::aligned_vec_from_iter(self.data.iter().map(|&a| op(a))),
+        )
+        .expect("Raster size bug")
+    }
+
     pub fn unary_inplace(&mut self, op: impl Fn(&mut T)) {
         self.data.iter_mut().for_each(op);
     }
@@ -93,7 +101,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         DenseArray::new(self.metadata().clone(), data).expect("Raster size bug")
     }
 
-    pub fn binary_as<TDest: ArrayNum>(
+    pub fn binary_to<TDest: ArrayNum>(
         &self,
         other: &Self,
         op: impl Fn(T, T) -> TDest,
