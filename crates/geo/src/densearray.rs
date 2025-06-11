@@ -93,6 +93,18 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         DenseArray::new(self.metadata().clone(), data).expect("Raster size bug")
     }
 
+    pub fn binary_as<TDest: ArrayNum>(
+        &self,
+        other: &Self,
+        op: impl Fn(T, T) -> TDest,
+    ) -> <DenseArray<T, Metadata> as Array>::WithPixelType<TDest> {
+        raster::algo::assert_dimensions(self, other);
+
+        let data = allocate::aligned_vec_from_iter(self.data.iter().zip(other.data.iter()).map(|(&a, &b)| op(a, b)));
+
+        DenseArray::new(self.metadata().clone(), data).expect("Raster size bug")
+    }
+
     pub fn binary_inplace<F: Fn(&mut T, T)>(&mut self, other: &Self, op: F) {
         raster::algo::assert_dimensions(self, other);
         self.data.iter_mut().zip(other.data.iter()).for_each(|(a, &b)| op(a, b));

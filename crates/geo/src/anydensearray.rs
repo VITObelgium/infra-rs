@@ -118,6 +118,18 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
+    pub fn binary_op_as<T: ArrayNum, TDest: ArrayNum>(&self, other: &Self, op: impl Fn(T, T) -> TDest) -> DenseArray<TDest, Metadata> {
+        let lhs: Result<&DenseArray<T, Metadata>> = self.try_into();
+        let rhs: Result<&DenseArray<T, Metadata>> = other.try_into();
+
+        match (lhs, rhs) {
+            (Ok(lhs), Ok(rhs)) => lhs.binary_as(rhs, op),
+            (Err(_), Err(_)) => self.cast_to::<T>().binary_as(&other.cast_to::<T>(), op),
+            (Ok(lhs), Err(_)) => lhs.binary_as(&other.cast_to::<T>(), op),
+            (Err(_), Ok(rhs)) => self.cast_to::<T>().binary_as(rhs, op),
+        }
+    }
+
     pub fn filled_with(fill: Option<f64>, metadata: Metadata, datatype: ArrayDataType) -> Self {
         match datatype {
             ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::filled_with(cast::option::<u8>(fill), metadata)),
