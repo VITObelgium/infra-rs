@@ -1,4 +1,7 @@
-use std::{collections::HashMap, ops::RangeInclusive};
+use std::{
+    collections::HashMap,
+    ops::{Range, RangeInclusive},
+};
 
 use num::ToPrimitive as _;
 
@@ -214,6 +217,13 @@ impl ColorMapper for CategoricNumeric {
         start..=end
     }
 
+    fn legend_entries(&self) -> Vec<(Range<f32>, Color)> {
+        self.categories
+            .iter()
+            .map(|(cat, legend_cat)| ((*cat as f32)..(*cat as f32), legend_cat.color))
+            .collect()
+    }
+
     fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
         UnmappableColors {
             nodata: config.nodata_color,
@@ -259,6 +269,10 @@ impl ColorMapper for CategoricString {
 
     fn value_range(&self) -> RangeInclusive<f32> {
         0.0..=0.0
+    }
+
+    fn legend_entries(&self) -> Vec<(Range<f32>, Color)> {
+        Vec::default()
     }
 
     fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {

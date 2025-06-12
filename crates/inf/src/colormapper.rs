@@ -9,6 +9,7 @@ pub(crate) use banded::Banded;
 pub(crate) use catgegoric::CategoricNumeric;
 pub(crate) use catgegoric::CategoricString;
 pub(crate) use linear::Linear;
+use std::ops::Range;
 use std::ops::RangeInclusive;
 
 #[cfg(feature = "simd")]
@@ -57,6 +58,7 @@ pub trait ColorMapper: Default {
     fn color_for_string_value(&self, value: &str, unmappable_colors: &UnmappableColors) -> Color;
     fn category_count(&self) -> usize;
     fn value_range(&self) -> RangeInclusive<f32>;
+    fn legend_entries(&self) -> Vec<(Range<f32>, Color)>;
 
     fn simd_supported(&self) -> bool {
         true

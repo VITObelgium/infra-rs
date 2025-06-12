@@ -96,4 +96,8 @@ impl ColorMapper for Linear {
     fn value_range(&self) -> RangeInclusive<f32> {
         RangeInclusive::new(self.value_range.start, self.value_range.end)
     }
+
+    fn legend_entries(&self) -> Vec<(Range<f32>, Color)> {
+        Vec::default()
+    }
 }

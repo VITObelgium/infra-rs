@@ -162,8 +162,12 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
             .color_for_string_value(value, &self.mapper.compute_unmappable_colors(&self.mapping_config))
     }
 
-    pub fn value_range(&self) -> RangeInclusive<f32> {
+    pub fn total_value_range(&self) -> RangeInclusive<f32> {
         self.mapper.value_range()
+    }
+
+    pub fn legend_entries(&self) -> Vec<(Range<f32>, Color)> {
+        self.mapper.legend_entries()
     }
 
     #[cfg(feature = "simd")]
@@ -385,12 +389,21 @@ impl Legend {
         }
     }
 
-    pub fn value_range(&self) -> RangeInclusive<f32> {
+    pub fn total_value_range(&self) -> RangeInclusive<f32> {
         match self {
-            Legend::Linear(legend) => legend.value_range(),
-            Legend::Banded(legend) => legend.value_range(),
-            Legend::CategoricNumeric(legend) => legend.value_range(),
-            Legend::CategoricString(legend) => legend.value_range(),
+            Legend::Linear(legend) => legend.total_value_range(),
+            Legend::Banded(legend) => legend.total_value_range(),
+            Legend::CategoricNumeric(legend) => legend.total_value_range(),
+            Legend::CategoricString(legend) => legend.total_value_range(),
+        }
+    }
+
+    pub fn legend_entries(&self) -> Vec<(Range<f32>, Color)> {
+        match self {
+            Legend::Linear(legend) => legend.legend_entries(),
+            Legend::Banded(legend) => legend.legend_entries(),
+            Legend::CategoricNumeric(legend) => legend.legend_entries(),
+            Legend::CategoricString(legend) => legend.legend_entries(),
         }
     }
 }

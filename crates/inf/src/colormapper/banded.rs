@@ -236,6 +236,10 @@ impl ColorMapper for Banded {
         start..=end
     }
 
+    fn legend_entries(&self) -> Vec<(Range<f32>, Color)> {
+        self.bands.iter().map(|band| (band.range.clone(), band.color)).collect()
+    }
+
     fn compute_unmappable_colors(&self, config: &MappingConfig) -> UnmappableColors {
         let low = config.out_of_range_low_color.unwrap_or_else(|| match self.bands.first() {
             Some(first_entry) => first_entry.color,
