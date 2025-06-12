@@ -51,7 +51,7 @@ impl Banded {
     }
 
     pub fn with_equal_bands(band_count: usize, value_range: RangeInclusive<f32>, color_map: &ColorMap) -> Result<Self> {
-        if value_range.start() >= value_range.end() {
+        if value_range.start() > value_range.end() {
             return Err(Error::InvalidArgument(format!(
                 "Invalid banded color mapper value range: start ({}) must be less than end ({})",
                 value_range.start(),
