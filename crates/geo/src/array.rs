@@ -253,10 +253,10 @@ pub trait Array:
     fn iter_values(&self) -> impl Iterator<Item = Self::Pixel>;
 
     /// Return an iterator over the raster data, nodata values are `Self::Pixel::NODATA`
-    fn iter(&self) -> std::slice::Iter<Self::Pixel>;
+    fn iter(&self) -> std::slice::Iter<'_, Self::Pixel>;
 
     /// Return a mutable iterator over the raster data
-    fn iter_mut(&mut self) -> std::slice::IterMut<Self::Pixel>;
+    fn iter_mut(&mut self) -> std::slice::IterMut<'_, Self::Pixel>;
 
     /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::NODATA`
     fn iter_window(&self, window: Window) -> impl Iterator<Item = Self::Pixel>;
