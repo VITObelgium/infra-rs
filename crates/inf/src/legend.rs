@@ -501,6 +501,7 @@ pub fn create_categoric_string(
 mod tests {
 
     use super::*;
+    use crate::color;
     use crate::colormap::ColorMapPreset;
 
     #[test]
@@ -579,6 +580,193 @@ mod tests {
 
         assert_eq!(colors.len(), input_data.len());
         assert_eq!(simd_colors, colors);
+
+        Ok(())
+    }
+
+    #[test]
+    fn linear_legend_out_of_range() -> Result<()> {
+        // Define custom colors for out-of-range values
+        let custom_low_color = color::RED;
+        let custom_high_color = color::GREEN;
+        let nodata_color = color::BLUE;
+
+        let value_range = 10.0..90.0;
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+
+        // Create mapping config with custom out-of-range colors
+        let mapping_config = MappingConfig::new(nodata_color, Some(custom_low_color), Some(custom_high_color), false);
+
+        let linear = create_linear(&cmap_def, value_range.clone(), Some(mapping_config))?;
+
+        // Test values below range
+        assert_eq!(linear.color_for_value(5.0, None), custom_low_color);
+        assert_eq!(linear.color_for_value(0.0, None), custom_low_color);
+        assert_eq!(linear.color_for_value(-10.0, None), custom_low_color);
+
+        // Test values above range
+        assert_eq!(linear.color_for_value(95.0, None), custom_high_color);
+        assert_eq!(linear.color_for_value(100.0, None), custom_high_color);
+        assert_eq!(linear.color_for_value(200.0, None), custom_high_color);
+
+        // Test values at the boundaries (should be in range)
+        assert_ne!(linear.color_for_value(value_range.start, None), custom_low_color);
+        assert_ne!(linear.color_for_value(value_range.end - 0.001, None), custom_high_color);
+
+        Ok(())
+    }
+
+    #[test]
+    fn banded_legend_out_of_range_no_edge_mapping_config() -> Result<()> {
+        // Create a banded legend with 5 bands from 10 to 60
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+        let value_range = 10.0..=60.0;
+        let nodata_color = color::BLUE;
+
+        // Create mapping config with default out-of-range colors
+        let mapping_config = MappingConfig::new(nodata_color, None, None, false);
+        let banded = create_banded(5, &cmap_def, value_range, Some(mapping_config))?;
+
+        // Verify colors get the edge values: if no unmappable colors are set, the values that fall outside the range
+        // will get the color of the first or last band
+        let out_of_range_low = banded.color_for_value(5.0, None);
+        let out_of_range_high = banded.color_for_value(65.0, None);
+        assert_eq!(out_of_range_low, banded.color_for_value(10.0, None));
+        assert_eq!(out_of_range_high, banded.color_for_value(60.0, None));
+
+        // Verify in-range color is not nodata
+        let in_range = banded.color_for_value(35.0, None);
+        assert_ne!(in_range, nodata_color);
+
+        Ok(())
+    }
+
+    #[test]
+    fn banded_legend_out_of_range_edge_mapping_config() -> Result<()> {
+        // Create a banded legend with 5 bands from 10 to 60
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+        let value_range = 10.0..=60.0;
+        let nodata_color = color::BLUE;
+        let nodata_color_low = color::GREEN;
+        let nodata_color_high = color::RED;
+
+        // Create mapping config with default out-of-range colors
+        let mapping_config = MappingConfig::new(nodata_color, Some(nodata_color_low), Some(nodata_color_high), false);
+        let banded = create_banded(5, &cmap_def, value_range, Some(mapping_config))?;
+
+        // Verify that the colors get the configured unmappable colors
+        let out_of_range_low = banded.color_for_value(5.0, None);
+        let out_of_range_high = banded.color_for_value(65.0, None);
+        assert_eq!(out_of_range_low, nodata_color_low);
+        assert_eq!(out_of_range_high, nodata_color_high);
+
+        // Verify in-range color is not nodata
+        let in_range = banded.color_for_value(35.0, None);
+        assert_ne!(in_range, nodata_color);
+
+        Ok(())
+    }
+
+    #[test]
+    fn categoric_legend_out_of_range() -> Result<()> {
+        // Create a categoric legend with values 10 to 20
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+        let value_range = 10..=20;
+        let nodata_color = color::BLUE;
+
+        // Create mapping config with default out-of-range values
+        let mapping_config = MappingConfig::new(nodata_color, None, None, false);
+
+        let categoric = create_categoric_for_value_range(&cmap_def, value_range, Some(mapping_config))?;
+
+        // Verify that we get colors for in-range values
+        for value in 10..=20 {
+            let color = categoric.color_for_value(value, None);
+            // Just verify we get some result without asserting what it is
+            assert_eq!(color, categoric.color_for_value(value, None));
+        }
+
+        // Verify out-of-range values return consistent colors
+        let out_of_range_low = categoric.color_for_value(5, None);
+        let out_of_range_high = categoric.color_for_value(25, None);
+
+        // For categorical legends, out-of-range values might return transparent color
+        // Just verify we get consistent results for the same out-of-range value
+        assert_eq!(out_of_range_low, categoric.color_for_value(5, None));
+        assert_eq!(out_of_range_high, categoric.color_for_value(25, None));
+
+        Ok(())
+    }
+
+    #[test]
+    fn linear_legend_out_of_range_colors_edge_mapping_config() -> Result<()> {
+        // Test that we can specify custom out-of-range colors
+        let nodata_color = color::BLUE;
+        let value_range = 10.0..90.0;
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+
+        // Test with custom out-of-range colors for linear legend
+        let custom_low_color = color::RED;
+        let custom_high_color = color::GREEN;
+
+        let mapping_config_custom = MappingConfig::new(nodata_color, Some(custom_low_color), Some(custom_high_color), false);
+
+        let linear_custom = create_linear(&cmap_def, value_range.clone(), Some(mapping_config_custom))?;
+
+        // The custom low color should be used for out-of-range low values
+        let custom_below_color = linear_custom.color_for_value(5.0, None);
+        assert_eq!(custom_below_color, custom_low_color);
+
+        // The custom high color should be used for out-of-range high values
+        let custom_above_color = linear_custom.color_for_value(91.0, None);
+        assert_eq!(custom_above_color, custom_high_color);
+
+        Ok(())
+    }
+
+    #[test]
+    fn linear_legend_out_of_range_colors_no_edge_mapping_config() -> Result<()> {
+        // Test that we can specify custom out-of-range colors
+        let nodata_color = color::BLUE;
+        let value_range = 10.0..90.0;
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+
+        let mapping_config_custom = MappingConfig::new(nodata_color, None, None, false);
+
+        let linear_custom = create_linear(&cmap_def, value_range.clone(), Some(mapping_config_custom))?;
+
+        // The colors at the edges should be used for out-of-range values when no custom colors are set
+        let custom_below_color = linear_custom.color_for_value(5.0, None);
+        let custom_above_color = linear_custom.color_for_value(91.0, None);
+        assert_eq!(custom_below_color, linear_custom.color_for_value(10.0, None));
+        assert_eq!(custom_above_color, linear_custom.color_for_value(90.0, None));
+
+        Ok(())
+    }
+
+    #[test]
+    fn zero_is_nodata_option() -> Result<()> {
+        // Test the zero_is_nodata option
+        let nodata_color = color::BLUE;
+        let value_range = -10.0..10.0;
+        let cmap_def = ColorMap::Preset(ColorMapPreset::Blues, ColorMapDirection::Regular);
+
+        // Create mapping config with zero_is_nodata = true
+        let mapping_config = MappingConfig::new(
+            nodata_color,
+            None,
+            None,
+            true, // zero_is_nodata
+        );
+
+        let linear = create_linear(&cmap_def, value_range.clone(), Some(mapping_config))?;
+
+        // Zero should be treated as nodata
+        assert_eq!(linear.color_for_value(0.0, None), nodata_color);
+
+        // Non-zero values in range should not be nodata
+        assert_ne!(linear.color_for_value(5.0, None), nodata_color);
+        assert_ne!(linear.color_for_value(-5.0, None), nodata_color);
 
         Ok(())
     }

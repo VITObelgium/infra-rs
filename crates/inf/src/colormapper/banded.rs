@@ -60,7 +60,7 @@ impl Banded {
         }
 
         let mut entries = Vec::with_capacity(band_count);
-        let band_offset: f32 = (value_range.end() - value_range.start()) / (band_count as f32 - 1.0);
+        let band_offset: f32 = (value_range.end() - value_range.start()) / (band_count as f32);
         let mut band_pos = *value_range.start();
 
         if let ColorMap::ColorList(colors) = color_map {
