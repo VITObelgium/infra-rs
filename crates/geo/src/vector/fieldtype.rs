@@ -1,20 +1,17 @@
-use std::ops::Range;
+use std::ops::RangeInclusive;
 
 use crate::{Error, Result};
 use gdal::vector::FieldValue;
 
-fn parse_value_range(year_range: &str) -> Result<Range<i32>> {
+fn parse_value_range(year_range: &str) -> Result<RangeInclusive<i32>> {
     let years: Vec<&str> = year_range.split('-').map(str::trim).collect();
     if years.len() == 1 {
         let year = years[0].parse::<i32>()?;
-        Ok(Range { start: year, end: year })
+        Ok(RangeInclusive::new(year, year))
     } else if years.len() == 2 {
         let start_year = years[0].parse::<i32>()?;
         let end_year = years[1].parse::<i32>()?;
-        Ok(Range {
-            start: start_year,
-            end: end_year,
-        })
+        Ok(RangeInclusive::new(start_year, end_year))
     } else {
         Err(Error::Runtime(format!("Invalid value range: {}", year_range)))
     }
@@ -76,19 +73,16 @@ impl VectorFieldType for String {
     }
 }
 
-impl VectorFieldType for Range<i32> {
+impl VectorFieldType for RangeInclusive<i32> {
     fn empty_value_is_valid() -> bool {
         false
     }
 
-    fn read_from_field(field: &FieldValue) -> Result<Option<Range<i32>>> {
+    fn read_from_field(field: &FieldValue) -> Result<Option<RangeInclusive<i32>>> {
         match field {
             FieldValue::StringValue(val) => Ok(Some(parse_value_range(val)?)),
-            FieldValue::RealValue(val) => Ok(Some(Range {
-                start: *val as i32,
-                end: *val as i32,
-            })),
-            FieldValue::IntegerValue(val) => Ok(Some(Range { start: *val, end: *val })),
+            FieldValue::RealValue(val) => Ok(Some(RangeInclusive::new(*val as i32, *val as i32))),
+            FieldValue::IntegerValue(val) => Ok(Some(RangeInclusive::new(*val, *val))),
             _ => Ok(None),
         }
     }
