@@ -20,9 +20,40 @@ impl FileBasedReader {
         let mut buffer = vec![0; 64 * 1024]; // 64 KiB buffer which should be sufficient for the COG header
         let mut stream = File::open(path).map_err(|e| Error::IOError(e))?;
         stream.read_exact(&mut buffer)?;
-
+        verify_gdal_ghost_data(&buffer)?;
         Ok(Self { stream, buffer, pos: 0 })
     }
+}
+
+fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
+    // Classic TIFF has magic number 42
+    // BigTIFF has magic number 43
+    let is_big_tiff = match header[0..4] {
+        [0x43, 0x4f, 0x47, 0x00] => true,  // BigTIFF magic number
+        [0x49, 0x49, 0x2a, 0x00] => false, // Classic TIFF magic number
+        _ => return Err(Error::InvalidArgument("Not a valid COG file".into())),
+    };
+
+    let offset = if is_big_tiff { 16 } else { 8 };
+
+    // GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n
+    let first_line = std::str::from_utf8(&header[offset..offset + 43])
+        .map_err(|e| Error::InvalidArgument(format!("Invalid UTF-8 in COG header: {}", e)))?;
+    if !first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE=") {
+        return Err(Error::InvalidArgument("COG not created with gdal".into()));
+    }
+
+    // The header size is at bytes 30..36 (6 bytes)
+    let header_size_str = &first_line[30..36];
+    let header_size: usize = header_size_str
+        .trim()
+        .parse()
+        .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {}", e)))?;
+
+    let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
+    println!("Header: {}", header_str);
+
+    Ok(())
 }
 
 impl Read for FileBasedReader {
@@ -279,8 +310,6 @@ pub struct CogTileIndex {
 
 impl CogTileIndex {
     pub fn from_file(path: &Path) -> Result<Self> {
-        verify_gdal_ghost_data(path)?;
-
         let mut reader = CogReader::new(FileBasedReader::new(path)?)?;
         let tile_offsets = reader.parse_cog_header()?;
 
@@ -292,49 +321,6 @@ impl CogTileIndex {
             tile_offsets,
         })
     }
-}
-
-fn verify_gdal_ghost_data(path: &std::path::Path) -> Result<()> {
-    let mut file = File::open(path)?;
-
-    let mut magic = [0; 4];
-    file.read_exact(&mut magic)?;
-
-    // Classic TIFF has magic number 42
-    // BigTIFF has magic number 43
-    let is_big_tiff = match magic {
-        [0x43, 0x4f, 0x47, 0x00] => true,  // BigTIFF magic number
-        [0x49, 0x49, 0x2a, 0x00] => false, // Classic TIFF magic number
-        _ => return Err(Error::InvalidArgument("Not a valid COG file".into())),
-    };
-
-    let offset = if is_big_tiff { 16 } else { 8 };
-
-    // Read the first line: "GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n"
-    let mut line = [0u8; 43];
-    file.seek(std::io::SeekFrom::Start(offset))?;
-    file.read_exact(&mut line)?;
-
-    // GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n
-
-    let first_line = std::str::from_utf8(&line).map_err(|e| Error::InvalidArgument(format!("Invalid UTF-8 in COG header: {}", e)))?;
-    if !first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE=") {
-        return Err(Error::InvalidArgument("COG not created with gdal".into()));
-    }
-
-    // The header size is at bytes 30..36 (6 bytes)
-    let header_size_str = &first_line[30..36];
-    let header_size: usize = header_size_str
-        .trim()
-        .parse()
-        .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {}", e)))?;
-
-    let mut header = vec![0u8; header_size];
-    file.read_exact(&mut header)?;
-    let header_str = String::from_utf8_lossy(&header);
-    println!("Header: {}", header_str);
-
-    Ok(())
 }
 
 #[cfg(test)]

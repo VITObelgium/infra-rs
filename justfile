@@ -95,7 +95,7 @@ test_release_py: pybootstrap
   pixi run test_release
 
 build: build_release
-test test_name='test_read_test_cog': (test_debug test_name)
+test test_name='': (test_debug test_name)
 test_simd testfilter="": (test_release_simd testfilter)
 
 rasterbench:
