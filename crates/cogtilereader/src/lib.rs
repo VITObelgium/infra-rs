@@ -1,6 +1,7 @@
 use thiserror::Error;
 
 pub mod cog;
+mod readers;
 
 #[derive(Error, Debug)]
 pub enum Error {

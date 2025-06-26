@@ -1,29 +1,12 @@
-use geo::{Coordinate, Point, Tile, crs};
+use geo::{Point, Tile, crs};
 use tiff::tags::Tag;
 
-use crate::{Error, Result};
+use crate::{Error, Result, readers::FileBasedReader};
 use std::{
     collections::HashMap,
-    fs::File,
-    io::{Read, Seek, SeekFrom},
+    io::{Read, Seek},
     path::Path,
 };
-
-struct FileBasedReader {
-    stream: std::fs::File,
-    buffer: Vec<u8>,
-    pos: usize,
-}
-
-impl FileBasedReader {
-    pub fn new(path: &Path) -> Result<Self> {
-        let mut buffer = vec![0; 64 * 1024]; // 64 KiB buffer which should be sufficient for the COG header
-        let mut stream = File::open(path).map_err(|e| Error::IOError(e))?;
-        stream.read_exact(&mut buffer)?;
-        verify_gdal_ghost_data(&buffer)?;
-        Ok(Self { stream, buffer, pos: 0 })
-    }
-}
 
 fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     // Classic TIFF has magic number 42
@@ -56,52 +39,6 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     Ok(())
 }
 
-impl Read for FileBasedReader {
-    fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
-        if self.pos + buf.len() > self.buffer.len() {
-            println!("Read outside of the header");
-            self.stream.seek(SeekFrom::Start(self.pos as u64))?;
-            return self.stream.read(&mut self.buffer);
-        }
-
-        //println!("Read {} bytes at {}", buf.len(), self.pos);
-        buf.copy_from_slice(&self.buffer[self.pos..self.pos + buf.len()]);
-        self.pos += buf.len();
-        Ok(buf.len())
-    }
-}
-
-impl Seek for FileBasedReader {
-    fn seek(&mut self, pos: std::io::SeekFrom) -> std::io::Result<u64> {
-        let seek_pos = match pos {
-            SeekFrom::Start(offset) => offset as usize,
-            SeekFrom::End(_) => {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
-                    "Seek from end is not supported for FileBasedReader",
-                ));
-            }
-            SeekFrom::Current(offset) => {
-                let new_pos = self.pos as i64 + offset;
-                if new_pos < 0 {
-                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "Seek before start of buffer"));
-                }
-
-                new_pos as usize
-            }
-        };
-
-        if seek_pos >= self.buffer.len() {
-            println!("Seek outside of the header, resetting buffer");
-            self.buffer.clear();
-            return self.stream.seek(SeekFrom::Start(seek_pos as u64));
-        }
-
-        self.pos = seek_pos;
-        Ok(seek_pos as u64)
-    }
-}
-
 pub struct CogReader<R: Read + Seek> {
     /// TIFF decoder
     decoder: tiff::decoder::Decoder<R>,
@@ -118,6 +55,7 @@ impl<R: Read + Seek> CogReader<R> {
         Ok(self.decoder.tile_count()? > 0)
     }
 
+    #[allow(dead_code)]
     fn band_count(&mut self) -> Result<usize> {
         let color_type = self.decoder.colortype()?;
         let num_bands: usize = match color_type {
@@ -296,7 +234,7 @@ impl<R: Read + Seek> CogReader<R> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct CogTileLocation {
     pub offset: u64,
     pub size: u64,
@@ -310,7 +248,9 @@ pub struct CogTileIndex {
 
 impl CogTileIndex {
     pub fn from_file(path: &Path) -> Result<Self> {
-        let mut reader = CogReader::new(FileBasedReader::new(path)?)?;
+        let buffered_reader = FileBasedReader::new(path)?;
+        verify_gdal_ghost_data(&buffered_reader.cog_header())?;
+        let mut reader = CogReader::new(buffered_reader)?;
         let tile_offsets = reader.parse_cog_header()?;
 
         Ok(CogTileIndex {
@@ -320,6 +260,14 @@ impl CogTileIndex {
                 .into(),
             tile_offsets,
         })
+    }
+
+    pub fn source(&self) -> &str {
+        &self.source
+    }
+
+    pub fn tile_offset(&self, tile: &Tile) -> Option<CogTileLocation> {
+        self.tile_offsets.get(tile).copied()
     }
 }
 
