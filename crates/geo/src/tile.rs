@@ -1,6 +1,4 @@
-use crate::{
-    Point, Rect, constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, crs, georeference::GeoReference, latlonbounds::LatLonBounds,
-};
+use crate::{Point, Rect, constants::EARTH_CIRCUMFERENCE_M, coordinate::Coordinate, latlonbounds::LatLonBounds};
 use std::f64::consts::PI;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

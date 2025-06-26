@@ -646,7 +646,9 @@ version = "0.1.0"
 dependencies = [
  "geo",
  "itertools 0.14.0",
+ "log",
  "path_macro",
+ "test-log",
  "thiserror 2.0.12",
  "tiff",
 ]

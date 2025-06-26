@@ -7,7 +7,9 @@ edition = "2024"
 tiff = "0.10"
 thiserror = "2.0"
 itertools = "0.14"
+log = "0.4"
 geo = { path = "../geo", default-features = false }
 
 [dev-dependencies]
 path_macro = "1.0"
+test-log = "0.2"

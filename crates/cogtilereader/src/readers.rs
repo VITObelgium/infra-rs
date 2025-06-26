@@ -33,7 +33,7 @@ impl FileBasedReader {
 impl Read for FileBasedReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.pos + buf.len() > self.buffer.len() {
-            println!("Read outside of the header");
+            log::debug!("Read outside of the header");
             self.stream.seek(SeekFrom::Start(self.pos as u64))?;
             return self.stream.read(&mut self.buffer);
         }
@@ -65,7 +65,7 @@ impl Seek for FileBasedReader {
         };
 
         if seek_pos >= self.buffer.len() {
-            println!("Seek outside of the header, resetting buffer");
+            log::debug!("Seek outside of the header, resetting buffer");
             self.buffer.clear();
             return self.stream.seek(SeekFrom::Start(seek_pos as u64));
         }

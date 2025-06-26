@@ -34,7 +34,7 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
         .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {}", e)))?;
 
     let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
-    println!("Header: {}", header_str);
+    log::debug!("Header: {}", header_str);
 
     Ok(())
 }
@@ -117,9 +117,6 @@ impl<R: Read + Seek> CogReader<R> {
         let tiles_wide = (image_width + tile_size - 1) / tile_size;
         let tiles_high = (image_height + tile_size - 1) / tile_size;
 
-        // println!("Top-left tile at zoom {zoom}: ({top_left})");
-        // println!("Image covers {}×{} tiles", tiles_wide, tiles_high);
-
         let mut tiles = Vec::new();
         // Iteration has to be done in row-major order so the tiles match the tile lists from the COG
         for ty in 0..tiles_high {
@@ -142,7 +139,7 @@ impl<R: Read + Seek> CogReader<R> {
             return Err(Error::InvalidArgument("Only tiled TIFFs are supported".into()));
         }
 
-        println!(
+        log::debug!(
             "Tile size: {}x{}",
             self.decoder.get_tag_u32(Tag::TileWidth)?,
             self.decoder.get_tag_u32(Tag::TileLength)?,
@@ -156,7 +153,7 @@ impl<R: Read + Seek> CogReader<R> {
         geo_transform[5] = -pixel_scale_y;
 
         let mut current_zoom = Tile::zoom_level_for_pixel_size(pixel_scale_x, geo::ZoomLevelStrategy::Closest);
-        println!("Zoom level: {}", current_zoom);
+        log::debug!("Zoom level: {}", current_zoom);
 
         if let Ok(transform) = self.read_model_transformation() {
             geo_transform[0] = transform[3];
@@ -167,7 +164,7 @@ impl<R: Read + Seek> CogReader<R> {
             geo_transform[5] = transform[5];
             valid_transform = true;
         } else {
-            println!("No model transformation info");
+            log::debug!("No model transformation info");
         }
 
         if let Ok(tie_points) = self.read_tie_points() {
@@ -179,7 +176,7 @@ impl<R: Read + Seek> CogReader<R> {
             geo_transform[3] = tie_points[4] - tie_points[1] * geo_transform[5];
             valid_transform = true;
         } else {
-            println!("No tie points info");
+            log::debug!("No tie points info");
         }
 
         if !valid_transform {
@@ -187,7 +184,7 @@ impl<R: Read + Seek> CogReader<R> {
         }
 
         loop {
-            println!(
+            log::debug!(
                 "Width: {}, Height {}",
                 self.decoder.get_tag_u32(Tag::ImageWidth)?,
                 self.decoder.get_tag_u32(Tag::ImageLength)?
@@ -217,10 +214,10 @@ impl<R: Read + Seek> CogReader<R> {
                 );
             });
 
-            // println!("Tiles [#{}]: {:?}", self.decoder.tile_count()?, tiles);
-            // println!("Tile offsets [#{}]: {:?}", self.decoder.tile_count()?, tile_offsets);
-            // println!("Tile bytes [#{}]: {:?}", self.decoder.tile_count()?, tile_byte_counts);
-            // println!("#Bands[{}] GeoTransform: {:?}", self.band_count()?, geo_transform);
+            // log::debug!("Tiles [#{}]: {:?}", self.decoder.tile_count()?, tiles);
+            // log::debug!("Tile offsets [#{}]: {:?}", self.decoder.tile_count()?, tile_offsets);
+            // log::debug!("Tile bytes [#{}]: {:?}", self.decoder.tile_count()?, tile_byte_counts);
+            // log::debug!("#Bands[{}] GeoTransform: {:?}", self.band_count()?, geo_transform);
 
             if !self.decoder.more_images() {
                 break;
@@ -277,11 +274,10 @@ mod tests {
 
     use super::*;
 
-    #[test]
+    #[test_log::test]
     fn test_read_test_cog() -> Result<()> {
         let cog = CogTileIndex::from_file(&testutils::workspace_test_data_dir().join("cog.tif"))?;
-
-        dbg!(&cog);
+        assert_eq!(cog.source(), testutils::workspace_test_data_dir().join("cog.tif").to_str().unwrap());
 
         Ok(())
     }

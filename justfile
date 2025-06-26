@@ -73,7 +73,7 @@ build_debug:
 build_release:
   cargo build --workspace --release
 
-test_debug test_name='':
+test_debug test_name='' $RUST_LOG="debug":
   cargo nextest run --profile ci --workspace --features=serde,gdal-static,arrow,derive,vector --no-capture {{test_name}}
 
 test_release test_name='':
