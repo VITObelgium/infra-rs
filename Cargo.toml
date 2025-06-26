@@ -1,59 +1,59 @@
 [package]
-edition = "2024"
-name    = "infra-rs"
+name = "infra-rs"
 version = "0.2.1"
-
-[workspace]
-members = [
-    "crates/geo",
-    "crates/geo/vector_derive",
-    "crates/inf",
-    "crates/raster-tile",
-    "crates/sqlite",
-    "crates/tiler",
-    "tools/createtiles",
-    "tools/tileserver",
-    "tools/tiles2raster",
-]
-
-[dependencies]
-geo    = { path = "./crates/geo" }
-inf    = { path = "./crates/inf" }
-pyo3   = { version = "*", optional = true }
-sqlite = { path = "./crates/sqlite", optional = true }
-tiler  = { path = "./crates/tiler", optional = true }
-
-[features]
-arrow       = ["geo/arrow"]
-gdal        = ["geo/gdal"]
-gdal-static = ["geo/gdal-static"]
-python      = ["pyo3/auto-initialize"]
-serde       = ["inf/serde"]
-sqlite      = ["dep:sqlite"]
-tiler       = ["dep:tiler"]
+edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
-    "gdal[core,netcdf,zstd]",
-    "hdf5[core,zlib]",
-    "netcdf-c[core,netcdf-4,hdf5]",
-    "tiff[core,lzma,zstd]",
-] # needed to run the geo tests
+  "gdal[core,netcdf,zstd]",
+  "hdf5[core,zlib]",
+  "netcdf-c[core,netcdf-4,hdf5]",
+  "tiff[core,lzma,zstd]",
+]  # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
 overlay-triplets-path = "vcpkg-overlay/triplets"
 rev = "ce613c4"
 
 [package.metadata.vcpkg.target]
-#aarch64-apple-darwin = { triplet = "arm64-osx-debugsymbols" }
-#x86_64-pc-windows-msvc = { triplet = "x64-windows-static-debugsymbols" }
-aarch64-apple-darwin   = { triplet = "arm64-osx-release" }
-x86_64-apple-darwin    = { triplet = "x64-osx-release" }
+# aarch64-apple-darwin = { triplet = "arm64-osx-debugsymbols" }
+# x86_64-pc-windows-msvc = { triplet = "x64-windows-static-debugsymbols" }
+aarch64-apple-darwin = { triplet = "arm64-osx-release" }
+x86_64-apple-darwin = { triplet = "x64-osx-release" }
 x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
+
+[workspace]
+members = [
+  "crates/geo",
+  "crates/geo/vector_derive",
+  "crates/inf",
+  "crates/raster-tile",
+  "crates/sqlite",
+  "crates/tiler",
+  "tools/createtiles",
+  "tools/tiles2raster",
+  "tools/tileserver",
+]
+
+[dependencies]
+geo = { path = "./crates/geo" }
+inf = { path = "./crates/inf" }
+pyo3 = { version = "*", optional = true }
+sqlite = { optional = true, path = "./crates/sqlite" }
+tiler = { optional = true, path = "./crates/tiler" }
+
+[features]
+arrow = ["geo/arrow"]
+gdal = ["geo/gdal"]
+gdal-static = ["geo/gdal-static"]
+python = ["pyo3/auto-initialize"]
+serde = ["inf/serde"]
+sqlite = ["dep:sqlite"]
+tiler = ["dep:tiler"]
 
 [patch.crates-io]
 # more recent geozero to avoid multiple gdal copies
 geozero = { git = "https://github.com/georust/geozero.git", rev = "e52422b54ab469ce8de6e33f859d4321be63d657" }
 
 [profile.samply]
-debug    = true
+debug = true
 inherits = "release"

@@ -26,23 +26,40 @@ pub fn bench_addition<T: ArrayNum>(c: &mut Criterion) {
     let rhs = DenseArray::<T>::filled_with(NumCast::from(9.0), raster_size);
 
     let create_raster = || DenseArray::<T>::filled_with(NumCast::from(4.0), raster_size);
+    let scalar: T = NumCast::from(10.0).unwrap();
 
     let mut group = c.benchmark_group(group_name::<T>("raster_ops"));
     group.warm_up_time(Duration::from_secs(1));
 
-    group.bench_function(bench_name::<T>("raster_ops_add"), |b| {
+    group.bench_function(bench_name::<T>("add"), |b| {
         b.iter_batched_ref(create_raster, |lhs| &*lhs + &rhs, BatchSize::LargeInput);
     });
 
-    group.bench_function(bench_name::<T>("raster_ops_add_inplace"), |b| {
+    group.bench_function(bench_name::<T>("add_assign"), |b| {
         b.iter_batched_ref(create_raster, |lhs| *lhs += &rhs, BatchSize::LargeInput);
     });
 
-    group.bench_function(bench_name::<T>("raster_ops_mul"), |b| {
+    group.bench_function(bench_name::<T>("add_scalar"), |b| {
+        b.iter_batched(create_raster, |lhs| lhs + scalar, BatchSize::LargeInput);
+    });
+
+    group.bench_function(bench_name::<T>("add_ref_scalar"), |b| {
+        b.iter_batched_ref(create_raster, |lhs| &*lhs + scalar, BatchSize::LargeInput);
+    });
+
+    group.bench_function(bench_name::<T>("add_assign_scalar"), |b| {
+        b.iter_batched_ref(create_raster, |lhs| *lhs += scalar, BatchSize::LargeInput);
+    });
+
+    group.bench_function(bench_name::<T>("mul"), |b| {
         b.iter_batched_ref(create_raster, |lhs| *lhs *= &rhs, BatchSize::LargeInput);
     });
 
-    group.bench_function(bench_name::<T>("raw_ops_mul"), |b| {
+    group.bench_function(bench_name::<T>("div"), |b| {
+        b.iter_batched_ref(create_raster, |lhs| *lhs /= &rhs, BatchSize::LargeInput);
+    });
+
+    group.bench_function(bench_name::<T>("raw_mul"), |b| {
         b.iter_batched_ref(
             create_raster,
             |lhs| lhs.iter_mut().zip(rhs.iter()).for_each(|(l, r)| *l *= *r),
@@ -50,7 +67,7 @@ pub fn bench_addition<T: ArrayNum>(c: &mut Criterion) {
         );
     });
 
-    group.bench_function(bench_name::<T>("rawer_ops_mul"), |b| {
+    group.bench_function(bench_name::<T>("rawer_mul"), |b| {
         b.iter_batched_ref(
             create_raster,
             |lhs| {
