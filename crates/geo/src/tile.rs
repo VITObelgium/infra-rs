@@ -176,21 +176,7 @@ impl Tile {
         }
     }
 
-    pub fn tile_index(tile: &Tile, meta: &GeoReference) -> Option<i32> {
-        let upper_left = crs::lat_lon_to_web_mercator(tile.center());
-
-        if meta.is_point_on_map(upper_left) {
-            let tiles_per_row = (meta.columns().count() as f64 / Tile::TILE_SIZE as f64) as i32;
-
-            let mut cell = meta.point_to_cell(upper_left);
-            cell.row /= Tile::TILE_SIZE as i32;
-            cell.col /= Tile::TILE_SIZE as i32;
-            Some(cell.row * tiles_per_row + cell.col)
-        } else {
-            None
-        }
-    }
-
+    /// Calculates the pixel size in meters for a given zoom level
     pub fn pixel_size_at_zoom_level(zoom_level: i32) -> f64 {
         let tiles_per_row = f64::powi(2.0, zoom_level);
         let meters_per_tile = EARTH_CIRCUMFERENCE_M / tiles_per_row;
@@ -198,42 +184,23 @@ impl Tile {
         meters_per_tile / Tile::TILE_SIZE as f64
     }
 
-    pub fn zoom_level_for_pixel_size(pixel_size: f64, stragegy: ZoomLevelStrategy) -> i32 {
-        let mut zoom_level = 20;
-        while zoom_level > 0 {
-            let zoom_level_pixel_size = Self::pixel_size_at_zoom_level(zoom_level);
-            if pixel_size <= zoom_level_pixel_size {
-                if pixel_size == zoom_level_pixel_size {
-                    // Exact match, strategy does not matter
-                    break;
-                }
+    /// Calculates the zoom level for a given pixel size
+    /// strategy specifies how the zoom level should be selected when converting between pixel size and zoom level.
+    ///
+    /// - `PreferHigher`: Chooses the next higher integer zoom level (ceil), ensuring the pixel size is less than or equal to the requested size.
+    /// - `PreferLower`: Chooses the next lower integer zoom level (floor), ensuring the pixel size is greater than or equal to the requested size.
+    /// - `Closest`: Chooses the closest integer zoom level (round) to the computed value.
+    /// - `Manual(i32)`: Uses a manually specified zoom level ignoring any calculations.
+    pub fn zoom_level_for_pixel_size(pixel_size: f64, strategy: ZoomLevelStrategy) -> i32 {
+        const INITIAL_RESOLUTION: f64 = EARTH_CIRCUMFERENCE_M / Tile::TILE_SIZE as f64; // meters/pixel at zoom 0
+        let zoom = (INITIAL_RESOLUTION / pixel_size).log2();
 
-                match stragegy {
-                    ZoomLevelStrategy::PreferHigher => {
-                        // Prefer the higher zoom level
-                        zoom_level += 1;
-                    }
-                    ZoomLevelStrategy::PreferLower => {
-                        // No adjustment needed
-                    }
-                    ZoomLevelStrategy::Closest => {
-                        let diff_higher = (pixel_size - zoom_level_pixel_size).abs();
-                        let diff_lower = (pixel_size - Self::pixel_size_at_zoom_level(zoom_level - 1)).abs();
-
-                        if diff_higher < diff_lower {
-                            zoom_level += 1;
-                        }
-                    }
-                    ZoomLevelStrategy::Manual(z) => {
-                        return z;
-                    }
-                }
-
-                break;
-            }
-            zoom_level -= 1;
+        match strategy {
+            ZoomLevelStrategy::PreferHigher => zoom.ceil() as i32,
+            ZoomLevelStrategy::PreferLower => zoom.floor() as i32,
+            ZoomLevelStrategy::Closest => zoom.round() as i32,
+            ZoomLevelStrategy::Manual(z) => z,
         }
-        zoom_level
     }
 
     /// Returns the neighboring tiles of the current tile including the current tile

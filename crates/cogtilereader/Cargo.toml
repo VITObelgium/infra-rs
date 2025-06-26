@@ -1,0 +1,13 @@
+[package]
+name = "cogtilereader"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+tiff = "0.10"
+thiserror = "2.0"
+itertools = "0.14"
+geo = { path = "../geo", default-features = false }
+
+[dev-dependencies]
+path_macro = "1.0"

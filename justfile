@@ -49,7 +49,7 @@ bootstrap: cargo-config-gen
   -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
   fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- '-l-framework' '-framework'
   fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- ' shlwapi ' ' -lshlwapi '
-  
+
 build_py:
   #!/usr/bin/env fish
   conda activate ./target/conda
@@ -73,11 +73,11 @@ build_debug:
 build_release:
   cargo build --workspace --release
 
-test_debug:
-  cargo nextest run --profile ci --workspace --features=serde,gdal-static,arrow,derive,vector
+test_debug test_name='':
+  cargo nextest run --profile ci --workspace --features=serde,gdal-static,arrow,derive,vector --no-capture {{test_name}}
 
-test_release:
-  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,derive,vector
+test_release test_name='':
+  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,derive,vector {{test_name}}
 
 test_debug_simd:
   cargo +nightly nextest run --profile ci --workspace --features=simd,serde,gdal-static,arrow,derive,vector
@@ -95,7 +95,7 @@ test_release_py: pybootstrap
   pixi run test_release
 
 build: build_release
-test: test_release
+test test_name='test_read_test_cog': (test_debug test_name)
 test_simd testfilter="": (test_release_simd testfilter)
 
 rasterbench:
@@ -116,10 +116,6 @@ rasterbenchbaseline name:
 tiles2raster zoom tile_size="256":
   cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.vrt?tile_format=vrt&tile_size={{tile_size}}" --zoom {{zoom}} --tile-size={{tile_size}} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_{{zoom}}_{{tile_size}}.tif
 
-
 #cargo run --release -p tiles2raster -- --stats --url "https://testmap.marvintest.vito.be/guppy/tiles/raster/no2_atmo_street-20220101-0000UT/{z}/{x}/{y}.png" --zoom {{zoom}} --coord1 51.26,4.33 --coord2 51.16,4.50 -o test_png_{{zoom}}.tif
 pngtiles2raster zoom tile_size="256":
   cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.png?tile_format=float_png" --zoom {{zoom}} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_png_{{zoom}}.tif
-
-guppy zoom:
-  cargo run --release -p tiles2raster -- --stats --url "http://localhost:8080/api/tiles/raster/landuse/{z}/{x}/{y}.png" --zoom {{zoom}} --coord1 50.67,2.52 --coord2 51.50,5.91 -o guppy_png_{{zoom}}.tif
