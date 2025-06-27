@@ -13,3 +13,5 @@ geo = { path = "../geo", default-features = false }
 [dev-dependencies]
 path_macro = "1.0"
 test-log = "0.2"
+geo = { path = "../geo", features = ["gdal-static"] }
+temp-dir = "0.1"

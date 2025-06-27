@@ -118,7 +118,7 @@ impl<R: Read + Seek> CogReader<R> {
         let tiles_high = (image_height + tile_size - 1) / tile_size;
 
         let mut tiles = Vec::new();
-        // Iteration has to be done in row-major order so the tiles match the tile lists from the COG
+        // Iteration has to be done in row-major order so the tiles match the order of the tile lists from the COG
         for ty in 0..tiles_high {
             for tx in 0..tiles_wide {
                 tiles.push(Tile {
@@ -270,14 +270,36 @@ impl CogTileIndex {
 
 #[cfg(test)]
 mod tests {
-    use crate::testutils;
-
     use super::*;
+    use crate::testutils;
+    use temp_dir::TempDir;
+
+    fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: u32) -> Result<()> {
+        let src_ds = geo::raster::io::dataset::open_read_only(input_tif).expect("Failed to open test COG input file");
+        let options = vec![
+            "-f".to_string(),
+            "COG".to_string(),
+            "-co".to_string(),
+            format!("BLOCKSIZE={tile_size}"),
+            "-co".to_string(),
+            "TILING_SCHEME=GoogleMapsCompatible".to_string(),
+        ];
+
+        geo::raster::algo::warp_to_disk_cli(&src_ds, output_tif, &options, &vec![]).expect("Failed to create test COG file");
+
+        Ok(())
+    }
 
     #[test_log::test]
     fn test_read_test_cog() -> Result<()> {
-        let cog = CogTileIndex::from_file(&testutils::workspace_test_data_dir().join("cog.tif"))?;
-        assert_eq!(cog.source(), testutils::workspace_test_data_dir().join("cog.tif").to_str().unwrap());
+        let tmp = TempDir::new()?;
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+        create_test_cog(&input, &output, 256)?;
+
+        let cog = CogTileIndex::from_file(&output)?;
+        assert_eq!(cog.source(), output.to_str().unwrap());
 
         Ok(())
     }
