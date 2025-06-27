@@ -4,11 +4,13 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tiff = "0.10"
+tiff = { version = "0.10", default-features = false }
 thiserror = "2.0"
 itertools = "0.14"
 log = "0.4"
 geo = { path = "../geo", default-features = false }
+inf = { path = "../inf" }
+weezl = "0.1"
 
 [dev-dependencies]
 path_macro = "1.0"

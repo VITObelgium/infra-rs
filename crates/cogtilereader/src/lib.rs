@@ -11,6 +11,8 @@ pub enum Error {
     InvalidArgument(String),
     #[error("IO error: {0}")]
     IOError(#[from] std::io::Error),
+    #[error("{0}")]
+    GeoError(#[from] geo::Error),
     #[error("Tiff error: {0}")]
     TiffError(#[from] tiff::TiffError),
 }

@@ -1,4 +1,8 @@
-use crate::{Error, Result};
+use geo::{Array, ArrayNum, DenseArray, RasterSize};
+use inf::allocate;
+use weezl::{BitOrder, decode::Decoder};
+
+use crate::{Error, Result, cog::CogTileLocation};
 use std::io::{Read, Seek, SeekFrom};
 
 pub const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
@@ -77,4 +81,34 @@ impl Seek for CogHeaderReader {
         self.pos = seek_pos;
         Ok(seek_pos as u64)
     }
+}
+
+pub fn read_tile_data<T: ArrayNum>(tile: CogTileLocation, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
+    let start_pos = tile.offset - 4;
+    reader.seek(SeekFrom::Start(start_pos))?;
+
+    let mut buf = vec![0; (tile.size + 4) as usize];
+    reader.read_exact(&mut buf)?;
+
+    // Buf now contains the tile data with the first 4 bytes being the size of the tile
+    let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&buf[0..4]).unwrap();
+    if tile.size != u32::from_le_bytes(size_bytes) as u64 {
+        return Err(Error::Runtime("Tile size does not match the expected size".into()));
+    }
+
+    let tile_data = lzw_decompress_to::<T>(&buf[4..], 256)?;
+    Ok(DenseArray::<T>::new(RasterSize::square(256), tile_data)?)
+}
+
+fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: usize) -> Result<Vec<T>> {
+    let mut decode_buffer = allocate::aligned_vec_with_capacity::<u8>(tile_size * tile_size * std::mem::size_of::<T>());
+
+    // Use MSB bit order and 8 as the initial code size, which is standard for TIFF LZW
+    Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
+        .into_vec(&mut decode_buffer)
+        .decode(data)
+        .status
+        .map_err(|e| Error::Runtime(format!("LZW decompression failed: {}", e)))?;
+
+    Ok(unsafe { allocate::reinterpret_aligned_vec::<_, T>(decode_buffer) })
 }
