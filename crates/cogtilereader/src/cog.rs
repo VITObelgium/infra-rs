@@ -1,4 +1,4 @@
-use geo::{ArrayNum, DenseArray, Point, Tile, crs};
+use geo::{ArrayDataType, ArrayNum, Columns, DenseArray, GeoReference, Point, RasterSize, Rows, Tile, crs};
 use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
@@ -136,33 +136,50 @@ impl<R: Read + Seek> CogDecoder<R> {
         tiles
     }
 
-    pub fn parse_cog_header(&mut self) -> Result<HashMap<Tile, CogTileLocation>> {
+    pub fn parse_cog_header(&mut self) -> Result<CogMetadata> {
         let mut tile_inventory = HashMap::new();
 
         if !self.is_tiled()? {
             return Err(Error::InvalidArgument("Only tiled TIFFs are supported".into()));
         }
 
-        log::debug!(
-            "Tile size: {}x{}",
-            self.decoder.get_tag_u32(Tag::TileWidth)?,
-            self.decoder.get_tag_u32(Tag::TileLength)?,
-        );
-
-        if self.decoder.get_tag_u32(Tag::Compression)? != 5 {
-            return Err(Error::InvalidArgument("Only LZW compressed COGs are supported".into()));
+        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)?;
+        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? {
+            return Err(Error::InvalidArgument("Only square tiles are supported".into()));
         }
 
-        match self.decoder.get_tag(Tag::BitsPerSample) {
-            Ok(Value::Short(bits)) => {
-                log::debug!("Bits per sample: {}", bits);
-            }
+        let bits_per_sample = match self.decoder.get_tag(Tag::BitsPerSample) {
+            Ok(Value::Short(bits)) => bits,
             Ok(Value::List(_)) => {
                 return Err(Error::InvalidArgument("Alpha channels are not supported".into()));
             }
             _ => {
                 return Err(Error::InvalidArgument("Unexpected bit depth information".into()));
             }
+        };
+
+        log::debug!("Gdal meta: {:?}", self.decoder.get_tag(Tag::Unknown(42112)));
+
+        let data_type = match (self.decoder.get_tag(Tag::SampleFormat)?, bits_per_sample) {
+            (Value::Short(1), 8) => ArrayDataType::Uint8,
+            (Value::Short(1), 16) => ArrayDataType::Uint16,
+            (Value::Short(1), 32) => ArrayDataType::Uint32,
+            (Value::Short(1), 64) => ArrayDataType::Uint64,
+            (Value::Short(2), 8) => ArrayDataType::Int8,
+            (Value::Short(2), 16) => ArrayDataType::Int16,
+            (Value::Short(2), 32) => ArrayDataType::Int32,
+            (Value::Short(2), 64) => ArrayDataType::Int64,
+            (Value::Short(3), 32) => ArrayDataType::Float32,
+            (Value::Short(3), 64) => ArrayDataType::Float64,
+            (data_type, _) => {
+                return Err(Error::InvalidArgument(format!(
+                    "Unsupported data type: {data_type:?} {bits_per_sample}"
+                )));
+            }
+        };
+
+        if self.decoder.get_tag_u32(Tag::Compression)? != 5 {
+            return Err(Error::InvalidArgument("Only LZW compressed COGs are supported".into()));
         }
 
         let mut valid_transform = false;
@@ -172,8 +189,8 @@ impl<R: Read + Seek> CogDecoder<R> {
         geo_transform[1] = pixel_scale_x;
         geo_transform[5] = -pixel_scale_y;
 
-        let mut current_zoom = Tile::zoom_level_for_pixel_size(pixel_scale_x, geo::ZoomLevelStrategy::Closest);
-        log::debug!("Zoom level: {}", current_zoom);
+        let max_zoom = Tile::zoom_level_for_pixel_size(pixel_scale_x, geo::ZoomLevelStrategy::Closest);
+        let mut current_zoom = max_zoom;
 
         if let Ok(transform) = self.read_model_transformation() {
             geo_transform[0] = transform[3];
@@ -222,7 +239,7 @@ impl<R: Read + Seek> CogDecoder<R> {
 
             let tile_offsets = self.decoder.get_tag_u64_vec(Tag::TileOffsets)?;
             let tile_byte_counts = self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?;
-            assert_eq!(tile_offsets.len(), tile_byte_counts.len());
+            debug_assert_eq!(tile_offsets.len(), tile_byte_counts.len());
 
             itertools::izip!(tiles.iter(), tile_offsets.iter(), tile_byte_counts.iter()).for_each(|(tile, offset, byte_count)| {
                 tile_inventory.insert(
@@ -234,11 +251,6 @@ impl<R: Read + Seek> CogDecoder<R> {
                 );
             });
 
-            // log::debug!("Tiles [#{}]: {:?}", self.decoder.tile_count()?, tiles);
-            // log::debug!("Tile offsets [#{}]: {:?}", self.decoder.tile_count()?, tile_offsets);
-            // log::debug!("Tile bytes [#{}]: {:?}", self.decoder.tile_count()?, tile_byte_counts);
-            // log::debug!("#Bands[{}] GeoTransform: {:?}", self.band_count()?, geo_transform);
-
             if !self.decoder.more_images() {
                 break;
             }
@@ -247,7 +259,25 @@ impl<R: Read + Seek> CogDecoder<R> {
             self.decoder.next_image()?;
         }
 
-        Ok(tile_inventory)
+        let raster_size = RasterSize::with_rows_cols(
+            Rows(self.decoder.get_tag_u32(Tag::ImageLength)? as i32),
+            Columns(self.decoder.get_tag_u32(Tag::ImageWidth)? as i32),
+        );
+
+        let nodata = if let Ok(nodata) = self.decoder.get_tag_ascii_string(Tag::GdalNodata) {
+            nodata.parse::<f64>().ok()
+        } else {
+            None
+        };
+
+        Ok(CogMetadata {
+            min_zoom: current_zoom,
+            max_zoom,
+            tile_size,
+            data_type,
+            tile_offsets: tile_inventory,
+            geo_reference: GeoReference::new("EPSG:3857", raster_size, geo_transform, nodata),
+        })
     }
 }
 
@@ -258,11 +288,21 @@ pub struct CogTileLocation {
 }
 
 #[derive(Debug, Clone)]
-pub struct CogTileIndex {
+pub struct CogMetadata {
+    pub min_zoom: i32,
+    pub max_zoom: i32,
+    pub tile_size: u32,
+    pub data_type: ArrayDataType,
+    pub geo_reference: GeoReference,
     tile_offsets: HashMap<Tile, CogTileLocation>,
 }
 
-impl CogTileIndex {
+#[derive(Debug, Clone)]
+pub struct CogAccessor {
+    meta: CogMetadata,
+}
+
+impl CogAccessor {
     pub fn from_file(path: &Path) -> Result<Self> {
         Self::new(CogHeaderReader::from_stream(File::open(path)?)?)
     }
@@ -275,13 +315,21 @@ impl CogTileIndex {
     fn new(reader: CogHeaderReader) -> Result<Self> {
         verify_gdal_ghost_data(&reader.cog_header())?;
         let mut reader = CogDecoder::new(reader)?;
-        let tile_offsets = reader.parse_cog_header()?;
+        let meta = reader.parse_cog_header()?;
 
-        Ok(CogTileIndex { tile_offsets })
+        Ok(CogAccessor { meta })
+    }
+
+    pub fn meta_data(&self) -> &CogMetadata {
+        &self.meta
+    }
+
+    pub fn tile_offsets(&self) -> &HashMap<Tile, CogTileLocation> {
+        &self.meta.tile_offsets
     }
 
     pub fn tile_offset(&self, tile: &Tile) -> Option<CogTileLocation> {
-        self.tile_offsets.get(tile).copied()
+        self.meta.tile_offsets.get(tile).copied()
     }
 
     pub fn read_tile_data<T: ArrayNum>(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
@@ -313,6 +361,8 @@ mod tests {
             "COMPRESS=LZW".to_string(),
             "-co".to_string(),
             "ADD_ALPHA=NO".to_string(),
+            "-co".to_string(),
+            "STATISTICS=YES".to_string(),
         ];
 
         geo::raster::algo::warp_to_disk_cli(&src_ds, output_tif, &options, &vec![]).expect("Failed to create test COG file");
@@ -327,14 +377,20 @@ mod tests {
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let output = tmp.path().join("cog.tif");
-        create_test_cog(&input, &output, 256)?;
+        create_test_cog(&input, &output, COG_TILE_SIZE)?;
 
-        let cog = CogTileIndex::from_file(&output)?;
+        let cog = CogAccessor::from_file(&output)?;
 
         let mut reader = File::open(&output)?;
+        let meta = cog.meta_data();
+        assert_eq!(meta.tile_size, COG_TILE_SIZE);
+        assert_eq!(meta.data_type, ArrayDataType::Uint8);
+        assert_eq!(meta.min_zoom, 6);
+        assert_eq!(meta.max_zoom, 10);
+        assert_eq!(meta.geo_reference.nodata(), Some(255.0));
 
-        assert!(!cog.tile_offsets.is_empty(), "Tile offsets should not be empty");
-        for (tile, _) in &cog.tile_offsets {
+        assert!(!cog.tile_offsets().is_empty(), "Tile offsets should not be empty");
+        for (tile, _) in cog.tile_offsets() {
             let tile_data = cog.read_tile_data::<u8>(tile, &mut reader)?;
             assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
         }
