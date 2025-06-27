@@ -40,12 +40,12 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     Ok(())
 }
 
-pub struct CogReader<R: Read + Seek> {
+pub struct CogDecoder<R: Read + Seek> {
     /// TIFF decoder
     decoder: tiff::decoder::Decoder<R>,
 }
 
-impl<R: Read + Seek> CogReader<R> {
+impl<R: Read + Seek> CogDecoder<R> {
     pub fn new(stream: R) -> Result<Self> {
         Ok(Self {
             decoder: tiff::decoder::Decoder::new(stream)?.with_limits(tiff::decoder::Limits::unlimited()),
@@ -248,13 +248,14 @@ impl CogTileIndex {
         Self::new(CogHeaderReader::from_stream(File::open(path)?)?)
     }
 
-    pub fn from_buffer(buffer: Vec<u8>) -> Result<Self> {
+    /// Create a CogTileIndex from a buffer containing the COG header the size of the buffer must match the `io::COG_HEADER_SIZE`.
+    pub fn from_cog_header(buffer: Vec<u8>) -> Result<Self> {
         Self::new(CogHeaderReader::from_buffer(buffer)?)
     }
 
     fn new(reader: CogHeaderReader) -> Result<Self> {
         verify_gdal_ghost_data(&reader.cog_header())?;
-        let mut reader = CogReader::new(reader)?;
+        let mut reader = CogDecoder::new(reader)?;
         let tile_offsets = reader.parse_cog_header()?;
 
         Ok(CogTileIndex { tile_offsets })
