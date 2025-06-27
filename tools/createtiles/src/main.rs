@@ -9,6 +9,8 @@ use indicatif_log_bridge::LogWrapper;
 use inf::progressinfo::{CallbackProgress, ComputationStatus};
 use tiler::TileFormat;
 
+use crate::createtiles::create_cog_tiles;
+
 pub type Error = tiler::Error;
 pub type Result<T> = tiler::Result<T>;
 
@@ -80,15 +82,22 @@ fn main() -> Result<()> {
 
     let progress = multi.add(ProgressBar::new(100));
     let p = progress.clone();
-    create_mbtiles(
-        &opt.input,
-        opt.output,
-        tile_opts,
-        CallbackProgress::<(), _>::with_cb(move |pos, _| {
-            progress.set_position((pos * 100.0) as u64);
-            ComputationStatus::Continue
-        }),
-    )?;
+
+    if let Some(ext) = opt.output.extension()
+        && ext.to_string_lossy() == "tif"
+    {
+        create_cog_tiles(&opt.input, opt.output, tile_opts)?;
+    } else {
+        create_mbtiles(
+            &opt.input,
+            opt.output,
+            tile_opts,
+            CallbackProgress::<(), _>::with_cb(move |pos, _| {
+                progress.set_position((pos * 100.0) as u64);
+                ComputationStatus::Continue
+            }),
+        )?;
+    }
 
     p.finish_with_message("Tile creation done");
 

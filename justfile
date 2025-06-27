@@ -55,6 +55,9 @@ build_py:
   conda activate ./target/conda
   cd ruster && maturin develop && python ./test.py
 
+create_tiles input output:
+    cargo run -p createtiles --release -- --input {{input}} --output {{output}}
+
 serve_tiles dir:
   cargo run -p tileserver --release -- --gis-dir {{dir}}
 
