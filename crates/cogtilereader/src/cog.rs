@@ -1,7 +1,10 @@
 use geo::{Point, Tile, crs};
 use tiff::tags::Tag;
 
-use crate::{Error, Result, readers::FileBasedReader};
+use crate::{
+    Error, Result,
+    readers::{CogStreamReader, FileBasedReader},
+};
 use std::{
     collections::HashMap,
     io::{Read, Seek},
@@ -239,7 +242,6 @@ pub struct CogTileLocation {
 
 #[derive(Debug, Clone)]
 pub struct CogTileIndex {
-    source: String,
     tile_offsets: HashMap<Tile, CogTileLocation>,
 }
 
@@ -250,17 +252,16 @@ impl CogTileIndex {
         let mut reader = CogReader::new(buffered_reader)?;
         let tile_offsets = reader.parse_cog_header()?;
 
-        Ok(CogTileIndex {
-            source: path
-                .to_str()
-                .ok_or_else(|| Error::InvalidArgument(format!("path: {}", path.to_string_lossy())))?
-                .into(),
-            tile_offsets,
-        })
+        Ok(CogTileIndex { tile_offsets })
     }
 
-    pub fn source(&self) -> &str {
-        &self.source
+    pub fn from_reader(reader: impl CogStreamReader) -> Result<Self> {
+        verify_gdal_ghost_data(reader.cog_header())?;
+
+        let mut reader = CogReader::new(reader)?;
+        let tile_offsets = reader.parse_cog_header()?;
+
+        Ok(CogTileIndex { tile_offsets })
     }
 
     pub fn tile_offset(&self, tile: &Tile) -> Option<CogTileLocation> {
@@ -299,7 +300,8 @@ mod tests {
         create_test_cog(&input, &output, 256)?;
 
         let cog = CogTileIndex::from_file(&output)?;
-        assert_eq!(cog.source(), output.to_str().unwrap());
+
+        assert!(!cog.tile_offsets.is_empty(), "Tile offsets should not be empty");
 
         Ok(())
     }

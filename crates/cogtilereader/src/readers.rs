@@ -8,6 +8,11 @@ use crate::Result;
 
 const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
 
+pub trait CogStreamReader: Read + Seek {
+    /// Returns the COG header as a byte slice.
+    fn cog_header(&self) -> &[u8];
+}
+
 /// This reader buffers the first 64 KiB of the file, which is usually sufficient for reading the COG header.
 /// This way multiple io calls are avoided when reading the header.
 /// Read operations outside of the header will be redirected to the underlying file stream.
@@ -24,8 +29,10 @@ impl FileBasedReader {
         stream.read_exact(&mut buffer)?;
         Ok(Self { stream, buffer, pos: 0 })
     }
+}
 
-    pub fn cog_header(&self) -> &[u8] {
+impl CogStreamReader for FileBasedReader {
+    fn cog_header(&self) -> &[u8] {
         &self.buffer
     }
 }
