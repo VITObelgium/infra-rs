@@ -9,6 +9,7 @@ use gdal::{
     errors::GdalError,
     vector::{FieldValue, LayerAccess},
 };
+use gdal_sys::OGRFieldType;
 
 use crate::{Error, Result, gdalinterop};
 
@@ -154,6 +155,21 @@ pub fn read_dataframe(path: &Path, layer: Option<&str>, columns: &[String]) -> R
     Ok(data)
 }
 
+pub fn read_dataframe_schema(
+    path: &Path,
+    layer: Option<&str>,
+    data_frame_open_options: Option<&[&str]>,
+) -> Result<Vec<(String, OGRFieldType::Type)>> {
+    let ds = dataset::open_read_only_with_options(path, data_frame_open_options)?;
+    let ds_layer = if let Some(layer_name) = layer {
+        ds.layer_by_name(layer_name)?
+    } else {
+        ds.layer(0)?
+    };
+
+    Ok(ds_layer.defn().fields().map(|f| (f.name().to_string(), f.field_type())).collect())
+}
+
 pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result<Vec<T>> {
     DataframeIterator::<T>::new(&path, layer)?.collect()
 }
@@ -163,7 +179,7 @@ pub fn read_dataframe_rows_cb(
     path: &Path,
     layer: Option<&str>,
     filter: Option<&str>,
-    columns: &[String],
+    columns: Option<&[String]>,
     data_frame_open_options: Option<&[&str]>,
     mut callback: impl FnMut(Vec<Option<FieldValue>>),
 ) -> Result<()> {
@@ -189,21 +205,30 @@ pub fn read_dataframe_rows_cb(
         ds_layer.set_attribute_filter(filter)?;
     }
 
-    let column_indexes: Vec<usize> = columns
-        .iter()
-        .map(|name| match ds_layer.defn().field_index(name) {
-            Ok(index) => Ok(index),
-            Err(_) => Err(Error::InvalidArgument(format!(
-                "Field '{}' not found in layer '{}', available fields: {}",
-                name,
-                ds_layer.name(),
-                ds_layer.defn().fields().map(|f| f.name()).collect::<Vec<String>>().join(", ")
-            ))),
-        })
-        .collect::<Result<Vec<usize>>>()?;
+    let column_indexes: Vec<usize> = match columns {
+        Some(columns) => columns
+            .iter()
+            .map(|name| match ds_layer.defn().field_index(name) {
+                Ok(index) => Ok(index),
+                Err(_) => Err(Error::InvalidArgument(format!(
+                    "Field '{}' not found in layer '{}', available fields: {}",
+                    name,
+                    ds_layer.name(),
+                    ds_layer.defn().fields().map(|f| f.name()).collect::<Vec<String>>().join(", ")
+                ))),
+            })
+            .collect::<Result<Vec<usize>>>()?,
+        None =>
+        // If no columns are specified, read all fields
+        {
+            (0..ds_layer.defn().field_count()?)
+                .map(|i| Ok(i as usize))
+                .collect::<Result<Vec<usize>>>()?
+        }
+    };
 
     for feature in ds_layer.features() {
-        let mut row = Vec::with_capacity(columns.len());
+        let mut row = Vec::with_capacity(column_indexes.len());
         let mut valid_field = false;
         for column_idx in &column_indexes {
             valid_field = valid_field || feature.field_is_valid(*column_idx);
