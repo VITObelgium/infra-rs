@@ -1,12 +1,10 @@
 use geo::{Point, Tile, crs};
 use tiff::tags::Tag;
 
-use crate::{
-    Error, Result,
-    readers::{CogStreamReader, FileBasedReader},
-};
+use crate::{Error, Result, io::CogHeaderReader};
 use std::{
     collections::HashMap,
+    fs::File,
     io::{Read, Seek},
     path::Path,
 };
@@ -247,17 +245,15 @@ pub struct CogTileIndex {
 
 impl CogTileIndex {
     pub fn from_file(path: &Path) -> Result<Self> {
-        let buffered_reader = FileBasedReader::new(path)?;
-        verify_gdal_ghost_data(&buffered_reader.cog_header())?;
-        let mut reader = CogReader::new(buffered_reader)?;
-        let tile_offsets = reader.parse_cog_header()?;
-
-        Ok(CogTileIndex { tile_offsets })
+        Self::new(CogHeaderReader::from_stream(File::open(path)?)?)
     }
 
-    pub fn from_reader(reader: impl CogStreamReader) -> Result<Self> {
-        verify_gdal_ghost_data(reader.cog_header())?;
+    pub fn from_buffer(buffer: Vec<u8>) -> Result<Self> {
+        Self::new(CogHeaderReader::from_buffer(buffer)?)
+    }
 
+    fn new(reader: CogHeaderReader) -> Result<Self> {
+        verify_gdal_ghost_data(&reader.cog_header())?;
         let mut reader = CogReader::new(reader)?;
         let tile_offsets = reader.parse_cog_header()?;
 

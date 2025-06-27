@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 pub mod cog;
-mod readers;
+mod io;
 
 #[derive(Error, Debug)]
 pub enum Error {
