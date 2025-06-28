@@ -313,7 +313,7 @@ impl CogTileLocation {
     pub fn range_to_fetch(&self) -> Range<u64> {
         Range {
             start: self.offset - 4,
-            end: self.size + 4,
+            end: self.offset + self.size,
         }
     }
 }
