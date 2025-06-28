@@ -88,24 +88,34 @@ impl Seek for CogHeaderReader {
 
 #[simd_macro::geo_simd_bounds]
 pub fn read_tile_data<T: ArrayNum>(
-    tile: CogTileLocation,
+    tile: &CogTileLocation,
     tile_size: i32,
     nodata: Option<f64>,
     mut reader: impl Read + Seek,
 ) -> Result<DenseArray<T>> {
-    let start_pos = tile.offset - 4;
-    reader.seek(SeekFrom::Start(start_pos))?;
+    let chunk_range = tile.range_to_fetch();
+    reader.seek(SeekFrom::Start(chunk_range.start))?;
 
-    let mut buf = vec![0; tile.size as usize + 4];
+    let mut buf = vec![0; (chunk_range.end - chunk_range.start) as usize];
     reader.read_exact(&mut buf)?;
 
-    // buf now contains the tile data with the first 4 bytes being the size of the tile as cross-check
-    let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&buf[0..4]).unwrap();
+    parse_tile_data(tile, tile_size, nodata, &buf)
+}
+
+#[simd_macro::geo_simd_bounds]
+pub fn parse_tile_data<T: ArrayNum>(
+    tile: &CogTileLocation,
+    tile_size: i32,
+    nodata: Option<f64>,
+    cog_chunk: &[u8],
+) -> Result<DenseArray<T>> {
+    // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
+    let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&cog_chunk[0..4]).unwrap();
     if tile.size != u32::from_le_bytes(size_bytes) as u64 {
         return Err(Error::Runtime("Tile size does not match the expected size".into()));
     }
 
-    let tile_data = lzw_decompress_to::<T>(&buf[4..], tile_size)?;
+    let tile_data = lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?;
     let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size), nodata);
     Ok(DenseArray::<T>::new_init_nodata(meta, tile_data)?)
 }

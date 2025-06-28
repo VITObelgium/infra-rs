@@ -2,8 +2,12 @@
 
 use thiserror::Error;
 
-pub mod cog;
+mod cog;
 mod io;
+
+pub use cog::CogAccessor;
+pub use cog::CogMetadata;
+pub use cog::CogTileLocation;
 
 #[derive(Error, Debug)]
 pub enum Error {

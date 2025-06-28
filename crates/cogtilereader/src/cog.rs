@@ -3,12 +3,13 @@ use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
     CogStats, Error, Result,
-    io::{CogHeaderReader, read_tile_data},
+    io::{self, CogHeaderReader},
 };
 use std::{
     collections::HashMap,
     fs::File,
     io::{Read, Seek},
+    ops::Range,
     path::Path,
 };
 
@@ -308,6 +309,15 @@ pub struct CogTileLocation {
     pub size: u64,
 }
 
+impl CogTileLocation {
+    pub fn range_to_fetch(&self) -> Range<u64> {
+        Range {
+            start: self.offset - 4,
+            end: self.size + 4,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CogMetadata {
     pub min_zoom: i32,
@@ -369,6 +379,21 @@ impl CogAccessor {
         })
     }
 
+    pub fn parse_tile_data(&self, tile: &CogTileLocation, cog_chunk: &[u8]) -> Result<AnyDenseArray> {
+        Ok(match self.meta.data_type {
+            ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(tile, cog_chunk)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(tile, cog_chunk)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(self.parse_tile_data_as::<u32>(tile, cog_chunk)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(self.parse_tile_data_as::<u64>(tile, cog_chunk)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(self.parse_tile_data_as::<i8>(tile, cog_chunk)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(self.parse_tile_data_as::<i16>(tile, cog_chunk)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(self.parse_tile_data_as::<i32>(tile, cog_chunk)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(self.parse_tile_data_as::<i64>(tile, cog_chunk)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(self.parse_tile_data_as::<f32>(tile, cog_chunk)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(self.parse_tile_data_as::<f64>(tile, cog_chunk)?),
+        })
+    }
+
     #[simd_macro::geo_simd_bounds]
     pub fn read_tile_data_as<T: ArrayNum>(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
@@ -380,10 +405,23 @@ impl CogAccessor {
         }
 
         if let Some(tile_location) = self.tile_offset(tile) {
-            read_tile_data(tile_location, self.meta.tile_size, self.meta.geo_reference.nodata(), &mut reader)
+            io::read_tile_data(&tile_location, self.meta.tile_size, self.meta.geo_reference.nodata(), &mut reader)
         } else {
             Err(Error::InvalidArgument(format!("Tile {tile:?} not found in COG index")))
         }
+    }
+
+    #[simd_macro::geo_simd_bounds]
+    pub fn parse_tile_data_as<T: ArrayNum>(&self, tile: &CogTileLocation, cog_chunk: &[u8]) -> Result<DenseArray<T>> {
+        if T::TYPE != self.meta.data_type {
+            return Err(Error::InvalidArgument(format!(
+                "Tile data type mismatch: expected {:?}, got {:?}",
+                self.meta.data_type,
+                T::TYPE
+            )));
+        }
+
+        io::parse_tile_data(tile, self.meta.tile_size, self.meta.geo_reference.nodata(), cog_chunk)
     }
 }
 
