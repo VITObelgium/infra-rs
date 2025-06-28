@@ -1,4 +1,4 @@
-use geo::{ArrayDataType, ArrayNum, Columns, DenseArray, GeoReference, Point, RasterSize, Rows, Tile, crs};
+use geo::{AnyDenseArray, ArrayDataType, ArrayNum, Columns, DenseArray, GeoReference, Point, RasterSize, Rows, Tile, crs};
 use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
@@ -332,9 +332,32 @@ impl CogAccessor {
         self.meta.tile_offsets.get(tile).copied()
     }
 
-    pub fn read_tile_data<T: ArrayNum>(&self, tile: &Tile, tile_size: i32, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
+    pub fn read_tile_data(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
+        Ok(match self.meta.data_type {
+            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_tile_data_as::<u8>(tile, &mut reader)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_tile_data_as::<u16>(tile, &mut reader)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_tile_data_as::<u32>(tile, &mut reader)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_tile_data_as::<u64>(tile, &mut reader)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_tile_data_as::<i8>(tile, &mut reader)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_tile_data_as::<i16>(tile, &mut reader)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_tile_data_as::<i32>(tile, &mut reader)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_tile_data_as::<i64>(tile, &mut reader)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_tile_data_as::<f32>(tile, &mut reader)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_tile_data_as::<f64>(tile, &mut reader)?),
+        })
+    }
+
+    pub fn read_tile_data_as<T: ArrayNum>(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
+        if T::TYPE != self.meta.data_type {
+            return Err(Error::InvalidArgument(format!(
+                "Tile data type mismatch: expected {:?}, got {:?}",
+                self.meta.data_type,
+                T::TYPE
+            )));
+        }
+
         if let Some(tile_location) = self.tile_offset(tile) {
-            read_tile_data(tile_location, tile_size, &mut reader)
+            read_tile_data(tile_location, self.meta.tile_size, &mut reader)
         } else {
             Err(Error::InvalidArgument(format!("Tile {tile:?} not found in COG index")))
         }
@@ -391,7 +414,11 @@ mod tests {
 
         assert!(!cog.tile_offsets().is_empty(), "Tile offsets should not be empty");
         for (tile, _) in cog.tile_offsets() {
-            let tile_data = cog.read_tile_data::<u8>(tile, meta.tile_size, &mut reader)?;
+            let tile_data = cog.read_tile_data(tile, &mut reader)?;
+            assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
+            assert_eq!(tile_data.data_type(), meta.data_type);
+
+            let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
             assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
         }
 
