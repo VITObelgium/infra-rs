@@ -2,7 +2,7 @@ use geo::{AnyDenseArray, ArrayDataType, ArrayNum, Columns, DenseArray, GeoRefere
 use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
-    Error, Result,
+    CogStats, Error, Result,
     io::{CogHeaderReader, read_tile_data},
 };
 use std::{
@@ -113,6 +113,17 @@ impl<R: Read + Seek> CogDecoder<R> {
         }
     }
 
+    fn read_gdal_metadata(&mut self) -> Result<Option<CogStats>> {
+        #[cfg(feature = "raster_stats")]
+        if let Ok(gdal_metadata) = self.decoder.get_tag_ascii_string(Tag::Unknown(42112)) {
+            use crate::stats;
+
+            return Ok(Some(stats::parse_statistics(&gdal_metadata)?));
+        }
+
+        Ok(None)
+    }
+
     fn generate_tiles_for_extent(geo_transform: [f64; 6], image_width: u32, image_height: u32, tile_size: u32, zoom: i32) -> Vec<Tile> {
         let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
         let top_left_tile = Tile::for_coordinate(top_left, zoom);
@@ -158,8 +169,6 @@ impl<R: Read + Seek> CogDecoder<R> {
             }
         };
 
-        log::debug!("Gdal meta: {:?}", self.decoder.get_tag(Tag::Unknown(42112)));
-
         let data_type = match (self.decoder.get_tag(Tag::SampleFormat)?, bits_per_sample) {
             (Value::Short(1), 8) => ArrayDataType::Uint8,
             (Value::Short(1), 16) => ArrayDataType::Uint16,
@@ -181,6 +190,8 @@ impl<R: Read + Seek> CogDecoder<R> {
         if self.decoder.get_tag_u32(Tag::Compression)? != 5 {
             return Err(Error::InvalidArgument("Only LZW compressed COGs are supported".into()));
         }
+
+        let statistics = self.read_gdal_metadata()?;
 
         let mut valid_transform = false;
         let mut geo_transform = [0.0; 6];
@@ -277,6 +288,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             data_type,
             tile_offsets: tile_inventory,
             geo_reference: GeoReference::new("EPSG:3857", raster_size, geo_transform, nodata),
+            statistics,
         })
     }
 }
@@ -294,6 +306,7 @@ pub struct CogMetadata {
     pub tile_size: i32,
     pub data_type: ArrayDataType,
     pub geo_reference: GeoReference,
+    pub statistics: Option<CogStats>,
     tile_offsets: HashMap<Tile, CogTileLocation>,
 }
 

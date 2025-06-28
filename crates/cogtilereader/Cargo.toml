@@ -11,9 +11,15 @@ log = "0.4"
 geo = { path = "../geo", default-features = false }
 inf = { path = "../inf" }
 weezl = "0.1"
+xml-rs = { version = "0.8", optional = true }
 
 [dev-dependencies]
 path_macro = "1.0"
 test-log = "0.2"
 geo = { path = "../geo", features = ["gdal-static"] }
 temp-dir = "0.1"
+approx = "0.5"
+
+[features]
+default = ["raster_stats"]
+raster_stats = ["dep:xml-rs"]

@@ -644,6 +644,7 @@ checksum = "f46ad14479a25103f283c0f10005961cf086d8dc42205bb44c46ac563475dca6"
 name = "cogtilereader"
 version = "0.1.0"
 dependencies = [
+ "approx",
  "geo",
  "inf",
  "itertools 0.14.0",
@@ -654,6 +655,7 @@ dependencies = [
  "thiserror 2.0.12",
  "tiff",
  "weezl",
+ "xml-rs",
 ]
 
 [[package]]
@@ -4151,6 +4153,12 @@ name = "writeable"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ea2f10b9bb0928dfb1b42b65e1f9e36f7f54dbdf08457afefb38afcdec4fa2bb"
+
+[[package]]
+name = "xml-rs"
+version = "0.8.26"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a62ce76d9b56901b19a74f19431b0d8b3bc7ca4ad685a746dfd78ca8f4fc6bda"
 
 [[package]]
 name = "yoke"
