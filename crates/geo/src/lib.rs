@@ -28,6 +28,7 @@ mod nodata;
 pub mod raster;
 #[cfg(feature = "gdal")]
 mod rasteriotests;
+mod rastermetadata;
 mod rastersize;
 pub mod rect;
 #[cfg(feature = "gdal")]
@@ -55,8 +56,8 @@ pub use {
     anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayInterop, array::ArrayMetadata, array::Columns, array::Rows,
     array::Window, arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell, cell::CellIterator,
     coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference,
-    latlonbounds::LatLonBounds, nodata::Nodata, raster::RasterNodataCompatibility, rastersize::RasterSize, rect::Rect, tile::Tile,
-    tile::ZoomLevelStrategy,
+    latlonbounds::LatLonBounds, nodata::Nodata, raster::RasterNodataCompatibility, rastermetadata::RasterMetadata, rastersize::RasterSize,
+    rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };
 
 #[doc(inline)]

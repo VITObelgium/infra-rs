@@ -108,13 +108,16 @@ mod tests {
     use tempdir::TempDir;
 
     use crate::{
-        Array, ArrayInterop as _, Cell, Columns, DenseArray, GeoReference, Nodata, RasterSize, Result, Rows,
+        Array, ArrayInterop as _, ArrayMetadata, Cell, Columns, DenseArray, GeoReference, Nodata, RasterMetadata, RasterSize, Result, Rows,
         raster::{DenseRaster, RasterIO},
     };
 
     #[test]
     fn write_raster() {
-        let mut raster = DenseArray::<f32>::zeros(RasterSize::with_rows_cols(Rows(5), Columns(10)));
+        let mut raster = DenseArray::<f32>::zeros(RasterMetadata::sized_for_type::<f32>(RasterSize::with_rows_cols(
+            Rows(5),
+            Columns(10),
+        )));
         let tmp_dir = TempDir::new("ras_write").unwrap();
 
         let raster_path = tmp_dir.path().join("test.asc");

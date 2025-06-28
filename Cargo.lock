@@ -650,6 +650,7 @@ dependencies = [
  "itertools 0.14.0",
  "log",
  "path_macro",
+ "simd_macro",
  "temp-dir",
  "test-log",
  "thiserror 2.0.12",

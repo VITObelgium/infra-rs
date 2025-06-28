@@ -1,5 +1,6 @@
 use num::Zero;
 
+use crate::rastermetadata::RasterMetadata;
 use crate::{Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, GeoReference, Nodata, RasterSize, Result};
 
 use super::clusterutils::{ClusterDiagonals, MARK_TODO};
@@ -20,7 +21,7 @@ where
     let cols = ras.columns();
 
     let mut result = R::WithPixelType::<u32>::new_with_dimensions_of(ras, 0);
-    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), ras.size());
+    let mut mark = DenseArray::<u8, R::Metadata>::filled_with(Some(MARK_TODO), ras.metadata().clone());
     let mut cluster_cells = Vec::new();
     let mut border = FiLo::new(rows, cols);
 
@@ -87,7 +88,7 @@ where
     let radius2 = (radius * radius) as i32;
 
     let mut result = R::WithPixelType::<i32>::new_with_dimensions_of(ras, -9999);
-    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_DONE), ras.size());
+    let mut mark = DenseArray::<u8, R::Metadata>::filled_with(Some(MARK_DONE), ras.metadata().clone());
 
     ras.iter().zip(mark.iter_mut()).zip(result.iter_mut()).for_each(|((val, m), res)| {
         if val.is_nodata() {
@@ -178,13 +179,13 @@ fn handle_cell_with_obstacles_straight(
     }
 }
 
-fn handle_cell_with_obstacles_diag(
+fn handle_cell_with_obstacles_diag<M: ArrayMetadata>(
     old_cell: Cell,
     cell: Cell,
-    cat_map: &impl Array<Pixel = i32>,
+    cat_map: &impl Array<Pixel = i32, Metadata = M>,
     cluster_value: i32,
-    obstacle_map: &impl Array<Pixel = u8>,
-    mark: &mut DenseArray<u8>,
+    obstacle_map: &impl Array<Pixel = u8, Metadata = M>,
+    mark: &mut DenseArray<u8, M>,
     border: &mut FiLo<Cell>,
 ) {
     if cat_map[cell] == cluster_value
@@ -244,7 +245,7 @@ fn compute_cluster_id_of_obstacle_cell(
     }
 }
 
-pub fn cluster_id_with_obstacles<R>(cat_map: &R, obstacle_map: &impl Array<Pixel = u8>) -> Result<R>
+pub fn cluster_id_with_obstacles<R>(cat_map: &R, obstacle_map: &impl Array<Pixel = u8, Metadata = R::Metadata>) -> Result<R>
 where
     R: Array<Pixel = i32> + ArrayCopy<i32, R>,
 {
@@ -258,7 +259,7 @@ where
     let cols = cat_map.columns();
 
     let mut result = R::new_with_dimensions_of(cat_map, Nodata::NODATA);
-    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), cat_map.size());
+    let mut mark = DenseArray::<u8, R::Metadata>::filled_with(Some(MARK_TODO), cat_map.metadata().clone());
 
     let mut cluster_id = 0;
     let mut border = FiLo::new(rows, cols);
@@ -405,7 +406,11 @@ fn compute_fuzzy_cluster_id_with_obstacles_rc(
     }
 }
 
-pub fn fuzzy_cluster_id_with_obstacles<R>(items: &R, obstacles: &impl Array<Pixel = u8>, radius_in_meter: f32) -> Result<R>
+pub fn fuzzy_cluster_id_with_obstacles<R>(
+    items: &R,
+    obstacles: &impl Array<Pixel = u8, Metadata = R::Metadata>,
+    radius_in_meter: f32,
+) -> Result<R>
 where
     R: Array<Pixel = i32, Metadata = GeoReference> + ArrayCopy<i32, R>,
 {
@@ -416,7 +421,7 @@ where
     let mut result = R::filled_with_nodata(items.metadata().clone());
     let radius = radius_in_meter / items.metadata().cell_size_x() as f32;
 
-    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), items.size());
+    let mut mark = DenseArray::<u8>::filled_with(Some(MARK_TODO), RasterMetadata::sized_for_type::<u8>(items.size()));
     let mut border = FiLo::new(rows, cols);
     let mut cluster_id = 1;
 
@@ -461,22 +466,23 @@ mod generictests {
     use inf::allocate;
 
     use crate::{
-        RasterSize,
+        ArrayDataType, RasterSize,
         array::{Columns, Rows},
+        rastermetadata::RasterMetadata,
         testutils::create_vec,
     };
 
     use super::*;
 
     #[test]
-    fn test_cluster_id<R: Array<Metadata = RasterSize>>() -> Result<()>
+    fn test_cluster_id<R: Array<Metadata = RasterMetadata>>() -> Result<()>
     where
         R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
-        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
+        let meta = RasterMetadata::sized_for_type::<u32>(RasterSize::with_rows_cols(Rows(5), Columns(4)));
         #[rustfmt::skip]
         let raster = R::new(
-            size,
+            meta,
             create_vec(&[
                 1.0, 1.0, 1.0, 1.0,
                 1.0, 1.0, 2.0, 3.0,
@@ -488,7 +494,7 @@ mod generictests {
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
-            size,
+            meta,
             allocate::aligned_vec_from_slice(&[
                 1, 1, 1, 1,
                 1, 1, 2, 3,
@@ -504,14 +510,14 @@ mod generictests {
     }
 
     #[test]
-    fn test_cluster_id_border_values<R: Array<Metadata = RasterSize>>() -> Result<()>
+    fn test_cluster_id_border_values<R: Array<Metadata = RasterMetadata>>() -> Result<()>
     where
         R::WithPixelType<u32>: ArrayCopy<u32, R>,
     {
-        let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
+        let meta = RasterMetadata::sized(RasterSize::with_rows_cols(Rows(5), Columns(4)), ArrayDataType::Uint32);
         #[rustfmt::skip]
         let raster = R::new(
-            size,
+            meta,
             create_vec(&[
                 1.0, 2.0, 3.0, 4.0,
                 2.0, 9.0, 9.0, 5.0,
@@ -523,7 +529,7 @@ mod generictests {
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u32>::new(
-            size,
+            meta,
             allocate::aligned_vec_from_slice(&[
                  1,  2,  3,  4,
                  5,  6,  6,  7,

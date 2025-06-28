@@ -12,6 +12,9 @@ use std::{
     path::Path,
 };
 
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
+
 fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     // Classic TIFF has magic number 42
     // BigTIFF has magic number 43
@@ -366,6 +369,7 @@ impl CogAccessor {
         })
     }
 
+    #[simd_macro::geo_simd_bounds]
     pub fn read_tile_data_as<T: ArrayNum>(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
@@ -376,7 +380,7 @@ impl CogAccessor {
         }
 
         if let Some(tile_location) = self.tile_offset(tile) {
-            read_tile_data(tile_location, self.meta.tile_size, &mut reader)
+            read_tile_data(tile_location, self.meta.tile_size, self.meta.geo_reference.nodata(), &mut reader)
         } else {
             Err(Error::InvalidArgument(format!("Tile {tile:?} not found in COG index")))
         }

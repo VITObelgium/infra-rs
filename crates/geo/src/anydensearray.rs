@@ -1,15 +1,16 @@
 use inf::{allocate, cast};
 
 use crate::{
-    Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, RasterSize, Result,
+    Array, ArrayDataType, ArrayMetadata, ArrayNum, Cell, DenseArray, Error, Result,
     array::{Columns, Rows},
     raster::algo,
+    rastermetadata::RasterMetadata,
 };
 
 /// Type erased `DenseArray`
 /// Needed to cross boundaries to dynamically typed languages like Python or JavaScript
 #[derive(Clone, Debug, PartialEq)]
-pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterSize> {
+pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterMetadata> {
     U8(DenseArray<u8, Metadata>),
     U16(DenseArray<u16, Metadata>),
     U32(DenseArray<u32, Metadata>),
@@ -487,7 +488,10 @@ impl<'a, T: ArrayNum, Metadata: ArrayMetadata> TryFrom<&'a mut AnyDenseArray<Met
 #[cfg(test)]
 mod tests {
 
-    use crate::array::{Columns, Rows};
+    use crate::{
+        RasterSize,
+        array::{Columns, Rows},
+    };
 
     use super::*;
 
@@ -497,7 +501,7 @@ mod tests {
         const TILE_HEIGHT: Rows = Rows(10);
 
         let raster = DenseArray::new(
-            RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
+            RasterMetadata::sized(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH), ArrayDataType::Uint32),
             allocate::aligned_vec_from_iter(0..(TILE_WIDTH * TILE_HEIGHT) as u32),
         )
         .unwrap();
@@ -522,7 +526,7 @@ mod tests {
         const TILE_HEIGHT: Rows = Rows(10);
 
         let raster = DenseArray::new(
-            RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH),
+            RasterMetadata::sized(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH), ArrayDataType::Uint32),
             allocate::aligned_vec_from_iter(0..(TILE_WIDTH * TILE_HEIGHT) as u32),
         )
         .unwrap();

@@ -1,4 +1,4 @@
-use geo::{Array, ArrayNum, DenseArray, RasterSize};
+use geo::{ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize};
 use inf::allocate::{self, AlignedVec};
 use weezl::{BitOrder, decode::Decoder};
 
@@ -6,6 +6,9 @@ use crate::{Error, Result, cog::CogTileLocation};
 use std::io::{BufWriter, Read, Seek, SeekFrom};
 
 pub const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
+
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
 
 /// This reader buffers the first 64 KiB of the source stream, which is usually sufficient for reading the COG header.
 /// This way multiple io calls are avoided when reading the header.
@@ -83,21 +86,28 @@ impl Seek for CogHeaderReader {
     }
 }
 
-pub fn read_tile_data<T: ArrayNum>(tile: CogTileLocation, tile_size: i32, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
+#[simd_macro::geo_simd_bounds]
+pub fn read_tile_data<T: ArrayNum>(
+    tile: CogTileLocation,
+    tile_size: i32,
+    nodata: Option<f64>,
+    mut reader: impl Read + Seek,
+) -> Result<DenseArray<T>> {
     let start_pos = tile.offset - 4;
     reader.seek(SeekFrom::Start(start_pos))?;
 
     let mut buf = vec![0; tile.size as usize + 4];
     reader.read_exact(&mut buf)?;
 
-    // Buf now contains the tile data with the first 4 bytes being the size of the tile
+    // buf now contains the tile data with the first 4 bytes being the size of the tile as cross-check
     let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&buf[0..4]).unwrap();
     if tile.size != u32::from_le_bytes(size_bytes) as u64 {
         return Err(Error::Runtime("Tile size does not match the expected size".into()));
     }
 
     let tile_data = lzw_decompress_to::<T>(&buf[4..], tile_size)?;
-    Ok(DenseArray::<T>::new(RasterSize::square(tile_size), tile_data)?)
+    let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size), nodata);
+    Ok(DenseArray::<T>::new_init_nodata(meta, tile_data)?)
 }
 
 fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: i32) -> Result<AlignedVec<T>> {

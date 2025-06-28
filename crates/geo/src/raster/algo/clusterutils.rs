@@ -1,6 +1,6 @@
 use crate::{
+    Array, ArrayMetadata, ArrayNum, Cell, DenseArray,
     array::{Columns, Rows},
-    Array, ArrayNum, Cell, DenseArray,
 };
 
 pub const MARK_TODO: u8 = 0;
@@ -147,7 +147,7 @@ impl<T: Default + Copy> FiLo<T> {
     }
 }
 
-pub fn insert_cell(cell: Cell, cluster_cells: &mut Vec<Cell>, mark: &mut DenseArray<u8>, border: &mut FiLo<Cell>) {
+pub fn insert_cell<M: ArrayMetadata>(cell: Cell, cluster_cells: &mut Vec<Cell>, mark: &mut DenseArray<u8, M>, border: &mut FiLo<Cell>) {
     mark[cell] = MARK_BORDER;
     border.push_back(cell);
     cluster_cells.push(cell);
@@ -158,11 +158,11 @@ pub fn insert_border_cell(cell: Cell, mark: &mut impl Array<Pixel = u8>, border:
     border.push_back(cell);
 }
 
-pub fn handle_cell<T: ArrayNum>(
+pub fn handle_cell<T: ArrayNum, M: ArrayMetadata>(
     cell: Cell,
     cluster_value: T,
     cluster_cells: &mut Vec<Cell>,
-    mark: &mut DenseArray<u8>,
+    mark: &mut DenseArray<u8, M>,
     border: &mut FiLo<Cell>,
     raster: &impl Array<Pixel = T>,
 ) {

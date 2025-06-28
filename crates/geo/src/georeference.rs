@@ -1,5 +1,5 @@
 use crate::{
-    Cell, RasterSize,
+    ArrayDataType, ArrayNum, Cell, RasterSize,
     array::{ArrayMetadata, Columns, Rows},
 };
 use approx::{AbsDiffEq, RelativeEq};
@@ -609,12 +609,16 @@ impl ArrayMetadata for GeoReference {
         self.nodata
     }
 
-    fn with_size(size: RasterSize) -> Self {
-        self::GeoReference::without_spatial_reference(size, None)
+    fn sized(size: RasterSize, dtype: ArrayDataType) -> Self {
+        self::GeoReference::without_spatial_reference(size, Some(dtype.default_nodata_value()))
     }
 
-    fn with_rows_cols(rows: Rows, cols: Columns) -> Self {
-        self::GeoReference::without_spatial_reference(RasterSize::with_rows_cols(rows, cols), None)
+    fn sized_for_type<T: ArrayNum>(size: RasterSize) -> Self {
+        Self::sized(size, T::TYPE)
+    }
+
+    fn sized_with_nodata(raster_size: RasterSize, nodata: Option<f64>) -> Self {
+        self::GeoReference::without_spatial_reference(raster_size, nodata)
     }
 
     fn with_geo_reference(georef: GeoReference) -> Self {

@@ -55,7 +55,7 @@ mod generictests {
     use inf::allocate;
 
     use crate::{
-        DenseArray, RasterSize, Result,
+        ArrayMetadata as _, DenseArray, RasterMetadata, RasterSize, Result,
         array::{Columns, Rows},
         testutils::{NOD, create_vec, number_cast},
     };
@@ -63,11 +63,11 @@ mod generictests {
     use super::*;
 
     #[test]
-    fn replace_nodata<R: Array<Metadata = RasterSize>>() -> Result<()> {
+    fn replace_nodata<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD,  4.0, 4.0,
                 4.0, 8.0,  4.0, 9.0,
@@ -79,7 +79,7 @@ mod generictests {
 
         #[rustfmt::skip]
         let expected = R::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 44.0, 44.0,  4.0,  4.0,
                  4.0,  8.0,  4.0,  9.0,
@@ -95,11 +95,11 @@ mod generictests {
     }
 
     #[test]
-    fn replace_value_by_nodata<R: Array<Metadata = RasterSize>>() -> Result<()> {
+    fn replace_value_by_nodata<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let mut raster = R::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD,  4.0, 4.0,
                 4.0, 8.0,  4.0, 9.0,
@@ -111,7 +111,7 @@ mod generictests {
 
         #[rustfmt::skip]
         let expected = R::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                  NOD,  NOD,  NOD,  NOD,
                  NOD,  8.0,  NOD,  9.0,
@@ -128,11 +128,11 @@ mod generictests {
     }
 
     #[test]
-    fn is_nodata<R: Array<Metadata = RasterSize>>() -> Result<()> {
+    fn is_nodata<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD,  4.0, 4.0,
                 4.0, 8.0,  4.0, 9.0,
@@ -144,7 +144,7 @@ mod generictests {
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             allocate::aligned_vec_from_slice(&[
                  1,  1,  0,  0,
                  0,  0,  0,  0,
@@ -160,11 +160,11 @@ mod generictests {
     }
 
     #[test]
-    fn is_data<R: Array<Metadata = RasterSize>>() -> Result<()> {
+    fn is_data<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
         #[rustfmt::skip]
         let raster = R::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD,  4.0, 4.0,
                 4.0, 8.0,  4.0, 9.0,
@@ -176,7 +176,7 @@ mod generictests {
 
         #[rustfmt::skip]
         let expected = R::WithPixelType::<u8>::new(
-            size,
+            RasterMetadata::sized_with_nodata(size, Some(NOD)),
             allocate::aligned_vec_from_slice(&[
                  0,  0,  1,  1,
                  1,  1,  1,  1,

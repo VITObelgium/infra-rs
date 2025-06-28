@@ -6,7 +6,7 @@ use inf::allocate::AlignedVec;
 use inf::legend::Legend;
 
 use geo::raster::io::RasterFormat;
-use geo::{Array, ArrayDataType, ArrayNum, DenseArray, RasterSize};
+use geo::{Array, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize};
 use geo::{Columns, Coordinate, GeoReference, LatLonBounds, Rows, Tile, crs};
 use num::Num;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
@@ -23,7 +23,10 @@ use crate::{
 };
 
 fn raw_tile_to_vito_tile_format<T: ArrayNum>(data: AlignedVec<T>, width: Columns, height: Rows) -> Result<TileData> {
-    let raster_tile = DenseArray::new(RasterSize::with_rows_cols(height, width), data)?;
+    let raster_tile = DenseArray::new(
+        RasterMetadata::sized_for_type::<T>(RasterSize::with_rows_cols(height, width)),
+        data,
+    )?;
 
     Ok(TileData::new(
         TileFormat::RasterTile,
@@ -93,8 +96,8 @@ impl WarpingTileProvider {
                 Some(T::NODATA),
             ),
             TileFormat::RasterTile => {
-                let (size, data) = raw_tile_data.into_raw_parts();
-                raw_tile_to_vito_tile_format::<T>(data, size.cols, size.rows)
+                let (meta, data) = raw_tile_data.into_raw_parts();
+                raw_tile_to_vito_tile_format::<T>(data, meta.size().cols, meta.size().rows)
             }
             _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
         }
@@ -227,7 +230,7 @@ impl TileProvider for WarpingTileProvider {
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
-    use geo::{Array, Cell, DenseArray, RasterSize};
+    use geo::{Array, ArrayMetadata, Cell, DenseArray, RasterMetadata, RasterSize};
     use geo::{Columns, Coordinate, Point, Rows, Tile, ZoomLevelStrategy, crs};
     use inf::cast;
     use path_macro::path;
@@ -317,10 +320,11 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
         let raster_tile = DenseArray::<u8>::from_raster_tile_bytes(&tile_data.data)?;
-        let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterSize::with_rows_cols(
-            Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-            Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-        ));
+        let mut raster_tile_per_pixel =
+            DenseArray::<u8>::zeros(RasterMetadata::sized_for_type::<u8>(RasterSize::with_rows_cols(
+                Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+                Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+            )));
 
         let current_coord = tile_bounds.top_left();
 
@@ -368,10 +372,11 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
         let raster_tile = DenseArray::<u8>::from_raster_tile_bytes(&tile_data.data)?;
-        let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterSize::with_rows_cols(
-            Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-            Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-        ));
+        let mut raster_tile_per_pixel =
+            DenseArray::<u8>::zeros(RasterMetadata::sized_for_type::<u8>(RasterSize::with_rows_cols(
+                Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+                Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+            )));
 
         let current_coord = tile_bounds.top_left();
 

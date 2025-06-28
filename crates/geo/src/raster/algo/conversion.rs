@@ -16,19 +16,21 @@ where
 mod generictests {
 
     use crate::{
-        DenseArray, RasterSize, Result,
+        ArrayMetadata, DenseArray, RasterSize, Result,
         array::{Columns, Rows},
+        rastermetadata::RasterMetadata,
         testutils::{NOD, create_vec, number_cast},
     };
 
     use super::*;
 
     #[test]
-    fn replace_value<R: Array<Metadata = RasterSize>>() -> Result<()> {
+    fn replace_value<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(4));
+        let meta = RasterMetadata::sized_with_nodata(size, Some(NOD));
         #[rustfmt::skip]
         let mut raster = R::new(
-            size,
+            meta,
             create_vec(&[
                 NOD, NOD,  4.0, 4.0,
                 4.0, 8.0,  4.0, 9.0,
@@ -40,7 +42,7 @@ mod generictests {
 
         #[rustfmt::skip]
         let expected = R::new(
-            size,
+            meta,
             create_vec(&[
                  NOD,  NOD,  9.0,  9.0,
                  9.0,  8.0,  9.0,  9.0,

@@ -1,4 +1,4 @@
-use crate::{AnyDenseArray, ArrayMetadata, DenseArray, RasterSize};
+use crate::{AnyDenseArray, ArrayMetadata, DenseArray};
 
 fn assert_same_data_type<Metadata: ArrayMetadata>(a: &AnyDenseArray<Metadata>, b: &AnyDenseArray<Metadata>) {
     assert_eq!(
@@ -98,16 +98,16 @@ macro_rules! any_dense_raster_op {
             fn $op_assign_fn(&mut self, other: &AnyDenseArray) {
                 assert_same_data_type(self, &other);
                 match self {
-                    AnyDenseArray::U8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u8, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::U16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u16, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::U32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u32, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::U64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u64, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i8, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i16, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i32, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i64, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::F32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f32, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::F64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f64, RasterSize>>::try_into(other).unwrap()),
+                    AnyDenseArray::U8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u8, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::U16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u16, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::U32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u32, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::U64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u64, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i8, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i16, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i32, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i64, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::F32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f32, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::F64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f64, _>>::try_into(other).unwrap()),
                 }
             }
         }
@@ -148,34 +148,34 @@ macro_rules! any_dense_raster_inclusive_op {
                 assert_same_data_type(&self, &other);
                 match self {
                     AnyDenseArray::U8(raster) => {
-                        AnyDenseArray::U8((&raster).$op_fn(TryInto::<&DenseArray<u8, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U8((&raster).$op_fn(TryInto::<&DenseArray<u8, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::U16(raster) => {
-                        AnyDenseArray::U16((&raster).$op_fn(TryInto::<&DenseArray<u16, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U16((&raster).$op_fn(TryInto::<&DenseArray<u16, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::U32(raster) => {
-                        AnyDenseArray::U32((&raster).$op_fn(TryInto::<&DenseArray<u32, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U32((&raster).$op_fn(TryInto::<&DenseArray<u32, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::U64(raster) => {
-                        AnyDenseArray::U64((&raster).$op_fn(TryInto::<&DenseArray<u64, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::U64((&raster).$op_fn(TryInto::<&DenseArray<u64, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I8(raster) => {
-                        AnyDenseArray::I8((&raster).$op_fn(TryInto::<&DenseArray<i8, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I8((&raster).$op_fn(TryInto::<&DenseArray<i8, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I16(raster) => {
-                        AnyDenseArray::I16((&raster).$op_fn(TryInto::<&DenseArray<i16, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I16((&raster).$op_fn(TryInto::<&DenseArray<i16, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I32(raster) => {
-                        AnyDenseArray::I32((&raster).$op_fn(TryInto::<&DenseArray<i32, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I32((&raster).$op_fn(TryInto::<&DenseArray<i32, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::I64(raster) => {
-                        AnyDenseArray::I64((&raster).$op_fn(TryInto::<&DenseArray<i64, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::I64((&raster).$op_fn(TryInto::<&DenseArray<i64, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::F32(raster) => {
-                        AnyDenseArray::F32((&raster).$op_fn(TryInto::<&DenseArray<f32, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::F32((&raster).$op_fn(TryInto::<&DenseArray<f32, _>>::try_into(other).unwrap()))
                     }
                     AnyDenseArray::F64(raster) => {
-                        AnyDenseArray::F64((&raster).$op_fn(TryInto::<&DenseArray<f64, RasterSize>>::try_into(other).unwrap()))
+                        AnyDenseArray::F64((&raster).$op_fn(TryInto::<&DenseArray<f64, _>>::try_into(other).unwrap()))
                     }
                 }
             }
@@ -187,16 +187,16 @@ macro_rules! any_dense_raster_inclusive_op {
                 println!("self");
 
                 match self {
-                    AnyDenseArray::U8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u8, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::U16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u16, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::U32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u32, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::U64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u64, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::I8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i8, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::I16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i16, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::I32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i32, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::I64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i64, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::F32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f32, RasterSize>>::try_into(&other).unwrap()),
-                    AnyDenseArray::F64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f64, RasterSize>>::try_into(&other).unwrap()),
+                    AnyDenseArray::U8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u8, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::U16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u16, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::U32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u32, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::U64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u64, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::I8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i8, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::I16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i16, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::I32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i32, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::I64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i64, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::F32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f32, _>>::try_into(&other).unwrap()),
+                    AnyDenseArray::F64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f64, _>>::try_into(&other).unwrap()),
                 }
             }
         }
@@ -205,16 +205,16 @@ macro_rules! any_dense_raster_inclusive_op {
             fn $op_assign_fn(&mut self, other: &AnyDenseArray) {
                 assert_same_data_type(self, &other);
                 match self {
-                    AnyDenseArray::U8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u8, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::U16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u16, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::U32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u32, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::U64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u64, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i8, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i16, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i32, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::I64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i64, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::F32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f32, RasterSize>>::try_into(other).unwrap()),
-                    AnyDenseArray::F64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f64, RasterSize>>::try_into(other).unwrap()),
+                    AnyDenseArray::U8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u8, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::U16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u16, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::U32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u32, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::U64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<u64, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I8(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i8, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I16(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i16, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i32, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::I64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<i64, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::F32(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f32, _>>::try_into(other).unwrap()),
+                    AnyDenseArray::F64(raster) => raster.$op_assign_fn(TryInto::<&DenseArray<f64, _>>::try_into(other).unwrap()),
                 }
             }
         }

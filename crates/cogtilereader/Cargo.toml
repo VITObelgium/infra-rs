@@ -4,22 +4,24 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-tiff = { version = "0.10", default-features = false }
-thiserror = "2.0"
+geo = { default-features = false, path = "../geo" }
+inf = { path = "../inf" }
 itertools = "0.14"
 log = "0.4"
-geo = { path = "../geo", default-features = false }
-inf = { path = "../inf" }
+simd_macro = { path = "../geo/simd_macro" }
+thiserror = "2.0"
+tiff = { version = "0.10", default-features = false }
 weezl = "0.1"
 xml-rs = { version = "0.8", optional = true }
 
 [dev-dependencies]
-path_macro = "1.0"
-test-log = "0.2"
-geo = { path = "../geo", features = ["gdal-static"] }
-temp-dir = "0.1"
 approx = "0.5"
+geo = { features = ["gdal-static"], path = "../geo" }
+path_macro = "1.0"
+temp-dir = "0.1"
+test-log = "0.2"
 
 [features]
 default = ["raster_stats"]
 raster_stats = ["dep:xml-rs"]
+simd = ["geo/simd", "inf/simd"]

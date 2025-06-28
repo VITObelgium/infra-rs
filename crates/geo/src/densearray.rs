@@ -3,9 +3,13 @@ use crate::{
     array::{ArrayInterop, Columns, Rows, Window},
     densearrayiterators, densearrayutil,
     raster::{self},
+    rastermetadata::RasterMetadata,
 };
 use approx::{AbsDiffEq, RelativeEq};
-use inf::allocate::{self, AlignedVec};
+use inf::{
+    allocate::{self, AlignedVec},
+    cast,
+};
 use num::NumCast;
 
 #[cfg(feature = "simd")]
@@ -15,7 +19,7 @@ const LANES: usize = inf::simd::LANES;
 /// The nodata values are stored as the [`crate::Nodata::NODATA`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
 #[derive(Debug)]
-pub struct DenseArray<T: ArrayNum, Metadata: ArrayMetadata = RasterSize> {
+pub struct DenseArray<T: ArrayNum, Metadata: ArrayMetadata = RasterMetadata> {
     pub(super) meta: Metadata,
     pub(super) data: AlignedVec<T>,
 }
@@ -52,7 +56,7 @@ impl<T: Clone + ArrayNum, Metadata: Clone + ArrayMetadata> Clone for DenseArray<
 impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     pub fn empty() -> Self {
         DenseArray {
-            meta: Metadata::with_rows_cols(Rows(0), Columns(0)),
+            meta: Metadata::sized_with_nodata_as::<T>(RasterSize::with_rows_cols(Rows(0), Columns(0)), Some(T::NODATA)),
             data: allocate::new_aligned_vec(),
         }
     }
@@ -332,7 +336,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metada
     }
 
     fn init_nodata(&mut self) {
-        let nodata = inf::cast::option(self.metadata().nodata());
+        let nodata = cast::option(self.metadata().nodata());
         densearrayutil::init_nodata(self.as_mut_slice(), nodata);
     }
 
@@ -442,12 +446,12 @@ mod tests {
     #[test]
     fn cast_dense_raster() {
         let ras = DenseArray::new(
-            RasterSize::with_rows_cols(Rows(2), Columns(2)),
-            allocate::aligned_vec_from_slice(&[1, 2, <i32 as Nodata>::NODATA, 4]),
+            RasterMetadata::sized_with_nodata_as::<i32>(RasterSize::with_rows_cols(Rows(2), Columns(2)), Some(i32::NODATA)),
+            allocate::aligned_vec_from_slice(&[1, 2, i32::NODATA, 4]),
         )
         .unwrap();
 
         let f64_ras = raster::algo::cast::<f64, _>(&ras);
-        compare_fp_vectors(f64_ras.as_slice(), &[1.0, 2.0, <f64 as Nodata>::NODATA, 4.0]);
+        compare_fp_vectors(f64_ras.as_slice(), &[1.0, 2.0, f64::NODATA, 4.0]);
     }
 }

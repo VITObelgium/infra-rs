@@ -1,5 +1,5 @@
 use criterion::{BatchSize, Criterion};
-use geo::{Array, ArrayNum, Columns, DenseArray, RasterSize, Rows};
+use geo::{Array, ArrayMetadata, ArrayNum, Columns, DenseArray, RasterMetadata, RasterSize, Rows};
 use num::NumCast;
 
 const RASTER_WIDTH: Columns = Columns(1024);
@@ -10,10 +10,10 @@ pub fn bench_name<T: ArrayNum>(name: &str) -> String {
 }
 
 pub fn bench_addition<T: ArrayNum>(c: &mut Criterion) {
-    let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
-    let rhs = DenseArray::<T>::filled_with(NumCast::from(9.0), raster_size);
+    let raster_meta = RasterMetadata::sized_for_type::<T>(RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH));
+    let rhs = DenseArray::<T>::filled_with(NumCast::from(9.0), raster_meta);
 
-    let create_raster = || DenseArray::<T>::filled_with(NumCast::from(4.0), raster_size);
+    let create_raster = || DenseArray::<T>::filled_with(NumCast::from(4.0), raster_meta);
 
     c.bench_function(&bench_name::<T>("raster_ops_add"), |b| {
         b.iter_batched_ref(create_raster, |lhs| *lhs += &rhs, BatchSize::LargeInput);

@@ -1,6 +1,6 @@
-use inf::allocate::AlignedVec;
+use inf::{allocate::AlignedVec, cast};
 
-use crate::{Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
+use crate::{ArrayDataType, Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
 use std::fmt::Debug;
 
 pub trait ArrayMetadata: Clone + Debug {
@@ -8,8 +8,16 @@ pub trait ArrayMetadata: Clone + Debug {
     fn nodata(&self) -> Option<f64>;
     fn geo_reference(&self) -> GeoReference;
 
-    fn with_size(size: RasterSize) -> Self;
-    fn with_rows_cols(rows: Rows, cols: Columns) -> Self;
+    fn sized(size: RasterSize, dtype: ArrayDataType) -> Self;
+    fn sized_for_type<T: ArrayNum>(size: RasterSize) -> Self {
+        Self::sized(size, T::TYPE)
+    }
+
+    fn sized_with_nodata(raster_size: RasterSize, nodata: Option<f64>) -> Self;
+    fn sized_with_nodata_as<T: ArrayNum>(size: RasterSize, nodata: Option<T>) -> Self {
+        Self::sized_with_nodata(size, cast::option(nodata))
+    }
+
     fn with_geo_reference(georef: GeoReference) -> Self;
 }
 

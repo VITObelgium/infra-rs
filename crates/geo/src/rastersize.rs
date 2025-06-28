@@ -1,7 +1,4 @@
-use crate::{
-    ArrayMetadata, GeoReference,
-    array::{Columns, Rows},
-};
+use crate::array::{Columns, Rows};
 
 /// Raster size represented by rows and columns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -38,31 +35,5 @@ impl RasterSize {
 impl std::fmt::Display for RasterSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(rows: {}, cols: {})", self.rows, self.cols)
-    }
-}
-
-impl ArrayMetadata for RasterSize {
-    fn size(&self) -> RasterSize {
-        *self
-    }
-
-    fn nodata(&self) -> Option<f64> {
-        None
-    }
-
-    fn with_size(size: RasterSize) -> Self {
-        size
-    }
-
-    fn with_rows_cols(rows: Rows, cols: Columns) -> Self {
-        RasterSize::with_rows_cols(rows, cols)
-    }
-
-    fn with_geo_reference(georef: GeoReference) -> Self {
-        georef.size()
-    }
-
-    fn geo_reference(&self) -> GeoReference {
-        GeoReference::without_spatial_reference(*self, None)
     }
 }
