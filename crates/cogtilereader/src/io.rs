@@ -1,9 +1,9 @@
 use geo::{Array, ArrayNum, DenseArray, RasterSize};
-use inf::allocate;
+use inf::allocate::{self, AlignedVec};
 use weezl::{BitOrder, decode::Decoder};
 
 use crate::{Error, Result, cog::CogTileLocation};
-use std::io::{Read, Seek, SeekFrom};
+use std::io::{BufWriter, Read, Seek, SeekFrom};
 
 pub const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
 
@@ -83,11 +83,11 @@ impl Seek for CogHeaderReader {
     }
 }
 
-pub fn read_tile_data<T: ArrayNum>(tile: CogTileLocation, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
+pub fn read_tile_data<T: ArrayNum>(tile: CogTileLocation, tile_size: i32, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
     let start_pos = tile.offset - 4;
     reader.seek(SeekFrom::Start(start_pos))?;
 
-    let mut buf = vec![0; (tile.size + 4) as usize];
+    let mut buf = vec![0; tile.size as usize + 4];
     reader.read_exact(&mut buf)?;
 
     // Buf now contains the tile data with the first 4 bytes being the size of the tile
@@ -96,19 +96,32 @@ pub fn read_tile_data<T: ArrayNum>(tile: CogTileLocation, mut reader: impl Read 
         return Err(Error::Runtime("Tile size does not match the expected size".into()));
     }
 
-    let tile_data = lzw_decompress_to::<T>(&buf[4..], 256)?;
-    Ok(DenseArray::<T>::new(RasterSize::square(256), tile_data)?)
+    let tile_data = lzw_decompress_to::<T>(&buf[4..], tile_size)?;
+    Ok(DenseArray::<T>::new(RasterSize::square(tile_size), tile_data)?)
 }
 
-fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: usize) -> Result<Vec<T>> {
-    let mut decode_buffer = allocate::aligned_vec_with_capacity::<u8>(tile_size * tile_size * std::mem::size_of::<T>());
+fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: i32) -> Result<AlignedVec<T>> {
+    let decoded_len = (tile_size * tile_size) as usize * std::mem::size_of::<T>();
+    let mut decode_buffer = allocate::aligned_vec_with_capacity::<u8>(decoded_len);
 
-    // Use MSB bit order and 8 as the initial code size, which is standard for TIFF LZW
-    Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
-        .into_vec(&mut decode_buffer)
-        .decode(data)
-        .status
-        .map_err(|e| Error::Runtime(format!("LZW decompression failed: {}", e)))?;
+    {
+        let mut stream = BufWriter::new(&mut decode_buffer);
+
+        // Use MSB bit order and 8 as the initial code size, which is standard for TIFF LZW
+        let decode_result = Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
+            .into_stream(&mut stream)
+            .decode(data);
+
+        if decode_result.bytes_read != data.len() {
+            return Err(Error::Runtime("LZW decompression did not read all input bytes".into()));
+        }
+
+        if decode_result.bytes_written != decoded_len {
+            return Err(Error::Runtime("LZW decompression did not write all tile pixels".into()));
+        }
+
+        decode_result.status?;
+    }
 
     Ok(unsafe { allocate::reinterpret_aligned_vec::<_, T>(decode_buffer) })
 }

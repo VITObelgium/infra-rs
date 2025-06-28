@@ -143,8 +143,8 @@ impl<R: Read + Seek> CogDecoder<R> {
             return Err(Error::InvalidArgument("Only tiled TIFFs are supported".into()));
         }
 
-        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)?;
-        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? {
+        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)? as i32;
+        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? as i32 {
             return Err(Error::InvalidArgument("Only square tiles are supported".into()));
         }
 
@@ -291,7 +291,7 @@ pub struct CogTileLocation {
 pub struct CogMetadata {
     pub min_zoom: i32,
     pub max_zoom: i32,
-    pub tile_size: u32,
+    pub tile_size: i32,
     pub data_type: ArrayDataType,
     pub geo_reference: GeoReference,
     tile_offsets: HashMap<Tile, CogTileLocation>,
@@ -332,9 +332,9 @@ impl CogAccessor {
         self.meta.tile_offsets.get(tile).copied()
     }
 
-    pub fn read_tile_data<T: ArrayNum>(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
+    pub fn read_tile_data<T: ArrayNum>(&self, tile: &Tile, tile_size: i32, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
         if let Some(tile_location) = self.tile_offset(tile) {
-            read_tile_data(tile_location, &mut reader)
+            read_tile_data(tile_location, tile_size, &mut reader)
         } else {
             Err(Error::InvalidArgument(format!("Tile {tile:?} not found in COG index")))
         }
@@ -348,7 +348,7 @@ mod tests {
     use geo::{Array, RasterSize};
     use temp_dir::TempDir;
 
-    fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: u32) -> Result<()> {
+    fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: i32) -> Result<()> {
         let src_ds = geo::raster::io::dataset::open_read_only(input_tif).expect("Failed to open test COG input file");
         let options = vec![
             "-f".to_string(),
@@ -372,7 +372,7 @@ mod tests {
 
     #[test_log::test]
     fn test_read_test_cog() -> Result<()> {
-        const COG_TILE_SIZE: u32 = 256;
+        const COG_TILE_SIZE: i32 = 256;
         let tmp = TempDir::new()?;
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
@@ -391,7 +391,7 @@ mod tests {
 
         assert!(!cog.tile_offsets().is_empty(), "Tile offsets should not be empty");
         for (tile, _) in cog.tile_offsets() {
-            let tile_data = cog.read_tile_data::<u8>(tile, &mut reader)?;
+            let tile_data = cog.read_tile_data::<u8>(tile, meta.tile_size, &mut reader)?;
             assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
         }
 
