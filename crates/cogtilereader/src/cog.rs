@@ -124,6 +124,52 @@ impl<R: Read + Seek> CogDecoder<R> {
         Ok(None)
     }
 
+    fn read_raster_size(&mut self) -> Result<RasterSize> {
+        Ok(RasterSize::with_rows_cols(
+            Rows(self.decoder.get_tag_u32(Tag::ImageLength)? as i32),
+            Columns(self.decoder.get_tag_u32(Tag::ImageWidth)? as i32),
+        ))
+    }
+
+    fn read_geo_transform(&mut self) -> Result<[f64; 6]> {
+        let mut valid_transform = false;
+        let mut geo_transform = [0.0; 6];
+
+        let (pixel_scale_x, pixel_scale_y) = self.read_pixel_scale()?;
+        geo_transform[1] = pixel_scale_x;
+        geo_transform[5] = -pixel_scale_y;
+
+        if let Ok(transform) = self.read_model_transformation() {
+            geo_transform[0] = transform[3];
+            geo_transform[1] = transform[0];
+            geo_transform[2] = transform[1];
+            geo_transform[3] = transform[7];
+            geo_transform[4] = transform[4];
+            geo_transform[5] = transform[5];
+            valid_transform = true;
+        } else {
+            log::debug!("No model transformation info");
+        }
+
+        if let Ok(tie_points) = self.read_tie_points() {
+            if geo_transform[1] == 0.0 || geo_transform[5] == 0.0 {
+                return Err(Error::Runtime("No cell sizes present in geotiff".into()));
+            }
+
+            geo_transform[0] = tie_points[3] - tie_points[0] * geo_transform[1];
+            geo_transform[3] = tie_points[4] - tie_points[1] * geo_transform[5];
+            valid_transform = true;
+        } else {
+            log::debug!("No tie points info");
+        }
+
+        if !valid_transform {
+            return Err(Error::Runtime("Failed to obtain pixel transformation from tiff".into()));
+        }
+
+        Ok(geo_transform)
+    }
+
     fn generate_tiles_for_extent(geo_transform: [f64; 6], image_width: u32, image_height: u32, tile_size: u32, zoom: i32) -> Vec<Tile> {
         let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
         let top_left_tile = Tile::for_coordinate(top_left, zoom);
@@ -145,6 +191,14 @@ impl<R: Read + Seek> CogDecoder<R> {
         }
 
         tiles
+    }
+
+    fn read_nodata_value(&mut self) -> Result<Option<f64>> {
+        if let Ok(nodata_str) = self.decoder.get_tag_ascii_string(Tag::GdalNodata) {
+            Ok(nodata_str.parse::<f64>().ok())
+        } else {
+            Ok(None)
+        }
     }
 
     pub fn parse_cog_header(&mut self) -> Result<CogMetadata> {
@@ -192,52 +246,15 @@ impl<R: Read + Seek> CogDecoder<R> {
         }
 
         let statistics = self.read_gdal_metadata()?;
+        let geo_transform = self.read_geo_transform()?;
+        let raster_size = self.read_raster_size()?;
+        let nodata = self.read_nodata_value()?;
 
-        let mut valid_transform = false;
-        let mut geo_transform = [0.0; 6];
-
-        let (pixel_scale_x, pixel_scale_y) = self.read_pixel_scale()?;
-        geo_transform[1] = pixel_scale_x;
-        geo_transform[5] = -pixel_scale_y;
-
-        let max_zoom = Tile::zoom_level_for_pixel_size(pixel_scale_x, geo::ZoomLevelStrategy::Closest);
+        // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
+        let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], geo::ZoomLevelStrategy::Closest);
         let mut current_zoom = max_zoom;
 
-        if let Ok(transform) = self.read_model_transformation() {
-            geo_transform[0] = transform[3];
-            geo_transform[1] = transform[0];
-            geo_transform[2] = transform[1];
-            geo_transform[3] = transform[7];
-            geo_transform[4] = transform[4];
-            geo_transform[5] = transform[5];
-            valid_transform = true;
-        } else {
-            log::debug!("No model transformation info");
-        }
-
-        if let Ok(tie_points) = self.read_tie_points() {
-            if geo_transform[1] == 0.0 || geo_transform[5] == 0.0 {
-                return Err(Error::Runtime("No cell sizes present in geotiff".into()));
-            }
-
-            geo_transform[0] = tie_points[3] - tie_points[0] * geo_transform[1];
-            geo_transform[3] = tie_points[4] - tie_points[1] * geo_transform[5];
-            valid_transform = true;
-        } else {
-            log::debug!("No tie points info");
-        }
-
-        if !valid_transform {
-            return Err(Error::Runtime("Failed to obtain pixel transformation from tiff".into()));
-        }
-
         loop {
-            log::debug!(
-                "Width: {}, Height {}",
-                self.decoder.get_tag_u32(Tag::ImageWidth)?,
-                self.decoder.get_tag_u32(Tag::ImageLength)?
-            );
-
             let tiles = Self::generate_tiles_for_extent(
                 geo_transform,
                 self.decoder.get_tag_u32(Tag::ImageWidth)?,
@@ -269,17 +286,6 @@ impl<R: Read + Seek> CogDecoder<R> {
             current_zoom -= 1;
             self.decoder.next_image()?;
         }
-
-        let raster_size = RasterSize::with_rows_cols(
-            Rows(self.decoder.get_tag_u32(Tag::ImageLength)? as i32),
-            Columns(self.decoder.get_tag_u32(Tag::ImageWidth)? as i32),
-        );
-
-        let nodata = if let Ok(nodata) = self.decoder.get_tag_ascii_string(Tag::GdalNodata) {
-            nodata.parse::<f64>().ok()
-        } else {
-            None
-        };
 
         Ok(CogMetadata {
             min_zoom: current_zoom,
