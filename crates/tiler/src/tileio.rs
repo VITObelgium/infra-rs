@@ -215,8 +215,8 @@ where
 
     imageprocessing::raw_tile_to_png_color_mapped::<T>(
         raw_tile_data.as_slice(),
-        (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
-        (Tile::TILE_SIZE * req.dpi_ratio as u16) as usize,
+        (req.tile_size * req.dpi_ratio as u16) as usize,
+        (req.tile_size * req.dpi_ratio as u16) as usize,
         Some(T::NODATA),
         req.legend,
     )
@@ -280,6 +280,7 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
             min_zoom: if over_view_count > 0 { zoom_level - over_view_count } else { 0 },
             nodata: meta.nodata(),
             supports_dpi_ratio: true,
+            tile_size: None, // Tile size is determined by the request
             tile_format: TileFormat::Png,
             source_is_web_mercator,
             epsg,
@@ -291,6 +292,7 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
             scheme: "xyz".to_string(),
             additional_data: Default::default(),
             band_nr: Some(band_nr),
+            tileprovider_data: None,
         };
 
         if opts.calculate_stats {

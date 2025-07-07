@@ -68,4 +68,6 @@ pub use arraynum::ArrayNumSimd;
 #[cfg(feature = "simd")]
 pub use nodata::simd::NodataSimd;
 
+pub use simd_macro::geo_simd_bounds as simd_bounds;
+
 pub type Point<T = f64> = geo_types::Point<T>;

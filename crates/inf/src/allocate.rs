@@ -72,9 +72,9 @@ pub unsafe fn reinterpret_aligned_vec<T: Sized, TDest: Sized>(data: AlignedVec<T
 
     #[cfg(feature = "simd")]
     {
-        let (ptr, len, cap) = data.into_raw_parts();
+        let (ptr, len, cap, alloc) = data.into_raw_parts_with_alloc();
 
-        unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>(), len, cap, allocator::CacheAligned) }
+        unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>(), len, cap, alloc) }
     }
 
     #[cfg(not(feature = "simd"))]

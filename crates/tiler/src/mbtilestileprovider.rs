@@ -46,6 +46,7 @@ impl MbtilesTileProvider {
             path: PathBuf::from(db_path),
             min_zoom: meta_map.remove("minzoom").unwrap_or_default().parse().unwrap_or(0),
             max_zoom: meta_map.remove("maxzoom").unwrap_or_default().parse().unwrap_or(20),
+            tile_size: Some(256),
             tile_format: TileFormat::from(meta_map.remove("format").unwrap_or_default().as_str()),
             name: meta_map.remove("name").unwrap_or(meta_map.remove("basename").unwrap_or_default()),
             description: meta_map.remove("description").unwrap_or_default(),
@@ -62,6 +63,7 @@ impl MbtilesTileProvider {
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
             additional_data: HashMap::new(),
             band_nr: None,
+            tileprovider_data: None,
         };
 
         meta.additional_data = meta_map;
@@ -166,7 +168,7 @@ mod mbtilesdb {
             let conn = sqlite::Connection::new(db_path, sqlite::AccessMode::ReadOnly)?;
             let tile_query = conn.prepare_statement(
                 "SELECT tile_data
-                FROM tiles 
+                FROM tiles
                 WHERE zoom_level = ?1 AND tile_column = ?2 AND tile_row = ?3;",
             )?;
 

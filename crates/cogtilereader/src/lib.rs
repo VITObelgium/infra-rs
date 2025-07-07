@@ -3,11 +3,12 @@
 use thiserror::Error;
 
 mod cog;
-mod io;
+pub mod io;
 
 pub use cog::CogAccessor;
 pub use cog::CogMetadata;
 pub use cog::CogTileLocation;
+pub use cog::TileOffsets;
 
 #[derive(Error, Debug)]
 pub enum Error {

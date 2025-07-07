@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
 #![warn(clippy::unwrap_used)]
 
 mod layermetadata;
@@ -9,6 +10,7 @@ mod tileio;
 mod tileprovider;
 pub mod tileproviderfactory;
 
+mod cogtileprovider;
 mod directorytileprovider;
 mod dynamictileprovider;
 mod imageprocessing;
@@ -55,6 +57,8 @@ pub enum Error {
     MvtError(#[from] mvt::Error),
     #[error("Raster tile error: {0}")]
     RasterTileError(#[from] raster_tile::Error),
+    #[error("Cog tile error: {0}")]
+    CogTileError(#[from] cogtilereader::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

@@ -24,7 +24,7 @@ mod bench {
         return format!("{}_{:?}", name, T::TYPE);
     }
 
-    #[simd_macro::geo_simd_bounds]
+    #[geo::simd_bounds]
     pub fn simd<T: ArrayNum>(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
         let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));

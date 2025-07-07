@@ -1,34 +1,37 @@
 [package]
-name    = "tiler"
+name = "tiler"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-inf         = { path = "../inf", features = ["serde"] }
+cogtilereader = { path = "../cogtilereader" }
+gdal = "0.18"
+geo = { features = ["gdal", "serde"], path = "../geo" }
+geo-types = "0.7"
+geozero = { version = "0.14", optional = true }
+inf = { features = ["serde"], path = "../inf" }
+log = "0.4"
+mvt = { version = "0.10", optional = true }
+num = "0.4"
+png = "0.17"
 raster-tile = { path = "../raster-tile" }
-geo         = { path = "../geo", features = ["gdal", "serde"] }
-geozero     = { version = "0.14", optional = true }
-geo-types   = "0.7"
-sqlite      = { path = "../sqlite" }
-thiserror   = "2.0"
-gdal        = "0.18"
-log         = "0.4"
-num         = "0.4"
-png         = "0.17"
-serde_json  = { version = "1.0", optional = true }
-serde       = { version = "1.0", features = ["derive"], optional = true }
-specta      = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
-mvt         = { version = "0.10", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+serde_json = { version = "1.0", optional = true }
+specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
+sqlite = { path = "../sqlite" }
+thiserror = "2.0"
 
 [dev-dependencies]
-approx     = "0.5"
-test-log   = "0.2"
-image      = { version = "0.25", default-features = false, features = ["png"] }
-ctor       = "0.4"
+approx = "0.5"
+ctor = "0.4"
+image = { version = "0.25", default-features = false, features = ["png"] }
 path_macro = "1.0"
+test-log = "0.2"
+tempfile = "3"
 
 [features]
-serde        = ["dep:serde", "dep:serde_json", "inf/serde"]
-specta       = ["dep:specta", "geo/specta", "inf/specta"]
+serde = ["dep:serde", "dep:serde_json", "inf/serde"]
+slow_tests = []
+simd = ["inf/simd", "geo/simd"]
+specta = ["dep:specta", "geo/specta", "inf/specta"]
 vector-tiles = ["dep:geozero", "dep:mvt", "geo/vector"]
-slow_tests   = []

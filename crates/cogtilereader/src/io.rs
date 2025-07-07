@@ -1,8 +1,11 @@
 use geo::{ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize};
-use inf::allocate::{self, AlignedVec};
+use inf::allocate::{self, AlignedVec, aligned_vec_from_slice};
 use weezl::{BitOrder, decode::Decoder};
 
-use crate::{Error, Result, cog::CogTileLocation};
+use crate::{
+    Error, Result,
+    cog::{CogTileLocation, Compression},
+};
 use std::io::{BufWriter, Read, Seek, SeekFrom};
 
 pub const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
@@ -86,11 +89,12 @@ impl Seek for CogHeaderReader {
     }
 }
 
-#[simd_macro::geo_simd_bounds]
+#[geo::simd_bounds]
 pub fn read_tile_data<T: ArrayNum>(
     tile: &CogTileLocation,
     tile_size: i32,
     nodata: Option<f64>,
+    compression: Compression,
     mut reader: impl Read + Seek,
 ) -> Result<DenseArray<T>> {
     let chunk_range = tile.range_to_fetch();
@@ -99,14 +103,15 @@ pub fn read_tile_data<T: ArrayNum>(
     let mut buf = vec![0; (chunk_range.end - chunk_range.start) as usize];
     reader.read_exact(&mut buf)?;
 
-    parse_tile_data(tile, tile_size, nodata, &buf)
+    parse_tile_data(tile, tile_size, nodata, compression, &buf)
 }
 
-#[simd_macro::geo_simd_bounds]
+#[geo::simd_bounds]
 pub fn parse_tile_data<T: ArrayNum>(
     tile: &CogTileLocation,
     tile_size: i32,
     nodata: Option<f64>,
+    compression: Compression,
     cog_chunk: &[u8],
 ) -> Result<DenseArray<T>> {
     // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
@@ -115,9 +120,28 @@ pub fn parse_tile_data<T: ArrayNum>(
         return Err(Error::Runtime("Tile size does not match the expected size".into()));
     }
 
-    let tile_data = lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?;
+    let tile_data = match compression {
+        Compression::Lzw => lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?,
+        Compression::None => {
+            if cog_chunk[4..].len() != ((tile_size * tile_size) as usize * std::mem::size_of::<T>()) {
+                return Err(Error::Runtime(
+                    "Uncompressed tile data size does not match the expected size".into(),
+                ));
+            }
+
+            unsafe {
+                let byte_slice = &cog_chunk[4..];
+                let ptr = byte_slice.as_ptr() as *const T;
+                let len = byte_slice.len() / std::mem::size_of::<T>();
+                let t_slice = std::slice::from_raw_parts(ptr, len);
+                aligned_vec_from_slice::<T>(t_slice)
+            }
+        }
+    };
+
     let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size), nodata);
-    Ok(DenseArray::<T>::new_init_nodata(meta, tile_data)?)
+    let arr = DenseArray::<T>::new_init_nodata(meta, tile_data)?;
+    Ok(arr)
 }
 
 fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: i32) -> Result<AlignedVec<T>> {

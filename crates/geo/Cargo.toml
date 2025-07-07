@@ -1,78 +1,79 @@
 [package]
-edition = "2024"
-name    = "geo"
+name = "geo"
 version = "0.1.0"
-
-[[bench]]
-harness = false
-name    = "rasterops"
-
-[[bench]]
-harness = false
-name    = "simd"
-
-[dependencies]
-approx        = "0.5"
-bon           = "3.6"
-cfg-if        = "1.0"
-gdal          = { version = "0.18", optional = true }
-gdal-sys      = { version = "0.11", optional = true }
-geo-types     = { version = "0.7", features = ["approx"] }
-geos          = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
-geozero       = { version = "0.14" }
-inf           = { path = "../inf" }
-itertools     = "0.14"
-log           = "0.4"
-num           = "0.4"
-rayon         = { version = "1.10", optional = true }
-simd_macro    = { path = "simd_macro" }
-thiserror     = "2.0"
-vector_derive = { path = "vector_derive", optional = true }
-#proj4rs = { version = "0.1" }
-arrow  = { version = "55", optional = true }
-pyo3   = { version = "0.24", optional = true }
-serde  = { version = "1.0", features = ["derive"], optional = true }
-specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
-
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-serde        = { version = "1.0" }
-tsify        = { version = "*", default-features = false, features = ["js"] }
-wasm-bindgen = { version = "0.2", features = ["serde"] }
-
-[dev-dependencies]
-ctor          = "0.4"
-env_logger    = "0.11"
-generic-tests = "0.1"
-path_macro    = "1.0"
-rand          = "0.9"
-tempdir       = "0.3"
-test-log      = "0.2"
-
-[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-criterion = "0.6"
-
-[features]
-arrow       = ["dep:arrow"]
-default     = ["derive"]
-derive      = ["dep:vector_derive"]
-gdal        = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
-gdal-static = ["gdal"]
-python      = ["arrow", "arrow/pyarrow", "dep:pyo3"]
-serde       = ["dep:serde"]
-simd        = ["inf/simd", "simd_macro/simd"]
-specta      = ["dep:specta"]
-vector      = ["dep:geos", "dep:rayon", "geozero/with-geos"]
+edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
-    "gdal[core,geos,sqlite3]",
-    "proj[core,embed-data]",
-    "tiff[core,lzma,zip]",
+  "gdal[core,geos,sqlite3]",
+  "proj[core,embed-data]",
+  "tiff[core,lzma,zip]",
 ]
 
 [package.metadata.vcpkg.target]
 x86_64-unknown-linux-gnu = { dependencies = [
-    "gdal[core,geos,iconv,sqlite3]",
-    "proj[core,embed-data]",
-    "tiff[core,lzma,zip]",
+  "gdal[core,geos,iconv,sqlite3]",
+  "proj[core,embed-data]",
+  "tiff[core,lzma,zip]",
 ] }
+
+[[bench]]
+harness = false
+name = "rasterops"
+
+[[bench]]
+harness = false
+name = "simd"
+
+[dependencies]
+approx = "0.5"
+# proj4rs = { version = "0.1" }
+arrow = { version = "55", optional = true }
+bon = "3.6"
+cfg-if = "1.0"
+gdal = { version = "0.18", optional = true }
+gdal-sys = { version = "0.11", optional = true }
+geo-types = { version = "0.7", features = ["approx"] }
+geos = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
+geozero = { version = "0.14" }
+inf = { path = "../inf" }
+itertools = "0.14"
+log = "0.4"
+num = "0.4"
+pyo3 = { version = "0.24", optional = true }
+rayon = { version = "1.10", optional = true }
+serde = { version = "1.0", features = ["derive"], optional = true }
+simd_macro = { path = "simd_macro" }
+specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
+thiserror = "2.0"
+vector_derive = { optional = true, path = "vector_derive" }
+
+[dev-dependencies]
+ctor = "0.4"
+env_logger = "0.11"
+generic-tests = "0.1"
+path_macro = "1.0"
+rand = "0.9"
+tempdir = "0.3"
+test-log = "0.2"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
+criterion = "0.6"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde = { version = "1.0" }
+tsify = { version = "*", default-features = false, features = ["js"] }
+wasm-bindgen = { version = "0.2", features = ["serde"] }
+
+[features]
+arrow = ["dep:arrow"]
+default = ["derive"]
+derive = ["dep:vector_derive"]
+gdal = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
+gdal-static = ["gdal"]
+python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
+serde = ["dep:serde"]
+simd = ["inf/simd", "simd_macro/simd"]
+specta = ["dep:specta"]
+vector = ["dep:geos", "dep:rayon", "geozero/with-geos"]
+

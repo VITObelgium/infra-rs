@@ -1,9 +1,9 @@
 [package]
-edition = "2024"
-name    = "sqlite"
+name = "sqlite"
 version = "0.1.0"
+edition = "2024"
 
 [dependencies]
-inf            = { path = "../inf" }
-libsqlite3-sys = "0.34"
-thiserror      = "2.0"
+inf = { path = "../inf" }
+libsqlite3-sys = "0.35"
+thiserror = "2.0"

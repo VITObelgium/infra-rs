@@ -3,6 +3,7 @@ use geo::raster::io::RasterFormat;
 use geo::{Coordinate, LatLonBounds};
 use raster_tile::RasterTileCastIO;
 
+use crate::cogtileprovider::CogTileProvider;
 use crate::layermetadata::{LayerId, LayerMetadata, LayerSourceType};
 use crate::mbtilestileprovider::MbtilesTileProvider;
 use crate::tiledata::TileData;
@@ -66,9 +67,11 @@ impl DirectoryTileProvider {
 
     pub fn extent_value_range_for_layer(layer: &LayerMetadata, extent: LatLonBounds, zoom: Option<i32>) -> Result<Range<f64>> {
         match layer.source_format {
-            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
-                WarpingTileProvider::value_range_for_extent(layer, extent, zoom)
-            }
+            LayerSourceType::CloudOptimizedGeoTiff
+            | LayerSourceType::GeoTiff
+            | LayerSourceType::GeoPackage
+            | LayerSourceType::ArcAscii
+            | LayerSourceType::Netcdf => WarpingTileProvider::value_range_for_extent(layer, extent, zoom),
             LayerSourceType::Mbtiles => MbtilesTileProvider::value_range_for_extent(layer, extent, zoom),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
@@ -76,9 +79,11 @@ impl DirectoryTileProvider {
 
     pub fn get_raster_value_for_layer(layer: &LayerMetadata, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
         match layer.source_format {
-            LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
-                WarpingTileProvider::raster_pixel(layer, coord, dpi_ratio)
-            }
+            LayerSourceType::CloudOptimizedGeoTiff
+            | LayerSourceType::GeoTiff
+            | LayerSourceType::GeoPackage
+            | LayerSourceType::ArcAscii
+            | LayerSourceType::Netcdf => WarpingTileProvider::raster_pixel(layer, coord, dpi_ratio),
             LayerSourceType::Mbtiles => MbtilesTileProvider::raster_pixel(layer, coord),
             LayerSourceType::Unknown => Err(Error::Runtime("Unsupported source format".to_string())),
         }
@@ -86,6 +91,7 @@ impl DirectoryTileProvider {
 
     pub fn get_tile_for_layer(layer: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
         match layer.source_format {
+            LayerSourceType::CloudOptimizedGeoTiff => CogTileProvider::tile(layer, tile_req),
             LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
                 WarpingTileProvider::tile(layer, tile_req)
             }
@@ -96,6 +102,7 @@ impl DirectoryTileProvider {
 
     pub fn get_tile_color_mapped_for_layer(layer: &LayerMetadata, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
         match layer.source_format {
+            LayerSourceType::CloudOptimizedGeoTiff => CogTileProvider::tile_color_mapped(layer, tile_req),
             LayerSourceType::GeoTiff | LayerSourceType::GeoPackage | LayerSourceType::ArcAscii | LayerSourceType::Netcdf => {
                 WarpingTileProvider::color_mapped_tile(layer, tile_req)
             }

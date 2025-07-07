@@ -1,6 +1,6 @@
 use geo::{ZoomLevelStrategy, raster::io::RasterFormat};
 
-use crate::Result;
+use crate::{Result, cogtileprovider::CogTileProvider};
 use std::path::Path;
 
 use crate::{
@@ -21,6 +21,8 @@ pub fn create_single_file_tile_provider(path: &Path, opts: &TileProviderOptions)
 
     if raster_type == RasterFormat::MBTiles {
         Ok(Box::new(MbtilesTileProvider::new(path)?))
+    } else if raster_type == RasterFormat::GeoTiff && CogTileProvider::tiff_is_cog(path) {
+        Ok(Box::new(CogTileProvider::new(path, opts)?))
     } else if WarpingTileProvider::supports_raster_type(raster_type) {
         Ok(Box::new(WarpingTileProvider::new(path, opts)?))
     } else {

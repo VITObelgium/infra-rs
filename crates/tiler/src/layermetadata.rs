@@ -3,6 +3,8 @@ use gdal::raster::GdalDataType;
 use geo::ArrayDataType;
 use geo::{Coordinate, LatLonBounds, crs::Epsg};
 use num::NumCast;
+use std::any::Any;
+use std::sync::Arc;
 use std::{collections::HashMap, path::PathBuf};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Ord, PartialOrd, Hash)]
@@ -37,6 +39,7 @@ pub enum LayerSourceType {
     Mbtiles,
     ArcAscii,
     GeoTiff,
+    CloudOptimizedGeoTiff,
     Netcdf,
     Unknown,
 }
@@ -60,6 +63,7 @@ pub struct LayerMetadata {
     pub data_type: ArrayDataType,
     pub epsg: Option<Epsg>,
     pub tile_format: TileFormat,
+    pub tile_size: Option<u16>,
     pub supports_dpi_ratio: bool,
     pub source_format: LayerSourceType,
     pub scheme: String,
@@ -67,6 +71,8 @@ pub struct LayerMetadata {
     pub additional_data: HashMap<String, String>,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub band_nr: Option<usize>,
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub tileprovider_data: Option<Box<Arc<dyn Any + Send + Sync>>>,
 }
 
 impl LayerMetadata {
