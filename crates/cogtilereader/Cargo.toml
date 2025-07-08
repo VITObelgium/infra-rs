@@ -18,7 +18,7 @@ xml-rs = { version = "0.8", optional = true }
 approx = "0.5"
 geo = { features = ["gdal-static"], path = "../geo" }
 path_macro = "1.0"
-temp-dir = "0.1"
+tempfile = "3"
 test-log = "0.2"
 
 [features]

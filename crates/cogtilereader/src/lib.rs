@@ -4,11 +4,13 @@ use thiserror::Error;
 
 mod cog;
 pub mod io;
+mod utils;
 
 pub use cog::CogAccessor;
 pub use cog::CogMetadata;
 pub use cog::CogTileLocation;
 pub use cog::TileOffsets;
+pub use utils::HorizontalUnpredictable;
 
 #[derive(Error, Debug)]
 pub enum Error {

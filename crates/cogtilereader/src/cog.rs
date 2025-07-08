@@ -4,6 +4,7 @@ use tiff::{decoder::ifd::Value, tags::Tag};
 use crate::{
     CogStats, Error, Result,
     io::{self, CogHeaderReader},
+    utils::HorizontalUnpredictable,
 };
 use std::{
     collections::HashMap,
@@ -22,6 +23,13 @@ const LANES: usize = inf::simd::LANES;
 pub enum Compression {
     None,
     Lzw,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Predictor {
+    None,
+    Horizontal,
+    FloatingPoint,
 }
 
 fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
@@ -264,6 +272,13 @@ impl<R: Read + Seek> CogDecoder<R> {
             }
         };
 
+        let predictor = match self.decoder.get_tag_u32(Tag::Predictor) {
+            Ok(1) => Predictor::None,
+            Ok(2) => Predictor::Horizontal,
+            Ok(3) => Predictor::FloatingPoint,
+            _ => Predictor::None,
+        };
+
         let statistics = self.read_gdal_metadata()?;
         let geo_transform = self.read_geo_transform()?;
         let raster_size = self.read_raster_size()?;
@@ -312,6 +327,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             tile_size,
             data_type,
             compression,
+            predictor,
             tile_offsets: tile_inventory,
             geo_reference: GeoReference::new("EPSG:3857", raster_size, geo_transform, nodata),
             statistics,
@@ -341,8 +357,9 @@ pub struct CogMetadata {
     pub tile_size: i32,
     pub data_type: ArrayDataType,
     pub geo_reference: GeoReference,
-    pub statistics: Option<CogStats>,
     pub compression: Compression,
+    pub predictor: Predictor,
+    pub statistics: Option<CogStats>,
     pub tile_offsets: TileOffsets,
 }
 
@@ -425,7 +442,11 @@ impl CogAccessor {
     }
 
     #[geo::simd_bounds]
-    pub fn read_tile_data_as<T: ArrayNum>(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<DenseArray<T>> {
+    pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
+        &self,
+        tile: &Tile,
+        mut reader: impl Read + Seek,
+    ) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
                 "Tile data type mismatch: expected {:?}, got {:?}",
@@ -440,6 +461,7 @@ impl CogAccessor {
                 self.meta.tile_size,
                 self.meta.geo_reference.nodata(),
                 self.meta.compression,
+                self.meta.predictor,
                 &mut reader,
             )
         } else {
@@ -448,7 +470,11 @@ impl CogAccessor {
     }
 
     #[geo::simd_bounds]
-    pub fn parse_tile_data_as<T: ArrayNum>(&self, tile: &CogTileLocation, cog_chunk: &[u8]) -> Result<DenseArray<T>> {
+    pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
+        &self,
+        tile: &CogTileLocation,
+        cog_chunk: &[u8],
+    ) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
                 "Tile data type mismatch: expected {:?}, got {:?}",
@@ -457,13 +483,16 @@ impl CogAccessor {
             )));
         }
 
-        io::parse_tile_data(
+        let tile_data = io::parse_tile_data(
             tile,
             self.meta.tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
+            self.meta.predictor,
             cog_chunk,
-        )
+        )?;
+
+        Ok(tile_data)
     }
 }
 
@@ -472,9 +501,10 @@ mod tests {
     use super::*;
     use crate::testutils;
     use geo::{Array, RasterSize};
-    use temp_dir::TempDir;
 
-    fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: i32, compress: &str) -> Result<()> {
+    const COG_TILE_SIZE: i32 = 256;
+
+    fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: i32, compress: &str, predictor: Option<&str>) -> Result<()> {
         let src_ds = geo::raster::io::dataset::open_read_only(input_tif).expect("Failed to open test COG input file");
         let options = vec![
             "-f".to_string(),
@@ -489,6 +519,8 @@ mod tests {
             "ADD_ALPHA=NO".to_string(),
             "-co".to_string(),
             "STATISTICS=YES".to_string(),
+            "-co".to_string(),
+            format!("PREDICTOR={}", predictor.unwrap_or("NO")),
         ];
 
         geo::raster::algo::warp_to_disk_cli(&src_ds, output_tif, &options, &vec![]).expect("Failed to create test COG file");
@@ -497,47 +529,13 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_read_test_cog() -> Result<()> {
-        const COG_TILE_SIZE: i32 = 256;
-        let tmp = TempDir::new()?;
+    fn cog_metadata() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let output = tmp.path().join("cog.tif");
-        create_test_cog(&input, &output, COG_TILE_SIZE, "LZW")?;
 
-        let cog = CogAccessor::from_file(&output)?;
-
-        let mut reader = File::open(&output)?;
-        let meta = cog.meta_data();
-        assert_eq!(meta.tile_size, COG_TILE_SIZE);
-        assert_eq!(meta.data_type, ArrayDataType::Uint8);
-        assert_eq!(meta.min_zoom, 6);
-        assert_eq!(meta.max_zoom, 10);
-        assert_eq!(meta.compression, Compression::Lzw);
-        assert_eq!(meta.geo_reference.nodata(), Some(255.0));
-
-        assert!(!cog.tile_offsets().is_empty(), "Tile offsets should not be empty");
-        for (tile, _) in cog.tile_offsets() {
-            let tile_data = cog.read_tile_data(tile, &mut reader)?;
-            assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
-            assert_eq!(tile_data.data_type(), meta.data_type);
-
-            let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
-            assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
-        }
-
-        Ok(())
-    }
-
-    #[test_log::test]
-    fn test_read_test_cog_no_compression() -> Result<()> {
-        const COG_TILE_SIZE: i32 = 256;
-        let tmp = TempDir::new()?;
-
-        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let output = tmp.path().join("cog.tif");
-        create_test_cog(&input, &output, COG_TILE_SIZE, "NONE")?;
-
+        create_test_cog(&input, &output, COG_TILE_SIZE, "None", None)?;
         let cog = CogAccessor::from_file(&output)?;
 
         let mut reader = File::open(&output)?;
@@ -547,9 +545,11 @@ mod tests {
         assert_eq!(meta.min_zoom, 6);
         assert_eq!(meta.max_zoom, 10);
         assert_eq!(meta.compression, Compression::None);
+        assert_eq!(meta.predictor, Predictor::None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
 
         assert!(!cog.tile_offsets().is_empty(), "Tile offsets should not be empty");
+        // Decode all tiles
         for (tile, _) in cog.tile_offsets() {
             let tile_data = cog.read_tile_data(tile, &mut reader)?;
             assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
@@ -563,16 +563,58 @@ mod tests {
     }
 
     #[test_log::test]
+    fn read_test_cog() -> Result<()> {
+        const COG_TILE_SIZE: i32 = 256;
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let reference_tile = Tile { z: 10, x: 524, y: 341 };
+        let reference_tile_data = {
+            // Create a test COG file without compression
+            create_test_cog(&input, &output, COG_TILE_SIZE, "None", None)?;
+            let cog = CogAccessor::from_file(&output)?;
+
+            let mut reader = File::open(&output)?;
+            cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?
+        };
+
+        {
+            // Create a test COG file with LZW compression and no predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", None)?;
+            let cog = CogAccessor::from_file(&output)?;
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?;
+            assert_eq!(tile_data, reference_tile_data);
+        }
+
+        {
+            // Create a test COG file with LZW compression and horizontal predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"))?;
+            let cog = CogAccessor::from_file(&output)?;
+            assert_eq!(cog.meta_data().predictor, Predictor::Horizontal);
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?;
+            assert_eq!(tile_data, reference_tile_data);
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
     fn compare_compression_results() -> Result<()> {
         const COG_TILE_SIZE: i32 = 256;
-        let tmp = TempDir::new()?;
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let no_compression_output = tmp.path().join("cog_no_compression.tif");
-        create_test_cog(&input, &no_compression_output, COG_TILE_SIZE, "NONE")?;
+        create_test_cog(&input, &no_compression_output, COG_TILE_SIZE, "NONE", None)?;
 
         let lzw_compression_output = tmp.path().join("cog_lzw_compression.tif");
-        create_test_cog(&input, &lzw_compression_output, COG_TILE_SIZE, "LZW")?;
+        create_test_cog(&input, &lzw_compression_output, COG_TILE_SIZE, "LZW", None)?;
 
         let cog_no_compression = CogAccessor::from_file(&no_compression_output)?;
         let cog_lzw_compression = CogAccessor::from_file(&lzw_compression_output)?;

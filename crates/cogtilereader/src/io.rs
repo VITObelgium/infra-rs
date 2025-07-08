@@ -4,7 +4,8 @@ use weezl::{BitOrder, decode::Decoder};
 
 use crate::{
     Error, Result,
-    cog::{CogTileLocation, Compression},
+    cog::{CogTileLocation, Compression, Predictor},
+    utils::{self, HorizontalUnpredictable},
 };
 use std::io::{BufWriter, Read, Seek, SeekFrom};
 
@@ -95,15 +96,19 @@ pub fn read_tile_data<T: ArrayNum>(
     tile_size: i32,
     nodata: Option<f64>,
     compression: Compression,
+    predictor: Predictor,
     mut reader: impl Read + Seek,
-) -> Result<DenseArray<T>> {
+) -> Result<DenseArray<T>>
+where
+    T: HorizontalUnpredictable,
+{
     let chunk_range = tile.range_to_fetch();
     reader.seek(SeekFrom::Start(chunk_range.start))?;
 
     let mut buf = vec![0; (chunk_range.end - chunk_range.start) as usize];
     reader.read_exact(&mut buf)?;
 
-    parse_tile_data(tile, tile_size, nodata, compression, &buf)
+    parse_tile_data(tile, tile_size, nodata, compression, predictor, &buf)
 }
 
 #[geo::simd_bounds]
@@ -112,15 +117,19 @@ pub fn parse_tile_data<T: ArrayNum>(
     tile_size: i32,
     nodata: Option<f64>,
     compression: Compression,
+    predictor: Predictor,
     cog_chunk: &[u8],
-) -> Result<DenseArray<T>> {
+) -> Result<DenseArray<T>>
+where
+    T: HorizontalUnpredictable,
+{
     // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
     let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&cog_chunk[0..4]).unwrap();
     if tile.size != u32::from_le_bytes(size_bytes) as u64 {
         return Err(Error::Runtime("Tile size does not match the expected size".into()));
     }
 
-    let tile_data = match compression {
+    let mut tile_data = match compression {
         Compression::Lzw => lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?,
         Compression::None => {
             if cog_chunk[4..].len() != ((tile_size * tile_size) as usize * std::mem::size_of::<T>()) {
@@ -138,6 +147,16 @@ pub fn parse_tile_data<T: ArrayNum>(
             }
         }
     };
+
+    match predictor {
+        Predictor::None => {}
+        Predictor::Horizontal => {
+            utils::unpredict_horizontal(&mut tile_data, tile_size);
+        }
+        Predictor::FloatingPoint => {
+            return Err(Error::InvalidArgument("Floating point predictor is not supported".into()));
+        }
+    }
 
     let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size), nodata);
     let arr = DenseArray::<T>::new_init_nodata(meta, tile_data)?;

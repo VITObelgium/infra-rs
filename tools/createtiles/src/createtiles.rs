@@ -76,6 +76,10 @@ pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions
         "NUM_THREADS=ALL_CPUS".to_string(),
         "-co".to_string(),
         "COMPRESS=LZW".to_string(),
+        "-co".to_string(),
+        "ALIGNED_LEVELS=6".to_string(),
+        "-co".to_string(),
+        "PREDICTOR=YES".to_string(),
     ];
 
     match opts.zoom_level_strategy {
