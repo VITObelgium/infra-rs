@@ -29,6 +29,11 @@ pub enum Error {
 pub type Result<T = ()> = std::result::Result<T, Error>;
 
 #[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    target_arch = "wasm32",
+    derive(tsify::Tsify, serde::Serialize, serde::Deserialize),
+    tsify(from_wasm_abi, into_wasm_abi)
+)]
 pub struct CogStats {
     pub minimum_value: f64,
     pub maximum_value: f64,

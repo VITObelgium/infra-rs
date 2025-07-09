@@ -20,8 +20,13 @@ path_macro = "1.0"
 tempfile = "3"
 test-log = "0.2"
 
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+serde = { version = "1.0" }
+tsify = { version = "*", default-features = false, features = ["js"] }
+wasm-bindgen = { version = "0.2", features = ["serde"] }
+
 [features]
 default = ["raster_stats"]
-gdal = ["geo/gdal-static"]  # Needed for running the tests
+gdal = ["geo/gdal-static"]      # Needed for running the tests
 raster_stats = ["dep:xml-rs"]
 simd = ["geo/simd", "inf/simd"]
