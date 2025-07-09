@@ -28,10 +28,7 @@ impl TryFrom<gdal_sys::OGRwkbGeometryType::Type> for GeometryType {
             gdal_sys::OGRwkbGeometryType::wkbGeometryCollection => Ok(GeometryType::GeometryCollection),
             gdal_sys::OGRwkbGeometryType::wkbUnknown => Ok(GeometryType::Geometry),
             gdal_sys::OGRwkbGeometryType::wkbNone => Ok(GeometryType::None),
-            _ => Err(crate::Error::InvalidArgument(format!(
-                "Unsupported geometry type: {}",
-                value
-            ))),
+            _ => Err(crate::Error::InvalidArgument(format!("Unsupported geometry type: {value}",))),
         }
     }
 }

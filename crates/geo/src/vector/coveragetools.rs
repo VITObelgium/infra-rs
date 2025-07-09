@@ -102,7 +102,7 @@ impl VectorBuilder {
 
         match std::str::from_utf8(mem_file.as_slice()?) {
             Ok(json_data) => Ok(json_data.to_string()),
-            Err(e) => Err(Error::Runtime(format!("Failed to convert json data to utf8 ({})", e))),
+            Err(e) => Err(Error::Runtime(format!("Failed to convert json data to utf8 ({e})"))),
         }
     }
 }

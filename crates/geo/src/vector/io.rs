@@ -167,7 +167,7 @@ pub fn read_dataframe_schema(
         ds.layer(0)?
     };
 
-    Ok(ds_layer.defn().fields().map(|f| (f.name().to_string(), f.field_type())).collect())
+    Ok(ds_layer.defn().fields().map(|f| (f.name(), f.field_type())).collect())
 }
 
 pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result<Vec<T>> {
@@ -334,7 +334,7 @@ impl FeatureExtension for gdal::vector::Feature<'_> {
         let field_index = unsafe { gdal_sys::OGR_F_GetFieldIndex(self.c_feature(), field_name_c_str.as_ptr()) };
 
         if field_index == -1 {
-            return Err(Error::InvalidArgument(format!("Field '{}' not found in feature", field_name)));
+            return Err(Error::InvalidArgument(format!("Field '{field_name}' not found in feature")));
         }
 
         Ok(field_index as usize)

@@ -4,7 +4,11 @@
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
+        "cargo": {
+          "features": ["gdal"]
+        },
         "check": {
+          "features": ["gdal"],
           "command": "clippy" // rust-analyzer.checkOnSave.command
         }
       }

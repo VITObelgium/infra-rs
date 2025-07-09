@@ -13,7 +13,7 @@ fn parse_value_range(year_range: &str) -> Result<RangeInclusive<i32>> {
         let end_year = years[1].parse::<i32>()?;
         Ok(RangeInclusive::new(start_year, end_year))
     } else {
-        Err(Error::Runtime(format!("Invalid value range: {}", year_range)))
+        Err(Error::Runtime(format!("Invalid value range: {year_range}")))
     }
 }
 

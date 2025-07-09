@@ -35,4 +35,3 @@ default = []
 serde = ["dep:serde"]
 simd = []
 specta = ["dep:specta"]
-

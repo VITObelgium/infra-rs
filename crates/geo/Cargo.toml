@@ -66,8 +66,8 @@ tsify = { version = "*", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
-arrow = ["dep:arrow"]
 default = ["derive"]
+arrow = ["dep:arrow"]
 derive = ["dep:vector_derive"]
 gdal = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
 gdal-static = ["gdal"]
@@ -76,4 +76,3 @@ serde = ["dep:serde"]
 simd = ["inf/simd", "simd_macro/simd"]
 specta = ["dep:specta"]
 vector = ["dep:geos", "dep:rayon", "geozero/with-geos"]
-
