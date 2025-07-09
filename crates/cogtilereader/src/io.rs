@@ -91,17 +91,14 @@ impl Seek for CogHeaderReader {
 }
 
 #[geo::simd_bounds]
-pub fn read_tile_data<T: ArrayNum>(
+pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
     tile_size: i32,
     nodata: Option<f64>,
     compression: Compression,
     predictor: Predictor,
     mut reader: impl Read + Seek,
-) -> Result<DenseArray<T>>
-where
-    T: HorizontalUnpredictable,
-{
+) -> Result<DenseArray<T>> {
     let chunk_range = tile.range_to_fetch();
     reader.seek(SeekFrom::Start(chunk_range.start))?;
 
@@ -112,17 +109,14 @@ where
 }
 
 #[geo::simd_bounds]
-pub fn parse_tile_data<T: ArrayNum>(
+pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
     tile_size: i32,
     nodata: Option<f64>,
     compression: Compression,
     predictor: Predictor,
     cog_chunk: &[u8],
-) -> Result<DenseArray<T>>
-where
-    T: HorizontalUnpredictable,
-{
+) -> Result<DenseArray<T>> {
     // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
     let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&cog_chunk[0..4]).unwrap();
     if tile.size != u32::from_le_bytes(size_bytes) as u64 {
@@ -140,7 +134,7 @@ where
 
             unsafe {
                 let byte_slice = &cog_chunk[4..];
-                let ptr = byte_slice.as_ptr() as *const T;
+                let ptr = byte_slice.as_ptr().cast::<T>();
                 let len = byte_slice.len() / std::mem::size_of::<T>();
                 let t_slice = std::slice::from_raw_parts(ptr, len);
                 aligned_vec_from_slice::<T>(t_slice)
@@ -154,7 +148,7 @@ where
             utils::unpredict_horizontal(&mut tile_data, tile_size);
         }
         Predictor::FloatingPoint => {
-            return Err(Error::InvalidArgument("Floating point predictor is not supported".into()));
+            utils::unpredict_floating_point(&mut tile_data, tile_size);
         }
     }
 
@@ -164,11 +158,18 @@ where
 }
 
 fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: i32) -> Result<AlignedVec<T>> {
-    let decoded_len = (tile_size * tile_size) as usize * std::mem::size_of::<T>();
-    let mut decode_buffer = allocate::aligned_vec_with_capacity::<u8>(decoded_len);
+    let decoded_len = (tile_size * tile_size) as usize;
+    let mut decode_buf = allocate::aligned_vec_with_capacity::<T>(decoded_len);
 
     {
-        let mut stream = BufWriter::new(&mut decode_buffer);
+        let mut buf_slice = unsafe {
+            // Safety: The buffer is allocated with enough capacity to hold the decoded data
+            std::slice::from_raw_parts_mut(
+                decode_buf.as_mut_ptr().cast::<u8>(),
+                decode_buf.capacity() * std::mem::size_of::<T>(),
+            )
+        };
+        let mut stream = BufWriter::new(&mut buf_slice);
 
         // Use MSB bit order and 8 as the initial code size, which is standard for TIFF LZW
         let decode_result = Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
@@ -179,12 +180,17 @@ fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: i32) -> Result<Aligned
             return Err(Error::Runtime("LZW decompression did not read all input bytes".into()));
         }
 
-        if decode_result.bytes_written != decoded_len {
+        if decode_result.bytes_written != decoded_len * std::mem::size_of::<T>() {
             return Err(Error::Runtime("LZW decompression did not write all tile pixels".into()));
+        }
+
+        unsafe {
+            // Safety: We verified the decoded length matches the expected size
+            decode_buf.set_len(decoded_len);
         }
 
         decode_result.status?;
     }
 
-    Ok(unsafe { allocate::reinterpret_aligned_vec::<_, T>(decode_buffer) })
+    Ok(decode_buf)
 }

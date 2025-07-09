@@ -54,10 +54,9 @@ pub fn parse_statistics(xml: &str) -> crate::Result<CogStats> {
                         "NAME" => {
                             if let Some(ref domain) = current_domain
                                 && domain == "TILING_SCHEME"
+                                && data != "GoogleMapsCompatible"
                             {
-                                if data != "GoogleMapsCompatible" {
-                                    return Err(Error::Runtime(format!("Unsupported TILING_SCHEME: {}", data)));
-                                }
+                                return Err(Error::Runtime(format!("Unsupported TILING_SCHEME: {data}")));
                             }
                         }
                         "ZOOM_LEVEL" => {
@@ -76,7 +75,7 @@ pub fn parse_statistics(xml: &str) -> crate::Result<CogStats> {
                 current_domain = None;
             }
             Err(e) => {
-                return Err(Error::Runtime(format!("XML parse error: {}", e)));
+                return Err(Error::Runtime(format!("XML parse error: {e}")));
             }
             _ => {}
         }

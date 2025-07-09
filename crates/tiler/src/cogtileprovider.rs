@@ -18,6 +18,7 @@ use crate::{
     layermetadata::{LayerId, LayerMetadata, LayerSourceType},
     tiledata::TileData,
     tileformat::TileFormat,
+    tileio,
     tileprovider::{ColorMappedTileRequest, TileRequest, unique_layer_id},
     tileproviderfactory::TileProviderOptions,
 };
@@ -46,16 +47,8 @@ impl CogTileProvider {
             source_is_web_mercator: true,
             supports_dpi_ratio: false,
             nodata: meta.geo_reference.nodata(),
-            min_value: meta
-                .statistics
-                .as_ref()
-                .and_then(|stat| Some(stat.minimum_value))
-                .unwrap_or(f64::NAN) as f32,
-            max_value: meta
-                .statistics
-                .as_ref()
-                .and_then(|stat| Some(stat.maximum_value))
-                .unwrap_or(f64::NAN) as f32,
+            min_value: meta.statistics.as_ref().map_or(f64::NAN, |stat| stat.minimum_value) as f32,
+            max_value: meta.statistics.as_ref().map_or(f64::NAN, |stat| stat.maximum_value) as f32,
             data_type: meta.data_type,
             source_format: LayerSourceType::CloudOptimizedGeoTiff,
             scheme: "xyz".into(),
@@ -84,9 +77,11 @@ impl CogTileProvider {
             .tileprovider_data
             .as_ref()
             .and_then(|data| data.downcast_ref::<CogMetadata>())
-            .and_then(|cog_meta| match cog_meta.tile_offsets.get(tile) {
-                Some(tile_offset) => Some((cog_meta.compression, cog_meta.predictor, tile_offset)),
-                None => None,
+            .and_then(|cog_meta| {
+                cog_meta
+                    .tile_offsets
+                    .get(tile)
+                    .map(|tile_offset| (cog_meta.compression, cog_meta.predictor, tile_offset))
             })
             .map(|(compression, predictor, tile_offset)| {
                 cogtilereader::io::read_tile_data::<T>(
@@ -101,7 +96,7 @@ impl CogTileProvider {
 
         match tile {
             Some(Ok(tile_data)) => Ok(tile_data),
-            Some(Err(e)) => Err(Error::Runtime(format!("Failed to read tile data: {}", e))),
+            Some(Err(e)) => Err(Error::Runtime(format!("Failed to read tile data: {e}"))),
             None => Ok(DenseArray::empty()),
         }
     }
@@ -145,8 +140,8 @@ impl CogTileProvider {
 
         imageprocessing::raw_tile_to_png_color_mapped::<T>(
             tile_data.as_slice(),
-            (tile_req.tile_size as u16) as usize,
-            (tile_req.tile_size as u16) as usize,
+            tile_req.tile_size as usize,
+            tile_req.tile_size as usize,
             Some(T::NODATA),
             tile_req.legend,
         )
@@ -204,8 +199,8 @@ impl CogTileProvider {
 }
 
 impl TileProvider for CogTileProvider {
-    fn extent_value_range(&self, _layer_id: LayerId, _extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
-        todo!()
+    fn extent_value_range(&self, _layer_id: LayerId, extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
+        tileio::detect_raster_range(&self.meta.path, 1, extent)
     }
 
     fn get_raster_value(&self, _layer_id: LayerId, _coord: Coordinate, _dpi_ratio: u8) -> Result<Option<f32>> {
