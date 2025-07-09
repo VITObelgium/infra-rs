@@ -5,10 +5,10 @@
     "rust-analyzer": {
       "initialization_options": {
         "cargo": {
-          "features": ["gdal"]
+          "features": ["gdal", "tui"]
         },
         "check": {
-          "features": ["gdal"],
+          "features": ["gdal", "tui"],
           "command": "clippy" // rust-analyzer.checkOnSave.command
         }
       }

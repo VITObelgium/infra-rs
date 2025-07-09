@@ -52,7 +52,12 @@ async fn main() -> Result<()> {
             .init();
     } else {
         #[cfg(feature = "tui")]
-        tui_logger::init_logger(log::LevelFilter::Info).expect("Failed to initialize logger");
+        if let Ok(rust_log) = std::env::var("RUST_LOG") {
+            tui_logger::init_logger(log::LevelFilter::Trace).expect("Failed to initialize logger");
+            tui_logger::set_env_filter_from_string(&rust_log);
+        } else {
+            tui_logger::init_logger(log::LevelFilter::Info).expect("Failed to initialize logger");
+        }
     }
 
     let exe_dir = PathBuf::from(
@@ -72,9 +77,7 @@ async fn main() -> Result<()> {
 
     let sock_addr = std::net::SocketAddr::from((ip_addr, opt.port));
     let (router, _status_rx) = tileapihandler::create_router(&opt.gis_dir);
-    let listener = tokio::net::TcpListener::bind(&sock_addr)
-        .await
-        .expect("Unable to bind to address");
+    let listener = tokio::net::TcpListener::bind(&sock_addr).await.expect("Unable to bind to address");
 
     #[cfg(feature = "tui")]
     if opt.tui {
