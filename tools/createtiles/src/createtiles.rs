@@ -85,7 +85,7 @@ pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions
     match opts.zoom_level_strategy {
         ZoomLevelStrategy::Manual(zoom) => {
             options.push("-co".to_string());
-            options.push(format!("ZOOM_LEVEL={}", zoom));
+            options.push(format!("ZOOM_LEVEL={zoom}"));
         }
         ZoomLevelStrategy::Closest => {
             options.push("-co".to_string());

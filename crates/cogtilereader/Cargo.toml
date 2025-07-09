@@ -16,12 +16,12 @@ xml-rs = { version = "0.8", optional = true }
 
 [dev-dependencies]
 approx = "0.5"
-geo = { features = ["gdal-static"], path = "../geo" }
 path_macro = "1.0"
 tempfile = "3"
 test-log = "0.2"
 
 [features]
 default = ["raster_stats"]
+gdal = ["geo/gdal-static"]  # Needed for running the tests
 raster_stats = ["dep:xml-rs"]
 simd = ["geo/simd", "inf/simd"]

@@ -260,6 +260,15 @@ impl<R: Read + Seek> CogDecoder<R> {
             }
         };
 
+        let samples_per_pixel = self.decoder.get_tag_u32(Tag::SamplesPerPixel)?;
+        if samples_per_pixel != 1 {
+            // When we will support multi-band COGs, the unpredict functions will need to be adjusted accordingly
+            // or will will need to use a different approach to handle multi-band data (e.g vec of DenseArray)
+            return Err(Error::InvalidArgument(format!(
+                "Only single band COGs are supported ({samples_per_pixel} bands found)",
+            )));
+        }
+
         let compression = match self.decoder.get_tag_u32(Tag::Compression)? {
             1 => Compression::None,
             5 => Compression::Lzw,
@@ -324,6 +333,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             max_zoom,
             tile_size,
             data_type,
+            band_count: samples_per_pixel,
             compression,
             predictor,
             tile_offsets: tile_inventory,
@@ -354,6 +364,7 @@ pub struct CogMetadata {
     pub max_zoom: i32,
     pub tile_size: i32,
     pub data_type: ArrayDataType,
+    pub band_count: u32,
     pub geo_reference: GeoReference,
     pub compression: Compression,
     pub predictor: Predictor,
@@ -494,6 +505,7 @@ impl CogAccessor {
     }
 }
 
+#[cfg(feature = "gdal")]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -627,17 +639,29 @@ mod tests {
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
 
-        // {
-        //     // Create a test COG file as float with LZW compression and float predictor
-        //     create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Float32"))?;
-        //     let cog = CogAccessor::from_file(&output)?;
-        //     assert_eq!(cog.meta_data().predictor, Predictor::FloatingPoint);
+        {
+            // Create a test COG file as float with LZW compression and float predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Float32"))?;
+            let cog = CogAccessor::from_file(&output)?;
+            assert_eq!(cog.meta_data().predictor, Predictor::FloatingPoint);
 
-        //     let mut reader = File::open(&output)?;
-        //     let tile_data = cog.read_tile_data_as::<f32>(&reference_tile, &mut reader)?;
+            let mut reader = File::open(&output)?;
+            let tile_data = cog.read_tile_data_as::<f32>(&reference_tile, &mut reader)?;
 
-        //     assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
-        // }
+            assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
+        {
+            // Create a test COG file as float with LZW compression and float predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Float64"))?;
+            let cog = CogAccessor::from_file(&output)?;
+            assert_eq!(cog.meta_data().predictor, Predictor::FloatingPoint);
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog.read_tile_data_as::<f64>(&reference_tile, &mut reader)?;
+
+            assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
 
         Ok(())
     }

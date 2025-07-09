@@ -1,4 +1,4 @@
-use geo::{ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize};
+use geo::{ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize};
 use inf::allocate::{self, AlignedVec, aligned_vec_from_slice};
 use weezl::{BitOrder, decode::Decoder};
 
@@ -147,9 +147,19 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
         Predictor::Horizontal => {
             utils::unpredict_horizontal(&mut tile_data, tile_size);
         }
-        Predictor::FloatingPoint => {
-            utils::unpredict_floating_point(&mut tile_data, tile_size);
-        }
+        Predictor::FloatingPoint => match T::TYPE {
+            ArrayDataType::Float32 => {
+                let mut fp32_data = unsafe { allocate::reinterpret_aligned_vec::<T, f32>(tile_data) };
+                fp32_data = utils::unpredict_fp32(&mut fp32_data, tile_size);
+                tile_data = unsafe { allocate::reinterpret_aligned_vec::<f32, T>(fp32_data) };
+            }
+            ArrayDataType::Float64 => {
+                let mut fp64_data = unsafe { allocate::reinterpret_aligned_vec::<T, f64>(tile_data) };
+                fp64_data = utils::unpredict_fp64(&mut fp64_data, tile_size);
+                tile_data = unsafe { allocate::reinterpret_aligned_vec::<f64, T>(fp64_data) };
+            }
+            _ => return Err(Error::Runtime("Floating point predictor only supported for f32 and f64".into())),
+        },
     }
 
     let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size), nodata);
