@@ -40,7 +40,8 @@ pub struct CogStats {
     pub mean: f64,
     pub standard_deviation: f64,
     pub valid_pixel_percentage: f64,
-    pub max_zoom: i32,
+    #[cfg_attr(target_arch = "wasm32", serde(skip))]
+    pub max_zoom: Option<i32>,
 }
 
 #[cfg(feature = "raster_stats")]

@@ -137,7 +137,6 @@ impl<R: Read + Seek> CogDecoder<R> {
         #[cfg(feature = "raster_stats")]
         if let Ok(gdal_metadata) = self.decoder.get_tag_ascii_string(Tag::Unknown(42112)) {
             use crate::stats;
-
             return Ok(Some(stats::parse_statistics(&gdal_metadata)?));
         }
 
@@ -191,6 +190,10 @@ impl<R: Read + Seek> CogDecoder<R> {
     }
 
     fn generate_tiles_for_extent(geo_transform: [f64; 6], image_width: u32, image_height: u32, tile_size: u32, zoom: i32) -> Vec<Tile> {
+        // Zoom levels are shifted by per tile_size factor above 256
+        //debug_assert!(tile_size % 256 == 0);
+        //zoom -= (tile_size / 256) as i32 - 1;
+
         let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
         let top_left_tile = Tile::for_coordinate(top_left, zoom);
 
@@ -292,7 +295,7 @@ impl<R: Read + Seek> CogDecoder<R> {
         let nodata = self.read_nodata_value()?;
 
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
-        let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], geo::ZoomLevelStrategy::Closest);
+        let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], geo::ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1);
         let mut current_zoom = max_zoom;
 
         loop {
@@ -474,7 +477,7 @@ impl CogAccessor {
                 &mut reader,
             )
         } else {
-            Err(Error::InvalidArgument(format!("Tile {tile:?} not found in COG index")))
+            Err(Error::InvalidArgument(format!("{tile:?} not found in COG index")))
         }
     }
 
@@ -602,7 +605,7 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
 
             let mut reader = File::open(&output)?;
-            cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?
+            cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("None_u8")
         };
 
         {
@@ -611,7 +614,7 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
 
             let mut reader = File::open(&output)?;
-            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?;
+            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("LZW_u8");
             assert_eq!(tile_data, reference_tile_data);
         }
 
@@ -622,31 +625,48 @@ mod tests {
             assert_eq!(cog.meta_data().predictor, Predictor::Horizontal);
 
             let mut reader = File::open(&output)?;
-            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?;
+            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("LZW_u8_predictor");
             assert_eq!(tile_data, reference_tile_data);
         }
 
         {
-            // Create a test COG file as float with LZW compression and no predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", None, Some("Float32"))?;
+            // Create a test COG file as i32 with LZW compression and predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Int32"))?;
             let cog = CogAccessor::from_file(&output)?;
-            assert_eq!(cog.meta_data().predictor, Predictor::None);
+            assert_eq!(cog.meta_data().predictor, Predictor::Horizontal);
 
             let mut reader = File::open(&output)?;
-            assert!(cog.read_tile_data_as::<f64>(&reference_tile, &mut reader).is_err());
-            let tile_data = cog.read_tile_data_as::<f32>(&reference_tile, &mut reader)?;
+            let tile_data = cog
+                .read_tile_data_as::<i32>(&reference_tile, &mut reader)
+                .expect("LZW_i32_predictor");
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
 
         {
-            // Create a test COG file as float with LZW compression and float predictor
+            // Create a test COG file as f32 with LZW compression and no predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", None, Some("Float32"))?;
+            let cog = CogAccessor::from_file(&output)?;
+            assert_eq!(cog.meta_data().predictor, Predictor::None);
+            assert_eq!(cog.meta_data().max_zoom, 10);
+
+            let mut reader = File::open(&output)?;
+            assert!(cog.read_tile_data_as::<f64>(&reference_tile, &mut reader).is_err());
+            let tile_data = cog.read_tile_data_as::<f32>(&reference_tile, &mut reader).expect("LZW_f32");
+
+            assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
+        {
+            // Create a test COG file as f64 with LZW compression and float predictor
             create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Float32"))?;
             let cog = CogAccessor::from_file(&output)?;
             assert_eq!(cog.meta_data().predictor, Predictor::FloatingPoint);
 
             let mut reader = File::open(&output)?;
-            let tile_data = cog.read_tile_data_as::<f32>(&reference_tile, &mut reader)?;
+            let tile_data = cog
+                .read_tile_data_as::<f32>(&reference_tile, &mut reader)
+                .expect("LZW_f32_predictor");
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
@@ -658,9 +678,52 @@ mod tests {
             assert_eq!(cog.meta_data().predictor, Predictor::FloatingPoint);
 
             let mut reader = File::open(&output)?;
-            let tile_data = cog.read_tile_data_as::<f64>(&reference_tile, &mut reader)?;
+            let tile_data = cog
+                .read_tile_data_as::<f64>(&reference_tile, &mut reader)
+                .expect("LZW_f64_predictor");
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_test_cog_512() -> Result<()> {
+        const COG_TILE_SIZE: i32 = 512;
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let reference_tile = Tile {
+            z: 9,
+            x: 524 / 2,
+            y: 341 / 2,
+        };
+        let reference_tile_data = {
+            // Create a test COG file without compression
+            create_test_cog(&input, &output, COG_TILE_SIZE, "None", None, None)?;
+            let cog = CogAccessor::from_file(&output)?;
+
+            let meta = cog.meta_data();
+            assert_eq!(meta.tile_size, COG_TILE_SIZE);
+            assert_eq!(meta.data_type, ArrayDataType::Uint8);
+            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.max_zoom, 9);
+
+            let mut reader = File::open(&output)?;
+            cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?
+        };
+
+        {
+            // Create a test COG file with LZW compression and no predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", None, None)?;
+            let cog = CogAccessor::from_file(&output)?;
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?;
+            assert_eq!(tile_data, reference_tile_data);
         }
 
         Ok(())

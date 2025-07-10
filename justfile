@@ -56,7 +56,7 @@ build_py:
   cd ruster && maturin develop && python ./test.py
 
 create_tiles input output:
-    cargo run -p createtiles --release -- --input {{input}} --output {{output}}
+    cargo run -p createtiles --release -- --input {{input}} --output {{output}} --tile-size 512
 
 serve_tiles dir:
   cargo run -p tileserver --release -- --gis-dir {{dir}}
@@ -77,19 +77,19 @@ build_release:
   cargo build --workspace --release
 
 test_debug test_name='' $RUST_LOG="debug":
-  cargo nextest run --profile ci --workspace --features=serde,gdal-static,arrow,derive,vector --no-capture {{test_name}}
+  cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_name}}
 
 test_release test_name='':
-  cargo nextest run --profile ci --workspace --release --features=serde,gdal-static,derive,vector {{test_name}}
+  cargo nextest run --profile ci --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_name}}
 
 test_debug_simd:
-  cargo +nightly nextest run --profile ci --workspace --features=simd,serde,gdal-static,arrow,derive,vector
+  cargo +nightly nextest run --profile ci --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector
 
 test_release_simd testfilter:
-  cargo +nightly nextest run --profile ci --workspace --release --features=simd,serde,gdal-static,derive,vector '{{testfilter}}'
+  cargo +nightly nextest run --profile ci --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector '{{testfilter}}'
 
 test_release_slow :
-  cargo nextest run --profile slow --workspace --release --features=serde,gdal-static,derive,vector
+  cargo nextest run --profile slow --workspace --release --features=serde,gdal,gdal-static,derive,vector
 
 test_debug_py: pybootstrap
   pixi run test_debug

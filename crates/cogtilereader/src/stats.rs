@@ -63,7 +63,7 @@ pub fn parse_statistics(xml: &str) -> crate::Result<CogStats> {
                             if let Some(ref domain) = current_domain
                                 && domain == "TILING_SCHEME"
                             {
-                                stats.max_zoom = data.parse::<i32>().unwrap_or_default();
+                                stats.max_zoom = data.parse::<i32>().ok();
                             }
                         }
                         _ => {}
@@ -108,6 +108,6 @@ mod tests {
         assert_abs_diff_eq!(stats.mean, 119.11901635438, epsilon = 1e-10);
         assert_abs_diff_eq!(stats.standard_deviation, 58.60474035626, epsilon = 1e-10);
         assert_abs_diff_eq!(stats.valid_pixel_percentage, 45.34, epsilon = 1e-10);
-        assert_eq!(stats.max_zoom, 10);
+        assert_eq!(stats.max_zoom, Some(10));
     }
 }

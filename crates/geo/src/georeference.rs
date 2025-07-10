@@ -144,9 +144,14 @@ impl GeoReference {
     }
 
     pub fn from_tile(tile: &Tile, tile_size: usize, dpi_ratio: u8) -> Self {
+        // The zoom level is shifted by 1 per tile size factor above 256 pixels.
+        // So adjust the zoom level back before calculating the pixel size.
+        let zoom_offset = (tile_size / 256) as i32 - 1;
+
         let tile_size = tile_size * dpi_ratio as usize;
         let raster_size = RasterSize::with_rows_cols(Rows(tile_size as i32), Columns(tile_size as i32));
-        let pixel_size = Tile::pixel_size_at_zoom_level(tile.z) / dpi_ratio as f64;
+        let pixel_size = Tile::pixel_size_at_zoom_level(tile.z + zoom_offset) / dpi_ratio as f64;
+
         GeoReference::with_origin(
             "",
             raster_size,
