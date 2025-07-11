@@ -9,7 +9,7 @@ dependencies = [
   "hdf5[core,zlib]",
   "netcdf-c[core,netcdf-4,hdf5]",
   "tiff[core,lzma,zstd]",
-]  # needed to run the geo tests
+] # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
 overlay-triplets-path = "vcpkg-overlay/triplets"
 rev = "ce613c4"
@@ -46,8 +46,9 @@ tiler = { optional = true, path = "./crates/tiler" }
 [features]
 arrow = ["geo/arrow"]
 cog = ["dep:cogtilereader"]
-gdal = ["geo/gdal"]
-gdal-static = ["geo/gdal-static"]
+default = ["cog", "gdal-static", "serde", "sqlite"]
+gdal = ["dep:cogtilereader", "geo/gdal"]
+gdal-static = ["gdal", "geo/gdal-static"]
 python = ["pyo3/auto-initialize"]
 serde = ["inf/serde"]
 sqlite = ["dep:sqlite"]
@@ -60,4 +61,3 @@ geozero = { git = "https://github.com/georust/geozero.git", rev = "e52422b54ab46
 [profile.samply]
 inherits = "release"
 debug = true
-

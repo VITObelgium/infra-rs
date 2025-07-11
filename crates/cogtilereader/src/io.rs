@@ -3,8 +3,8 @@ use inf::allocate::{self, AlignedVec, aligned_vec_from_slice};
 use weezl::{BitOrder, decode::Decoder};
 
 use crate::{
-    Error, Result,
-    cog::{CogTileLocation, Compression, Predictor},
+    Compression, Error, Predictor, Result,
+    cog::CogTileLocation,
     utils::{self, HorizontalUnpredictable},
 };
 use std::io::{BufWriter, Read, Seek, SeekFrom};
@@ -95,8 +95,8 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
     tile_size: i32,
     nodata: Option<f64>,
-    compression: Compression,
-    predictor: Predictor,
+    compression: Option<Compression>,
+    predictor: Option<Predictor>,
     mut reader: impl Read + Seek,
 ) -> Result<DenseArray<T>> {
     let chunk_range = tile.range_to_fetch();
@@ -117,8 +117,8 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
     tile_size: i32,
     nodata: Option<f64>,
-    compression: Compression,
-    predictor: Predictor,
+    compression: Option<Compression>,
+    predictor: Option<Predictor>,
     cog_chunk: &[u8],
 ) -> Result<DenseArray<T>> {
     // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
@@ -128,8 +128,8 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     }
 
     let mut tile_data = match compression {
-        Compression::Lzw => lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?,
-        Compression::None => {
+        Some(Compression::Lzw) => lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?,
+        None => {
             if cog_chunk[4..].len() != ((tile_size * tile_size) as usize * std::mem::size_of::<T>()) {
                 return Err(Error::Runtime(
                     "Uncompressed tile data size does not match the expected size".into(),
@@ -147,11 +147,11 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     };
 
     match predictor {
-        Predictor::None => {}
-        Predictor::Horizontal => {
+        None => {}
+        Some(Predictor::Horizontal) => {
             utils::unpredict_horizontal(&mut tile_data, tile_size);
         }
-        Predictor::FloatingPoint => match T::TYPE {
+        Some(Predictor::FloatingPoint) => match T::TYPE {
             ArrayDataType::Float32 => {
                 let mut fp32_data = unsafe { allocate::reinterpret_aligned_vec::<T, f32>(tile_data) };
                 fp32_data = utils::unpredict_fp32(&mut fp32_data, tile_size);

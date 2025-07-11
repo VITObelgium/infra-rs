@@ -6,12 +6,18 @@ mod cog;
 pub mod io;
 mod utils;
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Predictor {
+    Horizontal,
+    FloatingPoint,
+}
+
 pub use cog::CogAccessor;
 pub use cog::CogMetadata;
 pub use cog::CogTileLocation;
-pub use cog::Compression;
-pub use cog::Predictor;
 pub use cog::TileOffsets;
+pub use geo::cog::Compression;
+
 pub use utils::HorizontalUnpredictable;
 
 #[derive(Error, Debug)]

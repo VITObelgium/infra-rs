@@ -2,7 +2,7 @@ use geo::{AnyDenseArray, ArrayDataType, ArrayNum, Columns, DenseArray, GeoRefere
 use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
-    CogStats, Error, Result,
+    CogStats, Compression, Error, Predictor, Result,
     io::{self, CogHeaderReader},
     utils::HorizontalUnpredictable,
 };
@@ -18,19 +18,6 @@ pub type TileOffsets = HashMap<Tile, CogTileLocation>;
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Compression {
-    None,
-    Lzw,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Predictor {
-    None,
-    Horizontal,
-    FloatingPoint,
-}
 
 fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     // Classic TIFF has magic number 42
@@ -50,15 +37,15 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
         return Err(Error::InvalidArgument("COG not created with gdal".into()));
     }
 
-    // The header size is at bytes 30..36 (6 bytes)
-    let header_size_str = &first_line[30..36];
-    let header_size: usize = header_size_str
-        .trim()
-        .parse()
-        .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {e}")))?;
+    // // The header size is at bytes 30..36 (6 bytes)
+    // let header_size_str = &first_line[30..36];
+    // let header_size: usize = header_size_str
+    //     .trim()
+    //     .parse()
+    //     .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {e}")))?;
 
-    let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
-    log::debug!("Header: {header_str}");
+    // let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
+    // log::debug!("Header: {header_str}");
 
     Ok(())
 }
@@ -273,8 +260,8 @@ impl<R: Read + Seek> CogDecoder<R> {
         }
 
         let compression = match self.decoder.get_tag_u32(Tag::Compression)? {
-            1 => Compression::None,
-            5 => Compression::Lzw,
+            1 => None,
+            5 => Some(Compression::Lzw),
             _ => {
                 return Err(Error::InvalidArgument(format!(
                     "Only LZW compressed COGs are supported ({})",
@@ -284,9 +271,9 @@ impl<R: Read + Seek> CogDecoder<R> {
         };
 
         let predictor = match self.decoder.get_tag_u32(Tag::Predictor) {
-            Ok(2) => Predictor::Horizontal,
-            Ok(3) => Predictor::FloatingPoint,
-            _ => Predictor::None,
+            Ok(2) => Some(Predictor::Horizontal),
+            Ok(3) => Some(Predictor::FloatingPoint),
+            _ => None,
         };
 
         let statistics = self.read_gdal_metadata()?;
@@ -373,8 +360,8 @@ pub struct CogMetadata {
     pub data_type: ArrayDataType,
     pub band_count: u32,
     pub geo_reference: GeoReference,
-    pub compression: Compression,
-    pub predictor: Predictor,
+    pub compression: Option<Compression>,
+    pub predictor: Option<Predictor>,
     pub statistics: Option<CogStats>,
     pub tile_offsets: TileOffsets,
 }
@@ -553,10 +540,12 @@ impl CogAccessor {
 #[cfg(feature = "gdal")]
 #[cfg(test)]
 mod tests {
+    use crate::{Predictor, testutils};
+
     use super::*;
-    use crate::testutils;
+
     use approx::assert_relative_eq;
-    use geo::{Array, Coordinate, RasterSize};
+    use geo::{Array, Coordinate, RasterSize, cog::PredictorSelection};
 
     const COG_TILE_SIZE: i32 = 256;
 
@@ -564,46 +553,21 @@ mod tests {
         input_tif: &Path,
         output_tif: &Path,
         tile_size: i32,
-        compress: &str,
-        predictor: Option<&str>,
-        output_type: Option<&str>,
+        compression: Option<Compression>,
+        predictor: Option<PredictorSelection>,
+        output_type: Option<ArrayDataType>,
         allow_sparse: bool,
     ) -> Result<()> {
-        let src_ds = geo::raster::io::dataset::open_read_only(input_tif).expect("Failed to open test COG input file");
-        let mut options = vec![
-            "-overwrite".to_string(),
-            "-f".to_string(),
-            "COG".to_string(),
-            "-co".to_string(),
-            format!("BLOCKSIZE={tile_size}"),
-            "-co".to_string(),
-            "TILING_SCHEME=GoogleMapsCompatible".to_string(),
-            "-co".to_string(),
-            format!("COMPRESS={compress}"),
-            "-co".to_string(),
-            "ADD_ALPHA=NO".to_string(),
-            "-co".to_string(),
-            "STATISTICS=YES".to_string(),
-            "-co".to_string(),
-            "RESAMPLING=NEAREST".to_string(),
-            "-co".to_string(),
-            "OVERVIEW_RESAMPLING=NEAREST".to_string(),
-            "-co".to_string(),
-            "OVERVIEWS=IGNORE_EXISTING".to_string(),
-            "-co".to_string(),
-            "ALIGNED_LEVELS=5".to_string(),
-            "-co".to_string(),
-            format!("PREDICTOR={}", predictor.unwrap_or("NO")),
-            "-co".to_string(),
-            format!("SPARSE_OK={}", if allow_sparse { "TRUE" } else { "FALSE" }),
-        ];
-
-        if let Some(output_type) = output_type {
-            options.push("-ot".to_string());
-            options.push(output_type.to_string());
-        }
-
-        geo::raster::algo::warp_to_disk_cli(&src_ds, output_tif, &options, &vec![]).expect("Failed to create test COG file");
+        let opts = geo::cog::CogCreationOptions {
+            min_zoom: Some(7),
+            zoom_level_strategy: geo::ZoomLevelStrategy::Closest,
+            tile_size: tile_size as u16,
+            allow_sparse,
+            compression,
+            predictor,
+            output_data_type: output_type,
+        };
+        geo::cog::create_cog_tiles(input_tif, output_tif, opts)?;
 
         Ok(())
     }
@@ -616,7 +580,7 @@ mod tests {
 
         {
             // Allow sparse tiles, this would reduce the size if the bounds
-            create_test_cog(&input, &output, COG_TILE_SIZE, "None", None, None, true)?;
+            create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
             let cog = CogAccessor::from_file(&output)?;
 
             let data_bounds = cog.meta_data().data_bounds();
@@ -626,8 +590,9 @@ mod tests {
 
         {
             // Don't allow sparse tiles, The bounds should now match the extent of the lowest zoom level
-            create_test_cog(&input, &output, COG_TILE_SIZE, "None", None, None, false)?;
+            create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, false)?;
             let cog = CogAccessor::from_file(&output)?;
+            assert!(cog.meta_data().max_zoom == 10);
 
             let data_bounds = cog.meta_data().data_bounds();
             assert_relative_eq!(data_bounds.northwest(), Coordinate::latlon(52.48278022207821, 0.0));
@@ -644,17 +609,17 @@ mod tests {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let output = tmp.path().join("cog.tif");
 
-        create_test_cog(&input, &output, COG_TILE_SIZE, "None", None, None, true)?;
+        create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
         let cog = CogAccessor::from_file(&output)?;
 
         let mut reader = File::open(&output)?;
         let meta = cog.meta_data();
         assert_eq!(meta.tile_size, COG_TILE_SIZE);
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
-        assert_eq!(meta.min_zoom, 5);
         assert_eq!(meta.max_zoom, 10);
-        assert_eq!(meta.compression, Compression::None);
-        assert_eq!(meta.predictor, Predictor::None);
+        assert_eq!(meta.min_zoom, 6);
+        assert_eq!(meta.compression, None);
+        assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
 
         assert!(!cog.tile_offsets().is_empty(), "Tile offsets should not be empty");
@@ -685,7 +650,7 @@ mod tests {
         let reference_tile = Tile { z: 10, x: 524, y: 341 };
         let reference_tile_data = {
             // Create a test COG file without compression
-            create_test_cog(&input, &output, COG_TILE_SIZE, "None", None, None, true)?;
+            create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
             let cog = CogAccessor::from_file(&output)?;
 
             let mut reader = File::open(&output)?;
@@ -694,7 +659,7 @@ mod tests {
 
         {
             // Create a test COG file with LZW compression and no predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", None, None, true)?;
+            create_test_cog(&input, &output, COG_TILE_SIZE, Some(Compression::Lzw), None, None, true)?;
             let cog = CogAccessor::from_file(&output)?;
 
             let mut reader = File::open(&output)?;
@@ -704,9 +669,17 @@ mod tests {
 
         {
             // Create a test COG file with LZW compression and horizontal predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), None, true)?;
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Lzw),
+                Some(PredictorSelection::Automatic),
+                None,
+                true,
+            )?;
             let cog = CogAccessor::from_file(&output)?;
-            assert_eq!(cog.meta_data().predictor, Predictor::Horizontal);
+            assert_eq!(cog.meta_data().predictor, Some(Predictor::Horizontal));
 
             let mut reader = File::open(&output)?;
             let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("LZW_u8_predictor");
@@ -715,9 +688,17 @@ mod tests {
 
         {
             // Create a test COG file as i32 with LZW compression and predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Int32"), true)?;
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Lzw),
+                Some(PredictorSelection::Automatic),
+                Some(ArrayDataType::Int32),
+                true,
+            )?;
             let cog = CogAccessor::from_file(&output)?;
-            assert_eq!(cog.meta_data().predictor, Predictor::Horizontal);
+            assert_eq!(cog.meta_data().predictor, Some(Predictor::Horizontal));
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
@@ -729,9 +710,17 @@ mod tests {
 
         {
             // Create a test COG file as f32 with LZW compression and no predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", None, Some("Float32"), true)?;
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Lzw),
+                None,
+                Some(ArrayDataType::Float32),
+                true,
+            )?;
             let cog = CogAccessor::from_file(&output)?;
-            assert_eq!(cog.meta_data().predictor, Predictor::None);
+            assert_eq!(cog.meta_data().predictor, None);
             assert_eq!(cog.meta_data().max_zoom, 10);
 
             let mut reader = File::open(&output)?;
@@ -743,9 +732,17 @@ mod tests {
 
         {
             // Create a test COG file as f64 with LZW compression and float predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Float32"), true)?;
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Lzw),
+                Some(PredictorSelection::Automatic),
+                Some(ArrayDataType::Float32),
+                true,
+            )?;
             let cog = CogAccessor::from_file(&output)?;
-            assert_eq!(cog.meta_data().predictor, Predictor::FloatingPoint);
+            assert_eq!(cog.meta_data().predictor, Some(Predictor::FloatingPoint));
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
@@ -757,9 +754,17 @@ mod tests {
 
         {
             // Create a test COG file as float with LZW compression and float predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", Some("YES"), Some("Float64"), true)?;
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Lzw),
+                Some(PredictorSelection::Automatic),
+                Some(ArrayDataType::Float64),
+                true,
+            )?;
             let cog = CogAccessor::from_file(&output)?;
-            assert_eq!(cog.meta_data().predictor, Predictor::FloatingPoint);
+            assert_eq!(cog.meta_data().predictor, Some(Predictor::FloatingPoint));
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
@@ -787,13 +792,13 @@ mod tests {
         };
         let reference_tile_data = {
             // Create a test COG file without compression
-            create_test_cog(&input, &output, COG_TILE_SIZE, "None", None, None, true)?;
+            create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
             let cog = CogAccessor::from_file(&output)?;
 
             let meta = cog.meta_data();
             assert_eq!(meta.tile_size, COG_TILE_SIZE);
             assert_eq!(meta.data_type, ArrayDataType::Uint8);
-            assert_eq!(meta.min_zoom, 5);
+            assert_eq!(meta.min_zoom, 6);
             assert_eq!(meta.max_zoom, 9);
 
             let mut reader = File::open(&output)?;
@@ -802,7 +807,7 @@ mod tests {
 
         {
             // Create a test COG file with LZW compression and no predictor
-            create_test_cog(&input, &output, COG_TILE_SIZE, "LZW", None, None, true)?;
+            create_test_cog(&input, &output, COG_TILE_SIZE, Some(Compression::Lzw), None, None, true)?;
             let cog = CogAccessor::from_file(&output)?;
 
             let mut reader = File::open(&output)?;
@@ -819,10 +824,18 @@ mod tests {
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let no_compression_output = tmp.path().join("cog_no_compression.tif");
-        create_test_cog(&input, &no_compression_output, COG_TILE_SIZE, "NONE", None, None, true)?;
+        create_test_cog(&input, &no_compression_output, COG_TILE_SIZE, None, None, None, true)?;
 
         let lzw_compression_output = tmp.path().join("cog_lzw_compression.tif");
-        create_test_cog(&input, &lzw_compression_output, COG_TILE_SIZE, "LZW", None, None, true)?;
+        create_test_cog(
+            &input,
+            &lzw_compression_output,
+            COG_TILE_SIZE,
+            Some(Compression::Lzw),
+            None,
+            None,
+            true,
+        )?;
 
         let cog_no_compression = CogAccessor::from_file(&no_compression_output)?;
         let cog_lzw_compression = CogAccessor::from_file(&lzw_compression_output)?;
