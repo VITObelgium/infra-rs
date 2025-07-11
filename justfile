@@ -76,6 +76,8 @@ build_debug:
 build_release:
   cargo build --workspace --release
 
+build: build_release
+
 test_debug test_name='' $RUST_LOG="debug":
   cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_name}}
 
@@ -97,7 +99,6 @@ test_debug_py: pybootstrap
 test_release_py: pybootstrap
   pixi run test_release
 
-build: build_release
 test test_name='': (test_debug test_name)
 test_simd testfilter="": (test_release_simd testfilter)
 

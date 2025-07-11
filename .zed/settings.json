@@ -1,6 +1,15 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
 {
+  "file_scan_exclusions": [
+    "**/.git",
+    "**/.pixi",
+    "**/.gitmodules",
+    "**/.DS_Store",
+    "**/Thumbs.db",
+    "**/.settings",
+    "**/.vscode"
+  ],
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
