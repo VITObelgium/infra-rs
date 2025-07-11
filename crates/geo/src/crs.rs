@@ -2,9 +2,9 @@ use core::fmt;
 use std::f64::consts::PI;
 
 use crate::{
+    Point,
     constants::{EARTH_RADIUS_M, LATITUDE_MAX, LONGITUDE_MAX},
     coordinate::Coordinate,
-    Point,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -46,9 +46,9 @@ pub mod epsg {
     use super::Epsg;
 
     pub const WGS84_WEB_MERCATOR: Epsg = Epsg(3857);
-    pub const WGS84: Epsg = Epsg(4326); // geographic projection
+    pub const WGS84: Epsg = Epsg(4326); // geographic projection (lat, lon)
     pub const BELGIAN_LAMBERT72: Epsg = Epsg(31370);
-    pub const BELGE72_GEO: Epsg = Epsg(4313); // geographic projection
+    pub const BELGE72_GEO: Epsg = Epsg(4313); // geographic projection (lat, lon)
     pub const ETRS89: Epsg = Epsg(3035);
     pub const BELGIAN_LAMBERT2008: Epsg = Epsg(3812);
 }

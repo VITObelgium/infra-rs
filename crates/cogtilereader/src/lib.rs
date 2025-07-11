@@ -9,6 +9,8 @@ mod utils;
 pub use cog::CogAccessor;
 pub use cog::CogMetadata;
 pub use cog::CogTileLocation;
+pub use cog::Compression;
+pub use cog::Predictor;
 pub use cog::TileOffsets;
 pub use utils::HorizontalUnpredictable;
 

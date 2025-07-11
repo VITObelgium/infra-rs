@@ -100,6 +100,10 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     mut reader: impl Read + Seek,
 ) -> Result<DenseArray<T>> {
     let chunk_range = tile.range_to_fetch();
+    if chunk_range.start == chunk_range.end {
+        return Ok(DenseArray::empty());
+    }
+
     reader.seek(SeekFrom::Start(chunk_range.start))?;
 
     let mut buf = vec![0; (chunk_range.end - chunk_range.start) as usize];

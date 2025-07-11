@@ -80,6 +80,15 @@ impl Tile {
         Coordinate::latlon(lat_rad.to_degrees(), lon_degrees)
     }
 
+    pub fn lower_right(&self) -> Coordinate {
+        Tile {
+            x: self.x + 1,
+            y: self.y + 1,
+            z: self.z,
+        }
+        .upper_left()
+    }
+
     pub fn center(&self) -> Coordinate {
         let z2 = f64::powi(2.0, self.z);
         let degrees_per_tile = 360.0 / z2;

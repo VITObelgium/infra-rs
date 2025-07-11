@@ -73,13 +73,17 @@ pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions
         "-co".to_string(),
         "OVERVIEW_RESAMPLING=NEAREST".to_string(),
         "-co".to_string(),
+        "OVERVIEW_COUNT=4".to_string(),
+        "-co".to_string(),
+        "ALIGNED_LEVELS=5".to_string(),
+        "-co".to_string(),
         "NUM_THREADS=ALL_CPUS".to_string(),
         "-co".to_string(),
         "COMPRESS=LZW".to_string(),
         "-co".to_string(),
-        "ALIGNED_LEVELS=6".to_string(),
-        "-co".to_string(),
         "PREDICTOR=YES".to_string(),
+        "-co".to_string(),
+        "SPARSE_OK=TRUE".to_string(),
     ];
 
     match opts.zoom_level_strategy {
