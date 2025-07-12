@@ -40,8 +40,8 @@ pub use {
     cast::cast, distance::closest_target, distance::distance, distance::distance_with_obstacles,
     distance::sum_targets_within_travel_distance, distance::sum_within_travel_distance, distance::travel_distance,
     distance::travel_distances_up_to, distance::value_at_closest_less_than_travel_target, distance::value_at_closest_target,
-    distance::value_at_closest_travel_target, filter::filter, filter::filter_value, limits::min_max, quantile::quantiles,
-    quantile::quantiles_neg_pos, statistics::RasterStats, statistics::statistics,
+    distance::value_at_closest_travel_target, filter::filter, filter::filter_value, limits::min_max, quantile::SplitQuantiles,
+    quantile::quantiles, quantile::quantiles_neg_pos, statistics::RasterStats, statistics::statistics,
 };
 
 #[cfg(feature = "simd")]

@@ -61,10 +61,16 @@ where
     array_quantiles(&data, quantile_vals)
 }
 
+#[derive(Debug, Clone)]
+pub struct SplitQuantiles<T> {
+    pub negatives: Option<Vec<T>>,
+    pub positives: Option<Vec<T>>,
+}
+
 /// Computes quantiles for a raster, ignoring nodata values.
 /// This function is similar to `quantiles`, but it seperates the positive and negative values
 /// So two quantiles are computed, one for the negative values and one for the positive values.
-pub fn quantiles_neg_pos<RasterType>(ras: &RasterType, quantile_vals: &[f64]) -> Result<(Option<Vec<f64>>, Option<Vec<f64>>)>
+pub fn quantiles_neg_pos<RasterType>(ras: &RasterType, quantile_vals: &[f64]) -> Result<SplitQuantiles<f64>>
 where
     RasterType: Array,
     RasterType::Pixel: ArrayNum,
@@ -75,7 +81,10 @@ where
 
     let mut data: Vec<RasterType::Pixel> = ras.iter_values().collect();
     if data.is_empty() {
-        return Ok((None, None));
+        return Ok(SplitQuantiles {
+            negatives: None,
+            positives: None,
+        });
     }
 
     data.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
@@ -83,10 +92,10 @@ where
 
     let (negatives, positives) = data.split_at(first_pos_idx.unwrap_or(0));
 
-    Ok((
-        array_quantiles(negatives, quantile_vals)?,
-        array_quantiles(positives, quantile_vals)?,
-    ))
+    Ok(SplitQuantiles {
+        negatives: array_quantiles(negatives, quantile_vals)?,
+        positives: array_quantiles(positives, quantile_vals)?,
+    })
 }
 
 #[cfg(test)]
@@ -206,9 +215,9 @@ mod tests {
                     ]),
                 )?;
 
-        let (neg_quants, pos_quants) = algo::quantiles_neg_pos(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?;
-        let neg_quants = neg_quants.expect("Negative quantiles should have a value");
-        let pos_quants = pos_quants.expect("Positive quantiles should have a value");
+        let quantiles = algo::quantiles_neg_pos(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?;
+        let neg_quants = quantiles.negatives.expect("Negative quantiles should have a value");
+        let pos_quants = quantiles.positives.expect("Positive quantiles should have a value");
         assert_eq!(neg_quants, vec![-7.0, -3.75, -2.5, -1.25, -1.0]);
         assert_eq!(pos_quants, vec![1.0, 1.25, 2.5, 3.75, 7.0]);
 
