@@ -551,7 +551,7 @@ impl CogAccessor {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Array as _, Coordinate,
+        Array as _,
         cog::{CogCreationOptions, create_cog_tiles, creation::PredictorSelection},
         testutils,
     };

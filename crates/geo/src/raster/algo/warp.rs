@@ -1,9 +1,12 @@
 use std::{
-    ffi::{c_double, c_int, CString},
+    ffi::{CString, c_double, c_int},
     path::Path,
 };
 
-use crate::{gdalinterop::check_rc, Error, Result};
+use crate::{
+    Error, Result,
+    gdalinterop::{self, check_rc},
+};
 use gdal::cpl::CslStringList;
 
 pub struct WarpOptions {
@@ -74,20 +77,14 @@ pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOption
             // will get freed by gdal
             (*warp_options).padfSrcNoDataReal = gdal_sys::CPLMalloc(band_size).cast::<c_double>();
             // C++ equivalent: padfSrcNoDataReal[0] = src_nodata_value;
-            (*warp_options)
-                .padfSrcNoDataReal
-                .wrapping_add(0)
-                .write(src_nodata_value);
+            (*warp_options).padfSrcNoDataReal.wrapping_add(0).write(src_nodata_value);
         }
 
         if let Some(dst_nodata_value) = dst_ds.rasterband(1)?.no_data_value() {
             // will get freed by gdal
             (*warp_options).padfDstNoDataReal = gdal_sys::CPLMalloc(band_size).cast::<c_double>();
             // C++ equivalent: padfDstNoDataReal[0] = dstNodataValue.value();
-            (*warp_options)
-                .padfDstNoDataReal
-                .wrapping_add(0)
-                .write(dst_nodata_value);
+            (*warp_options).padfDstNoDataReal.wrapping_add(0).write(dst_nodata_value);
         }
 
         const FALSE: i32 = 0;
@@ -182,7 +179,7 @@ pub fn warp_to_disk_cli(
 
     unsafe {
         let mut user_error: c_int = 0;
-        gdal_sys::GDALWarp(
+        let handle = gdal_sys::GDALWarp(
             path_str.as_ptr(),
             std::ptr::null_mut(),
             1,
@@ -194,6 +191,8 @@ pub fn warp_to_disk_cli(
         if user_error != 0 {
             return Err(Error::Runtime("GDAL Warp: invalid arguments".to_string()));
         }
+
+        gdal::Dataset::from_c_dataset(gdalinterop::check_pointer(handle, "GDALWarp")?);
     }
 
     Ok(())
