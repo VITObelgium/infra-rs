@@ -402,6 +402,11 @@ impl CogMetadata {
             y: max_tile_y,
         };
 
+        if min_tile_x == i32::MAX {
+            // No tiles with data at the maximum zoom level
+            return LatLonBounds::world();
+        }
+
         LatLonBounds::hull(min_tile.upper_left(), max_tile.lower_right())
     }
 }
