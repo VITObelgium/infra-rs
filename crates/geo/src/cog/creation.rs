@@ -129,3 +129,43 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        cog::{CogAccessor, Predictor},
+        testutils,
+    };
+
+    use super::*;
+
+    #[test]
+    fn cog_creation() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(5),
+            zoom_level_strategy: ZoomLevelStrategy::Manual(6),
+            tile_size: 256,
+            compression: Some(Compression::Lzw),
+            predictor: Some(PredictorSelection::Horizontal),
+            allow_sparse: true,
+            output_data_type: Some(ArrayDataType::Uint8),
+        };
+
+        create_cog_tiles(&input, &output, opts)?;
+        let cog = CogAccessor::from_file(&output)?;
+        let meta = cog.meta_data();
+
+        assert_eq!(meta.min_zoom, 5);
+        assert_eq!(meta.max_zoom, 6);
+        assert_eq!(meta.tile_size, 256);
+        assert_eq!(meta.compression, Some(Compression::Lzw));
+        assert_eq!(meta.predictor, Some(Predictor::Horizontal));
+        assert_eq!(meta.data_type, ArrayDataType::Uint8);
+
+        Ok(())
+    }
+}

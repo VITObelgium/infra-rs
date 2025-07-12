@@ -26,18 +26,26 @@ pub struct CogHeaderReader {
 }
 
 impl CogHeaderReader {
-    pub fn from_stream(mut stream: impl Read) -> Result<Self> {
+    pub fn from_stream(mut stream: impl Read + Seek) -> Result<Self> {
         // Immediately read the cog header into the buffer
         let mut buffer = vec![0; COG_HEADER_SIZE];
-        stream.read_exact(&mut buffer)?;
+
+        match stream.read_exact(&mut buffer) {
+            Ok(_) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
+                // Determine the filesize and adjust the buffer size accordingly
+                let file_size = stream.seek(SeekFrom::End(0))?;
+                buffer.resize(file_size as usize, 0);
+                stream.seek(SeekFrom::Start(0))?;
+                stream.read_exact(&mut buffer)?;
+            }
+            Err(e) => return Err(e.into()),
+        }
+
         Self::from_buffer(buffer)
     }
 
     pub fn from_buffer(buffer: Vec<u8>) -> Result<Self> {
-        if buffer.len() != COG_HEADER_SIZE {
-            return Err(Error::InvalidArgument("Provided buffer should match the COG_HEADER_SIZE".into()));
-        }
-
         Ok(Self { buffer, pos: 0 })
     }
 
