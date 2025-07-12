@@ -23,7 +23,6 @@ x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 
 [workspace]
 members = [
-  "crates/cogtilereader",
   "crates/geo",
   "crates/geo/vector_derive",
   "crates/inf",
@@ -36,7 +35,6 @@ members = [
 ]
 
 [dependencies]
-cogtilereader = { optional = true, path = "./crates/cogtilereader" }
 geo = { path = "./crates/geo" }
 inf = { path = "./crates/inf" }
 pyo3 = { version = "*", optional = true }
@@ -45,9 +43,8 @@ tiler = { optional = true, path = "./crates/tiler" }
 
 [features]
 arrow = ["geo/arrow"]
-cog = ["dep:cogtilereader"]
-default = ["cog", "gdal-static", "serde", "sqlite"]
-gdal = ["dep:cogtilereader", "geo/gdal"]
+default = ["gdal-static", "serde", "sqlite"]
+gdal = ["geo/gdal"]
 gdal-static = ["gdal", "geo/gdal-static"]
 python = ["pyo3/auto-initialize"]
 serde = ["inf/serde"]

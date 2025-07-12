@@ -5,7 +5,6 @@ mod generictests {
     use core::fmt;
 
     use num::NumCast;
-    use tempdir::TempDir;
 
     use crate::{
         Array, ArrayNum, Cell, GeoReference, Point, Result,
@@ -49,7 +48,7 @@ mod generictests {
     #[test]
     fn read_write_raster_nodata_handling<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() -> Result<()>
     {
-        let tmp_dir = TempDir::new("asc_write")?;
+        let tmp_dir = tempfile::TempDir::new().unwrap();
         let raster_path = tmp_dir.path().join("test.asc");
 
         std::fs::write(
@@ -105,7 +104,6 @@ mod generictests {
 #[cfg(test)]
 mod tests {
     use inf::allocate;
-    use tempdir::TempDir;
 
     use crate::{
         Array, ArrayInterop as _, ArrayMetadata, Cell, Columns, DenseArray, GeoReference, Nodata, RasterMetadata, RasterSize, Result, Rows,
@@ -118,8 +116,7 @@ mod tests {
             Rows(5),
             Columns(10),
         )));
-        let tmp_dir = TempDir::new("ras_write").unwrap();
-
+        let tmp_dir = tempfile::TempDir::new().unwrap();
         let raster_path = tmp_dir.path().join("test.asc");
 
         // Write the raster
@@ -134,7 +131,7 @@ mod tests {
 
     #[test]
     fn test_read_write_nodata_handling_nan() -> Result<()> {
-        let tmp_dir = TempDir::new("asc_write")?;
+        let tmp_dir = tempfile::TempDir::new().unwrap();
         let raster_path = tmp_dir.path().join("test.asc");
 
         std::fs::write(
@@ -177,7 +174,7 @@ mod tests {
 
     #[test]
     fn test_read_write_nodata_handling() -> Result<()> {
-        let tmp_dir = TempDir::new("asc_write")?;
+        let tmp_dir = tempfile::TempDir::new().unwrap();
         let raster_path = tmp_dir.path().join("test.asc");
 
         std::fs::write(

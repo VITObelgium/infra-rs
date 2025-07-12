@@ -1,5 +1,21 @@
-use crate::{CogStats, Error};
+use crate::Error;
 use xml::reader::{EventReader, XmlEvent};
+
+#[derive(Debug, Clone, Default)]
+#[cfg_attr(
+    target_arch = "wasm32",
+    derive(tsify::Tsify, serde::Serialize, serde::Deserialize),
+    tsify(from_wasm_abi, into_wasm_abi)
+)]
+pub struct CogStats {
+    pub minimum_value: f64,
+    pub maximum_value: f64,
+    pub mean: f64,
+    pub standard_deviation: f64,
+    pub valid_pixel_percentage: f64,
+    #[cfg_attr(target_arch = "wasm32", serde(skip))]
+    pub max_zoom: Option<i32>,
+}
 
 // Statistics have the following format
 // <GDALMetadata>

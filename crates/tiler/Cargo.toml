@@ -4,9 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-cogtilereader = { path = "../cogtilereader" }
 gdal = "0.18"
-geo = { features = ["gdal", "serde"], path = "../geo" }
+geo = { features = ["gdal", "serde", "cog"], path = "../geo" }
 geo-types = "0.7"
 geozero = { version = "0.14", optional = true }
 inf = { features = ["serde"], path = "../inf" }

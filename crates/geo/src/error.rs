@@ -37,6 +37,9 @@ pub enum Error {
     //ProjError(#[from] proj4rs::errors::Error),
     #[error("Error: {0}")]
     Infra(#[from] inf::Error),
+    #[cfg(feature = "cog")]
+    #[error("Tiff error: {0}")]
+    TiffError(#[from] tiff::TiffError),
 }
 
 #[cfg(feature = "python")]

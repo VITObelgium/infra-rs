@@ -47,6 +47,9 @@ simd_macro = { path = "simd_macro" }
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 thiserror = "2.0"
 vector_derive = { optional = true, path = "vector_derive" }
+tiff = { version = "0.10", default-features = false, optional = true }
+weezl = { version = "0.1", optional = true }
+xml-rs = { version = "0.8", optional = true }
 
 [dev-dependencies]
 ctor = "0.4"
@@ -54,7 +57,7 @@ env_logger = "0.11"
 generic-tests = "0.1"
 path_macro = "1.0"
 rand = "0.9"
-tempdir = "0.3"
+tempfile = "3"
 test-log = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
@@ -66,10 +69,11 @@ tsify = { version = "*", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
-default = ["derive", "gdal"]
+default = ["derive", "gdal", "cog"]
 arrow = ["dep:arrow"]
 derive = ["dep:vector_derive"]
 gdal = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
+cog = ["dep:weezl", "dep:tiff", "dep:xml-rs"]
 gdal-static = ["gdal"]
 python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 serde = ["dep:serde"]

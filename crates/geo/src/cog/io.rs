@@ -1,12 +1,15 @@
-use geo::{ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize};
+use crate::{
+    ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize,
+    cog::{
+        Compression, Predictor,
+        utils::{self, HorizontalUnpredictable},
+    },
+};
 use inf::allocate::{self, AlignedVec, aligned_vec_from_slice};
+use simd_macro::simd_bounds;
 use weezl::{BitOrder, decode::Decoder};
 
-use crate::{
-    Compression, Error, Predictor, Result,
-    cog::CogTileLocation,
-    utils::{self, HorizontalUnpredictable},
-};
+use crate::{Error, Result, cog::CogTileLocation};
 use std::io::{BufWriter, Read, Seek, SeekFrom};
 
 pub const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
@@ -90,7 +93,7 @@ impl Seek for CogHeaderReader {
     }
 }
 
-#[geo::simd_bounds]
+#[simd_bounds]
 pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
     tile_size: i32,
@@ -112,7 +115,7 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     parse_tile_data(tile, tile_size, nodata, compression, predictor, &buf)
 }
 
-#[geo::simd_bounds]
+#[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
     tile_size: i32,

@@ -31,7 +31,6 @@ impl IntoResponse for AppError {
                 Error::InvalidArgument(err) => (http::StatusCode::BAD_REQUEST, err),
                 #[cfg(feature = "vector-diff")]
                 Error::MvtError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
-                Error::CogTileError(err) => (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string()),
                 Error::GeoError(_) | Error::SqliteError(_) | Error::RasterTileError(_) => {
                     (http::StatusCode::INTERNAL_SERVER_ERROR, err.to_string())
                 }

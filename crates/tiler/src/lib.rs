@@ -57,8 +57,6 @@ pub enum Error {
     MvtError(#[from] mvt::Error),
     #[error("Raster tile error: {0}")]
     RasterTileError(#[from] raster_tile::Error),
-    #[error("Cog tile error: {0}")]
-    CogTileError(#[from] cogtilereader::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

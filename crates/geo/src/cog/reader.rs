@@ -1,11 +1,18 @@
-use geo::{AnyDenseArray, ArrayDataType, ArrayNum, Columns, DenseArray, GeoReference, LatLonBounds, Point, RasterSize, Rows, Tile, crs};
+use crate::{
+    AnyDenseArray, ArrayDataType, ArrayNum, Columns, DenseArray, GeoReference, LatLonBounds, Point, RasterSize, Rows, Tile,
+    ZoomLevelStrategy,
+    cog::{
+        CogStats, Compression, Predictor,
+        io::{self, CogHeaderReader},
+        stats,
+        utils::HorizontalUnpredictable,
+    },
+    crs,
+};
+use simd_macro::simd_bounds;
 use tiff::{decoder::ifd::Value, tags::Tag};
 
-use crate::{
-    CogStats, Compression, Error, Predictor, Result,
-    io::{self, CogHeaderReader},
-    utils::HorizontalUnpredictable,
-};
+use crate::{Error, Result};
 use std::{
     collections::HashMap,
     fs::File,
@@ -121,9 +128,7 @@ impl<R: Read + Seek> CogDecoder<R> {
     }
 
     fn read_gdal_metadata(&mut self) -> Result<Option<CogStats>> {
-        #[cfg(feature = "raster_stats")]
         if let Ok(gdal_metadata) = self.decoder.get_tag_ascii_string(Tag::Unknown(42112)) {
-            use crate::stats;
             return Ok(Some(stats::parse_statistics(&gdal_metadata)?));
         }
 
@@ -282,7 +287,7 @@ impl<R: Read + Seek> CogDecoder<R> {
         let nodata = self.read_nodata_value()?;
 
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
-        let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], geo::ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1);
+        let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1);
         let mut current_zoom = max_zoom;
 
         loop {
@@ -482,7 +487,7 @@ impl CogAccessor {
         })
     }
 
-    #[geo::simd_bounds]
+    #[simd_bounds]
     pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
         tile: &Tile,
@@ -510,7 +515,7 @@ impl CogAccessor {
         }
     }
 
-    #[geo::simd_bounds]
+    #[simd_bounds]
     pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
         tile: &CogTileLocation,
@@ -540,12 +545,15 @@ impl CogAccessor {
 #[cfg(feature = "gdal")]
 #[cfg(test)]
 mod tests {
-    use crate::{Predictor, testutils};
+    use crate::{
+        Array as _, Coordinate,
+        cog::{CogCreationOptions, create_cog_tiles, creation::PredictorSelection},
+        testutils,
+    };
 
     use super::*;
 
     use approx::assert_relative_eq;
-    use geo::{Array, Coordinate, RasterSize, cog::PredictorSelection};
 
     const COG_TILE_SIZE: i32 = 256;
 
@@ -558,16 +566,16 @@ mod tests {
         output_type: Option<ArrayDataType>,
         allow_sparse: bool,
     ) -> Result<()> {
-        let opts = geo::cog::CogCreationOptions {
+        let opts = CogCreationOptions {
             min_zoom: Some(7),
-            zoom_level_strategy: geo::ZoomLevelStrategy::Closest,
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
             tile_size: tile_size as u16,
             allow_sparse,
             compression,
             predictor,
             output_data_type: output_type,
         };
-        geo::cog::create_cog_tiles(input_tif, output_tif, opts)?;
+        create_cog_tiles(input_tif, output_tif, opts)?;
 
         Ok(())
     }

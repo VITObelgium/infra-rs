@@ -8,7 +8,7 @@ mod arraydatatype;
 mod arraynum;
 pub mod arrayops;
 mod cell;
-#[cfg(feature = "gdal")]
+#[cfg(feature = "cog")]
 pub mod cog;
 pub mod constants;
 mod coordinate;

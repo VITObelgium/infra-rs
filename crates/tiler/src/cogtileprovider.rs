@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use cogtilereader::{CogAccessor, CogMetadata, HorizontalUnpredictable};
+use geo::cog::{self, CogAccessor, CogMetadata, HorizontalUnpredictable};
 use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
@@ -68,7 +68,7 @@ impl CogTileProvider {
     }
 
     pub fn tiff_is_cog(path: &Path) -> bool {
-        cogtilereader::CogAccessor::is_cog(path)
+        CogAccessor::is_cog(path)
     }
 
     #[geo::simd_bounds]
@@ -84,7 +84,7 @@ impl CogTileProvider {
                     .map(|tile_offset| (cog_meta.compression, cog_meta.predictor, tile_offset))
             })
             .map(|(compression, predictor, tile_offset)| {
-                cogtilereader::io::read_tile_data::<T>(
+                cog::io::read_tile_data::<T>(
                     tile_offset,
                     tile_size,
                     meta.nodata,
