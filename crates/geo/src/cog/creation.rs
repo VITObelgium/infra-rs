@@ -60,6 +60,8 @@ fn gdal_predictor_name(predictor: Option<PredictorSelection>) -> &'static str {
 
 pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -> Result<()> {
     let src_ds = raster::io::dataset::open_read_only(input)?;
+    let mut overview_option = "IGNORE_EXISTING";
+
     let mut options = vec![
         "-overwrite".to_string(),
         "-f".to_string(),
@@ -72,8 +74,6 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
         "ADD_ALPHA=NO".to_string(),
         "-co".to_string(),
         "STATISTICS=YES".to_string(),
-        "-co".to_string(),
-        "OVERVIEWS=IGNORE_EXISTING".to_string(),
         "-co".to_string(),
         "RESAMPLING=NEAREST".to_string(),
         "-co".to_string(),
@@ -109,9 +109,16 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
 
     if let Some(min_zoom) = opts.min_zoom {
         let georef = GeoReference::from_file(input)?.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-        let max_zoom = Tile::zoom_level_for_pixel_size(georef.cell_size_x(), opts.zoom_level_strategy) - (opts.tile_size / 256 - 1) as i32;
+        let tile_size_offset = (opts.tile_size / 256 - 1) as i32;
+        let max_zoom = Tile::zoom_level_for_pixel_size(georef.cell_size_x(), opts.zoom_level_strategy) - tile_size_offset;
 
-        let overview_count = (max_zoom - min_zoom) as usize;
+        let mut overview_count = (max_zoom - min_zoom) as usize;
+        if overview_count == 0 && tile_size_offset > 0 {
+            // Zoome levels for larger tiles sizes are offset by the factor of tile_size above 256
+            // Reoffset if the overview count is zero otherwise the min zoom level gets ignored
+            overview_count += tile_size_offset as usize;
+        }
+
         if overview_count > 0 {
             options.extend([
                 "-co".to_string(),
@@ -119,8 +126,12 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
                 "-co".to_string(),
                 format!("ALIGNED_LEVELS={}", overview_count + 1),
             ]);
+        } else {
+            overview_option = "NONE";
         }
     }
+
+    options.extend(["-co".to_string(), format!("OVERVIEWS={overview_option}")]);
 
     if let Some(output_type) = opts.output_data_type {
         options.push("-ot".to_string());
@@ -142,7 +153,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn cog_creation() -> Result<()> {
+    fn cog_creation_256px() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let output = tmp.path().join("cog.tif");
@@ -235,6 +246,107 @@ mod tests {
             assert_eq!(meta.max_zoom, 9);
             assert_eq!(meta.min_zoom, 7);
             assert_eq!(meta.tile_size, 256);
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn cog_creation_512px() -> Result<()> {
+        const TILE_SIZE: u16 = 512;
+
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        {
+            // Manually specified zoom level
+            let opts = CogCreationOptions {
+                min_zoom: Some(6),
+                zoom_level_strategy: ZoomLevelStrategy::Manual(7),
+                tile_size: TILE_SIZE,
+                compression: Some(Compression::Lzw),
+                predictor: Some(PredictorSelection::Horizontal),
+                allow_sparse: true,
+                output_data_type: Some(ArrayDataType::Uint8),
+            };
+
+            create_cog_tiles(&input, &output, opts)?;
+            let cog = CogAccessor::from_file(&output)?;
+            let meta = cog.meta_data();
+
+            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.max_zoom, 7);
+            assert_eq!(meta.tile_size, TILE_SIZE);
+            assert_eq!(meta.compression, Some(Compression::Lzw));
+            assert_eq!(meta.predictor, Some(Predictor::Horizontal));
+            assert_eq!(meta.data_type, ArrayDataType::Uint8);
+        }
+
+        {
+            // Closest zoom level
+            let opts = CogCreationOptions {
+                min_zoom: Some(6),
+                zoom_level_strategy: ZoomLevelStrategy::Closest,
+                tile_size: TILE_SIZE,
+                compression: Some(Compression::Lzw),
+                predictor: Some(PredictorSelection::Horizontal),
+                allow_sparse: true,
+                output_data_type: Some(ArrayDataType::Float32),
+            };
+
+            create_cog_tiles(&input, &output, opts)?;
+            let cog = CogAccessor::from_file(&output)?;
+            let meta = cog.meta_data();
+
+            assert_eq!(meta.max_zoom, 9);
+            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.tile_size, TILE_SIZE);
+            assert_eq!(meta.compression, Some(Compression::Lzw));
+            assert_eq!(meta.predictor, Some(Predictor::Horizontal));
+            assert_eq!(meta.data_type, ArrayDataType::Float32);
+        }
+
+        {
+            // Upper zoom level
+            let opts = CogCreationOptions {
+                min_zoom: Some(6),
+                zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
+                tile_size: TILE_SIZE,
+                compression: Some(Compression::Lzw),
+                predictor: Some(PredictorSelection::Horizontal),
+                allow_sparse: true,
+                output_data_type: None,
+            };
+
+            create_cog_tiles(&input, &output, opts)?;
+            let cog = CogAccessor::from_file(&output)?;
+            let meta = cog.meta_data();
+
+            assert_eq!(meta.max_zoom, 9);
+            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.tile_size, TILE_SIZE);
+        }
+
+        {
+            // Lower zoom level
+            let opts = CogCreationOptions {
+                min_zoom: Some(7),
+                zoom_level_strategy: ZoomLevelStrategy::PreferLower,
+                tile_size: TILE_SIZE,
+                compression: Some(Compression::Lzw),
+                predictor: Some(PredictorSelection::Horizontal),
+                allow_sparse: true,
+                output_data_type: None,
+            };
+
+            create_cog_tiles(&input, &output, opts)?;
+            let cog = CogAccessor::from_file(&output)?;
+            let meta = cog.meta_data();
+
+            assert_eq!(meta.max_zoom, 8);
+            assert_eq!(meta.min_zoom, 7);
+            assert_eq!(meta.tile_size, TILE_SIZE);
         }
 
         Ok(())

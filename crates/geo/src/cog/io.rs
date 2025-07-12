@@ -104,7 +104,7 @@ impl Seek for CogHeaderReader {
 #[simd_bounds]
 pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
-    tile_size: i32,
+    tile_size: u16,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
@@ -126,7 +126,7 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 #[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     tile: &CogTileLocation,
-    tile_size: i32,
+    tile_size: u16,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
@@ -141,7 +141,8 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     let mut tile_data = match compression {
         Some(Compression::Lzw) => lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?,
         None => {
-            if cog_chunk[4..].len() != ((tile_size * tile_size) as usize * std::mem::size_of::<T>()) {
+            let tile_size = tile_size as usize;
+            if cog_chunk[4..].len() != (tile_size * tile_size * std::mem::size_of::<T>()) {
                 return Err(Error::Runtime(
                     "Uncompressed tile data size does not match the expected size".into(),
                 ));
@@ -177,13 +178,13 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
         },
     }
 
-    let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size), nodata);
+    let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), nodata);
     let arr = DenseArray::<T>::new_init_nodata(meta, tile_data)?;
     Ok(arr)
 }
 
-fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: i32) -> Result<AlignedVec<T>> {
-    let decoded_len = (tile_size * tile_size) as usize;
+fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: u16) -> Result<AlignedVec<T>> {
+    let decoded_len = tile_size as usize * tile_size as usize;
     let mut decode_buf = allocate::aligned_vec_with_capacity::<T>(decoded_len);
 
     {

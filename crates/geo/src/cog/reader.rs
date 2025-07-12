@@ -222,8 +222,8 @@ impl<R: Read + Seek> CogDecoder<R> {
             return Err(Error::InvalidArgument("Only tiled TIFFs are supported".into()));
         }
 
-        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)? as i32;
-        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? as i32 {
+        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)? as u16;
+        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? as u16 {
             return Err(Error::InvalidArgument("Only square tiles are supported".into()));
         }
 
@@ -287,7 +287,7 @@ impl<R: Read + Seek> CogDecoder<R> {
         let nodata = self.read_nodata_value()?;
 
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
-        let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1);
+        let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1) as i32;
         let mut current_zoom = max_zoom;
 
         loop {
@@ -361,7 +361,7 @@ impl CogTileLocation {
 pub struct CogMetadata {
     pub min_zoom: i32,
     pub max_zoom: i32,
-    pub tile_size: i32,
+    pub tile_size: u16,
     pub data_type: ArrayDataType,
     pub band_count: u32,
     pub geo_reference: GeoReference,
@@ -560,12 +560,12 @@ mod tests {
 
     use approx::assert_relative_eq;
 
-    const COG_TILE_SIZE: i32 = 256;
+    const COG_TILE_SIZE: u16 = 256;
 
     fn create_test_cog(
         input_tif: &Path,
         output_tif: &Path,
-        tile_size: i32,
+        tile_size: u16,
         compression: Option<Compression>,
         predictor: Option<PredictorSelection>,
         output_type: Option<ArrayDataType>,
@@ -574,7 +574,7 @@ mod tests {
         let opts = CogCreationOptions {
             min_zoom: Some(7),
             zoom_level_strategy: ZoomLevelStrategy::Closest,
-            tile_size: tile_size as u16,
+            tile_size,
             allow_sparse,
             compression,
             predictor,
@@ -643,11 +643,11 @@ mod tests {
                 continue; // Skip empty tiles
             }
 
-            assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE).cell_count());
+            assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
             assert_eq!(tile_data.data_type(), meta.data_type);
 
             let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
-            assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE));
+            assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
         }
 
         Ok(())
@@ -792,7 +792,7 @@ mod tests {
 
     #[test_log::test]
     fn read_test_cog_512() -> Result<()> {
-        const COG_TILE_SIZE: i32 = 512;
+        const COG_TILE_SIZE: u16 = 512;
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");

@@ -72,7 +72,7 @@ impl CogTileProvider {
     }
 
     #[geo::simd_bounds]
-    fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: i32) -> Result<DenseArray<T>> {
+    fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u16) -> Result<DenseArray<T>> {
         let tile = meta
             .tileprovider_data
             .as_ref()
@@ -103,7 +103,7 @@ impl CogTileProvider {
 
     #[geo::simd_bounds]
     fn read_vrt_tile<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u16) -> Result<TileData> {
-        let tile_data = Self::read_tile_data::<T>(meta, tile, tile_size as i32)?;
+        let tile_data = Self::read_tile_data::<T>(meta, tile, tile_size)?;
         if tile_data.is_empty() {
             return Ok(TileData::default());
         }
@@ -133,7 +133,7 @@ impl CogTileProvider {
             return Err(Error::InvalidArgument("Invalid COG tile size requested".to_string()));
         }
 
-        let tile_data = Self::read_tile_data::<T>(meta, &tile_req.tile, tile_req.tile_size as i32)?;
+        let tile_data = Self::read_tile_data::<T>(meta, &tile_req.tile, tile_req.tile_size)?;
         if tile_data.is_empty() {
             return Ok(TileData::default());
         }
