@@ -597,8 +597,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
 
             let data_bounds = cog.meta_data().data_bounds();
-            assert_relative_eq!(data_bounds.northwest(), Coordinate::latlon(51.6180165487737, 2.4609375));
-            assert_relative_eq!(data_bounds.southeast(), Coordinate::latlon(50.51342652633955, 5.9765625));
+            assert_relative_eq!(data_bounds.northwest(), Tile { z: 10, x: 519, y: 340 }.upper_left());
+            assert_relative_eq!(data_bounds.southeast(), Tile { z: 10, x: 528, y: 344 }.lower_right());
         }
 
         {
@@ -608,8 +608,8 @@ mod tests {
             assert!(cog.meta_data().max_zoom == 10);
 
             let data_bounds = cog.meta_data().data_bounds();
-            assert_relative_eq!(data_bounds.northwest(), Coordinate::latlon(52.48278022207821, 0.0));
-            assert_relative_eq!(data_bounds.southeast(), Coordinate::latlon(48.92249926375824, 11.25));
+            assert_relative_eq!(data_bounds.northwest(), Tile { z: 7, x: 64, y: 42 }.upper_left());
+            assert_relative_eq!(data_bounds.southeast(), Tile { z: 7, x: 66, y: 43 }.lower_right());
         }
 
         Ok(())
@@ -629,8 +629,8 @@ mod tests {
         let meta = cog.meta_data();
         assert_eq!(meta.tile_size, COG_TILE_SIZE);
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
+        assert_eq!(meta.min_zoom, 7);
         assert_eq!(meta.max_zoom, 10);
-        assert_eq!(meta.min_zoom, 6);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
@@ -811,7 +811,7 @@ mod tests {
             let meta = cog.meta_data();
             assert_eq!(meta.tile_size, COG_TILE_SIZE);
             assert_eq!(meta.data_type, ArrayDataType::Uint8);
-            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.min_zoom, 7);
             assert_eq!(meta.max_zoom, 9);
 
             let mut reader = File::open(&output)?;
