@@ -48,6 +48,10 @@ pub fn setup_logging(debug: bool) {
         log::debug!("Failed to set GDAL debug level");
     }
 
+    gdal::config::set_config_option("CPL_LOG_ERRORS", "ON").unwrap_or_else(|_| {
+        log::warn!("Failed to set CPL_LOG_ERRORS, GDAL error logging may not work as expected");
+    });
+
     gdal::config::set_error_handler(|sev, _ec, msg| {
         use gdal::errors::CplErrType;
         match sev {
@@ -106,7 +110,7 @@ fn raw_string_to_string(raw_ptr: *const std::ffi::c_char) -> String {
     c_str.to_string_lossy().into_owned()
 }
 
-fn last_error_message() -> String {
+pub fn last_error_message() -> String {
     raw_string_to_string(unsafe { gdal_sys::CPLGetLastErrorMsg() })
 }
 
