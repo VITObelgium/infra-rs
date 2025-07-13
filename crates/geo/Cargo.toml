@@ -29,7 +29,7 @@ name = "simd"
 approx = "0.5"
 # proj4rs = { version = "0.1" }
 arrow = { version = "55", optional = true }
-bon = "3.6"
+bon = { version = "3.6", optional = true }
 cfg-if = "1.0"
 gdal = { version = "0.18", optional = true }
 gdal-sys = { version = "0.11", optional = true }
@@ -72,7 +72,7 @@ wasm-bindgen = { version = "0.2", features = ["serde"] }
 default = ["derive", "gdal", "cog"]
 arrow = ["dep:arrow"]
 derive = ["dep:vector_derive"]
-gdal = ["dep:gdal", "dep:gdal-sys", "geozero/with-gdal"]
+gdal = ["dep:gdal", "dep:gdal-sys", "dep:bon", "geozero/with-gdal"]
 cog = ["dep:weezl", "dep:tiff", "dep:xml-rs"]
 gdal-static = ["gdal"]
 python = ["arrow", "arrow/pyarrow", "dep:pyo3"]

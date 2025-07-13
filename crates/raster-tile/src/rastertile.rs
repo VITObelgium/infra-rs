@@ -1,8 +1,8 @@
 use geo::{AnyDenseArray, Array, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, RasterSize};
 use geo::{Columns, Rows, raster};
 
+use crate::RASTER_TILE_SIGNATURE;
 use crate::{CompressionAlgorithm, Error, Result, TileHeader};
-use crate::{RASTER_TILE_SIGNATURE, lz4};
 
 enum TileFormat {
     #[cfg(feature = "float_png")]
@@ -134,9 +134,15 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
         }
     }
 
+    #[allow(unreachable_code, unused_variables)]
     fn encode_raster_tile(&self, algorithm: CompressionAlgorithm) -> Result<Vec<u8>> {
-        let compressed_data = match algorithm {
+        let compressed_data: Vec<u8> = match algorithm {
+            #[cfg(feature = "lz4")]
             CompressionAlgorithm::Lz4Block => crate::lz4::compress_tile_data(self.as_slice())?,
+            #[cfg(not(feature = "lz4"))]
+            CompressionAlgorithm::Lz4Block => {
+                return Err(Error::InvalidArgument("LZ4 compression is not enabled".into()));
+            }
         };
 
         let header = TileHeader::new(
@@ -159,6 +165,7 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
         Ok(data)
     }
 
+    #[allow(unreachable_code, unused_variables)]
     fn from_raster_tile_header_and_data(header: &TileHeader, data: &[u8]) -> Result<Self> {
         assert!(header.data_type == T::TYPE, "Tile data type mismatch");
         if data.len() != header.data_size as usize {
@@ -166,7 +173,14 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
         }
 
         let data = match header.compression {
-            CompressionAlgorithm::Lz4Block => lz4::decompress_tile_data(header.tile_width as usize * header.tile_height as usize, data)?,
+            CompressionAlgorithm::Lz4Block => {
+                #[cfg(feature = "lz4")]
+                {
+                    crate::lz4::decompress_tile_data(header.tile_width as usize * header.tile_height as usize, data)?
+                }
+                #[cfg(not(feature = "lz4"))]
+                return Err(Error::InvalidArgument("LZ4 compression is not enabled".into()));
+            }
         };
 
         Ok(DenseArray::new(

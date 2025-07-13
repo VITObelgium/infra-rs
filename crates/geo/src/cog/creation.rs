@@ -189,7 +189,7 @@ mod tests {
                 zoom_level_strategy: ZoomLevelStrategy::Closest,
                 tile_size: 256,
                 compression: Some(Compression::Lzw),
-                predictor: Some(PredictorSelection::Horizontal),
+                predictor: Some(PredictorSelection::FloatingPoint),
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Float32),
             };
@@ -202,7 +202,7 @@ mod tests {
             assert_eq!(meta.min_zoom, 6);
             assert_eq!(meta.tile_size, 256);
             assert_eq!(meta.compression, Some(Compression::Lzw));
-            assert_eq!(meta.predictor, Some(Predictor::Horizontal));
+            assert_eq!(meta.predictor, Some(Predictor::FloatingPoint));
             assert_eq!(meta.data_type, ArrayDataType::Float32);
         }
 
