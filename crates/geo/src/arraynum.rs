@@ -16,6 +16,8 @@ pub trait ArrayNumScalar:
     + std::fmt::Debug
     + std::string::ToString
     + approx::AbsDiffEq<Epsilon = Self>
+    + bytemuck::AnyBitPattern
+    + bytemuck::NoUninit
 {
     const TYPE: ArrayDataType;
     const IS_SIGNED: bool;

@@ -104,10 +104,10 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
     let meta = RasterMetadata::sized_for_type::<T>(RasterSize::square(scaled_size));
-    let mut data = DenseArray::zeros(meta);
     let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
-    raster::io::dataset::read_band(&ds, 1, data.vec_mut())?;
-    Ok(data)
+
+    let (_, data) = raster::io::dataset::read_band(&ds, 1)?;
+    Ok(DenseArray::new(meta, data)?)
 }
 
 pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(

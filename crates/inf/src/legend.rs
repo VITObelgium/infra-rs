@@ -231,8 +231,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
             *val.1 = self.color_for_value_precomputed_unmappable(*val.0, nodata, &unmappable).to_bits();
         }
 
-        // SAFETY: colors and data have the same length, and colors is already filled with u32 color bits
-        unsafe { allocate::reinterpret_aligned_vec::<u32, Color>(colors) }
+        allocate::cast_aligned_vec::<u32, Color>(colors)
     }
 }
 

@@ -103,14 +103,6 @@ impl Window {
     }
 }
 
-pub trait ArrayIsEqual {
-    type To: ?Sized;
-}
-
-impl<T: ?Sized> ArrayIsEqual for T {
-    type To = Self;
-}
-
 /// A trait representing a raster.
 /// A raster implementation provides access to the pixel data and the geographic metadata associated with the raster.
 pub trait Array:

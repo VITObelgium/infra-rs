@@ -92,8 +92,10 @@ struct CutOut {
 }
 
 pub mod dataset {
+    use std::mem::MaybeUninit;
+
     use gdal::Metadata;
-    use inf::allocate::AlignedVec;
+    use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
 
     use crate::{
         ArrayNum, Nodata, RasterSize,
@@ -188,7 +190,7 @@ pub mod dataset {
         dataset: &gdal::Dataset,
         band_nr: usize,
         extent: &GeoReference,
-        dst_data: &mut [T],
+        dst_data: &mut [MaybeUninit<T>],
     ) -> Result<GeoReference> {
         let meta = read_band_metadata(dataset, band_nr)?;
         let cut_out = intersect_metadata(&meta, extent)?;
@@ -212,7 +214,10 @@ pub mod dataset {
 
         if cut_out_smaller_than_extent {
             if let Some(nodata) = dst_meta.nodata() {
-                dst_data.fill(NumCast::from(nodata).unwrap_or(T::zero()));
+                let nodata = NumCast::from(nodata).unwrap_or(T::zero());
+                for dst_data in dst_data.iter_mut() {
+                    let _ = *dst_data.write(nodata);
+                }
             }
         }
 
@@ -226,16 +231,15 @@ pub mod dataset {
     /// Read the full band from the dataset into the provided Vec.
     /// The vec will be resized to the correct lenght so it can be empty.
     /// The band index is 1-based.
-    pub fn read_band<T: GdalType + num::NumCast>(
+    pub fn read_band<T: GdalType + num::NumCast + bytemuck::AnyBitPattern>(
         dataset: &gdal::Dataset,
         band_index: usize,
-        dst_data: &mut AlignedVec<T>,
-    ) -> Result<GeoReference> {
+    ) -> Result<(GeoReference, AlignedVec<T>)> {
         let raster_band = dataset.rasterband(band_index)?;
         let meta = read_band_metadata(dataset, band_index)?;
 
         check_if_metadata_fits::<T>(meta.nodata(), raster_band.band_type())?;
-        dst_data.reserve_exact(meta.raster_size().cell_count() - dst_data.capacity());
+        let mut dst_data = AlignedVecUnderConstruction::new(meta.raster_size().cell_count());
 
         let cut_out = CutOut {
             rows: meta.rows().count(),
@@ -243,12 +247,15 @@ pub mod dataset {
             ..Default::default()
         };
 
-        read_region_from_dataset(band_index, &cut_out, dataset, dst_data, meta.columns().count())?;
-        unsafe {
-            // Safety: The full buffer was written by `read_region_from_dataset`
-            dst_data.set_len(meta.raster_size().cell_count());
-        };
-        Ok(meta)
+        read_region_from_dataset(
+            band_index,
+            &cut_out,
+            dataset,
+            dst_data.as_uninit_slice_mut(),
+            meta.columns().count(),
+        )?;
+        let dst_data = unsafe { dst_data.assume_init() };
+        Ok((meta, dst_data))
     }
 
     /// Read a subregion into the provided data buffer.
@@ -258,7 +265,7 @@ pub mod dataset {
         band_nr: usize,
         cut: &CutOut,
         ds: &gdal::Dataset,
-        data: &mut [T],
+        data: &mut [MaybeUninit<T>],
         data_cols: i32,
     ) -> Result<()> {
         let mut data_ptr = data.as_mut_ptr();

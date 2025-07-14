@@ -115,7 +115,7 @@ impl<T: ArrayNum, Meta: ArrayMetadata> RasterTileIO for DenseArray<T, Meta> {
 
         if T::TYPE != ArrayDataType::Float32 {
             // Safety: The data is a valid slice of f32 values, so it is safe to reinterpret it
-            let float_vec = unsafe { inf::allocate::reinterpret_aligned_vec::<f32, T>(data) };
+            let float_vec = inf::allocate::cast_aligned_vec::<f32, T>(data);
             Ok(Self::new(Meta::sized(raster_size, T::TYPE), float_vec).expect("Raster size bug"))
         } else {
             Ok(Self::from_iter_opt(

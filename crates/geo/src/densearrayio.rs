@@ -8,7 +8,7 @@ use crate::array::ArrayInterop as _;
 use crate::raster;
 use crate::raster::RasterIO;
 use gdal::raster::GdalType;
-use inf::allocate;
+use inf::allocate::AlignedVecUnderConstruction;
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
@@ -21,11 +21,7 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
 
     fn read_band(path: &std::path::Path, band_index: usize) -> Result<Self> {
         let ds = raster::io::dataset::open_read_only(path)?;
-        let (cols, rows) = ds.raster_size();
-
-        // read_band will take care of setting the data len
-        let mut data = allocate::aligned_vec_with_capacity::<T>(rows * cols);
-        let metadata = raster::io::dataset::read_band(&ds, band_index, &mut data)?;
+        let (metadata, data) = raster::io::dataset::read_band(&ds, band_index)?;
         Self::new_init_nodata(Metadata::with_geo_reference(metadata), data)
     }
 
@@ -35,12 +31,9 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
     fn read_bounds(path: &std::path::Path, bounds: &GeoReference, band_index: usize) -> Result<Self> {
         let ds = gdal::Dataset::open(path)?;
         let (cols, rows) = ds.raster_size();
-        let mut data = allocate::aligned_vec_with_capacity::<T>(rows * cols);
-        let dst_meta = raster::io::dataset::read_band_region(&ds, band_index, bounds, &mut data)?;
-        unsafe {
-            // Safety: if read_band_region succeeds, it has written all rows * cols elements to `data`
-            data.set_len(rows * cols);
-        }
+        let mut data = AlignedVecUnderConstruction::new(rows * cols);
+        let dst_meta = raster::io::dataset::read_band_region(&ds, band_index, bounds, data.as_uninit_slice_mut())?;
+        let data = unsafe { data.assume_init() };
 
         Self::new_init_nodata(Metadata::with_geo_reference(dst_meta), data)
     }

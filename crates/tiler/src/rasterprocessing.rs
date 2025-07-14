@@ -2,7 +2,7 @@ use geo::{
     Columns, RasterSize, Rows,
     raster::{self, io::RasterFormat},
 };
-use std::path::Path;
+use std::{mem::MaybeUninit, path::Path};
 
 use geo::{
     Coordinate, CoordinateTransformer, GeoReference, LatLonBounds, Point, SpatialReference,
@@ -22,14 +22,16 @@ fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -
     // Modify the metadata to only contain the pixel at the given coordinate
     let ll = meta.cell_lower_left(cell);
     meta.set_extent(ll, RasterSize::with_rows_cols(Rows(1), Columns(1)), meta.cell_size());
-    let mut data = [0.0];
+    let mut data = [MaybeUninit::zeroed()];
 
     raster::io::dataset::read_band_region(&ds, band_nr, &meta, &mut data)?;
-    if Some(f64::from(data[0])) == meta.nodata() {
+    let pixel = unsafe { data[0].assume_init() };
+    // SAFETY: We have just read a single pixel into the data array, so it is safe to assume it is initialized
+    if Some(f64::from(pixel)) == meta.nodata() {
         return Ok(None);
     }
 
-    Ok(Some(data[0]))
+    Ok(Some(pixel))
 }
 
 pub fn raster_pixel(raster_path: &Path, band_nr: usize, mut coord: Coordinate, layer_name: Option<&str>) -> Result<Option<f32>> {

@@ -1,7 +1,56 @@
+use std::mem::MaybeUninit;
+
 #[cfg(feature = "simd")]
 pub type AlignedVec<T> = Vec<T, allocator::CacheAligned>;
 #[cfg(not(feature = "simd"))]
 pub type AlignedVec<T> = Vec<T>;
+
+/// Helper struct to create an aligned vec while avoiding unnecessary memory initializaton while constructing.
+pub struct AlignedVecUnderConstruction<T: bytemuck::AnyBitPattern> {
+    vec: AlignedVec<MaybeUninit<T>>,
+}
+
+impl<T: bytemuck::AnyBitPattern> AlignedVecUnderConstruction<T> {
+    /// Create a new aligned vec under construction with the given length.
+    pub fn new(len: usize) -> Self {
+        Self {
+            vec: aligned_vec_uninit(len),
+        }
+    }
+
+    pub fn from_vec(vec: AlignedVec<T>) -> Self
+    where
+        T: bytemuck::NoUninit,
+        MaybeUninit<T>: bytemuck::AnyBitPattern,
+    {
+        Self {
+            vec: cast_aligned_vec(vec),
+        }
+    }
+
+    /// Obtain the underlying buffer as a mutable byte slice
+    /// # Safety
+    /// The caller must ensure that the buffer is used correctly and that the data is not accessed in an invalid way.
+    pub unsafe fn as_byte_slice_mut(&mut self) -> &mut [u8] {
+        unsafe {
+            // Safety: The buffer is allocated with enough capacity to hold the decoded data
+            std::slice::from_raw_parts_mut(self.vec.as_mut_ptr().cast::<u8>(), self.vec.capacity() * std::mem::size_of::<T>())
+        }
+    }
+
+    /// Obtain the underlying buffer as a mutable slice of `MaybeUninit<T>`.
+    /// This allows the caller to initialize the elements of the vec.
+    pub fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<T>] {
+        &mut self.vec
+    }
+
+    /// Convert the aligned vec under construction to an aligned vec of initialized elements.
+    /// # Safety
+    /// The caller must ensure that all elements of the `AlignedVec<MaybeUninit<T>>` are initialized before calling this function.
+    pub unsafe fn assume_init(self) -> AlignedVec<T> {
+        unsafe { aligned_vec_assume_init(self.vec) }
+    }
+}
 
 /// Create an empty aligned vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
 /// Otherwise a regular Vec is created.
@@ -21,6 +70,31 @@ pub fn aligned_vec_with_capacity<T>(capacity: usize) -> AlignedVec<T> {
 
     #[cfg(not(feature = "simd"))]
     return Vec::with_capacity(capacity);
+}
+
+/// Create a vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
+/// Otherwise a regular Vec is created. The vec is of of the requested size filled with `MaybeUninit<T>`
+/// This avoids the cost of initializing the elements, callers will have to initialize the elements themselves.
+/// and convert them to `T` when they are ready.
+pub fn aligned_vec_uninit<T>(len: usize) -> AlignedVec<MaybeUninit<T>> {
+    #[cfg(feature = "simd")]
+    let mut vec = Vec::with_capacity_in(len, allocator::CacheAligned);
+
+    #[cfg(not(feature = "simd"))]
+    let mut vec = Vec::with_capacity(len);
+
+    unsafe {
+        vec.set_len(len);
+    }
+
+    vec
+}
+
+/// # Safety
+///
+/// The caller must ensure that all elements of the `AlignedVec<MaybeUninit<T>>` are initialized before calling this function.
+pub unsafe fn aligned_vec_assume_init<T>(vec: AlignedVec<MaybeUninit<T>>) -> AlignedVec<T> {
+    unsafe { std::mem::transmute::<AlignedVec<MaybeUninit<T>>, AlignedVec<T>>(vec) }
 }
 
 /// Create a vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
@@ -64,7 +138,7 @@ pub fn aligned_vec_filled_with<T: Copy>(val: T, len: usize) -> AlignedVec<T> {
 /// # Safety
 ///
 /// `T` and `TDest` must have the same size.
-pub unsafe fn reinterpret_aligned_vec<T: Sized, TDest: Sized>(data: AlignedVec<T>) -> AlignedVec<TDest> {
+pub fn cast_aligned_vec<T: bytemuck::NoUninit, TDest: bytemuck::AnyBitPattern>(data: AlignedVec<T>) -> AlignedVec<TDest> {
     assert!(
         std::mem::size_of::<T>() == std::mem::size_of::<TDest>(),
         "Cannot reinterpret AlignedVec<T> to AlignedVec<TDest> because their sizes do not match"
@@ -78,15 +152,7 @@ pub unsafe fn reinterpret_aligned_vec<T: Sized, TDest: Sized>(data: AlignedVec<T
     }
 
     #[cfg(not(feature = "simd"))]
-    {
-        let ptr = data.as_ptr() as *mut TDest;
-        let len = data.len();
-        let cap = data.capacity();
-        #[allow(clippy::mem_forget)] // No longer needed when Vec::into_raw_parts is stable
-        std::mem::forget(data); // Avoid dropping the original Vec
-
-        unsafe { Vec::from_raw_parts(ptr, len, cap) }
-    }
+    bytemuck::cast_vec(data)
 }
 
 #[cfg(feature = "simd")]

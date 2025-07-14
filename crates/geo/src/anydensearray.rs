@@ -388,11 +388,7 @@ where
 {
     if TDest::TYPE == T::TYPE {
         let (meta, data) = raster.into_raw_parts();
-
-        // Safety: We just checked that TDest and T are the same type
-        Ok(DenseArray::new(meta, unsafe {
-            allocate::reinterpret_aligned_vec::<T, TDest>(data)
-        })?)
+        Ok(DenseArray::new(meta, allocate::cast_aligned_vec::<T, TDest>(data))?)
     } else {
         Err(Error::InvalidArgument(format!("Type mismatch: {} != {}", TDest::TYPE, T::TYPE)))
     }

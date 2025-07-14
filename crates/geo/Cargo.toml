@@ -30,6 +30,7 @@ approx = "0.5"
 # proj4rs = { version = "0.1" }
 arrow = { version = "55", optional = true }
 bon = { version = "3.6", optional = true }
+bytemuck = { version = "1.23" }
 cfg-if = "1.0"
 gdal = { version = "0.18", optional = true }
 gdal-sys = { version = "0.11", optional = true }
