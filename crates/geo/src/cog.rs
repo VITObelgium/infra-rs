@@ -25,4 +25,4 @@ pub use stats::CogStats;
 pub use utils::HorizontalUnpredictable;
 
 #[cfg(feature = "gdal")]
-pub use creation::{CogCreationOptions, create_cog_tiles};
+pub use creation::{CogCreationOptions, PredictorSelection, create_cog_tiles};

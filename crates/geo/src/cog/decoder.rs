@@ -298,29 +298,35 @@ impl<R: Read + Seek> CogDecoder<R> {
         let mut current_zoom = max_zoom;
 
         loop {
-            let tiles = Self::generate_tiles_for_extent(
-                geo_transform,
-                self.decoder.get_tag_u32(Tag::ImageWidth)?,
-                self.decoder.get_tag_u32(Tag::ImageLength)?,
-                self.decoder.get_tag_u32(Tag::TileWidth)?,
-                current_zoom,
-            );
+            let tile_width = self.decoder.get_tag_u32(Tag::TileWidth)?;
+            let aligned = self.decoder.get_tag_u32(Tag::ImageWidth)? % tile_width == 0
+                && self.decoder.get_tag_u32(Tag::ImageWidth)? % tile_width == 0;
 
-            assert_eq!(self.decoder.tile_count()? as usize, tiles.len());
-
-            let tile_offsets = self.decoder.get_tag_u64_vec(Tag::TileOffsets)?;
-            let tile_byte_counts = self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?;
-            debug_assert_eq!(tile_offsets.len(), tile_byte_counts.len());
-
-            itertools::izip!(tiles.iter(), tile_offsets.iter(), tile_byte_counts.iter()).for_each(|(tile, offset, byte_count)| {
-                tile_inventory.insert(
-                    *tile,
-                    CogTileLocation {
-                        offset: *offset,
-                        size: *byte_count,
-                    },
+            if aligned {
+                let tiles = Self::generate_tiles_for_extent(
+                    geo_transform,
+                    self.decoder.get_tag_u32(Tag::ImageWidth)?,
+                    self.decoder.get_tag_u32(Tag::ImageLength)?,
+                    self.decoder.get_tag_u32(Tag::TileWidth)?,
+                    current_zoom,
                 );
-            });
+
+                assert_eq!(self.decoder.tile_count()? as usize, tiles.len());
+
+                let tile_offsets = self.decoder.get_tag_u64_vec(Tag::TileOffsets)?;
+                let tile_byte_counts = self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?;
+                debug_assert_eq!(tile_offsets.len(), tile_byte_counts.len());
+
+                itertools::izip!(tiles.iter(), tile_offsets.iter(), tile_byte_counts.iter()).for_each(|(tile, offset, byte_count)| {
+                    tile_inventory.insert(
+                        *tile,
+                        CogTileLocation {
+                            offset: *offset,
+                            size: *byte_count,
+                        },
+                    );
+                });
+            }
 
             if !self.decoder.more_images() {
                 break;
