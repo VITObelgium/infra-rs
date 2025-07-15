@@ -68,6 +68,7 @@ pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions
         predictor: Some(PredictorSelection::Automatic),
         allow_sparse: true,
         output_data_type: None,
+        aligned_levels: None,
     };
 
     geo::cog::create_cog_tiles(input, &output, cog_opts)?;

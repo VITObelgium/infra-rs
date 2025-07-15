@@ -295,6 +295,7 @@ mod tests {
             compression,
             predictor,
             output_data_type: output_type,
+            aligned_levels: None,
         };
         create_cog_tiles(input_tif, output_tif, opts)?;
 
@@ -503,6 +504,33 @@ mod tests {
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_test_cog_unaligned_overviews() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(7),
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
+            tile_size: COG_TILE_SIZE,
+            allow_sparse: true,
+            compression: None,
+            predictor: None,
+            output_data_type: None,
+            aligned_levels: Some(2),
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        let cog = CogAccessor::from_file(&output)?;
+        let meta = cog.meta_data();
+        assert_eq!(meta.min_zoom, 9);
+        assert_eq!(meta.max_zoom, 10);
 
         Ok(())
     }

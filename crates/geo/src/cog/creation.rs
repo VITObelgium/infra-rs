@@ -18,6 +18,7 @@ pub struct CogCreationOptions {
     pub predictor: Option<PredictorSelection>,
     pub allow_sparse: bool,
     pub output_data_type: Option<ArrayDataType>,
+    pub aligned_levels: Option<i32>,
 }
 
 fn gdal_bool_name(value: bool) -> &'static str {
@@ -124,11 +125,13 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
                 "-co".to_string(),
                 format!("OVERVIEW_COUNT={overview_count}"),
                 "-co".to_string(),
-                format!("ALIGNED_LEVELS={}", overview_count + 1),
+                format!("ALIGNED_LEVELS={}", opts.aligned_levels.unwrap_or(overview_count as i32 + 1)),
             ]);
         } else {
             overview_option = "NONE";
         }
+    } else if let Some(aligned_levels) = opts.aligned_levels {
+        options.extend(["-co".to_string(), format!("ALIGNED_LEVELS={aligned_levels}")]);
     }
 
     options.extend(["-co".to_string(), format!("OVERVIEWS={overview_option}")]);
@@ -168,6 +171,7 @@ mod tests {
                 predictor: Some(PredictorSelection::Horizontal),
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Uint8),
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -192,6 +196,7 @@ mod tests {
                 predictor: Some(PredictorSelection::FloatingPoint),
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Float32),
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -216,6 +221,7 @@ mod tests {
                 predictor: Some(PredictorSelection::Horizontal),
                 allow_sparse: true,
                 output_data_type: None,
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -237,6 +243,7 @@ mod tests {
                 predictor: Some(PredictorSelection::Horizontal),
                 allow_sparse: true,
                 output_data_type: None,
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -269,6 +276,7 @@ mod tests {
                 predictor: Some(PredictorSelection::Horizontal),
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Uint8),
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -293,6 +301,7 @@ mod tests {
                 predictor: Some(PredictorSelection::Horizontal),
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Float32),
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -317,6 +326,7 @@ mod tests {
                 predictor: Some(PredictorSelection::Horizontal),
                 allow_sparse: true,
                 output_data_type: None,
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -338,6 +348,7 @@ mod tests {
                 predictor: Some(PredictorSelection::Horizontal),
                 allow_sparse: true,
                 output_data_type: None,
+                aligned_levels: None,
             };
 
             create_cog_tiles(&input, &output, opts)?;

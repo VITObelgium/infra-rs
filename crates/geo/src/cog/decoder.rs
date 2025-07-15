@@ -296,11 +296,12 @@ impl<R: Read + Seek> CogDecoder<R> {
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
         let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1) as i32;
         let mut current_zoom = max_zoom;
+        let mut min_zoom = max_zoom;
 
         loop {
             let tile_width = self.decoder.get_tag_u32(Tag::TileWidth)?;
             let aligned = self.decoder.get_tag_u32(Tag::ImageWidth)? % tile_width == 0
-                && self.decoder.get_tag_u32(Tag::ImageWidth)? % tile_width == 0;
+                && self.decoder.get_tag_u32(Tag::ImageLength)? % tile_width == 0;
 
             if aligned {
                 let tiles = Self::generate_tiles_for_extent(
@@ -326,6 +327,8 @@ impl<R: Read + Seek> CogDecoder<R> {
                         },
                     );
                 });
+
+                min_zoom = current_zoom;
             }
 
             if !self.decoder.more_images() {
@@ -341,7 +344,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             .unwrap_or_default();
 
         Ok(CogMetadata {
-            min_zoom: current_zoom,
+            min_zoom,
             max_zoom,
             tile_size,
             data_type,
