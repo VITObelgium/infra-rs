@@ -11,10 +11,14 @@ pub enum Predictor {
 
 #[cfg(feature = "gdal")]
 mod creation;
+mod decoder;
 pub mod io;
+mod projectioninfo;
 mod reader;
 mod stats;
 mod utils;
+
+use projectioninfo::ProjectionInfo;
 
 pub use reader::{CogAccessor, CogMetadata, CogTileLocation, TileOffsets};
 pub use stats::CogStats;
