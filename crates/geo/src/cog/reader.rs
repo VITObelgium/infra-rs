@@ -7,7 +7,7 @@ use crate::{
         stats,
         utils::HorizontalUnpredictable,
     },
-    crs,
+    crs::{self},
 };
 use simd_macro::simd_bounds;
 use tiff::{decoder::ifd::Value, tags::Tag};
@@ -55,6 +55,31 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     // log::debug!("Header: {header_str}");
 
     Ok(())
+}
+
+#[derive(Debug, Clone, Default)]
+enum ModelType {
+    #[default]
+    Projected,
+    Geographic,
+    Geocentric,
+}
+
+#[derive(Debug, Clone, Default)]
+struct ProjectionInfo {
+    pub model_type: ModelType,
+    pub projected_epsg: Option<crs::Epsg>,
+    pub geographic_epsg: Option<crs::Epsg>,
+}
+
+impl ProjectionInfo {
+    pub fn epsg(&self) -> Option<crs::Epsg> {
+        match self.model_type {
+            ModelType::Projected => self.projected_epsg,
+            ModelType::Geographic => self.geographic_epsg,
+            ModelType::Geocentric => None,
+        }
+    }
 }
 
 pub struct CogDecoder<R: Read + Seek> {
@@ -158,8 +183,6 @@ impl<R: Read + Seek> CogDecoder<R> {
             geo_transform[4] = transform[4];
             geo_transform[5] = transform[5];
             valid_transform = true;
-        } else {
-            log::debug!("No model transformation info");
         }
 
         if let Ok(tie_points) = self.read_tie_points() {
@@ -213,6 +236,58 @@ impl<R: Read + Seek> CogDecoder<R> {
         } else {
             Ok(None)
         }
+    }
+
+    fn read_projection_info(&mut self) -> Result<Option<ProjectionInfo>> {
+        let key_dir = self.decoder.get_tag_u16_vec(Tag::GeoKeyDirectoryTag)?;
+        if key_dir.len() < 4 {
+            return Ok(None);
+        }
+
+        if key_dir[0] != 1 {
+            return Err(Error::Runtime(format!("Unexpected key directory version: {}", key_dir[0])));
+        }
+
+        let mut proj_info = ProjectionInfo::default();
+
+        for key in key_dir[4..].as_chunks::<4>().0 {
+            match key[0] {
+                1024 => {
+                    // Geographic Type GeoKey
+                    if key[1] == 0 {
+                        match key[2] {
+                            1 => proj_info.model_type = ModelType::Projected,
+                            2 => proj_info.model_type = ModelType::Geographic,
+                            3 => proj_info.model_type = ModelType::Geocentric,
+                            _ => {
+                                return Err(Error::Runtime(format!("Unsupported model type: {}", key[2])));
+                            }
+                        }
+                    } else {
+                        return Err(Error::Runtime("Only inline model keys are supported".into()));
+                    }
+                }
+                2048 => {
+                    // Geographic Coordinate Reference System GeoKey
+                    if key[1] == 0 && key[2] == 1 {
+                        proj_info.geographic_epsg = Some(crs::Epsg::from(key[3] as u32));
+                    } else {
+                        return Err(Error::Runtime("Only inline EPSG codes are supported".into()));
+                    }
+                }
+                3072 => {
+                    // Projected Coordinate Reference System GeoKey
+                    if key[1] == 0 && key[2] == 1 {
+                        proj_info.projected_epsg = Some(crs::Epsg::from(key[3] as u32));
+                    } else {
+                        return Err(Error::Runtime("Only inline EPSG codes are supported".into()));
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        Ok(Some(proj_info))
     }
 
     pub fn parse_cog_header(&mut self) -> Result<CogMetadata> {
@@ -285,6 +360,7 @@ impl<R: Read + Seek> CogDecoder<R> {
         let geo_transform = self.read_geo_transform()?;
         let raster_size = self.read_raster_size()?;
         let nodata = self.read_nodata_value()?;
+        let projection = self.read_projection_info()?;
 
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
         let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1) as i32;
@@ -323,6 +399,10 @@ impl<R: Read + Seek> CogDecoder<R> {
             self.decoder.next_image()?;
         }
 
+        let epsg = projection
+            .and_then(|proj| proj.epsg().map(|epsg| epsg.to_string()))
+            .unwrap_or_default();
+
         Ok(CogMetadata {
             min_zoom: current_zoom,
             max_zoom,
@@ -332,7 +412,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             compression,
             predictor,
             tile_offsets: tile_inventory,
-            geo_reference: GeoReference::new("EPSG:3857", raster_size, geo_transform, nodata),
+            geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
             statistics,
         })
     }
