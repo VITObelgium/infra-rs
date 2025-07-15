@@ -3,9 +3,12 @@ name = "createtiles"
 version = "0.1.0"
 edition = "2024"
 
+[package.metadata.vcpkg]
+dependencies = ["gdal[core,netcdf]"]
+
 [dependencies]
 inf = { path = "../../crates/inf", features = [] }
-geo = { path = "../../crates/geo", features = ["gdal-static"] }
+geo = { path = "../../crates/geo", features = ["gdal-static", "cog"] }
 tiler = { path = "../../crates/tiler", features = [] }
 sqlite = { path = "../../crates/sqlite", features = [] }
 clap = { version = "4.5", features = ["derive", "env"] }
@@ -17,6 +20,3 @@ indicatif = "0.18"
 indicatif-log-bridge = "0.2"
 
 [features]
-
-[package.metadata.vcpkg]
-dependencies = ["gdal[core,netcdf]"]

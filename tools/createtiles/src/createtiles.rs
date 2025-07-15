@@ -1,3 +1,4 @@
+use geo::cog::{Compression, PredictorSelection};
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 
@@ -54,58 +55,22 @@ pub fn write_tiles_to_mbtiles(
 }
 
 pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions) -> Result<()> {
-    let src_ds = geo::raster::io::dataset::open_read_only(input)?;
-    let mut options = vec![
-        "-f".to_string(),
-        "COG".to_string(),
-        "-co".to_string(),
-        format!("BLOCKSIZE={}", opts.tile_size),
-        "-co".to_string(),
-        "TILING_SCHEME=GoogleMapsCompatible".to_string(),
-        "-co".to_string(),
-        "ADD_ALPHA=NO".to_string(),
-        "-co".to_string(),
-        "STATISTICS=YES".to_string(),
-        "-co".to_string(),
-        "OVERVIEWS=IGNORE_EXISTING".to_string(),
-        "-co".to_string(),
-        "RESAMPLING=NEAREST".to_string(),
-        "-co".to_string(),
-        "OVERVIEW_RESAMPLING=NEAREST".to_string(),
-        "-co".to_string(),
-        "OVERVIEW_COUNT=4".to_string(),
-        "-co".to_string(),
-        "ALIGNED_LEVELS=5".to_string(),
-        "-co".to_string(),
-        "NUM_THREADS=ALL_CPUS".to_string(),
-        "-co".to_string(),
-        "COMPRESS=LZW".to_string(),
-        "-co".to_string(),
-        "PREDICTOR=YES".to_string(),
-        "-co".to_string(),
-        "SPARSE_OK=TRUE".to_string(),
-    ];
-
-    match opts.zoom_level_strategy {
-        ZoomLevelStrategy::Manual(zoom) => {
-            options.push("-co".to_string());
-            options.push(format!("ZOOM_LEVEL={zoom}"));
-        }
-        ZoomLevelStrategy::Closest => {
-            options.push("-co".to_string());
-            options.push("ZOOM_LEVEL_STRATEGY=AUTO".to_string());
-        }
-        ZoomLevelStrategy::PreferHigher => {
-            options.push("-co".to_string());
-            options.push("ZOOM_LEVEL_STRATEGY=UPPER".to_string());
-        }
-        ZoomLevelStrategy::PreferLower => {
-            options.push("-co".to_string());
-            options.push("ZOOM_LEVEL_STRATEGY=LOWER".to_string());
-        }
+    let mut zoom_level_strategy = opts.zoom_level_strategy;
+    if let Some(max_zoom) = opts.max_zoom {
+        zoom_level_strategy = ZoomLevelStrategy::Manual(max_zoom);
     }
 
-    geo::raster::algo::warp_to_disk_cli(&src_ds, &output, &options, &vec![])?;
+    let cog_opts = geo::cog::CogCreationOptions {
+        min_zoom: opts.min_zoom,
+        zoom_level_strategy,
+        tile_size: opts.tile_size,
+        compression: Some(Compression::Lzw),
+        predictor: Some(PredictorSelection::Automatic),
+        allow_sparse: true,
+        output_data_type: None,
+    };
+
+    geo::cog::create_cog_tiles(input, &output, cog_opts)?;
 
     Ok(())
 }
