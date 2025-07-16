@@ -81,11 +81,11 @@ impl CogTileProvider {
                 cog_meta
                     .tile_offsets
                     .get(tile)
-                    .map(|tile_offset| (cog_meta.compression, cog_meta.predictor, tile_offset))
+                    .map(|tile_meta| (cog_meta.compression, cog_meta.predictor, tile_meta))
             })
-            .map(|(compression, predictor, tile_offset)| {
+            .map(|(compression, predictor, tile_meta)| {
                 cog::io::read_tile_data::<T>(
-                    tile_offset,
+                    tile_meta,
                     tile_size,
                     meta.nodata,
                     compression,

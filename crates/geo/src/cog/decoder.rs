@@ -7,7 +7,12 @@ use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
     ArrayDataType, Columns, Error, GeoReference, Point, RasterSize, Result, Rows, Tile, ZoomLevelStrategy,
-    cog::{CogMetadata, CogStats, CogTileLocation, Compression, Predictor, projectioninfo::ModelType, stats},
+    cog::{
+        CogMetadata, CogStats, CogTileLocation, Compression, Predictor,
+        projectioninfo::ModelType,
+        reader::{PyramidInfo, TileMetadata, WebTileOffset},
+        stats,
+    },
     crs,
 };
 
@@ -135,13 +140,28 @@ impl<R: Read + Seek> CogDecoder<R> {
         Ok(geo_transform)
     }
 
-    fn generate_tiles_for_extent(geo_transform: [f64; 6], image_width: u32, image_height: u32, tile_size: u32, zoom: i32) -> Vec<Tile> {
-        // Zoom levels are shifted by per tile_size factor above 256
-        //debug_assert!(tile_size % 256 == 0);
-        //zoom -= (tile_size / 256) as i32 - 1;
+    fn generate_tiles_for_extent(
+        geo_transform: [f64; 6],
+        image_width: u32,
+        image_height: u32,
+        tile_size: u32,
+        zoom: i32,
+    ) -> Vec<(Tile, WebTileOffset)> {
+        let aligned = image_width % tile_size == 0 && image_height % tile_size == 0;
 
         let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
         let top_left_tile = Tile::for_coordinate(top_left, zoom);
+
+        let (overview_x_offset, overview_y_offset) = if aligned {
+            (0, 0)
+        } else {
+            top_left_tile.coordinate_pixel_offset(top_left, tile_size).unwrap_or_default()
+        };
+
+        // log::info!(
+        //     "Aligned: {aligned}: TL: {top_left:?} PO: {:?}",
+        //     top_left_tile.coordinate_pixel_offset(top_left, tile_size)
+        // );
 
         let tiles_wide = image_width.div_ceil(tile_size);
         let tiles_high = image_height.div_ceil(tile_size);
@@ -150,11 +170,16 @@ impl<R: Read + Seek> CogDecoder<R> {
         // Iteration has to be done in row-major order so the tiles match the order of the tile lists from the COG
         for ty in 0..tiles_high {
             for tx in 0..tiles_wide {
-                tiles.push(Tile {
+                let tile = Tile {
                     z: zoom,
                     x: top_left_tile.x + tx as i32,
                     y: top_left_tile.y + ty as i32,
-                });
+                };
+
+                let x_offset = if tx == 0 { overview_x_offset } else { 0 } as usize;
+                let y_offset = if tx == 0 { overview_y_offset } else { 0 } as usize;
+
+                tiles.push((tile, WebTileOffset { x: x_offset, y: y_offset }));
             }
         }
 
@@ -296,40 +321,58 @@ impl<R: Read + Seek> CogDecoder<R> {
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
         let max_zoom = Tile::zoom_level_for_pixel_size(geo_transform[1], ZoomLevelStrategy::Closest) - ((tile_size / 256) - 1) as i32;
         let mut current_zoom = max_zoom;
-        let mut min_zoom = max_zoom;
+        let mut pyramids = Vec::new();
+        //let mut min_zoom = max_zoom;
 
         loop {
-            let tile_width = self.decoder.get_tag_u32(Tag::TileWidth)?;
-            let aligned = self.decoder.get_tag_u32(Tag::ImageWidth)? % tile_width == 0
-                && self.decoder.get_tag_u32(Tag::ImageLength)? % tile_width == 0;
+            let image_width = self.decoder.get_tag_u32(Tag::ImageWidth)?;
+            let image_height = self.decoder.get_tag_u32(Tag::ImageLength)?;
 
-            if aligned {
-                let tiles = Self::generate_tiles_for_extent(
-                    geo_transform,
-                    self.decoder.get_tag_u32(Tag::ImageWidth)?,
-                    self.decoder.get_tag_u32(Tag::ImageLength)?,
-                    self.decoder.get_tag_u32(Tag::TileWidth)?,
-                    current_zoom,
-                );
+            pyramids.push(PyramidInfo {
+                zoom_level: current_zoom,
+                raster_size: RasterSize::with_rows_cols(Rows(image_height as i32), Columns(image_width as i32)),
+            });
 
-                assert_eq!(self.decoder.tile_count()? as usize, tiles.len());
+            //let tile_width = self.decoder.get_tag_u32(Tag::TileWidth)?;
+            // let aligned = self.decoder.get_tag_u32(Tag::ImageWidth)? % tile_width == 0
+            //     && self.decoder.get_tag_u32(Tag::ImageLength)? % tile_width == 0;
 
-                let tile_offsets = self.decoder.get_tag_u64_vec(Tag::TileOffsets)?;
-                let tile_byte_counts = self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?;
-                debug_assert_eq!(tile_offsets.len(), tile_byte_counts.len());
+            //if aligned {
+            log::info!("Aligned {current_zoom} {}x{}", image_width, image_height);
+            let tiles = Self::generate_tiles_for_extent(
+                geo_transform,
+                image_width,
+                image_height,
+                self.decoder.get_tag_u32(Tag::TileWidth)?,
+                current_zoom,
+            );
 
-                itertools::izip!(tiles.iter(), tile_offsets.iter(), tile_byte_counts.iter()).for_each(|(tile, offset, byte_count)| {
-                    tile_inventory.insert(
-                        *tile,
-                        CogTileLocation {
+            assert_eq!(self.decoder.tile_count()? as usize, tiles.len());
+
+            let tile_offsets = self.decoder.get_tag_u64_vec(Tag::TileOffsets)?;
+            let tile_byte_counts = self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?;
+            debug_assert_eq!(tile_offsets.len(), tile_byte_counts.len());
+
+            itertools::izip!(tiles.iter(), tile_offsets.iter(), tile_byte_counts.iter()).for_each(|(tile, offset, byte_count)| {
+                tile_inventory.insert(
+                    tile.0,
+                    TileMetadata {
+                        cog_location: CogTileLocation {
                             offset: *offset,
                             size: *byte_count,
                         },
-                    );
-                });
+                        web_tile_offset: tile.1,
+                    },
+                );
+            });
 
-                min_zoom = current_zoom;
-            }
+            // } else {
+            //     log::warn!(
+            //         "Overview ({}x{}) is not aligned with image size at zoom level {current_zoom}, skipping tiles for this zoom level.",
+            //         self.decoder.get_tag_u32(Tag::ImageWidth)?,
+            //         self.decoder.get_tag_u32(Tag::ImageLength)?
+            //     );
+            // }
 
             if !self.decoder.more_images() {
                 break;
@@ -343,8 +386,10 @@ impl<R: Read + Seek> CogDecoder<R> {
             .and_then(|proj| proj.epsg().map(|epsg| epsg.to_string()))
             .unwrap_or_default();
 
+        dbg!(current_zoom, max_zoom);
+
         Ok(CogMetadata {
-            min_zoom,
+            min_zoom: current_zoom,
             max_zoom,
             tile_size,
             data_type,
@@ -354,6 +399,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             tile_offsets: tile_inventory,
             geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
             statistics,
+            pyramids,
         })
     }
 }

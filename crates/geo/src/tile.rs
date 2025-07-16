@@ -60,6 +60,23 @@ impl Tile {
         }
     }
 
+    pub fn coordinate_pixel_offset(&self, coord: Coordinate, tile_size: u32) -> Option<(u32, u32)> {
+        let zoom_level_tiles = f64::powi(2.0, self.z);
+        let top_left = self.upper_left();
+
+        let pixels_per_lat = 180.0 / zoom_level_tiles / tile_size as f64;
+        let pixels_per_lon = 360.0 / zoom_level_tiles / tile_size as f64;
+
+        let x_offset = (coord.longitude - top_left.longitude) / pixels_per_lon;
+        let y_offset = (top_left.latitude - coord.latitude) / pixels_per_lat;
+
+        if x_offset < 0.0 || y_offset < 0.0 || x_offset >= tile_size as f64 || y_offset >= tile_size as f64 {
+            return None;
+        }
+
+        Some((x_offset as u32, y_offset as u32))
+    }
+
     pub fn x(&self) -> i32 {
         self.x
     }

@@ -1,5 +1,5 @@
 use crate::{
-    AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, GeoReference, LatLonBounds, Tile,
+    AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, GeoReference, LatLonBounds, RasterSize, Tile,
     cog::{
         CogStats, Compression, Predictor,
         decoder::CogDecoder,
@@ -18,7 +18,13 @@ use std::{
     path::Path,
 };
 
-pub type TileOffsets = HashMap<Tile, CogTileLocation>;
+#[derive(Debug, Clone)]
+pub struct TileMetadata {
+    pub cog_location: CogTileLocation,
+    pub web_tile_offset: WebTileOffset,
+}
+
+pub type TileOffsets = HashMap<Tile, TileMetadata>;
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
@@ -54,6 +60,14 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// For COG overviews, the tiles on the edges are not always aligned to the tile size.
+/// This struct represents the offset of a cog tile in XYZ web tile.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct WebTileOffset {
+    pub x: usize,
+    pub y: usize,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct CogTileLocation {
     pub offset: u64,
@@ -74,6 +88,12 @@ impl CogTileLocation {
 }
 
 #[derive(Debug, Clone)]
+pub struct PyramidInfo {
+    pub raster_size: RasterSize,
+    pub zoom_level: i32,
+}
+
+#[derive(Debug, Clone)]
 pub struct CogMetadata {
     pub min_zoom: i32,
     pub max_zoom: i32,
@@ -85,6 +105,7 @@ pub struct CogMetadata {
     pub predictor: Option<Predictor>,
     pub statistics: Option<CogStats>,
     pub tile_offsets: TileOffsets,
+    pub pyramids: Vec<PyramidInfo>,
 }
 
 impl CogMetadata {
@@ -98,7 +119,7 @@ impl CogMetadata {
         for (tile, _) in self
             .tile_offsets
             .iter()
-            .filter(|(tile, loc)| loc.size > 0 && tile.z == self.max_zoom)
+            .filter(|(tile, loc)| loc.cog_location.size > 0 && tile.z == self.max_zoom)
         {
             min_tile_x = min_tile_x.min(tile.x);
             max_tile_x = max_tile_x.max(tile.x);
@@ -172,7 +193,11 @@ impl CogAccessor {
     }
 
     pub fn tile_offset(&self, tile: &Tile) -> Option<CogTileLocation> {
-        self.meta.tile_offsets.get(tile).copied()
+        self.meta.tile_offsets.get(tile).map(|meta| meta.cog_location)
+    }
+
+    pub fn tile_metadata(&self, tile: &Tile) -> Option<TileMetadata> {
+        self.meta.tile_offsets.get(tile).cloned()
     }
 
     /// Read the tile data for the given tile using the provided reader.
@@ -193,7 +218,7 @@ impl CogAccessor {
         })
     }
 
-    pub fn parse_tile_data(&self, tile: &CogTileLocation, cog_chunk: &[u8]) -> Result<AnyDenseArray> {
+    pub fn parse_tile_data(&self, tile: &TileMetadata, cog_chunk: &[u8]) -> Result<AnyDenseArray> {
         Ok(match self.meta.data_type {
             ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(tile, cog_chunk)?),
             ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(tile, cog_chunk)?),
@@ -222,9 +247,9 @@ impl CogAccessor {
             )));
         }
 
-        if let Some(tile_location) = self.tile_offset(tile) {
+        if let Some(tile_meta) = self.tile_metadata(tile) {
             io::read_tile_data(
-                &tile_location,
+                &tile_meta,
                 self.meta.tile_size,
                 self.meta.geo_reference.nodata(),
                 self.meta.compression,
@@ -239,7 +264,7 @@ impl CogAccessor {
     #[simd_bounds]
     pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        tile: &CogTileLocation,
+        tile_meta: &TileMetadata,
         cog_chunk: &[u8],
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
@@ -251,7 +276,7 @@ impl CogAccessor {
         }
 
         let tile_data = io::parse_tile_data(
-            tile,
+            tile_meta,
             self.meta.tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
@@ -342,7 +367,6 @@ mod tests {
         create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
         let cog = CogAccessor::from_file(&output)?;
 
-        let mut reader = File::open(&output)?;
         let meta = cog.meta_data();
         assert_eq!(meta.tile_size, COG_TILE_SIZE);
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
@@ -355,6 +379,7 @@ mod tests {
 
         assert!(!cog.tile_offsets().is_empty(), "Tile offsets should not be empty");
         // Decode all tiles
+        let mut reader = File::open(&output)?;
         for tile in cog.tile_offsets().keys() {
             let tile_data = cog.read_tile_data(tile, &mut reader)?;
             if tile_data.is_empty() {
@@ -529,8 +554,23 @@ mod tests {
 
         let cog = CogAccessor::from_file(&output)?;
         let meta = cog.meta_data();
-        assert_eq!(meta.min_zoom, 9);
+        assert_eq!(meta.min_zoom, 7);
         assert_eq!(meta.max_zoom, 10);
+
+        // Decode all tiles
+        let mut reader = File::open(&output)?;
+        for tile in cog.tile_offsets().keys() {
+            let tile_data = cog.read_tile_data(tile, &mut reader)?;
+            if tile_data.is_empty() {
+                continue; // Skip empty tiles
+            }
+
+            assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
+            assert_eq!(tile_data.data_type(), meta.data_type);
+
+            let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
+            assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
+        }
 
         Ok(())
     }

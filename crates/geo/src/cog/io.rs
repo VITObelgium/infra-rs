@@ -2,14 +2,16 @@ use crate::{
     ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize,
     cog::{
         Compression, Predictor,
+        reader::TileMetadata,
         utils::{self, HorizontalUnpredictable},
     },
 };
 use inf::allocate::{self, AlignedVec, AlignedVecUnderConstruction, aligned_vec_from_slice};
+use num::NumCast;
 use simd_macro::simd_bounds;
 use weezl::{BitOrder, decode::Decoder};
 
-use crate::{Error, Result, cog::CogTileLocation};
+use crate::{Error, Result};
 use std::io::{BufWriter, Read, Seek, SeekFrom};
 
 pub const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
@@ -103,14 +105,14 @@ impl Seek for CogHeaderReader {
 
 #[simd_bounds]
 pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    tile: &CogTileLocation,
+    tile_meta: &TileMetadata,
     tile_size: u16,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
     mut reader: impl Read + Seek,
 ) -> Result<DenseArray<T>> {
-    let chunk_range = tile.range_to_fetch();
+    let chunk_range = tile_meta.cog_location.range_to_fetch();
     if chunk_range.start == chunk_range.end {
         return Ok(DenseArray::empty());
     }
@@ -120,12 +122,12 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     let mut buf = vec![0; (chunk_range.end - chunk_range.start) as usize];
     reader.read_exact(&mut buf)?;
 
-    parse_tile_data(tile, tile_size, nodata, compression, predictor, &buf)
+    parse_tile_data(tile_meta, tile_size, nodata, compression, predictor, &buf)
 }
 
 #[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    tile: &CogTileLocation,
+    tile_meta: &TileMetadata,
     tile_size: u16,
     nodata: Option<f64>,
     compression: Option<Compression>,
@@ -134,7 +136,7 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 ) -> Result<DenseArray<T>> {
     // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
     let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&cog_chunk[0..4]).unwrap();
-    if tile.size != u32::from_le_bytes(size_bytes) as u64 {
+    if tile_meta.cog_location.size != u32::from_le_bytes(size_bytes) as u64 {
         return Err(Error::Runtime("Tile size does not match the expected size".into()));
     }
 
@@ -172,6 +174,30 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
             _ => return Err(Error::Runtime("Floating point predictor only supported for f32 and f64".into())),
         },
     }
+
+    let tile_data = if tile_meta.web_tile_offset.x != 0 || tile_meta.web_tile_offset.y != 0 {
+        debug_assert_eq!(tile_data.len(), (tile_size as usize * tile_size as usize));
+        // This is a tile that is not aligned to a xyz web tile.
+        // Read it into a local buffer and then blit it into the correct position
+
+        let nodata = nodata.and_then(NumCast::from).unwrap_or(T::zero());
+        let mut web_aligned_data = allocate::aligned_vec_filled_with(nodata, tile_size as usize * tile_size as usize);
+
+        let cog_width = tile_size as usize - tile_meta.web_tile_offset.x;
+        let cog_height = tile_size as usize - tile_meta.web_tile_offset.y;
+
+        for row in 0..cog_height {
+            let x_offset = tile_meta.web_tile_offset.x;
+            let cog_tile_start = row * tile_size as usize;
+            web_aligned_data[x_offset..x_offset + cog_width].copy_from_slice(&tile_data[cog_tile_start..cog_tile_start + cog_width]);
+        }
+
+        web_aligned_data
+    } else {
+        // This is a tile that is aligned to a xyz web tile.
+        // We can directly use the data as it is
+        tile_data
+    };
 
     let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), nodata);
     let arr = DenseArray::<T>::new_init_nodata(meta, tile_data)?;
