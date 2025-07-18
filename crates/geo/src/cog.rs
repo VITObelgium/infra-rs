@@ -17,12 +17,14 @@ mod projectioninfo;
 mod reader;
 mod stats;
 mod utils;
+mod webtiles;
 
 use projectioninfo::ProjectionInfo;
 
 pub use reader::{CogAccessor, CogMetadata, CogTileLocation, TileOffsets};
 pub use stats::CogStats;
 pub use utils::HorizontalUnpredictable;
+pub use webtiles::WebTilesReader;
 
 #[cfg(feature = "gdal")]
 pub use creation::{CogCreationOptions, PredictorSelection, create_cog_tiles};

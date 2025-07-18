@@ -176,7 +176,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.min_zoom, 6);
             assert_eq!(meta.max_zoom, 7);
@@ -201,7 +201,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.max_zoom, 10);
             assert_eq!(meta.min_zoom, 6);
@@ -226,7 +226,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.max_zoom, 10);
             assert_eq!(meta.min_zoom, 6);
@@ -248,7 +248,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.max_zoom, 9);
             assert_eq!(meta.min_zoom, 7);
@@ -281,7 +281,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.min_zoom, 6);
             assert_eq!(meta.max_zoom, 7);
@@ -306,7 +306,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.max_zoom, 9);
             assert_eq!(meta.min_zoom, 6);
@@ -331,7 +331,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.max_zoom, 9);
             assert_eq!(meta.min_zoom, 6);
@@ -353,7 +353,7 @@ mod tests {
 
             create_cog_tiles(&input, &output, opts)?;
             let cog = CogAccessor::from_file(&output)?;
-            let meta = cog.meta_data();
+            let meta = cog.metadata();
 
             assert_eq!(meta.max_zoom, 8);
             assert_eq!(meta.min_zoom, 7);

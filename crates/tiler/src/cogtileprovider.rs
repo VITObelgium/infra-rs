@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use geo::cog::{self, CogAccessor, CogMetadata, HorizontalUnpredictable};
+use geo::cog::{CogAccessor, HorizontalUnpredictable, WebTilesReader};
 use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
@@ -29,15 +29,15 @@ pub struct CogTileProvider {
 
 impl CogTileProvider {
     pub fn new(path: &Path, _opts: &TileProviderOptions) -> Result<Self> {
-        let cog = CogAccessor::from_file(path)?;
-        let meta = cog.meta_data();
+        let cog = WebTilesReader::from_cog(CogAccessor::from_file(path)?)?;
+        let meta = cog.cog_metadata();
 
         let meta = LayerMetadata {
             id: unique_layer_id(),
             path: PathBuf::from(path),
             min_zoom: meta.min_zoom,
             max_zoom: meta.max_zoom,
-            tile_size: Some(meta.tile_size as u16),
+            tile_size: Some(meta.tile_size),
             tile_format: TileFormat::RasterTile,
             name: "COG".into(),
             description: String::default(),
@@ -54,7 +54,7 @@ impl CogTileProvider {
             scheme: "xyz".into(),
             additional_data: HashMap::new(),
             band_nr: None,
-            tileprovider_data: Some(Box::new(Arc::new(cog.meta_data().clone()))),
+            tileprovider_data: Some(Box::new(Arc::new(cog))),
         };
 
         log::info!(
@@ -73,26 +73,15 @@ impl CogTileProvider {
 
     #[geo::simd_bounds]
     fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u16) -> Result<DenseArray<T>> {
+        if Some(tile_size) != meta.tile_size {
+            return Err(Error::InvalidArgument("Invalid COG tile size requested".to_string()));
+        }
+
         let tile = meta
             .tileprovider_data
             .as_ref()
-            .and_then(|data| data.downcast_ref::<CogMetadata>())
-            .and_then(|cog_meta| {
-                cog_meta
-                    .tile_offsets
-                    .get(tile)
-                    .map(|tile_meta| (cog_meta.compression, cog_meta.predictor, tile_meta))
-            })
-            .map(|(compression, predictor, tile_meta)| {
-                cog::io::read_tile_data::<T>(
-                    tile_meta,
-                    tile_size,
-                    meta.nodata,
-                    compression,
-                    predictor,
-                    std::fs::File::open(&meta.path)?,
-                )
-            });
+            .and_then(|data| data.downcast_ref::<WebTilesReader>())
+            .map(|cog| cog.read_tile_data_as::<T>(tile, std::fs::File::open(&meta.path)?));
 
         match tile {
             Some(Ok(tile_data)) => Ok(tile_data),

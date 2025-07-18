@@ -227,6 +227,38 @@ impl Tile {
         }
     }
 
+    pub fn adjacent_tile_left(&self) -> Tile {
+        Tile {
+            x: self.x - 1,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    pub fn adjacent_tile_right(&self) -> Tile {
+        Tile {
+            x: self.x + 1,
+            y: self.y,
+            z: self.z,
+        }
+    }
+
+    pub fn adjacent_tile_up(&self) -> Tile {
+        Tile {
+            x: self.x,
+            y: self.y - 1,
+            z: self.z,
+        }
+    }
+
+    pub fn adjacent_tile_down(&self) -> Tile {
+        Tile {
+            x: self.x,
+            y: self.y + 1,
+            z: self.z,
+        }
+    }
+
     /// Returns the neighboring tiles of the current tile including the current tile
     pub fn surrounding_tiles_including_self(&self) -> Vec<Tile> {
         let mut tiles = Vec::with_capacity(9);
