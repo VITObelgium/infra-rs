@@ -7,6 +7,7 @@ use crate::{
         utils::HorizontalUnpredictable,
     },
 };
+
 use simd_macro::simd_bounds;
 
 use crate::{Error, Result};
@@ -66,29 +67,6 @@ impl CogTileLocation {
         Range {
             start: self.offset - 4,
             end: self.offset + self.size,
-        }
-    }
-}
-
-/// For COG overviews, the tiles on the edges are not always aligned to the tile size.
-/// This struct represents the offset of a cog tile in XYZ web tile.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct TileOffset {
-    pub x: usize,
-    pub y: usize,
-}
-
-#[derive(Debug, Clone)]
-pub struct TileMetadata {
-    pub cog_location: CogTileLocation,
-    pub web_tile_offset: TileOffset,
-}
-
-impl TileMetadata {
-    pub fn without_offset(cog_location: CogTileLocation) -> Self {
-        TileMetadata {
-            cog_location,
-            web_tile_offset: TileOffset::default(),
         }
     }
 }
@@ -157,25 +135,25 @@ impl CogAccessor {
     /// Read the tile data for the given tile using the provided reader.
     /// This method will return an error if the tile does not exist in the COG index
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
-    pub fn read_tile_data(&self, tile_meta: &TileMetadata, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
+    pub fn read_tile_data(&self, cog_tile: &CogTileLocation, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
         Ok(match self.meta.data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_tile_data_as::<u8>(tile_meta, &mut reader)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_tile_data_as::<u16>(tile_meta, &mut reader)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_tile_data_as::<u32>(tile_meta, &mut reader)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_tile_data_as::<u64>(tile_meta, &mut reader)?),
-            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_tile_data_as::<i8>(tile_meta, &mut reader)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_tile_data_as::<i16>(tile_meta, &mut reader)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_tile_data_as::<i32>(tile_meta, &mut reader)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_tile_data_as::<i64>(tile_meta, &mut reader)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_tile_data_as::<f32>(tile_meta, &mut reader)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_tile_data_as::<f64>(tile_meta, &mut reader)?),
+            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_tile_data_as::<u8>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_tile_data_as::<u16>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_tile_data_as::<u32>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_tile_data_as::<u64>(cog_tile, &mut reader)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_tile_data_as::<i8>(cog_tile, &mut reader)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_tile_data_as::<i16>(cog_tile, &mut reader)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_tile_data_as::<i32>(cog_tile, &mut reader)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_tile_data_as::<i64>(cog_tile, &mut reader)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_tile_data_as::<f32>(cog_tile, &mut reader)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_tile_data_as::<f64>(cog_tile, &mut reader)?),
         })
     }
 
     #[simd_bounds]
     pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        tile_meta: &TileMetadata,
+        cog_tile: &CogTileLocation,
         mut reader: impl Read + Seek,
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
@@ -187,7 +165,7 @@ impl CogAccessor {
         }
 
         io::read_tile_data(
-            tile_meta,
+            cog_tile,
             self.meta.tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
@@ -199,7 +177,7 @@ impl CogAccessor {
     #[simd_bounds]
     pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        tile_meta: &TileMetadata,
+        cog_tile: &CogTileLocation,
         cog_chunk: &[u8],
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
@@ -211,11 +189,12 @@ impl CogAccessor {
         }
 
         let tile_data = io::parse_tile_data(
-            tile_meta,
+            cog_tile,
             self.meta.tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
+            None,
             cog_chunk,
         )?;
 
@@ -287,15 +266,16 @@ mod tests {
             assert!(!pyramid.tile_locations.is_empty(), "Pyramid tile locations should not be empty");
 
             for tile in &pyramid.tile_locations {
-                let tile_data = cog.read_tile_data(&TileMetadata::without_offset(*tile), &mut reader)?;
-                if tile_data.is_empty() {
+                if tile.size == 0 {
                     continue; // Skip empty tiles
                 }
+
+                let tile_data = cog.read_tile_data(tile, &mut reader)?;
 
                 assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
                 assert_eq!(tile_data.data_type(), meta.data_type);
 
-                let tile_data = cog.read_tile_data_as::<u8>(&TileMetadata::without_offset(*tile), &mut reader)?;
+                let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
                 assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
             }
         }
@@ -340,11 +320,8 @@ mod tests {
             let mut lzw_compression_reader = File::open(&lzw_compression_output)?;
 
             for (tile, tile_lzw) in pyramid_no_compression.tile_locations.iter().zip(pyramid_lzw.tile_locations.iter()) {
-                let tile = TileMetadata::without_offset(*tile);
-                let tile_lzw = TileMetadata::without_offset(*tile_lzw);
-
-                let tile_data_no_compression = cog_no_compression.read_tile_data(&tile, &mut no_compression_reader).unwrap();
-                let tile_data_lzw_compression = cog_lzw_compression.read_tile_data(&tile_lzw, &mut lzw_compression_reader).unwrap();
+                let tile_data_no_compression = cog_no_compression.read_tile_data(tile, &mut no_compression_reader).unwrap();
+                let tile_data_lzw_compression = cog_lzw_compression.read_tile_data(tile_lzw, &mut lzw_compression_reader).unwrap();
 
                 assert_eq!(tile_data_no_compression, tile_data_lzw_compression);
             }

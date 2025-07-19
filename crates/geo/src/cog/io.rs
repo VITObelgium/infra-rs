@@ -1,13 +1,12 @@
 use crate::{
-    ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, DenseArray, RasterMetadata, RasterSize,
+    Array, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Rows, Window,
     cog::{
-        Compression, Predictor,
-        reader::TileMetadata,
+        CogTileLocation, Compression, Predictor,
         utils::{self, HorizontalUnpredictable},
     },
+    raster::io::CutOut,
 };
 use inf::allocate::{self, AlignedVec, AlignedVecUnderConstruction, aligned_vec_from_slice};
-use num::NumCast;
 use simd_macro::simd_bounds;
 use weezl::{BitOrder, decode::Decoder};
 
@@ -103,18 +102,10 @@ impl Seek for CogHeaderReader {
     }
 }
 
-#[simd_bounds]
-pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    tile_meta: &TileMetadata,
-    tile_size: u16,
-    nodata: Option<f64>,
-    compression: Option<Compression>,
-    predictor: Option<Predictor>,
-    mut reader: impl Read + Seek,
-) -> Result<DenseArray<T>> {
-    let chunk_range = tile_meta.cog_location.range_to_fetch();
+pub fn read_cog_chunk(cog_location: &CogTileLocation, mut reader: impl Read + Seek) -> Result<Vec<u8>> {
+    let chunk_range = cog_location.range_to_fetch();
     if chunk_range.start == chunk_range.end {
-        return Ok(DenseArray::empty());
+        return Ok(Vec::default());
     }
 
     reader.seek(SeekFrom::Start(chunk_range.start))?;
@@ -122,21 +113,40 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     let mut buf = vec![0; (chunk_range.end - chunk_range.start) as usize];
     reader.read_exact(&mut buf)?;
 
-    parse_tile_data(tile_meta, tile_size, nodata, compression, predictor, &buf)
+    Ok(buf)
 }
 
 #[simd_bounds]
-pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    tile_meta: &TileMetadata,
+pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
+    cog_location: &CogTileLocation,
     tile_size: u16,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
+    mut reader: impl Read + Seek,
+) -> Result<DenseArray<T>> {
+    if cog_location.size == 0 {
+        return Ok(DenseArray::empty());
+    }
+
+    let cog_chunk = read_cog_chunk(cog_location, &mut reader)?;
+    parse_tile_data(cog_location, tile_size, nodata, compression, predictor, None, &cog_chunk)
+}
+
+#[simd_bounds]
+pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
+    cog_location: &CogTileLocation,
+    tile_size: u16,
+    nodata: Option<f64>,
+    compression: Option<Compression>,
+    predictor: Option<Predictor>,
+    cutout: Option<&CutOut>,
     cog_chunk: &[u8],
 ) -> Result<DenseArray<T>> {
+    debug_assert!(cog_chunk.len() > 4);
     // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
     let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&cog_chunk[0..4]).unwrap();
-    if tile_meta.cog_location.size != u32::from_le_bytes(size_bytes) as u64 {
+    if cog_location.size != u32::from_le_bytes(size_bytes) as u64 {
         return Err(Error::Runtime("Tile size does not match the expected size".into()));
     }
 
@@ -175,32 +185,19 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
         },
     }
 
-    let tile_data = if tile_meta.web_tile_offset.x != 0 || tile_meta.web_tile_offset.y != 0 {
-        debug_assert_eq!(tile_data.len(), (tile_size as usize * tile_size as usize));
-        // This is a tile that is not aligned to a xyz web tile.
-        // Read it into a local buffer and then blit it into the correct position
+    let mut meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), nodata);
+    let mut arr = DenseArray::<T>::new_init_nodata(meta, tile_data)?;
 
-        let nodata = nodata.and_then(NumCast::from).unwrap_or(T::zero());
-        let mut web_aligned_data = allocate::aligned_vec_filled_with(nodata, tile_size as usize * tile_size as usize);
+    if let Some(cutout) = cutout {
+        let size = RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols));
+        let window = Window::new(Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset), size);
 
-        let cog_width = tile_size as usize - tile_meta.web_tile_offset.x;
-        let cog_height = tile_size as usize - tile_meta.web_tile_offset.y;
+        let cutout_data = allocate::aligned_vec_from_iter(arr.iter_window(window));
 
-        for row in 0..cog_height {
-            let x_offset = tile_meta.web_tile_offset.x;
-            let cog_tile_start = row * tile_size as usize;
-            web_aligned_data[x_offset..x_offset + cog_width].copy_from_slice(&tile_data[cog_tile_start..cog_tile_start + cog_width]);
-        }
+        meta = RasterMetadata::sized_with_nodata(size, nodata);
+        arr = DenseArray::<T>::new(meta, cutout_data)?;
+    }
 
-        web_aligned_data
-    } else {
-        // This is a tile that is aligned to a xyz web tile.
-        // We can directly use the data as it is
-        tile_data
-    };
-
-    let meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), nodata);
-    let arr = DenseArray::<T>::new_init_nodata(meta, tile_data)?;
     Ok(arr)
 }
 

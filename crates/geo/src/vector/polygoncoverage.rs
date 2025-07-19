@@ -84,7 +84,7 @@ fn create_geometry_extent(geom: &geos::Geometry, grid_extent: &GeoReference) -> 
     let top_left_ll = grid_extent.cell_lower_left(top_left_cell);
     let bottom_right_ll = grid_extent.cell_lower_left(bottom_right_cell);
 
-    let geom_rect = Rect::from_ne_sw(
+    let geom_rect = Rect::from_nw_se(
         Point::new(top_left_ll.x(), top_left_ll.y() - grid_extent.cell_size_y()),
         Point::new(bottom_right_ll.x() + grid_extent.cell_size_x(), bottom_right_ll.y()),
     );

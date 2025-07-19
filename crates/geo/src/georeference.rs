@@ -255,7 +255,7 @@ impl GeoReference {
     pub fn cell_bounding_box(&self, cell: Cell) -> Rect<f64> {
         let ll = self.cell_lower_left(cell);
 
-        Rect::from_ne_sw(
+        Rect::from_nw_se(
             Point::new(ll.x(), ll.y() - self.cell_size_y()),
             Point::new(ll.x() + self.cell_size_x(), ll.y()),
         )
@@ -318,7 +318,7 @@ impl GeoReference {
     }
 
     pub fn bounding_box(&self) -> Rect<f64> {
-        Rect::<f64>::from_ne_sw(self.top_left(), self.bottom_right())
+        Rect::<f64>::from_nw_se(self.top_left(), self.bottom_right())
     }
 
     pub fn latlonbounds(&self) -> LatLonBounds {
@@ -586,7 +586,7 @@ impl GeoReference {
         }
 
         let intersection = self.bounding_box().intersection(&other.bounding_box());
-        if !intersection.empty() {
+        if !intersection.is_empty() {
             let raster_size = RasterSize {
                 rows: Rows((intersection.height() / self.cell_size_y().abs()).round() as i32),
                 cols: Columns((intersection.width() / self.cell_size_x().abs()).round() as i32),

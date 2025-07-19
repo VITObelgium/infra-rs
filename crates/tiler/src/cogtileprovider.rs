@@ -84,9 +84,9 @@ impl CogTileProvider {
             .map(|cog| cog.read_tile_data_as::<T>(tile, std::fs::File::open(&meta.path)?));
 
         match tile {
-            Some(Ok(tile_data)) => Ok(tile_data),
+            Some(Ok(Some(tile_data))) => Ok(tile_data),
             Some(Err(e)) => Err(Error::Runtime(format!("Failed to read tile data: {e}"))),
-            None => Ok(DenseArray::empty()),
+            None | Some(Ok(None)) => Ok(DenseArray::empty()),
         }
     }
 
