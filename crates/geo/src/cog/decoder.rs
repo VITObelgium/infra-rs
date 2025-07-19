@@ -271,10 +271,6 @@ impl<R: Read + Seek> CogDecoder<R> {
         loop {
             let image_width = self.decoder.get_tag_u32(Tag::ImageWidth)?;
             let image_height = self.decoder.get_tag_u32(Tag::ImageLength)?;
-            let tile_width = self.decoder.get_tag_u32(Tag::TileWidth)?;
-
-            let tile_aligned = self.decoder.get_tag_u32(Tag::ImageWidth)? % tile_width == 0
-                && self.decoder.get_tag_u32(Tag::ImageLength)? % tile_width == 0;
 
             let tile_offsets = self.decoder.get_tag_u64_vec(Tag::TileOffsets)?;
             let tile_byte_counts = self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?;
@@ -291,7 +287,6 @@ impl<R: Read + Seek> CogDecoder<R> {
             pyramids.push(PyramidInfo {
                 zoom_level: current_zoom,
                 raster_size: RasterSize::with_rows_cols(Rows(image_height as i32), Columns(image_width as i32)),
-                is_tile_aligned: tile_aligned,
                 tile_locations,
             });
 

@@ -1,5 +1,5 @@
 use crate::{
-    AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, GeoReference, RasterSize, Tile,
+    AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, GeoReference, RasterSize,
     cog::{
         CogStats, Compression, Predictor,
         decoder::CogDecoder,
@@ -11,29 +11,11 @@ use simd_macro::simd_bounds;
 
 use crate::{Error, Result};
 use std::{
-    collections::HashMap,
     fs::File,
     io::{Read, Seek},
     ops::Range,
     path::Path,
 };
-
-#[derive(Debug, Clone)]
-pub struct TileMetadata {
-    pub cog_location: CogTileLocation,
-    pub web_tile_offset: WebTileOffset,
-}
-
-impl TileMetadata {
-    pub fn without_offset(cog_location: CogTileLocation) -> Self {
-        TileMetadata {
-            cog_location,
-            web_tile_offset: WebTileOffset::default(),
-        }
-    }
-}
-
-pub type TileOffsets = HashMap<Tile, TileMetadata>;
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
@@ -69,14 +51,6 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     Ok(())
 }
 
-/// For COG overviews, the tiles on the edges are not always aligned to the tile size.
-/// This struct represents the offset of a cog tile in XYZ web tile.
-#[derive(Debug, Clone, Copy, Default)]
-pub struct WebTileOffset {
-    pub x: usize,
-    pub y: usize,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct CogTileLocation {
     pub offset: u64,
@@ -96,11 +70,33 @@ impl CogTileLocation {
     }
 }
 
+/// For COG overviews, the tiles on the edges are not always aligned to the tile size.
+/// This struct represents the offset of a cog tile in XYZ web tile.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct TileOffset {
+    pub x: usize,
+    pub y: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct TileMetadata {
+    pub cog_location: CogTileLocation,
+    pub web_tile_offset: TileOffset,
+}
+
+impl TileMetadata {
+    pub fn without_offset(cog_location: CogTileLocation) -> Self {
+        TileMetadata {
+            cog_location,
+            web_tile_offset: TileOffset::default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct PyramidInfo {
     pub raster_size: RasterSize,
     pub zoom_level: i32,
-    pub is_tile_aligned: bool,
     pub tile_locations: Vec<CogTileLocation>,
 }
 

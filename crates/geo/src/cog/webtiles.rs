@@ -1,4 +1,10 @@
-use crate::{AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, Error, Result, cog::HorizontalUnpredictable};
+use crate::{
+    AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, Error, Result,
+    cog::{
+        HorizontalUnpredictable,
+        reader::{TileMetadata, TileOffset},
+    },
+};
 use std::{
     collections::HashMap,
     io::{Read, Seek},
@@ -6,10 +12,7 @@ use std::{
 
 use crate::{
     LatLonBounds, Point, RasterSize, Tile,
-    cog::{
-        CogAccessor, CogMetadata,
-        reader::{TileMetadata, WebTileOffset},
-    },
+    cog::{CogAccessor, CogMetadata},
     crs,
 };
 
@@ -31,26 +34,27 @@ impl WebTiles {
             // //if aligned {
             // log::info!("Aligned {current_zoom} {}x{}", image_width, image_height);
 
+            let tile_aligned = pyramid.raster_size.cols.count() % meta.tile_size as i32 == 0
+                && pyramid.raster_size.rows.count() % meta.tile_size as i32 == 0;
+
             let tiles = generate_tiles_for_extent(
                 meta.geo_reference.geo_transform(),
                 pyramid.raster_size,
                 meta.tile_size,
+                tile_aligned,
                 pyramid.zoom_level,
             );
 
-            if pyramid.is_tile_aligned {
-                tiles
-                    .into_iter()
-                    .zip(pyramid.tile_locations.iter())
-                    .for_each(|(web_tile, cog_tile)| {
-                        zoom_levels[web_tile.0.z as usize].insert(
-                            web_tile.0,
-                            TileMetadata {
-                                cog_location: *cog_tile,
-                                web_tile_offset: web_tile.1,
-                            },
-                        );
-                    });
+            if tile_aligned {
+                tiles.into_iter().zip(&pyramid.tile_locations).for_each(|(web_tile, cog_tile)| {
+                    zoom_levels[web_tile.0.z as usize].insert(
+                        web_tile.0,
+                        TileMetadata {
+                            cog_location: *cog_tile,
+                            web_tile_offset: web_tile.1,
+                        },
+                    );
+                });
             }
         }
 
@@ -130,19 +134,23 @@ fn trim_empty_zoom_levels(zoom_levels: &mut Vec<HashMap<Tile, TileMetadata>>) {
     }
 }
 
-fn generate_tiles_for_extent(geo_transform: [f64; 6], raster_size: RasterSize, tile_size: u16, zoom: i32) -> Vec<(Tile, WebTileOffset)> {
-    //let aligned = raster_size.cols % tile_size == 0 && image_height % tile_size == 0;
-
+fn generate_tiles_for_extent(
+    geo_transform: [f64; 6],
+    raster_size: RasterSize,
+    tile_size: u16,
+    tile_aligned: bool,
+    zoom: i32,
+) -> Vec<(Tile, TileOffset)> {
     let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
     let top_left_tile = Tile::for_coordinate(top_left, zoom);
 
-    let (overview_x_offset, overview_y_offset) = (0, 0);
-
-    // let (overview_x_offset, overview_y_offset) = if aligned {
-    //     (0, 0)
-    // } else {
-    //     top_left_tile.coordinate_pixel_offset(top_left, tile_size).unwrap_or_default()
-    // };
+    let (overview_x_offset, overview_y_offset) = if tile_aligned {
+        (0, 0)
+    } else {
+        top_left_tile
+            .coordinate_pixel_offset(top_left, tile_size as u32)
+            .unwrap_or_default()
+    };
 
     // log::info!(
     //     "Aligned: {aligned}: TL: {top_left:?} PO: {:?}",
@@ -165,7 +173,7 @@ fn generate_tiles_for_extent(geo_transform: [f64; 6], raster_size: RasterSize, t
             let x_offset = if tx == 0 { overview_x_offset } else { 0 } as usize;
             let y_offset = if tx == 0 { overview_y_offset } else { 0 } as usize;
 
-            tiles.push((tile, WebTileOffset { x: x_offset, y: y_offset }));
+            tiles.push((tile, TileOffset { x: x_offset, y: y_offset }));
         }
     }
 
