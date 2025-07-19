@@ -1,9 +1,10 @@
 use crate::{
-    AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, Error, Result,
+    AnyDenseArray, ArrayDataType, ArrayNum, CellSize, DenseArray, Error, GeoReference, Rect, Result,
     cog::{
-        HorizontalUnpredictable,
-        reader::{TileMetadata, TileOffset},
+        CogTileLocation, HorizontalUnpredictable,
+        reader::{PyramidInfo, TileSource},
     },
+    raster::io::dataset::intersect_metadata,
 };
 use std::{
     collections::HashMap,
@@ -23,7 +24,7 @@ const LANES: usize = inf::simd::LANES;
 
 #[derive(Debug, Clone)]
 pub struct WebTiles {
-    zoom_levels: Vec<HashMap<Tile, TileMetadata>>,
+    zoom_levels: Vec<HashMap<Tile, TileSource>>,
 }
 
 impl WebTiles {
@@ -31,7 +32,6 @@ impl WebTiles {
         let mut zoom_levels = vec![HashMap::default(); 22];
 
         for pyramid in &meta.pyramids {
-            // //if aligned {
             // log::info!("Aligned {current_zoom} {}x{}", image_width, image_height);
 
             let tile_aligned = pyramid.raster_size.cols.count() % meta.tile_size as i32 == 0
@@ -41,20 +41,59 @@ impl WebTiles {
                 meta.geo_reference.geo_transform(),
                 pyramid.raster_size,
                 meta.tile_size,
-                tile_aligned,
                 pyramid.zoom_level,
             );
 
             if tile_aligned {
                 tiles.into_iter().zip(&pyramid.tile_locations).for_each(|(web_tile, cog_tile)| {
-                    zoom_levels[web_tile.0.z as usize].insert(
-                        web_tile.0,
-                        TileMetadata {
-                            cog_location: *cog_tile,
-                            web_tile_offset: web_tile.1,
-                        },
-                    );
+                    zoom_levels[web_tile.z as usize].insert(web_tile, TileSource::Aligned(*cog_tile));
                 });
+            } else {
+                let cog_tile_bounds = create_cog_tile_web_mercator_bounds(pyramid, &meta.geo_reference, meta.tile_size).unwrap();
+
+                log::info!(
+                    "Unaligned zoom level: {} Web tiles {} Cog tiles {}",
+                    pyramid.zoom_level,
+                    tiles.len(),
+                    pyramid.tile_locations.len(),
+                );
+
+                log::info!("[{:?}]", tiles.first().unwrap().web_mercator_bounds(),);
+                log::info!("[{:?}]", cog_tile_bounds.first().unwrap().1);
+
+                let pixel_size = Tile::pixel_size_at_zoom_level(pyramid.zoom_level);
+
+                for tile in &tiles {
+                    let mut tile_sources = Vec::new();
+
+                    let web_tile_georef = GeoReference::from_tile(tile, meta.tile_size as usize, 1);
+
+                    for (cog_tile, bounds) in &cog_tile_bounds {
+                        let cog_tile_georef = GeoReference::with_origin(
+                            "",
+                            RasterSize::square(meta.tile_size as i32),
+                            bounds.bottom_left(),
+                            CellSize::square(pixel_size),
+                            Option::<f64>::None,
+                        );
+
+                        if tile.web_mercator_bounds().intersects(bounds) {
+                            if let Ok(cutout) = intersect_metadata(&web_tile_georef, &cog_tile_georef) {
+                                log::info!("Cutout {cutout:?}");
+                                tile_sources.push((*cog_tile, cutout));
+                            }
+
+                            // let intersection = tile.web_mercator_bounds().intersection(bounds);
+                            // let cols = (intersection.width() / pixel_size).round() as u32;
+                            // let rows = (intersection.height() / pixel_size).round() as u32;
+                            //log::info!("---- Tile intersection ---- {cols}x{rows}");
+                        }
+                    }
+
+                    if !tile_sources.is_empty() {
+                        zoom_levels[tile.z as usize].insert(*tile, TileSource::Unaligned(tile_sources));
+                    }
+                }
             }
         }
 
@@ -63,7 +102,7 @@ impl WebTiles {
         WebTiles { zoom_levels }
     }
 
-    pub fn get(&self, tile: &Tile) -> Option<&TileMetadata> {
+    pub fn get(&self, tile: &Tile) -> Option<&TileSource> {
         self.zoom_levels.get(tile.z as usize).and_then(|level| level.get(tile))
     }
 
@@ -92,7 +131,10 @@ impl WebTiles {
         let mut max_tile_y = i32::MIN;
 
         if let Some(last_zoom_level) = self.zoom_levels.last() {
-            for (tile, _) in last_zoom_level.iter().filter(|(_, loc)| loc.cog_location.size > 0) {
+            for (tile, _) in last_zoom_level.iter().filter(|(_, loc)| match loc {
+                TileSource::Aligned(loc) => loc.size > 0,
+                TileSource::Unaligned(_) => false, // Max zoom levels should not have unaligned tiles
+            }) {
                 min_tile_x = min_tile_x.min(tile.x);
                 max_tile_x = max_tile_x.max(tile.x);
                 min_tile_y = min_tile_y.min(tile.y);
@@ -123,7 +165,7 @@ impl WebTiles {
     }
 }
 
-fn trim_empty_zoom_levels(zoom_levels: &mut Vec<HashMap<Tile, TileMetadata>>) {
+fn trim_empty_zoom_levels(zoom_levels: &mut Vec<HashMap<Tile, TileSource>>) {
     // Remove empty zoom levels from the end
     while let Some(last) = zoom_levels.last() {
         if last.is_empty() {
@@ -134,28 +176,9 @@ fn trim_empty_zoom_levels(zoom_levels: &mut Vec<HashMap<Tile, TileMetadata>>) {
     }
 }
 
-fn generate_tiles_for_extent(
-    geo_transform: [f64; 6],
-    raster_size: RasterSize,
-    tile_size: u16,
-    tile_aligned: bool,
-    zoom: i32,
-) -> Vec<(Tile, TileOffset)> {
+fn generate_tiles_for_extent(geo_transform: [f64; 6], raster_size: RasterSize, tile_size: u16, zoom: i32) -> Vec<Tile> {
     let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
     let top_left_tile = Tile::for_coordinate(top_left, zoom);
-
-    let (overview_x_offset, overview_y_offset) = if tile_aligned {
-        (0, 0)
-    } else {
-        top_left_tile
-            .coordinate_pixel_offset(top_left, tile_size as u32)
-            .unwrap_or_default()
-    };
-
-    // log::info!(
-    //     "Aligned: {aligned}: TL: {top_left:?} PO: {:?}",
-    //     top_left_tile.coordinate_pixel_offset(top_left, tile_size)
-    // );
 
     let tiles_wide = (raster_size.cols.count() as u16).div_ceil(tile_size);
     let tiles_high = (raster_size.rows.count() as u16).div_ceil(tile_size);
@@ -170,14 +193,48 @@ fn generate_tiles_for_extent(
                 y: top_left_tile.y + ty as i32,
             };
 
-            let x_offset = if tx == 0 { overview_x_offset } else { 0 } as usize;
-            let y_offset = if tx == 0 { overview_y_offset } else { 0 } as usize;
-
-            tiles.push((tile, TileOffset { x: x_offset, y: y_offset }));
+            tiles.push(tile);
         }
     }
 
     tiles
+}
+
+fn create_cog_tile_web_mercator_bounds(
+    pyramid: &PyramidInfo,
+    geo_reference: &GeoReference,
+    tile_size: u16,
+) -> Result<Vec<(CogTileLocation, Rect<f64>)>> {
+    let mut web_tiles = Vec::with_capacity(pyramid.tile_locations.len());
+
+    let tiles_wide = (pyramid.raster_size.cols.count() as u16).div_ceil(tile_size) as usize;
+    let tiles_high = (pyramid.raster_size.rows.count() as u16).div_ceil(tile_size) as usize;
+
+    if tiles_wide * tiles_high != pyramid.tile_locations.len() {
+        return Err(Error::InvalidArgument(format!(
+            "Expected {} tiles, but got {}",
+            tiles_wide * tiles_high,
+            pyramid.tile_locations.len()
+        )));
+    }
+
+    let tile_offset = tile_size as f64 * Tile::pixel_size_at_zoom_level(pyramid.zoom_level);
+
+    for ty in 0..tiles_high {
+        let y_offset = ty as f64 * -tile_offset;
+        for tx in 0..tiles_wide {
+            let cog_tile = &pyramid.tile_locations[ty * tiles_wide + tx];
+            let x_offset = tx as f64 * tile_offset;
+
+            let offset = Point::new(x_offset, y_offset);
+            let top_left = geo_reference.top_left() + offset;
+            let bottom_right = geo_reference.top_left() + Point::new(tile_offset, -tile_offset);
+
+            web_tiles.push((*cog_tile, Rect::from_nw_se(top_left, bottom_right)));
+        }
+    }
+
+    Ok(web_tiles)
 }
 
 pub struct WebTileInfo {
@@ -219,29 +276,29 @@ impl WebTilesReader {
         self.cog.metadata()
     }
 
-    fn tile_metadata(&self, tile: &Tile) -> Option<&TileMetadata> {
+    fn tile_source(&self, tile: &Tile) -> Option<&TileSource> {
         self.web_tiles.get(tile)
     }
 
     /// Read the tile data for the given tile using the provided reader.
     /// This method will return an error if the tile does not exist in the COG index
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
-    pub fn read_tile_data(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
+    pub fn read_tile_data(&self, tile: &Tile, mut reader: impl Read + Seek) -> Result<Option<AnyDenseArray>> {
         Ok(match self.data_type() {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_tile_data_as::<u8>(tile, &mut reader)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_tile_data_as::<u16>(tile, &mut reader)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_tile_data_as::<u32>(tile, &mut reader)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_tile_data_as::<u64>(tile, &mut reader)?),
-            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_tile_data_as::<i8>(tile, &mut reader)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_tile_data_as::<i16>(tile, &mut reader)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_tile_data_as::<i32>(tile, &mut reader)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_tile_data_as::<i64>(tile, &mut reader)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_tile_data_as::<f32>(tile, &mut reader)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_tile_data_as::<f64>(tile, &mut reader)?),
+            ArrayDataType::Uint8 => self.read_tile_data_as::<u8>(tile, &mut reader)?.map(AnyDenseArray::U8),
+            ArrayDataType::Uint16 => self.read_tile_data_as::<u16>(tile, &mut reader)?.map(AnyDenseArray::U16),
+            ArrayDataType::Uint32 => self.read_tile_data_as::<u32>(tile, &mut reader)?.map(AnyDenseArray::U32),
+            ArrayDataType::Uint64 => self.read_tile_data_as::<u64>(tile, &mut reader)?.map(AnyDenseArray::U64),
+            ArrayDataType::Int8 => self.read_tile_data_as::<i8>(tile, &mut reader)?.map(AnyDenseArray::I8),
+            ArrayDataType::Int16 => self.read_tile_data_as::<i16>(tile, &mut reader)?.map(AnyDenseArray::I16),
+            ArrayDataType::Int32 => self.read_tile_data_as::<i32>(tile, &mut reader)?.map(AnyDenseArray::I32),
+            ArrayDataType::Int64 => self.read_tile_data_as::<i64>(tile, &mut reader)?.map(AnyDenseArray::I64),
+            ArrayDataType::Float32 => self.read_tile_data_as::<f32>(tile, &mut reader)?.map(AnyDenseArray::F32),
+            ArrayDataType::Float64 => self.read_tile_data_as::<f64>(tile, &mut reader)?.map(AnyDenseArray::F64),
         })
     }
 
-    pub fn parse_tile_data(&self, tile: &TileMetadata, cog_chunk: &[u8]) -> Result<AnyDenseArray> {
+    pub fn parse_tile_data(&self, tile: &TileSource, cog_chunk: &[u8]) -> Result<AnyDenseArray> {
         Ok(match self.data_type() {
             ArrayDataType::Uint8 => AnyDenseArray::U8(self.cog.parse_tile_data_as::<u8>(tile, cog_chunk)?),
             ArrayDataType::Uint16 => AnyDenseArray::U16(self.cog.parse_tile_data_as::<u16>(tile, cog_chunk)?),
@@ -261,11 +318,11 @@ impl WebTilesReader {
         &self,
         tile: &Tile,
         mut reader: impl Read + Seek,
-    ) -> Result<DenseArray<T>> {
-        if let Some(tile_meta) = self.tile_metadata(tile) {
-            self.cog.read_tile_data_as::<T>(tile_meta, &mut reader)
+    ) -> Result<Option<DenseArray<T>>> {
+        if let Some(tile_source) = self.tile_source(tile) {
+            Ok(Some(self.cog.read_tile_data_as::<T>(tile_source, &mut reader)?))
         } else {
-            Err(Error::InvalidArgument(format!("{tile:?} not found in COG index")))
+            Ok(None)
         }
     }
 }
@@ -354,7 +411,7 @@ mod tests {
             let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
 
             let mut reader = File::open(&output)?;
-            cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("None_u8")
+            cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("None_u8").unwrap()
         };
 
         {
@@ -363,7 +420,7 @@ mod tests {
             let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
 
             let mut reader = File::open(&output)?;
-            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("LZW_u8");
+            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("LZW_u8").unwrap();
             assert_eq!(tile_data, reference_tile_data);
         }
 
@@ -382,7 +439,10 @@ mod tests {
             assert_eq!(cog.cog_metadata().predictor, Some(Predictor::Horizontal));
 
             let mut reader = File::open(&output)?;
-            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("LZW_u8_predictor");
+            let tile_data = cog
+                .read_tile_data_as::<u8>(&reference_tile, &mut reader)
+                .expect("LZW_u8_predictor")
+                .unwrap();
             assert_eq!(tile_data, reference_tile_data);
         }
 
@@ -403,7 +463,8 @@ mod tests {
             let mut reader = File::open(&output)?;
             let tile_data = cog
                 .read_tile_data_as::<i32>(&reference_tile, &mut reader)
-                .expect("LZW_i32_predictor");
+                .expect("LZW_i32_predictor")
+                .unwrap();
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
@@ -425,7 +486,10 @@ mod tests {
 
             let mut reader = File::open(&output)?;
             assert!(cog.read_tile_data_as::<f64>(&reference_tile, &mut reader).is_err());
-            let tile_data = cog.read_tile_data_as::<f32>(&reference_tile, &mut reader).expect("LZW_f32");
+            let tile_data = cog
+                .read_tile_data_as::<f32>(&reference_tile, &mut reader)
+                .expect("LZW_f32")
+                .unwrap();
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
@@ -447,7 +511,8 @@ mod tests {
             let mut reader = File::open(&output)?;
             let tile_data = cog
                 .read_tile_data_as::<f32>(&reference_tile, &mut reader)
-                .expect("LZW_f32_predictor");
+                .expect("LZW_f32_predictor")
+                .unwrap();
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
@@ -469,7 +534,8 @@ mod tests {
             let mut reader = File::open(&output)?;
             let tile_data = cog
                 .read_tile_data_as::<f64>(&reference_tile, &mut reader)
-                .expect("LZW_f64_predictor");
+                .expect("LZW_f64_predictor")
+                .unwrap();
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
@@ -477,65 +543,65 @@ mod tests {
         Ok(())
     }
 
-    // #[test_log::test]
-    // fn read_test_cog_unaligned_overviews() -> Result<()> {
-    //     let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+    #[test_log::test]
+    fn read_test_cog_unaligned_overviews() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
-    //     let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-    //     let output = tmp.path().join("cog.tif");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
 
-    //     let opts = CogCreationOptions {
-    //         min_zoom: Some(7),
-    //         zoom_level_strategy: ZoomLevelStrategy::Closest,
-    //         tile_size: COG_TILE_SIZE,
-    //         allow_sparse: true,
-    //         compression: None,
-    //         predictor: None,
-    //         output_data_type: None,
-    //         aligned_levels: Some(2),
-    //     };
-    //     create_cog_tiles(&input, &output, opts)?;
+        let opts = CogCreationOptions {
+            min_zoom: Some(7),
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
+            tile_size: COG_TILE_SIZE,
+            allow_sparse: true,
+            compression: None,
+            predictor: None,
+            output_data_type: None,
+            aligned_levels: Some(2),
+        };
+        create_cog_tiles(&input, &output, opts)?;
 
-    //     let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
-    //     let meta = cog.cog_metadata();
-    //     assert_eq!(meta.min_zoom, 7);
-    //     assert_eq!(meta.max_zoom, 10);
+        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
+        let meta = cog.cog_metadata();
+        assert_eq!(meta.min_zoom, 7);
+        assert_eq!(meta.max_zoom, 10);
 
-    //     // Decode all tiles
-    //     let mut reader = File::open(&output)?;
-    //     let tile_data = cog.read_tile_data(&Tile { z: 7, x: 65, y: 42 }, &mut reader)?;
+        // Decode all tiles
+        let mut reader = File::open(&output)?;
+        let tile_data = cog.read_tile_data(&Tile { z: 7, x: 65, y: 42 }, &mut reader)?.unwrap();
 
-    //     // save as grayscale png
-    //     let tile_data_u8 = match &tile_data {
-    //         crate::AnyDenseArray::U8(data) => data.clone(),
-    //         _ => tile_data.cast_to::<u8>(),
-    //     };
+        // save as grayscale png
+        let tile_data_u8 = match &tile_data {
+            crate::AnyDenseArray::U8(data) => data.clone(),
+            _ => tile_data.cast_to::<u8>(),
+        };
 
-    //     let png_path = "/Users/dirk/tile_7_65_42.png";
-    //     let file = std::fs::File::create(png_path)?;
-    //     let w = &mut std::io::BufWriter::new(file);
+        let png_path = "/Users/dirk/tile_7_65_42.png";
+        let file = std::fs::File::create(png_path)?;
+        let w = &mut std::io::BufWriter::new(file);
 
-    //     let mut encoder = png::Encoder::new(w, COG_TILE_SIZE as u32, COG_TILE_SIZE as u32);
-    //     encoder.set_color(png::ColorType::Grayscale);
-    //     encoder.set_depth(png::BitDepth::Eight);
-    //     let mut writer = encoder.write_header().unwrap();
-    //     writer.write_image_data(tile_data_u8.as_slice()).unwrap();
+        let mut encoder = png::Encoder::new(w, COG_TILE_SIZE as u32, COG_TILE_SIZE as u32);
+        encoder.set_color(png::ColorType::Grayscale);
+        encoder.set_depth(png::BitDepth::Eight);
+        let mut writer = encoder.write_header().unwrap();
+        writer.write_image_data(tile_data_u8.as_slice()).unwrap();
 
-    //     // for tile in cog.tile_offsets().keys() {
-    //     //     let tile_data = cog.read_tile_data(tile, &mut reader)?;
-    //     //     if tile_data.is_empty() {
-    //     //         continue; // Skip empty tiles
-    //     //     }
+        // for tile in cog.tile_offsets().keys() {
+        //     let tile_data = cog.read_tile_data(tile, &mut reader)?;
+        //     if tile_data.is_empty() {
+        //         continue; // Skip empty tiles
+        //     }
 
-    //     //     assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
-    //     //     assert_eq!(tile_data.data_type(), meta.data_type);
+        //     assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
+        //     assert_eq!(tile_data.data_type(), meta.data_type);
 
-    //     //     let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
-    //     //     assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
-    //     // }
+        //     let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
+        //     assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
+        // }
 
-    //     Ok(())
-    // }
+        Ok(())
+    }
 
     #[test_log::test]
     fn read_test_cog_512() -> Result<()> {

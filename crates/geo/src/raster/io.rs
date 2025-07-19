@@ -81,8 +81,8 @@ impl RasterFormat {
     }
 }
 
-#[derive(Default)]
-struct CutOut {
+#[derive(Default, Debug, Clone, PartialEq, Eq)]
+pub struct CutOut {
     pub src_col_offset: i32,
     pub src_row_offset: i32,
     pub dst_col_offset: i32,
@@ -424,7 +424,7 @@ pub mod dataset {
         Ok(())
     }
 
-    fn intersect_metadata(src_meta: &GeoReference, dst_meta: &GeoReference) -> Result<CutOut> {
+    pub fn intersect_metadata(src_meta: &GeoReference, dst_meta: &GeoReference) -> Result<CutOut> {
         // src_meta: the metadata of the raster that we are going to read as it ison disk
         // dst_meta: the metadata of the raster that will be returned to the user
 

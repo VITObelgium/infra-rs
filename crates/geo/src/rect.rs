@@ -2,7 +2,7 @@ use std::fmt::Debug;
 
 pub type Point<T = f64> = geo_types::Point<T>;
 use geo_types::CoordNum;
-use num::{abs, Signed, Zero};
+use num::Zero;
 
 #[derive(Debug)]
 pub struct Rect<T>
@@ -24,10 +24,10 @@ where
         Rect { top_left, bottom_right }
     }
 
-    pub fn from_ne_sw(ne: Point<T>, sw: Point<T>) -> Self {
+    pub fn from_nw_se(nw: Point<T>, se: Point<T>) -> Self {
         Rect {
-            top_left: ne,
-            bottom_right: sw,
+            top_left: nw,
+            bottom_right: se,
         }
     }
 
@@ -44,14 +44,18 @@ where
 
     pub fn height(&self) -> T
     where
-        T: std::ops::Sub + std::ops::Neg + Copy + Signed,
+        T: std::ops::Sub + Copy,
     {
-        abs(self.bottom_right.y() - self.top_left.y())
+        if self.bottom_right.y() > self.top_left.y() {
+            self.bottom_right.y() - self.top_left.y()
+        } else {
+            self.top_left.y() - self.bottom_right.y()
+        }
     }
 
-    pub fn empty(&self) -> bool
+    pub fn is_empty(&self) -> bool
     where
-        T: PartialEq + Default + std::ops::Sub + Zero + Copy + PartialOrd + Signed,
+        T: PartialEq + std::ops::Sub + Zero + Copy + PartialOrd,
     {
         self.width() == T::zero() || self.height() == T::zero()
     }
@@ -76,7 +80,9 @@ where
     where
         T: Copy + CoordNum,
     {
-        self.top_left.x() < other.bottom_right.x()
+        !self.is_empty()
+            && !other.is_empty()
+            && self.top_left.x() < other.bottom_right.x()
             && self.bottom_right.x() > other.top_left.x()
             && self.top_left.y() > other.bottom_right.y()
             && self.bottom_right.y() < other.top_left.y()
@@ -100,24 +106,16 @@ where
             max(self.bottom_right.y(), other.bottom_right.y()),
         );
 
-        Rect::from_ne_sw(top_left, bottom_right)
+        Rect::from_nw_se(top_left, bottom_right)
     }
 }
 
 fn min<T: PartialOrd>(a: T, b: T) -> T {
-    if a < b {
-        a
-    } else {
-        b
-    }
+    if a < b { a } else { b }
 }
 
 fn max<T: PartialOrd>(a: T, b: T) -> T {
-    if b > a {
-        b
-    } else {
-        a
-    }
+    if b > a { b } else { a }
 }
 
 impl From<Rect<f64>> for geo_types::Polygon<f64> {
@@ -178,5 +176,32 @@ mod tests {
 
         assert_eq!(intersection.top_left, Point::new(0.0, 0.0));
         assert_eq!(intersection.bottom_right, Point::new(0.0, 0.0));
+    }
+
+    #[test]
+    fn adjacent_rectangles_intersection() {
+        let r1 = Rect::from_points(Point::new(0, 10), Point::new(10, 0));
+        let r2 = Rect::from_points(Point::new(10, 10), Point::new(20, 0));
+
+        assert!(!r1.intersects(&r2));
+        let intersection = r1.intersection(&r2);
+        assert!(intersection.is_empty());
+    }
+
+    #[test]
+    fn empty_rectangle_intersection() {
+        let r1 = Rect::from_points(
+            Point::new(313086.06785608083, 6731350.458905762),
+            Point::new(469629.1017841218, 6574807.424977721),
+        );
+
+        let r2 = Rect::from_points(
+            Point::new(391357.58482010243, 6731350.458905762),
+            Point::new(391357.58482010243, 6574807.424977721),
+        );
+
+        assert!(!r1.intersects(&r2));
+        let intersection = r1.intersection(&r2);
+        assert!(intersection.is_empty());
     }
 }
