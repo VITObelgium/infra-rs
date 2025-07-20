@@ -192,8 +192,28 @@ impl TileProvider for CogTileProvider {
         tileio::detect_raster_range(&self.meta.path, 1, extent)
     }
 
-    fn get_raster_value(&self, _layer_id: LayerId, _coord: Coordinate, _dpi_ratio: u8) -> Result<Option<f32>> {
-        todo!()
+    fn get_raster_value(&self, layer_id: LayerId, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
+        let tile = Tile::for_coordinate(coord, self.meta.max_zoom);
+        let tile_size = self.meta.tile_size.unwrap_or(256);
+
+        let tile_data = self.get_tile(
+            layer_id,
+            &TileRequest {
+                tile,
+                dpi_ratio,
+                tile_size,
+                tile_format: TileFormat::RasterTile,
+            },
+        )?;
+
+        if !tile_data.data.is_empty()
+            && let Some((x, y)) = tile.coordinate_pixel_offset(coord, tile_size as u32)
+        {
+            let index = (y * tile_size as u32 + x) as usize;
+            Ok(tile_data.data.get(index).map(|v| *v as f32))
+        } else {
+            Ok(None)
+        }
     }
 
     fn get_tile(&self, layer_id: LayerId, req: &TileRequest) -> Result<TileData> {
