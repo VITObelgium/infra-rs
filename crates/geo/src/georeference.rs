@@ -153,7 +153,7 @@ impl GeoReference {
         let pixel_size = Tile::pixel_size_at_zoom_level(tile.z + zoom_offset) / dpi_ratio as f64;
 
         GeoReference::with_origin(
-            "",
+            "EPSG:3857",
             raster_size,
             crs::lat_lon_to_web_mercator(tile.bounds().southwest()),
             CellSize::square(pixel_size),
@@ -661,8 +661,11 @@ impl std::fmt::Display for GeoReference {
 }
 
 fn is_aligned(val1: f64, val2: f64, cellsize: f64) -> bool {
+    let cellsizeabs = cellsize.abs();
     let diff = (val1 - val2).abs();
-    diff % cellsize < 1e-12
+    let modulo = diff % cellsizeabs;
+
+    if modulo < 1e-6 { true } else { (modulo - cellsizeabs).abs() < 1e-6 }
 }
 
 #[cfg(test)]
