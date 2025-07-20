@@ -31,6 +31,7 @@ impl CogTileProvider {
     pub fn new(path: &Path, _opts: &TileProviderOptions) -> Result<Self> {
         let cog = WebTilesReader::from_cog(CogAccessor::from_file(path)?)?;
         let meta = cog.cog_metadata();
+        let wgs84_meta = meta.geo_reference.warped_to_epsg(crs::epsg::WGS84)?;
 
         let meta = LayerMetadata {
             id: unique_layer_id(),
@@ -42,7 +43,7 @@ impl CogTileProvider {
             name: "COG".into(),
             description: String::default(),
             epsg: Some(crs::epsg::WGS84_WEB_MERCATOR),
-            bounds: meta.geo_reference.latlonbounds().array(),
+            bounds: wgs84_meta.latlonbounds().array(),
             url: "".to_string(),
             source_is_web_mercator: true,
             supports_dpi_ratio: false,
