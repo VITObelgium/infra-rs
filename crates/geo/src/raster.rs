@@ -4,6 +4,8 @@ mod denserasterconversions;
 #[cfg(feature = "gdal")]
 pub mod io;
 
+use std::path::Path;
+
 use crate::GeoReference;
 
 // pub mod warp;
@@ -38,17 +40,17 @@ where
 {
     /// Reads the full raster from disk
     /// No processing (cutting, resampling) is done on the raster data, the original data is returned
-    fn read_band(path: &std::path::Path, band_index: usize) -> Result<Self>;
+    fn read_band(path: impl AsRef<Path>, band_index: usize) -> Result<Self>;
     /// Same as `read_band_from_disk` but reads the first band
-    fn read(path: &std::path::Path) -> Result<Self>;
+    fn read(path: impl AsRef<Path>) -> Result<Self>;
 
     /// Reads a subset of the raster from disk
     /// The provided extent does not have to be contained within the raster
     /// Areas outside of the original raster will be filled with the nodata value
-    fn read_bounds(path: &std::path::Path, region: &GeoReference, band_index: usize) -> Result<Self>;
+    fn read_bounds(path: impl AsRef<Path>, region: &GeoReference, band_index: usize) -> Result<Self>;
 
     /// Write the full raster to disk
-    fn write(&mut self, path: &std::path::Path) -> Result;
+    fn write(&mut self, path: impl AsRef<Path>) -> Result;
 }
 
 /// Trait for raster types that can handle nodata values and need te exchanged with external code

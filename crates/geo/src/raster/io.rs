@@ -54,7 +54,8 @@ impl RasterFormat {
     }
 
     /// Given a file path, guess the raster type based on the file extension
-    pub fn guess_from_path(file_path: &Path) -> RasterFormat {
+    pub fn guess_from_path(file_path: impl AsRef<Path>) -> RasterFormat {
+        let file_path = file_path.as_ref();
         let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
 
         if let Some(ext) = ext {
@@ -108,7 +109,8 @@ pub mod dataset {
         options.iter().map(|s| s.as_ref()).collect()
     }
 
-    fn open_with_options(path: &Path, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
+    fn open_with_options(path: impl AsRef<Path>, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
+        let path = path.as_ref();
         gdal::Dataset::open_ex(path, options).map_err(|err| match err {
             // Match on the error to give a cleaner error message when the file does not exist
             GdalError::NullPointer { method_name: _, msg: _ } => {
@@ -132,7 +134,7 @@ pub mod dataset {
     }
 
     /// Open a GDAL raster dataset for reading
-    pub fn open_read_only(path: &Path) -> Result<gdal::Dataset> {
+    pub fn open_read_only(path: impl AsRef<Path>) -> Result<gdal::Dataset> {
         let options = gdal::DatasetOptions {
             open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
             ..Default::default()
@@ -142,7 +144,7 @@ pub mod dataset {
     }
 
     /// Open a GDAL raster dataset for reading with driver open options
-    pub fn open_read_only_with_options(path: &Path, open_options: &[&str]) -> Result<gdal::Dataset> {
+    pub fn open_read_only_with_options(path: impl AsRef<Path>, open_options: &[&str]) -> Result<gdal::Dataset> {
         let options = gdal::DatasetOptions {
             open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
             open_options: Some(open_options),
@@ -153,17 +155,17 @@ pub mod dataset {
     }
 
     /// Detect the data type of the raster band at the provided path
-    pub fn detect_data_type(path: &Path, band_index: usize) -> Result<gdal::raster::GdalDataType> {
+    pub fn detect_data_type(path: impl AsRef<Path>, band_index: usize) -> Result<gdal::raster::GdalDataType> {
         Ok(open_read_only(path)?.rasterband(band_index)?.band_type())
     }
 
     /// Reads the [`crate::GeoReference`] from the first band of a raster file
-    pub fn read_file_metadata(path: &Path) -> Result<GeoReference> {
+    pub fn read_file_metadata(path: impl AsRef<Path>) -> Result<GeoReference> {
         read_band_metadata(&open_read_only(path)?, 1)
     }
 
     /// Opens the raster dataset to read the spatial metadata with driver open options
-    pub fn read_file_metadata_with_options<T: AsRef<str>>(path: &Path, open_options: &[T]) -> Result<GeoReference> {
+    pub fn read_file_metadata_with_options<T: AsRef<str>>(path: impl AsRef<Path>, open_options: &[T]) -> Result<GeoReference> {
         read_band_metadata(&open_read_only_with_options(path, str_vec(open_options).as_slice())?, 1)
     }
 
@@ -186,7 +188,7 @@ pub mod dataset {
 
     /// The provided extent will be the extent of the resulting raster.
     /// Areas outside the extent of the raster on disk will be filled with nodata.
-    pub fn read_band_region<T: GdalType + ArrayNum>(
+    pub fn read_band_region<T: ArrayNum>(
         dataset: &gdal::Dataset,
         band_nr: usize,
         extent: &GeoReference,
@@ -306,11 +308,12 @@ pub mod dataset {
     /// Write raster to disk using a different data type then present in the data buffer
     /// Driver options (as documented in the GDAL drivers) can be provided
     /// If no driver options are provided, some sane defaults will be used for geotiff files
-    pub fn write_as<TStore, T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result<()>
+    pub fn write_as<TStore, T>(data: &[T], meta: &GeoReference, path: impl AsRef<Path>, driver_options: &[String]) -> Result<()>
     where
         T: GdalType + Nodata + num::NumCast + Copy,
         TStore: GdalType + Nodata + num::NumCast,
     {
+        let path = path.as_ref();
         create_output_directory_if_needed(path)?;
 
         // To write a raster to disk we need a dataset that contains the data
@@ -336,7 +339,7 @@ pub mod dataset {
     /// Write the raster to disk.
     /// Driver options (as documented in the GDAL drivers) can be provided.
     /// If no driver options are provided, some sane defaults will be used for geotiff files (compression, tiling).
-    pub fn write<T>(data: &[T], meta: &GeoReference, path: &Path, driver_options: &[String]) -> Result
+    pub fn write<T>(data: &[T], meta: &GeoReference, path: impl AsRef<Path>, driver_options: &[String]) -> Result
     where
         T: GdalType + Nodata + num::NumCast + Copy,
     {
@@ -358,7 +361,13 @@ pub mod dataset {
     }
 
     // Write dataset to disk using the Drivers CreateCopy method
-    fn write_to_disk(ds: &mut gdal::Dataset, path: &Path, driver_options: &[String], metadata_values: &[(String, String)]) -> Result<()> {
+    fn write_to_disk(
+        ds: &mut gdal::Dataset,
+        path: impl AsRef<Path>,
+        driver_options: &[String],
+        metadata_values: &[(String, String)],
+    ) -> Result<()> {
+        let path = path.as_ref();
         let driver = create_raster_driver_for_path(path)?;
 
         let mut c_opts = CslStringList::new();
@@ -461,7 +470,8 @@ pub mod dataset {
         Ok(result)
     }
 
-    fn create_raster_driver_for_path(path: &Path) -> Result<gdal::Driver> {
+    fn create_raster_driver_for_path(path: impl AsRef<Path>) -> Result<gdal::Driver> {
+        let path = path.as_ref();
         let raster_format = RasterFormat::guess_from_path(path);
         if raster_format == RasterFormat::Unknown {
             return Err(Error::Runtime(format!(

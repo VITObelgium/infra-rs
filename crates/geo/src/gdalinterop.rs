@@ -72,7 +72,8 @@ pub fn create_string_list(options: &[String]) -> Result<CslStringList> {
     Ok(result)
 }
 
-pub fn create_output_directory_if_needed(p: &Path) -> Result<()> {
+pub fn create_output_directory_if_needed(p: impl AsRef<Path>) -> Result<()> {
+    let p = p.as_ref();
     if p.starts_with("/vsi") {
         // this is a gdal virtual filesystem path
         return Ok(());

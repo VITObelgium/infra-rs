@@ -374,10 +374,10 @@ impl WebTilesReader {
     ) -> Result<DenseArray<T>> {
         let tile_size = self.cog_metadata().tile_size as usize;
 
-        let mut arr = DenseArray::new(
-            RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), NumCast::from(T::NODATA)),
-            allocate::aligned_vec_filled_with(T::NODATA, tile_size * tile_size),
-        )?;
+        let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(
+            RasterSize::square(tile_size as i32),
+            NumCast::from(T::NODATA),
+        ));
 
         for ((cog_location, cutout), cog_chunck) in tile_sources.iter().zip(cog_chunks) {
             let chunk_range = cog_location.range_to_fetch();

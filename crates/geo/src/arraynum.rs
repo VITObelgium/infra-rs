@@ -5,6 +5,12 @@ use crate::{ArrayDataType, Nodata};
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
+#[cfg(not(feature = "gdal"))]
+pub trait GdalNum {}
+
+#[cfg(feature = "gdal")]
+pub trait GdalNum: gdal::raster::GdalType {}
+
 pub trait ArrayNumScalar:
     Copy
     + Nodata
@@ -18,6 +24,7 @@ pub trait ArrayNumScalar:
     + approx::AbsDiffEq<Epsilon = Self>
     + bytemuck::AnyBitPattern
     + bytemuck::NoUninit
+    + GdalNum
 {
     const TYPE: ArrayDataType;
     const IS_SIGNED: bool;
@@ -272,6 +279,7 @@ macro_rules! impl_arraynum_scalar_signed {
         }
 
         impl ArrayNum for $t {}
+        impl GdalNum for $t {}
     };
 }
 
@@ -288,6 +296,7 @@ macro_rules! impl_arraynum_scalar_unsigned {
         }
 
         impl ArrayNum for $t {}
+        impl GdalNum for $t {}
     };
 }
 
@@ -304,6 +313,7 @@ macro_rules! impl_arraynum_scalar_fp {
         }
 
         impl ArrayNum for $t {}
+        impl GdalNum for $t {}
     };
 }
 
