@@ -1,6 +1,6 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
-    RasterMetadata, Rect, Result, Rows, Window,
+    RasterMetadata, Result, Rows, Window,
     cog::{CogTileLocation, HorizontalUnpredictable, io, reader::PyramidInfo},
     raster::io::{CutOut, dataset::intersect_metadata},
 };
@@ -71,31 +71,20 @@ impl WebTiles {
                     pyramid.tile_locations.len(),
                 );
 
-                let pixel_size = Tile::pixel_size_at_zoom_level(pyramid.zoom_level);
-
                 for tile in &tiles {
                     let mut tile_sources = Vec::new();
-
                     let web_tile_georef = GeoReference::from_tile(tile, meta.tile_size as usize, 1);
 
                     for (cog_tile, bounds) in &cog_tile_bounds {
-                        // let cog_tile_georef = GeoReference::with_origin(
-                        //     "",
-                        //     RasterSize::square(meta.tile_size as i32),
-                        //     bounds.bottom_left(),
-                        //     CellSize::square(pixel_size),
-                        //     Option::<f64>::None,
-                        // );
-
                         if web_tile_georef.intersects(bounds).unwrap() {
+                            // let t = Tile { z: 8, x: 132, y: 85 };
+                            // if tile == &t {
+                            //     log::info!("Break");
+                            // }
+
                             if let Ok(cutout) = intersect_metadata(bounds, &web_tile_georef) {
                                 tile_sources.push((*cog_tile, cutout));
                             }
-
-                            // if pyramid.zoom_level == 7 {
-                            //     let intersection = tile.web_mercator_bounds().intersection(bounds);
-                            //     dbg!(tile, intersection);
-                            // }
                         }
                     }
 
@@ -246,12 +235,30 @@ fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, pyramid: &Pyramid
     tiles
 }
 
+fn change_georef_cell_size(geo_reference: &GeoReference, cell_size: CellSize) -> GeoReference {
+    let mut result = geo_reference.clone();
+    let x_factor = cell_size.x() / geo_reference.cell_size_x();
+    let y_factor = cell_size.y() / geo_reference.cell_size_y();
+    result.set_cell_size(cell_size);
+
+    let raster_size = geo_reference.raster_size();
+    let new_rows = Rows((raster_size.rows.count() as f64 * y_factor).round() as i32);
+    let new_cols = Columns((raster_size.cols.count() as f64 * x_factor).round() as i32);
+    result.set_rows(new_rows);
+    result.set_columns(new_cols);
+
+    result
+}
+
 fn create_cog_tile_web_mercator_bounds(
     pyramid: &PyramidInfo,
-    geo_reference: &GeoReference,
+    geo_reference: &GeoReference, // georeference of the full cog image
     tile_size: u16,
 ) -> Result<Vec<(CogTileLocation, GeoReference)>> {
     let mut web_tiles = Vec::with_capacity(pyramid.tile_locations.len());
+
+    let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level));
+    let geo_ref_zoom_level = change_georef_cell_size(geo_reference, cell_size);
 
     let tiles_wide = (pyramid.raster_size.cols.count() as u16).div_ceil(tile_size) as usize;
     let tiles_high = (pyramid.raster_size.rows.count() as u16).div_ceil(tile_size) as usize;
@@ -264,23 +271,20 @@ fn create_cog_tile_web_mercator_bounds(
         )));
     }
 
-    let max_x = geo_reference.bottom_right().x();
-    let min_y = geo_reference.bottom_right().y();
-
-    //let tile_size_dims = RasterSize::square((tile_size as f64 * geo_reference.cell_size_x()) as i32);
-
     let tile_size = tile_size as i32;
     for ty in 0..tiles_high {
-        let mut current_source_cell = Cell::from_row_col(0, ty as i32 * tile_size);
+        let mut current_source_cell = Cell::from_row_col(ty as i32 * tile_size, 0);
         let tile_height = Rows(if current_source_cell.row + tile_size > pyramid.raster_size.rows.count() {
+            debug_assert!(ty + 1 == tiles_high);
             pyramid.raster_size.rows.count() - current_source_cell.row
         } else {
             tile_size
         });
 
         for tx in 0..tiles_wide {
-            current_source_cell.col += tx as i32 * tile_size;
+            current_source_cell.col = tx as i32 * tile_size;
             let tile_width = Columns(if current_source_cell.col + tile_size > pyramid.raster_size.cols.count() {
+                debug_assert!(tx + 1 == tiles_wide);
                 pyramid.raster_size.cols.count() - current_source_cell.col
             } else {
                 tile_size
@@ -291,8 +295,8 @@ fn create_cog_tile_web_mercator_bounds(
             let cog_tile_geo_ref = GeoReference::with_origin(
                 "EPSG:3857",
                 RasterSize::with_rows_cols(tile_height, tile_width),
-                geo_reference.cell_lower_left(lower_left_cell),
-                geo_reference.cell_size(),
+                geo_ref_zoom_level.cell_lower_left(lower_left_cell),
+                cell_size,
                 Option::<f64>::None,
             );
 
@@ -303,68 +307,6 @@ fn create_cog_tile_web_mercator_bounds(
 
     Ok(web_tiles)
 }
-
-// fn create_cog_tile_web_mercator_bounds(
-//     pyramid: &PyramidInfo,
-//     geo_reference: &GeoReference,
-//     tile_size: u16,
-// ) -> Result<Vec<(CogTileLocation, GeoReference)>> {
-//     let mut web_tiles = Vec::with_capacity(pyramid.tile_locations.len());
-
-//     let tiles_wide = (pyramid.raster_size.cols.count() as u16).div_ceil(tile_size) as usize;
-//     let tiles_high = (pyramid.raster_size.rows.count() as u16).div_ceil(tile_size) as usize;
-
-//     if tiles_wide * tiles_high != pyramid.tile_locations.len() {
-//         return Err(Error::InvalidArgument(format!(
-//             "Expected {} tiles, but got {}",
-//             tiles_wide * tiles_high,
-//             pyramid.tile_locations.len()
-//         )));
-//     }
-
-//     let pixel_size = tile_size as f64 * Tile::pixel_size_at_zoom_level(pyramid.zoom_level);
-//     //let pixel_y_offset = -pixel_x_offset; // Y coordinates decrease from top to bottom in web mercator
-
-//     let max_x = pyramid.raster_size.cols.count() as f64;
-//     let max_y = pyramid.raster_size.rows.count() as f64;
-
-//     let tile_size = tile_size as f64;
-//     for ty in 0..tiles_high {
-//         let y_offset = (ty as f64 * pixel_size * tile_size).min(max_y * pixel_size);
-
-//         let mut current_pos = geo_reference.bottom_left() + Point::new(0.0, ty as f64 * geo_reference.cell_size_y() * tile_size);
-
-//         for tx in 0..tiles_wide {
-//             let cog_tile_geo_ref = GeoReference::with_origin(
-//                 "EPSG:3857",
-//                 RasterSize::square(tile_size as i32),
-//                 current_pos,
-//                 geo_reference.cell_size(),
-//                 Option::<f64>::None,
-//             );
-
-//             current_pos += Point::new(geo_reference.cell_size_x() * tile_size, 0.0);
-
-//             let cog_tile = &pyramid.tile_locations[ty * tiles_wide + tx];
-//             let intersect = cog_tile_geo_ref.intersects(geo_reference)?;
-//             if intersect {
-//                 let intersection = cog_tile_geo_ref.intersection(geo_reference)?;
-//                 web_tiles.push((*cog_tile, intersection));
-//             }
-
-//             // let cog_tile = &pyramid.tile_locations[ty * tiles_wide + tx];
-//             // let x_offset = (tx as f64 * pixel_size * tile_size).min(max_x);
-
-//             // let offset = Point::new(x_offset, -y_offset);
-//             // let top_left = geo_reference.top_left() + offset;
-//             // let bottom_right = top_left + Point::new(pixel_size * tile_size, -(pixel_size * tile_size));
-
-//             //web_tiles.push((*cog_tile, Rect::from_nw_se(top_left, bottom_right)));
-//         }
-//     }
-
-//     Ok(web_tiles)
-// }
 
 pub struct WebTileInfo {
     pub min_zoom: i32,
@@ -751,6 +693,9 @@ mod tests {
         };
         create_cog_tiles(&input, &output, opts)?;
 
+        // debug::dump_web_tiles(&output, 7, &PathBuf::from("/Users/dirk/cog/tile")).unwrap();
+        // debug::dump_web_tiles(&output, 8, &PathBuf::from("/Users/dirk/cog/tile")).unwrap();
+
         let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
         let meta = cog.cog_metadata();
         assert_eq!(meta.min_zoom, 7);
@@ -759,48 +704,69 @@ mod tests {
         // Decode all tiles
         let mut reader = File::open(&output)?;
 
-        let tile = Tile { z: 7, x: 66, y: 42 };
-        let tile_source = cog.tile_source(&tile).unwrap();
-        match tile_source {
-            TileSource::Aligned(_) => {
-                panic!("Expected unaligned tile source for tile {tile:?}");
+        {
+            let tile = Tile { z: 7, x: 66, y: 42 };
+            let tile_source = cog.tile_source(&tile).unwrap();
+            match tile_source {
+                TileSource::Aligned(_) => {
+                    panic!("Expected unaligned tile source for tile {tile:?}");
+                }
+                TileSource::Unaligned(tile_sources) => {
+                    assert_eq!(1, tile_sources.len());
+                }
             }
-            TileSource::Unaligned(tile_sources) => {
-                assert_eq!(1, tile_sources.len());
+
+            let tile_data = cog.read_tile_data_as::<u8>(&tile, &mut reader).unwrap().unwrap();
+            let mut first_row_value_count = 0;
+            for row in 0..tile_data.rows().count() {
+                // This tile only contains a bit of data in the lower left corner, the rest is nodata
+                // Verify the zero padding values that are present in the cog for the unaligned overviews are not present in the tile data
+
+                // Last row should be nodata
+                let last_col_value = tile_data[Cell::from_row_col(row, COG_TILE_SIZE as i32 - 1)];
+                assert!(
+                    last_col_value.is_nodata(),
+                    "Last cell at row {row} is not nodata but {last_col_value}"
+                );
+
+                // Middle row should be nodata
+                let middle_col_value = tile_data[Cell::from_row_col(row, (COG_TILE_SIZE / 2) as i32 - 1)];
+                assert!(
+                    middle_col_value.is_nodata(),
+                    "Middle cell at row {row} is not nodata but {middle_col_value}"
+                );
+
+                // First row should not all be nodata
+                let first_col_value = tile_data[Cell::from_row_col(row, 0)];
+                if !first_col_value.is_nodata() {
+                    first_row_value_count += 1;
+                }
             }
+
+            assert_ne!(first_row_value_count, 0);
+            assert!(tile_data.as_slice()[0..(COG_TILE_SIZE / 2) as usize].iter().all(|&v| v.is_nodata()));
         }
 
-        let tile_data = cog.read_tile_data_as::<u8>(&tile, &mut reader).unwrap().unwrap();
-        let mut first_row_value_count = 0;
-        for row in 0..tile_data.rows().count() {
-            // This tile only contains a bit of data in the lower left corner, the rest is nodata
-            // Verify the zero padding values that are present in the cog for the unaligned overviews are not present in the tile data
-
-            // Last row should be nodata
-            let last_col_value = tile_data[Cell::from_row_col(row, COG_TILE_SIZE as i32 - 1)];
-            assert!(
-                last_col_value.is_nodata(),
-                "Last cell at row {row} is not nodata but {last_col_value}"
-            );
-
-            // Middle row should be nodata
-            let middle_col_value = tile_data[Cell::from_row_col(row, (COG_TILE_SIZE / 2) as i32 - 1)];
-            assert!(
-                middle_col_value.is_nodata(),
-                "Middle cell at row {row} is not nodata but {middle_col_value}"
-            );
-
-            // First row should not all be nodata
-            let first_col_value = tile_data[Cell::from_row_col(row, 0)];
-            if !first_col_value.is_nodata() {
-                first_row_value_count += 1;
+        {
+            let tile = Tile { z: 8, x: 131, y: 85 };
+            let tile_source = cog.tile_source(&tile).unwrap();
+            match tile_source {
+                TileSource::Aligned(_) => {
+                    panic!("Expected unaligned tile source for tile {tile:?}");
+                }
+                TileSource::Unaligned(tile_sources) => {
+                    assert_eq!(2, tile_sources.len());
+                }
             }
+
+            let tile_data = cog.read_tile_data_as::<u8>(&tile, &mut reader).unwrap().unwrap();
+            assert!(
+                !tile_data.as_slice()
+                    [COG_TILE_SIZE as usize * (COG_TILE_SIZE as usize - 1)..COG_TILE_SIZE as usize * COG_TILE_SIZE as usize]
+                    .iter()
+                    .all(|&v| v == 0)
+            );
         }
-
-        assert_ne!(first_row_value_count, 0);
-        assert!(tile_data.as_slice()[0..(COG_TILE_SIZE / 2) as usize].iter().all(|&v| v.is_nodata()));
-
-        //let tile_data = cog.read_tile_data(&tile, &mut reader)?.unwrap();
 
         for tile in cog.zoom_level_tile_sources(7).unwrap().keys() {
             if let Some(tile_data) = cog.read_tile_data(tile, &mut reader)? {
@@ -878,9 +844,8 @@ mod tests {
         };
         create_cog_tiles(&input, &output, opts)?;
 
-        std::fs::copy(&output, "/Users/dirk/http/cog_unaligned.tif").unwrap();
-
         let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
+
         let pyramid = cog.pyramid_info(7).expect("Zoom level 7 not found");
 
         let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, pyramid, COG_TILE_SIZE);
@@ -896,6 +861,100 @@ mod tests {
                 Tile { z: 7, x: 66, y: 43 },
             ]
         );
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn create_cog_tile_web_mercator_bounds() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(7),
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
+            tile_size: COG_TILE_SIZE,
+            allow_sparse: true,
+            compression: None,
+            predictor: None,
+            output_data_type: None,
+            aligned_levels: Some(2),
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        let cog_accessor = CogAccessor::from_file(&output)?;
+        let cog_tiles = cog_accessor.pyramid_info(8).unwrap().tile_locations.clone();
+
+        let cog = WebTilesReader::from_cog(cog_accessor)?;
+        let bounds = super::create_cog_tile_web_mercator_bounds(
+            cog.pyramid_info(8).unwrap(),
+            &cog.cog_metadata().geo_reference,
+            cog.cog_metadata().tile_size,
+        )?;
+
+        {
+            // Top right tile
+            let (cog_tile_location, geo_ref) = &bounds[2];
+            assert_eq!(cog_tile_location.offset, cog_tiles[2].offset);
+            assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6731350.458905762));
+        }
+
+        {
+            // Bottom right tile
+            let (cog_tile_location, geo_ref) = &bounds[5];
+            assert_eq!(cog_tile_location.offset, cog_tiles[5].offset);
+            assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6574807.424977721));
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn generate_tile_sources() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(7),
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
+            tile_size: COG_TILE_SIZE,
+            allow_sparse: true,
+            compression: None,
+            predictor: None,
+            output_data_type: None,
+            aligned_levels: Some(2),
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
+
+        {
+            let tile_sources = cog.zoom_level_tile_sources(8).expect("Zoom level 8 not found");
+            let web_tile = Tile { z: 8, x: 132, y: 85 };
+
+            let tile = tile_sources.get(&web_tile).unwrap();
+            match tile {
+                TileSource::Aligned(_) => panic!("Expected unaligned tile source for tile {tile:?}"),
+                TileSource::Unaligned(items) => {
+                    assert_eq!(1, items.len());
+                    let (tile_location, cutout) = items.first().unwrap();
+
+                    assert_eq!(
+                        tile_location.offset,
+                        264600 /* offset of the cog tile at 0 based index 2 (top right cog tile)*/
+                    );
+
+                    assert_eq!(cutout.cols, 128);
+                    assert_eq!(cutout.rows, 256);
+                    assert_eq!(cutout.src_col_offset, 128);
+                    assert_eq!(cutout.src_row_offset, 0);
+                    assert_eq!(cutout.dst_col_offset, 0);
+                    assert_eq!(cutout.src_row_offset, 0);
+                }
+            }
+        }
 
         Ok(())
     }

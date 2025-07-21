@@ -302,8 +302,6 @@ impl<R: Read + Seek> CogDecoder<R> {
             .and_then(|proj| proj.epsg().map(|epsg| epsg.to_string()))
             .unwrap_or_default();
 
-        dbg!(current_zoom, max_zoom);
-
         Ok(CogMetadata {
             min_zoom: current_zoom,
             max_zoom,

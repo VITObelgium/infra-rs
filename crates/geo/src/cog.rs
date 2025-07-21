@@ -10,6 +10,9 @@ pub enum Predictor {
 }
 
 #[cfg(feature = "gdal")]
+pub mod debug;
+
+#[cfg(feature = "gdal")]
 mod creation;
 mod decoder;
 pub mod io;

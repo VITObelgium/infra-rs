@@ -132,6 +132,10 @@ impl CogAccessor {
         &self.meta
     }
 
+    pub fn pyramid_info(&self, zoom_level: i32) -> Option<&PyramidInfo> {
+        self.meta.pyramids.iter().find(|p| p.zoom_level == zoom_level)
+    }
+
     /// Read the tile data for the given tile using the provided reader.
     /// This method will return an error if the tile does not exist in the COG index
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
