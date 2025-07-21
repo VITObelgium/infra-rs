@@ -13,7 +13,7 @@ use crate::{
 #[cfg(feature = "gdal")]
 use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
 
-#[derive(Clone, Debug, PartialEq, Default)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct CellSize {
     x: f64,
     y: f64,
@@ -196,6 +196,11 @@ impl GeoReference {
         self.geo_transform[1] = size;
     }
 
+    pub fn set_cell_size(&mut self, size: CellSize) {
+        self.set_cell_size_x(size.x);
+        self.set_cell_size_y(size.y);
+    }
+
     /// The verical cell size of the image.
     pub fn cell_size_y(&self) -> f64 {
         self.geo_transform[5]
@@ -209,7 +214,7 @@ impl GeoReference {
         self.geo_transform[5] = size;
     }
 
-    pub fn set_cell_size(&mut self, size: f64) {
+    pub fn set_square_cell_size_north_up(&mut self, size: f64) {
         self.set_cell_size_x(size);
         self.set_cell_size_y(-size);
     }
@@ -353,6 +358,11 @@ impl GeoReference {
                 None => Err(Error::InvalidArgument("Failed to convert nodata value".to_string())),
             },
         }
+    }
+
+    pub fn with_nodata(mut self, nodata: Option<f64>) -> Self {
+        self.set_nodata(nodata);
+        self
     }
 
     pub fn geographic_epsg(&self) -> Option<Epsg> {

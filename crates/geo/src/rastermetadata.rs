@@ -48,7 +48,7 @@ impl ArrayMetadata for RasterMetadata {
 
     fn geo_reference(&self) -> GeoReference {
         let mut georef = GeoReference::without_spatial_reference(self.raster_size, self.nodata);
-        georef.set_cell_size(1.0); // Otherwise tools will not render anything
+        georef.set_square_cell_size_north_up(1.0); // Otherwise tools will not render anything
         georef
     }
 }

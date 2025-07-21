@@ -590,7 +590,7 @@ mod genericgeotests {
     {
         let size = RasterSize::with_rows_cols(Rows(10), Columns(10));
         let mut meta = GeoReference::without_spatial_reference(size, None);
-        meta.set_cell_size(100.0);
+        meta.set_square_cell_size_north_up(100.0);
 
         #[rustfmt::skip]
         let raster = R::new(

@@ -586,6 +586,35 @@ pub mod dataset {
         }
 
         #[test]
+        fn intersect_meta_epsg_3857() {
+            let meta1 = GeoReference::new(
+                "EPSG:3857".to_string(),
+                RasterSize::with_rows_cols(Rows(256), Columns(256)),
+                [547900.6187481433, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141],
+                None,
+            );
+
+            let meta2 = GeoReference::new(
+                "EPSG:3857".to_string(),
+                RasterSize::with_rows_cols(Rows(256), Columns(256)),
+                [626172.1357121639, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141],
+                None,
+            );
+
+            assert!(meta1.intersects(&meta2).unwrap());
+
+            let cutout = intersect_metadata(&meta1, &meta2).unwrap();
+            assert_eq!(cutout.cols, 128);
+            assert_eq!(cutout.rows, 256);
+
+            assert_eq!(cutout.src_col_offset, 128);
+            assert_eq!(cutout.dst_col_offset, 0);
+
+            assert_eq!(cutout.src_row_offset, 0);
+            assert_eq!(cutout.dst_row_offset, 0);
+        }
+
+        #[test]
         fn projection_info_projected_31370() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg31370.tif");
             let meta = read_file_metadata(path.as_path()).unwrap();
