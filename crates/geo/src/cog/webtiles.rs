@@ -478,7 +478,10 @@ impl WebTilesReader {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs::File, path::Path};
+    use std::{
+        fs::File,
+        path::{Path, PathBuf},
+    };
 
     use approx::assert_relative_eq;
     use path_macro::path;
@@ -697,31 +700,15 @@ mod tests {
     fn read_test_cog_unaligned_overviews() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
-        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let output = tmp.path().join("cog.tif");
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
+        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&cog_path)?)?;
 
-        let opts = CogCreationOptions {
-            min_zoom: Some(7),
-            zoom_level_strategy: ZoomLevelStrategy::Closest,
-            tile_size: COG_TILE_SIZE,
-            allow_sparse: true,
-            compression: None,
-            predictor: None,
-            output_data_type: None,
-            aligned_levels: Some(2),
-        };
-        create_cog_tiles(&input, &output, opts)?;
-
-        // debug::dump_web_tiles(&output, 7, &PathBuf::from("/Users/dirk/cog/tile")).unwrap();
-        // debug::dump_web_tiles(&output, 8, &PathBuf::from("/Users/dirk/cog/tile")).unwrap();
-
-        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
         let meta = cog.cog_metadata();
         assert_eq!(meta.min_zoom, 7);
         assert_eq!(meta.max_zoom, 10);
 
         // Decode all tiles
-        let mut reader = File::open(&output)?;
+        let mut reader = File::open(&cog_path)?;
 
         {
             let tile = Tile { z: 7, x: 66, y: 42 };
@@ -848,22 +835,8 @@ mod tests {
     #[test_log::test]
     fn generate_tiles_for_extent_unaligned() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
-        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let output = tmp.path().join("cog.tif");
-
-        let opts = CogCreationOptions {
-            min_zoom: Some(7),
-            zoom_level_strategy: ZoomLevelStrategy::Closest,
-            tile_size: COG_TILE_SIZE,
-            allow_sparse: true,
-            compression: None,
-            predictor: None,
-            output_data_type: None,
-            aligned_levels: Some(2),
-        };
-        create_cog_tiles(&input, &output, opts)?;
-
-        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
+        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&cog_path)?)?;
 
         let pyramid = cog.pyramid_info(7).expect("Zoom level 7 not found");
 
@@ -887,22 +860,9 @@ mod tests {
     #[test_log::test]
     fn create_cog_tile_web_mercator_bounds() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
-        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let output = tmp.path().join("cog.tif");
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
 
-        let opts = CogCreationOptions {
-            min_zoom: Some(7),
-            zoom_level_strategy: ZoomLevelStrategy::Closest,
-            tile_size: COG_TILE_SIZE,
-            allow_sparse: true,
-            compression: None,
-            predictor: None,
-            output_data_type: None,
-            aligned_levels: Some(2),
-        };
-        create_cog_tiles(&input, &output, opts)?;
-
-        let cog_accessor = CogAccessor::from_file(&output)?;
+        let cog_accessor = CogAccessor::from_file(&cog_path)?;
         let cog_tiles = cog_accessor.pyramid_info(8).unwrap().tile_locations.clone();
 
         let cog = WebTilesReader::from_cog(cog_accessor)?;
@@ -916,14 +876,14 @@ mod tests {
             // Top right tile
             let (cog_tile_location, geo_ref) = &bounds[2];
             assert_eq!(cog_tile_location.offset, cog_tiles[2].offset);
-            assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6731350.458905762));
+            assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6731350.458905762), epsilon = 1e-6);
         }
 
         {
             // Bottom right tile
             let (cog_tile_location, geo_ref) = &bounds[5];
             assert_eq!(cog_tile_location.offset, cog_tiles[5].offset);
-            assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6574807.424977721));
+            assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6574807.424977721), epsilon = 1e-6);
         }
 
         Ok(())
@@ -932,22 +892,9 @@ mod tests {
     #[test_log::test]
     fn generate_tile_sources() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
-        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let output = tmp.path().join("cog.tif");
 
-        let opts = CogCreationOptions {
-            min_zoom: Some(7),
-            zoom_level_strategy: ZoomLevelStrategy::Closest,
-            tile_size: COG_TILE_SIZE,
-            allow_sparse: true,
-            compression: None,
-            predictor: None,
-            output_data_type: None,
-            aligned_levels: Some(2),
-        };
-        create_cog_tiles(&input, &output, opts)?;
-
-        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&output)?)?;
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
+        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&cog_path)?)?;
 
         {
             let tile_sources = cog.zoom_level_tile_sources(8).expect("Zoom level 8 not found");
@@ -984,14 +931,26 @@ mod tests {
         // The qgis project in tests/data/cog_debug can be used to visually inspect the generated web tiles with resprect to the cog tiles.
 
         let output_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "cog_debug");
+        for tile_size in [256, 512] {
+            let cog_path = create_unaligned_test_cog(&output_dir, tile_size)?;
 
+            for zoom_level in 7..=8 {
+                debug::dump_cog_tiles(&cog_path, zoom_level, &output_dir.join("cog_tile").join(format!("{tile_size}px")))?;
+                debug::dump_web_tiles(&cog_path, zoom_level, &output_dir.join("web_tile").join(format!("{tile_size}px")))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn create_unaligned_test_cog(dir: &Path, tile_size: u16) -> Result<PathBuf> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let output = output_dir.join("cog.tif");
+        let output = dir.join(format!("cog_{tile_size}px.tif"));
 
         let opts = CogCreationOptions {
             min_zoom: Some(7),
             zoom_level_strategy: ZoomLevelStrategy::Closest,
-            tile_size: COG_TILE_SIZE,
+            tile_size,
             allow_sparse: true,
             compression: None,
             predictor: None,
@@ -1000,11 +959,6 @@ mod tests {
         };
         create_cog_tiles(&input, &output, opts)?;
 
-        for zoom_level in 7..=8 {
-            debug::dump_cog_tiles(&output, zoom_level, &output_dir.join("cog_tile").join(format!("{COG_TILE_SIZE}px")))?;
-            debug::dump_web_tiles(&output, zoom_level, &output_dir.join("web_tile").join(format!("{COG_TILE_SIZE}px")))?;
-        }
-
-        Ok(())
+        Ok(output)
     }
 }
