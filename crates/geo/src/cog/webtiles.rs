@@ -413,6 +413,7 @@ impl WebTilesReader {
         }
     }
 
+    #[simd_bounds]
     fn merge_tile_sources<T: ArrayNum + HorizontalUnpredictable>(
         &self,
         tile_sources: &[(CogTileLocation, CutOut)],
