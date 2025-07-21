@@ -384,21 +384,32 @@ impl WebTilesReader {
         })
     }
 
-    pub fn parse_tile_data(&self, tile_source: &TileSource, cog_chunk: &[u8]) -> Result<AnyDenseArray> {
+    pub fn parse_tile_data(&self, tile_source: &TileSource, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
         match tile_source {
             TileSource::Aligned(cog_tile) => Ok(match self.data_type() {
-                ArrayDataType::Uint8 => AnyDenseArray::U8(self.cog.parse_tile_data_as::<u8>(cog_tile, cog_chunk)?),
-                ArrayDataType::Uint16 => AnyDenseArray::U16(self.cog.parse_tile_data_as::<u16>(cog_tile, cog_chunk)?),
-                ArrayDataType::Uint32 => AnyDenseArray::U32(self.cog.parse_tile_data_as::<u32>(cog_tile, cog_chunk)?),
-                ArrayDataType::Uint64 => AnyDenseArray::U64(self.cog.parse_tile_data_as::<u64>(cog_tile, cog_chunk)?),
-                ArrayDataType::Int8 => AnyDenseArray::I8(self.cog.parse_tile_data_as::<i8>(cog_tile, cog_chunk)?),
-                ArrayDataType::Int16 => AnyDenseArray::I16(self.cog.parse_tile_data_as::<i16>(cog_tile, cog_chunk)?),
-                ArrayDataType::Int32 => AnyDenseArray::I32(self.cog.parse_tile_data_as::<i32>(cog_tile, cog_chunk)?),
-                ArrayDataType::Int64 => AnyDenseArray::I64(self.cog.parse_tile_data_as::<i64>(cog_tile, cog_chunk)?),
-                ArrayDataType::Float32 => AnyDenseArray::F32(self.cog.parse_tile_data_as::<f32>(cog_tile, cog_chunk)?),
-                ArrayDataType::Float64 => AnyDenseArray::F64(self.cog.parse_tile_data_as::<f64>(cog_tile, cog_chunk)?),
+                ArrayDataType::Uint8 => AnyDenseArray::U8(self.cog.parse_tile_data_as::<u8>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Uint16 => AnyDenseArray::U16(self.cog.parse_tile_data_as::<u16>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Uint32 => AnyDenseArray::U32(self.cog.parse_tile_data_as::<u32>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Uint64 => AnyDenseArray::U64(self.cog.parse_tile_data_as::<u64>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Int8 => AnyDenseArray::I8(self.cog.parse_tile_data_as::<i8>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Int16 => AnyDenseArray::I16(self.cog.parse_tile_data_as::<i16>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Int32 => AnyDenseArray::I32(self.cog.parse_tile_data_as::<i32>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Int64 => AnyDenseArray::I64(self.cog.parse_tile_data_as::<i64>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Float32 => AnyDenseArray::F32(self.cog.parse_tile_data_as::<f32>(cog_tile, cog_chunks[0])?),
+                ArrayDataType::Float64 => AnyDenseArray::F64(self.cog.parse_tile_data_as::<f64>(cog_tile, cog_chunks[0])?),
             }),
-            TileSource::Unaligned(tile_sources) => todo!(),
+            TileSource::Unaligned(tile_sources) => Ok(match self.data_type() {
+                ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+            }),
         }
     }
 
