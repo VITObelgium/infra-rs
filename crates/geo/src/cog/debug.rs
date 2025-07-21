@@ -52,7 +52,7 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     Ok(())
 }
 
-pub fn dump_web_tiles(cog_path: &Path, zoom_level: u8, output_dir: &Path) -> Result<()> {
+pub fn dump_web_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
     let cog = WebTilesReader::from_cog(CogAccessor::from_file(cog_path)?)?;
     let mut reader = std::fs::File::open(cog_path)?;
 

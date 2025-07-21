@@ -5,3 +5,6 @@ target
 *.aux.xml
 **/__pycache__
 .idea
+crates/geo/tests/data/cog_debug/cog_tile
+crates/geo/tests/data/cog_debug/web_tile
+crates/geo/tests/data/cog_debug/cog.tif

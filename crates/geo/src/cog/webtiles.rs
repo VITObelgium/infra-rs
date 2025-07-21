@@ -104,7 +104,7 @@ impl WebTiles {
         self.zoom_levels.get(tile.z as usize).and_then(|level| level.get(tile))
     }
 
-    pub fn zoom_level_tile_sources(&self, zoom_level: u8) -> Option<&HashMap<Tile, TileSource>> {
+    pub fn zoom_level_tile_sources(&self, zoom_level: i32) -> Option<&HashMap<Tile, TileSource>> {
         if zoom_level as usize >= self.zoom_levels.len() {
             return None;
         }
@@ -215,8 +215,15 @@ fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, pyramid: &Pyramid
     let top_left_tile = Tile::for_coordinate(top_left, pyramid.zoom_level);
     let bottom_right_tile = Tile::for_coordinate(bottom_right, pyramid.zoom_level);
 
-    let tiles_wide = bottom_right_tile.x - top_left_tile.x + 1;
-    let tiles_high = bottom_right_tile.y - top_left_tile.y + 1;
+    assert!(
+        tile_size % Tile::TILE_SIZE == 0,
+        "Tile size must be a factor of {}",
+        Tile::TILE_SIZE
+    );
+    let tile_size_factor = (tile_size / Tile::TILE_SIZE) as f64;
+
+    let tiles_wide = ((bottom_right_tile.x - top_left_tile.x + 1) as f64 / tile_size_factor).ceil() as i32;
+    let tiles_high = ((bottom_right_tile.y - top_left_tile.y + 1) as f64 / tile_size_factor).ceil() as i32;
 
     let mut tiles = Vec::new();
     // Iteration has to be done in row-major order so the tiles match the order of the tile lists from the COG
@@ -351,7 +358,7 @@ impl WebTilesReader {
         self.web_tiles.tile_source(tile)
     }
 
-    pub fn zoom_level_tile_sources(&self, zoom_level: u8) -> Option<&HashMap<Tile, TileSource>> {
+    pub fn zoom_level_tile_sources(&self, zoom_level: i32) -> Option<&HashMap<Tile, TileSource>> {
         self.web_tiles.zoom_level_tile_sources(zoom_level)
     }
 
@@ -463,10 +470,11 @@ mod tests {
     use std::{fs::File, path::Path};
 
     use approx::assert_relative_eq;
+    use path_macro::path;
 
     use crate::{
         Nodata as _, ZoomLevelStrategy,
-        cog::{CogCreationOptions, Compression, Predictor, PredictorSelection, create_cog_tiles},
+        cog::{CogCreationOptions, Compression, Predictor, PredictorSelection, create_cog_tiles, debug},
         testutils,
     };
 
@@ -954,6 +962,36 @@ mod tests {
                     assert_eq!(cutout.src_row_offset, 0);
                 }
             }
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn create_cog_tiles_for_debugging() -> Result<()> {
+        // This test generates COG tiles from a test TIFF file and dumps the web tiles and COG tiles for zoom levels 7 and 8.
+        // The qgis project in tests/data/cog_debug can be used to visually inspect the generated web tiles with resprect to the cog tiles.
+
+        let output_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "cog_debug");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = output_dir.join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(7),
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
+            tile_size: COG_TILE_SIZE,
+            allow_sparse: true,
+            compression: None,
+            predictor: None,
+            output_data_type: None,
+            aligned_levels: Some(2),
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        for zoom_level in 7..=8 {
+            debug::dump_cog_tiles(&output, zoom_level, &output_dir.join("cog_tile").join(format!("{COG_TILE_SIZE}px")))?;
+            debug::dump_web_tiles(&output, zoom_level, &output_dir.join("web_tile").join(format!("{COG_TILE_SIZE}px")))?;
         }
 
         Ok(())

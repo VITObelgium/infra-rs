@@ -175,6 +175,8 @@ pub fn warp_to_disk_cli(
     let mut warp_options = WarpAppOptionsWrapper::new(options)?;
     warp_options.set_warp_options(key_value_options)?;
 
+    gdalinterop::create_output_directory_if_needed(dest_path)?;
+
     let path_str = CString::new(dest_path.to_string_lossy().as_ref())?;
 
     unsafe {
