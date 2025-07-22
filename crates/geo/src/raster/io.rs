@@ -9,7 +9,6 @@ use std::{
 
 use crate::{Error, Result};
 use crate::{GeoReference, gdalinterop::*};
-use approx::relative_eq;
 use gdal::{
     cpl::CslStringList,
     errors::GdalError::{self},
@@ -82,16 +81,6 @@ impl RasterFormat {
     }
 }
 
-#[derive(Default, Debug, Clone, PartialEq, Eq)]
-pub struct CutOut {
-    pub src_col_offset: i32,
-    pub src_row_offset: i32,
-    pub dst_col_offset: i32,
-    pub dst_row_offset: i32,
-    pub rows: i32,
-    pub cols: i32,
-}
-
 pub mod dataset {
     use std::mem::MaybeUninit;
 
@@ -101,6 +90,7 @@ pub mod dataset {
     use crate::{
         ArrayNum, Nodata, RasterSize,
         array::{Columns, Rows},
+        raster::intersection::{CutOut, intersect_georeference},
     };
 
     use super::*;
@@ -195,7 +185,7 @@ pub mod dataset {
         dst_data: &mut [MaybeUninit<T>],
     ) -> Result<GeoReference> {
         let meta = read_band_metadata(dataset, band_nr)?;
-        let cut_out = intersect_metadata(&meta, extent)?;
+        let cut_out = intersect_georeference(&meta, extent)?;
 
         // Error if the requeated data type can not hold the nodata value of the raster
         check_if_metadata_fits::<T>(meta.nodata(), dataset.rasterband(band_nr)?.band_type())?;
@@ -433,43 +423,6 @@ pub mod dataset {
         Ok(())
     }
 
-    pub fn intersect_metadata(src_meta: &GeoReference, dst_meta: &GeoReference) -> Result<CutOut> {
-        // src_meta: the metadata of the raster that we are going to read as it ison disk
-        // dst_meta: the metadata of the raster that will be returned to the user
-
-        let src_cellsize = src_meta.cell_size();
-        let dst_cellsize = dst_meta.cell_size();
-
-        if !relative_eq!(src_cellsize, dst_cellsize, epsilon = 1e-10) {
-            return Err(Error::InvalidArgument("Cell sizes do not match".to_string()));
-        }
-
-        if !src_cellsize.is_valid() {
-            return Err(Error::InvalidArgument("Extent cellsize is zero".to_string()));
-        }
-
-        let cell_size = src_meta.cell_size();
-        let src_bbox = src_meta.bounding_box();
-        let dst_bbox = dst_meta.bounding_box();
-
-        let intersect = src_bbox.intersection(&dst_bbox);
-
-        // Calulate the cell in the source extent that corresponds to the top left cell of the intersect
-        //let intersect_top_left_cell = src_meta.point_to_cell(*intersect.top_left() + Point::new(src_cellsize.x() / 2.0, src_cellsize.y() / 2.0));
-        let intersect_top_left_cell = src_meta.point_to_cell(intersect.top_left());
-
-        let result = CutOut {
-            src_col_offset: intersect_top_left_cell.col,
-            src_row_offset: intersect_top_left_cell.row,
-            rows: (intersect.height() / cell_size.y()).abs().round() as i32,
-            cols: (intersect.width() / cell_size.x()).round() as i32,
-            dst_col_offset: ((intersect.top_left().x() - dst_bbox.top_left().x()) / cell_size.x()).round() as i32,
-            dst_row_offset: ((dst_bbox.top_left().y() - intersect.top_left().y()) / cell_size.y().abs()).round() as i32,
-        };
-
-        Ok(result)
-    }
-
     fn create_raster_driver_for_path(path: impl AsRef<Path>) -> Result<gdal::Driver> {
         let path = path.as_ref();
         let raster_format = RasterFormat::guess_from_path(path);
@@ -509,110 +462,11 @@ pub mod dataset {
 
     #[cfg(test)]
     mod tests {
-        use crate::{CellSize, Point, crs};
+        use crate::crs;
 
         use super::*;
-        use crate::Cell;
-        use approx::assert_relative_eq;
+
         use path_macro::path;
-
-        #[test]
-        fn test_intersect_metadata() {
-            let meta1 = GeoReference::with_origin(
-                String::default(),
-                RasterSize::with_rows_cols(Rows(3), Columns(5)),
-                Point::new(1.0, -10.0),
-                CellSize::square(4.0),
-                Some(-10.0),
-            );
-            let meta2 = GeoReference::with_origin(
-                String::default(),
-                RasterSize::with_rows_cols(Rows(3), Columns(4)),
-                Point::new(-3.0, -6.0),
-                CellSize::square(4.0),
-                Some(-6.0),
-            );
-
-            assert_eq!(meta2.cell_center(Cell::from_row_col(0, 0)), Point::new(-1.0, 4.0));
-            assert_eq!(meta1.point_to_cell(Point::new(0.0, 4.0)), Cell::from_row_col(-1, -1));
-
-            let cutout = intersect_metadata(&meta1, &meta2).unwrap();
-
-            assert_eq!(cutout.rows, 2);
-            assert_eq!(cutout.cols, 3);
-            assert_eq!(cutout.src_col_offset, 0);
-            assert_eq!(cutout.src_row_offset, 0);
-            assert_eq!(cutout.dst_col_offset, 1);
-            assert_eq!(cutout.dst_row_offset, 1);
-        }
-
-        #[test]
-        fn intersect_meta_epsg_4326() {
-            const TRANS: [f64; 6] = [
-                -30.000_000_763_788_11,
-                0.100_000_001_697_306_9,
-                0.0,
-                29.999999619212282,
-                0.0,
-                -0.049_999_998_635_984_29,
-            ];
-
-            let meta = GeoReference::new(
-                "EPSG:4326".to_string(),
-                RasterSize::with_rows_cols(Rows(840), Columns(900)),
-                TRANS,
-                None,
-            );
-            assert_relative_eq!(
-                meta.cell_center(Cell::from_row_col(0, 0)),
-                Point::new(TRANS[0] + (TRANS[1] / 2.0), TRANS[3] + (TRANS[5] / 2.0)),
-                epsilon = 1e-6
-            );
-
-            // Cell to point and back
-            let cell = Cell::from_row_col(0, 0);
-            assert_eq!(meta.point_to_cell(meta.cell_center(cell)), cell);
-            assert_eq!(meta.point_to_cell(meta.top_left()), Cell::from_row_col(0, 0));
-
-            let cutout = intersect_metadata(&meta, &meta).unwrap();
-            assert_eq!(cutout.cols, 900);
-            assert_eq!(cutout.rows, 840);
-
-            assert_eq!(cutout.src_col_offset, 0);
-            assert_eq!(cutout.dst_col_offset, 0);
-
-            assert_eq!(cutout.src_row_offset, 0);
-            assert_eq!(cutout.dst_row_offset, 0);
-        }
-
-        #[test]
-        fn intersect_meta_epsg_3857() {
-            let meta1 = GeoReference::new(
-                "EPSG:3857".to_string(),
-                RasterSize::with_rows_cols(Rows(256), Columns(256)),
-                [547900.6187481433, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141],
-                None,
-            );
-
-            let meta2 = GeoReference::new(
-                "EPSG:3857".to_string(),
-                RasterSize::with_rows_cols(Rows(256), Columns(256)),
-                [626172.1357121639, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141],
-                None,
-            );
-
-            assert!(meta1.intersects(&meta2).unwrap());
-
-            let cutout = intersect_metadata(&meta1, &meta2).unwrap();
-            assert_eq!(cutout.cols, 128);
-            assert_eq!(cutout.rows, 256);
-
-            assert_eq!(cutout.src_col_offset, 128);
-            assert_eq!(cutout.dst_col_offset, 0);
-
-            assert_eq!(cutout.src_row_offset, 0);
-            assert_eq!(cutout.dst_row_offset, 0);
-        }
 
         #[test]
         fn projection_info_projected_31370() {

@@ -4,7 +4,7 @@ use crate::{
         CogTileLocation, Compression, Predictor,
         utils::{self, HorizontalUnpredictable},
     },
-    raster::io::CutOut,
+    raster::intersection::CutOut,
 };
 use inf::allocate::{self, AlignedVec, AlignedVecUnderConstruction, aligned_vec_from_slice};
 use simd_macro::simd_bounds;

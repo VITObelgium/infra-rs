@@ -1,6 +1,7 @@
 pub mod algo;
 mod denseraster;
 mod denserasterconversions;
+pub mod intersection;
 #[cfg(feature = "gdal")]
 pub mod io;
 

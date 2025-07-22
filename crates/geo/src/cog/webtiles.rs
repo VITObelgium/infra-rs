@@ -2,7 +2,7 @@ use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
     RasterMetadata, Result, Rows, Window,
     cog::{CogTileLocation, HorizontalUnpredictable, io, reader::PyramidInfo},
-    raster::io::{CutOut, dataset::intersect_metadata},
+    raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
     collections::HashMap,
@@ -82,7 +82,7 @@ impl WebTiles {
                             //     log::info!("Break");
                             // }
 
-                            if let Ok(cutout) = intersect_metadata(bounds, &web_tile_georef) {
+                            if let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef) {
                                 tile_sources.push((*cog_tile, cutout));
                             }
                         }
