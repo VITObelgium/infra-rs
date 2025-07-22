@@ -34,7 +34,7 @@ pub struct Opt {
     pub max_zoom: Option<i32>,
 
     #[clap(long = "tile-size", default_value = "256")]
-    pub tile_size: u16,
+    pub tile_size: u32,
 
     #[clap(long = "tile-format")]
     #[clap(default_value = "vrt")]

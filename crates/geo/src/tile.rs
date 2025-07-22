@@ -19,7 +19,7 @@ pub struct Tile {
 }
 
 impl Tile {
-    pub const TILE_SIZE: u16 = 256;
+    pub const TILE_SIZE: u32 = 256;
 
     fn xy(coord: Coordinate) -> Point<f64> {
         let x = coord.longitude / 360.0 + 0.5;
@@ -200,8 +200,11 @@ impl Tile {
         }
     }
 
-    /// Calculates the pixel size in meters for a given zoom level
-    pub fn pixel_size_at_zoom_level(zoom_level: i32) -> f64 {
+    /// Calculates the pixel size in meters for a given zoom level and tile size.
+    pub fn pixel_size_at_zoom_level(zoom_level: i32, tile_size: u32) -> f64 {
+        let zoom_level_offset = tile_size / Tile::TILE_SIZE - 1;
+        let zoom_level = zoom_level + zoom_level_offset as i32;
+
         let tiles_per_row = f64::powi(2.0, zoom_level);
         let meters_per_tile = EARTH_CIRCUMFERENCE_M / tiles_per_row;
 
@@ -316,27 +319,27 @@ mod tests {
     fn test_pixel_size_at_zoom_level() {
         const EPS: f64 = 1e-2;
 
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(0), 156543.03, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(1), 78271.52, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(2), 39135.76, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(3), 19567.88, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(4), 9783.94, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(5), 4891.97, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(6), 2445.98, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(7), 1222.99, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(8), 611.50, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(9), 305.75, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(10), 152.87, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(11), 76.437, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(12), 38.219, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(13), 19.109, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(14), 9.5546, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(15), 4.7773, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(16), 2.3887, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(17), 1.1943, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(18), 0.5972, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(19), 0.298, epsilon = EPS);
-        assert_relative_eq!(Tile::pixel_size_at_zoom_level(20), 0.149, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(0, Tile::TILE_SIZE), 156543.03, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(1, Tile::TILE_SIZE), 78271.52, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(2, Tile::TILE_SIZE), 39135.76, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(3, Tile::TILE_SIZE), 19567.88, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(4, Tile::TILE_SIZE), 9783.94, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(5, Tile::TILE_SIZE), 4891.97, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(6, Tile::TILE_SIZE), 2445.98, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(7, Tile::TILE_SIZE), 1222.99, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(8, Tile::TILE_SIZE), 611.50, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(9, Tile::TILE_SIZE), 305.75, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(10, Tile::TILE_SIZE), 152.87, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(11, Tile::TILE_SIZE), 76.437, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(12, Tile::TILE_SIZE), 38.219, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(13, Tile::TILE_SIZE), 19.109, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(14, Tile::TILE_SIZE), 9.5546, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(15, Tile::TILE_SIZE), 4.7773, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(16, Tile::TILE_SIZE), 2.3887, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(17, Tile::TILE_SIZE), 1.1943, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(18, Tile::TILE_SIZE), 0.5972, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(19, Tile::TILE_SIZE), 0.298, epsilon = EPS);
+        assert_relative_eq!(Tile::pixel_size_at_zoom_level(20, Tile::TILE_SIZE), 0.149, epsilon = EPS);
     }
 
     #[test]

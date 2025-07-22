@@ -80,10 +80,10 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-    tile_size: u16,
+    tile_size: u32,
 ) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = (tile_size * dpi_ratio as u16) as i32;
+    let scaled_size = (tile_size * dpi_ratio as u32) as i32;
 
     let options: Vec<String> = vec![
         "-b".to_string(),
@@ -115,10 +115,10 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-    tile_size: u16,
+    tile_size: u32,
 ) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
-    let scaled_size = (tile_size * dpi_ratio as u16) as i32;
+    let scaled_size = (tile_size * dpi_ratio as u32) as i32;
 
     let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
     let dest_extent = GeoReference::with_origin(
@@ -174,7 +174,7 @@ pub fn read_tile_data<T: ArrayNum + Num + GdalType>(
     band_nr: usize,
     tile: Tile,
     dpi_ratio: u8,
-    tile_size: u16,
+    tile_size: u32,
 ) -> Result<DenseArray<T>> {
     let start = std::time::Instant::now();
 
@@ -215,8 +215,8 @@ where
 
     imageprocessing::raw_tile_to_png_color_mapped::<T>(
         raw_tile_data.as_slice(),
-        (req.tile_size * req.dpi_ratio as u16) as usize,
-        (req.tile_size * req.dpi_ratio as u16) as usize,
+        (req.tile_size * req.dpi_ratio as u32) as usize,
+        (req.tile_size * req.dpi_ratio as u32) as usize,
         Some(T::NODATA),
         req.legend,
     )

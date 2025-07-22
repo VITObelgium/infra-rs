@@ -31,7 +31,7 @@ macro_rules! impl_horizontal_unpredictable_for_fp {
 impl_horizontal_unpredictable_for_int!(u8, u16, u32, u64, i8, i16, i32, i64);
 impl_horizontal_unpredictable_for_fp!(f32, f64);
 
-pub fn unpredict_horizontal<T: HorizontalUnpredictable + Copy>(data: &mut [T], tile_size: u16) {
+pub fn unpredict_horizontal<T: HorizontalUnpredictable + Copy>(data: &mut [T], tile_size: u32) {
     for row in data.chunks_mut(tile_size as usize) {
         for i in 1..row.len() {
             row[i] = row[i].unpredict_horizontal(row[i - 1]);
@@ -39,7 +39,7 @@ pub fn unpredict_horizontal<T: HorizontalUnpredictable + Copy>(data: &mut [T], t
     }
 }
 
-fn decode_delta_bytes(data: &mut [u8], bytes_per_pixel: usize, tile_size: u16) {
+fn decode_delta_bytes(data: &mut [u8], bytes_per_pixel: usize, tile_size: u32) {
     for row in data.chunks_mut(bytes_per_pixel * tile_size as usize) {
         for i in 1..row.len() {
             row[i] = row[i].unpredict_horizontal(row[i - 1]);
@@ -47,7 +47,7 @@ fn decode_delta_bytes(data: &mut [u8], bytes_per_pixel: usize, tile_size: u16) {
     }
 }
 
-pub fn unpredict_fp32(data: &mut [f32], tile_size: u16) -> AlignedVec<f32> {
+pub fn unpredict_fp32(data: &mut [f32], tile_size: u32) -> AlignedVec<f32> {
     let bytes = unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<u8>(), std::mem::size_of_val(data)) };
     debug_assert_eq!(bytes.len(), tile_size as usize * tile_size as usize * std::mem::size_of::<f32>());
     decode_delta_bytes(bytes, std::mem::size_of::<f32>(), tile_size);
@@ -69,7 +69,7 @@ pub fn unpredict_fp32(data: &mut [f32], tile_size: u16) -> AlignedVec<f32> {
     output
 }
 
-pub fn unpredict_fp64(data: &mut [f64], tile_size: u16) -> AlignedVec<f64> {
+pub fn unpredict_fp64(data: &mut [f64], tile_size: u32) -> AlignedVec<f64> {
     let bytes = unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<u8>(), std::mem::size_of_val(data)) };
     debug_assert_eq!(bytes.len(), tile_size as usize * tile_size as usize * std::mem::size_of::<f64>());
     decode_delta_bytes(bytes, std::mem::size_of::<f64>(), tile_size);

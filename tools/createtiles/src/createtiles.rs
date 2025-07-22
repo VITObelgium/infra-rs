@@ -12,7 +12,7 @@ pub struct TileCreationOptions {
     pub min_zoom: Option<i32>,
     pub max_zoom: Option<i32>,
     pub zoom_level_strategy: ZoomLevelStrategy,
-    pub tile_size: u16,
+    pub tile_size: u32,
     pub tile_format: TileFormat,
 }
 

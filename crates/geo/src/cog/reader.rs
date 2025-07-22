@@ -82,7 +82,7 @@ pub struct PyramidInfo {
 pub struct CogMetadata {
     pub min_zoom: i32,
     pub max_zoom: i32,
-    pub tile_size: u16,
+    pub tile_size: u32,
     pub data_type: ArrayDataType,
     pub band_count: u32,
     pub geo_reference: GeoReference,
@@ -217,12 +217,12 @@ mod tests {
 
     use super::*;
 
-    const COG_TILE_SIZE: u16 = 256;
+    const COG_TILE_SIZE: u32 = 256;
 
     fn create_test_cog(
         input_tif: &Path,
         output_tif: &Path,
-        tile_size: u16,
+        tile_size: u32,
         compression: Option<Compression>,
         predictor: Option<PredictorSelection>,
         output_type: Option<ArrayDataType>,

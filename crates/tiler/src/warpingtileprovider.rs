@@ -23,10 +23,7 @@ use crate::{
 };
 
 fn raw_tile_to_vito_tile_format<T: ArrayNum>(data: AlignedVec<T>, width: Columns, height: Rows) -> Result<TileData> {
-    let raster_tile = DenseArray::new(
-        RasterMetadata::sized_for_type::<T>(RasterSize::with_rows_cols(height, width)),
-        data,
-    )?;
+    let raster_tile = DenseArray::new(RasterMetadata::sized_for_type::<T>(RasterSize::with_rows_cols(height, width)), data)?;
 
     Ok(TileData::new(
         TileFormat::RasterTile,
@@ -59,7 +56,7 @@ impl WarpingTileProvider {
             return Ok(None);
         }
 
-        let tile_size = (Tile::TILE_SIZE * dpi_ratio as u16) as usize;
+        let tile_size = (Tile::TILE_SIZE * dpi_ratio as u32) as usize;
         let tile_meta = GeoReference::from_tile(&tile, tile_size, dpi_ratio);
         let cell = tile_meta.point_to_cell(crs::lat_lon_to_web_mercator(coord));
 
@@ -83,16 +80,16 @@ impl WarpingTileProvider {
                 // The default legend is with grayscale colors in range 0-255
                 imageprocessing::raw_tile_to_png_color_mapped::<T>(
                     raw_tile_data.as_ref(),
-                    (req.tile_size * req.dpi_ratio as u16) as usize,
-                    (req.tile_size * req.dpi_ratio as u16) as usize,
+                    (req.tile_size * req.dpi_ratio as u32) as usize,
+                    (req.tile_size * req.dpi_ratio as u32) as usize,
                     Some(T::NODATA),
                     &Legend::default(),
                 )
             }
             TileFormat::FloatEncodedPng => imageprocessing::raw_tile_to_float_encoded_png::<T>(
                 raw_tile_data.as_ref(),
-                (req.tile_size * req.dpi_ratio as u16) as usize,
-                (req.tile_size * req.dpi_ratio as u16) as usize,
+                (req.tile_size * req.dpi_ratio as u32) as usize,
+                (req.tile_size * req.dpi_ratio as u32) as usize,
                 Some(T::NODATA),
             ),
             TileFormat::RasterTile => {
@@ -309,7 +306,7 @@ mod tests {
 
         let tile = Tile::for_coordinate(Coordinate::latlon(51.046575, 4.344067), zoom);
         let tile_bounds = tile.web_mercator_bounds();
-        let cell_size = Tile::pixel_size_at_zoom_level(zoom);
+        let cell_size = Tile::pixel_size_at_zoom_level(zoom, Tile::TILE_SIZE);
 
         let request = TileRequest {
             tile,
@@ -320,16 +317,15 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
         let raster_tile = DenseArray::<u8>::from_raster_tile_bytes(&tile_data.data)?;
-        let mut raster_tile_per_pixel =
-            DenseArray::<u8>::zeros(RasterMetadata::sized_for_type::<u8>(RasterSize::with_rows_cols(
-                Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-                Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-            )));
+        let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterMetadata::sized_for_type::<u8>(RasterSize::with_rows_cols(
+            Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+            Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+        )));
 
         let current_coord = tile_bounds.top_left();
 
-        for y in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
-            for x in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
+        for y in 0..Tile::TILE_SIZE * request.dpi_ratio as u32 {
+            for x in 0..Tile::TILE_SIZE * request.dpi_ratio as u32 {
                 let coord = Point::from((
                     current_coord.x() + (x as f64 * cell_size) + (cell_size / 2.0),
                     current_coord.y() - (y as f64 * cell_size) - (cell_size / 2.0),
@@ -361,7 +357,7 @@ mod tests {
 
         let tile = Tile::for_coordinate(Coordinate::latlon(51.046575, 4.344067), zoom);
         let tile_bounds = tile.web_mercator_bounds();
-        let cell_size = Tile::pixel_size_at_zoom_level(zoom);
+        let cell_size = Tile::pixel_size_at_zoom_level(zoom, Tile::TILE_SIZE);
 
         let request = TileRequest {
             tile,
@@ -372,16 +368,15 @@ mod tests {
 
         let tile_data = provider.get_tile(layer_meta.id, &request)?;
         let raster_tile = DenseArray::<u8>::from_raster_tile_bytes(&tile_data.data)?;
-        let mut raster_tile_per_pixel =
-            DenseArray::<u8>::zeros(RasterMetadata::sized_for_type::<u8>(RasterSize::with_rows_cols(
-                Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-                Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
-            )));
+        let mut raster_tile_per_pixel = DenseArray::<u8>::zeros(RasterMetadata::sized_for_type::<u8>(RasterSize::with_rows_cols(
+            Rows(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+            Columns(Tile::TILE_SIZE as i32 * request.dpi_ratio as i32),
+        )));
 
         let current_coord = tile_bounds.top_left();
 
-        for y in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
-            for x in 0..Tile::TILE_SIZE * request.dpi_ratio as u16 {
+        for y in 0..Tile::TILE_SIZE * request.dpi_ratio as u32 {
+            for x in 0..Tile::TILE_SIZE * request.dpi_ratio as u32 {
                 let coord = Point::from((
                     current_coord.x() + (x as f64 * cell_size) + (cell_size / 2.0),
                     current_coord.y() - (y as f64 * cell_size) - (cell_size / 2.0),

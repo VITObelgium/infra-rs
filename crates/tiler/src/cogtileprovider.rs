@@ -73,7 +73,7 @@ impl CogTileProvider {
     }
 
     #[geo::simd_bounds]
-    fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u16) -> Result<DenseArray<T>> {
+    fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<DenseArray<T>> {
         if Some(tile_size) != meta.tile_size {
             return Err(Error::InvalidArgument("Invalid COG tile size requested".to_string()));
         }
@@ -92,7 +92,7 @@ impl CogTileProvider {
     }
 
     #[geo::simd_bounds]
-    fn read_vrt_tile<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u16) -> Result<TileData> {
+    fn read_vrt_tile<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<TileData> {
         let tile_data = Self::read_tile_data::<T>(meta, tile, tile_size)?;
         if tile_data.is_empty() {
             return Ok(TileData::default());
@@ -258,7 +258,7 @@ mod tests {
         path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "landusebyte.tif")
     }
 
-    fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: i32, compress: &str) -> Result<()> {
+    fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: u32, compress: &str) -> Result<()> {
         let src_ds = geo::raster::io::dataset::open_read_only(input_tif).expect("Failed to open test COG input file");
         let options = vec![
             "-f".to_string(),
@@ -290,7 +290,7 @@ mod tests {
 
     #[test]
     fn test_cog_tile_decompression() -> Result<()> {
-        const COG_TILE_SIZE: i32 = 256;
+        const COG_TILE_SIZE: u32 = 256;
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let no_compression_output = tmp.path().join("cog_no_compression.tif");
@@ -309,7 +309,7 @@ mod tests {
         let request = TileRequest {
             tile,
             dpi_ratio: 1,
-            tile_size: COG_TILE_SIZE as u16,
+            tile_size: COG_TILE_SIZE,
             tile_format: TileFormat::RasterTile,
         };
 
@@ -326,7 +326,7 @@ mod tests {
         let request = ColorMappedTileRequest {
             tile,
             dpi_ratio: 1,
-            tile_size: COG_TILE_SIZE as u16,
+            tile_size: COG_TILE_SIZE,
             legend: &legend,
         };
 

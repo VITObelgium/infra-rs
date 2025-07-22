@@ -12,7 +12,7 @@ use crate::{
 pub struct TileRequest {
     pub tile: Tile,
     pub dpi_ratio: u8,
-    pub tile_size: u16,
+    pub tile_size: u32,
     pub tile_format: TileFormat,
 }
 
@@ -20,7 +20,7 @@ pub struct TileRequest {
 pub struct ColorMappedTileRequest<'a> {
     pub tile: Tile,
     pub dpi_ratio: u8,
-    pub tile_size: u16,
+    pub tile_size: u32,
     pub legend: &'a Legend,
 }
 

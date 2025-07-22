@@ -232,7 +232,7 @@ impl TileApiHandler {
         Ok(Json(LayersResponse { layers }))
     }
 
-    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat, tile_size: u16) -> Result<TileData> {
+    async fn fetch_tile(layer_meta: LayerMetadata, tile: Tile, dpi: u8, tile_format: TileFormat, tile_size: u32) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
         rayon::spawn(move || {
@@ -256,7 +256,7 @@ impl TileApiHandler {
         tile: Tile,
         dpi: u8,
         tile_format: TileFormat,
-        tile_size: u16,
+        tile_size: u32,
     ) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
@@ -281,7 +281,7 @@ impl TileApiHandler {
         cmap: String,
         tile: Tile,
         dpi: u8,
-        tile_size: u16,
+        tile_size: u32,
     ) -> Result<TileData> {
         let (send, recv) = tokio::sync::oneshot::channel();
 
@@ -373,7 +373,7 @@ impl TileApiHandler {
         }
 
         if let Some(size) = params.get("tile_size") {
-            tile_size = size.parse::<u16>().unwrap_or(256);
+            tile_size = size.parse::<u32>().unwrap_or(256);
         }
 
         log::debug!(
@@ -441,7 +441,7 @@ impl TileApiHandler {
         }
 
         if let Some(size) = params.get("tile_size") {
-            tile_size = size.parse::<u16>().unwrap_or(256);
+            tile_size = size.parse::<u32>().unwrap_or(256);
         }
 
         log::debug!(

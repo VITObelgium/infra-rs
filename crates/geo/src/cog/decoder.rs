@@ -197,8 +197,8 @@ impl<R: Read + Seek> CogDecoder<R> {
             return Err(Error::InvalidArgument("Only tiled TIFFs are supported".into()));
         }
 
-        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)? as u16;
-        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? as u16 {
+        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)?;
+        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? {
             return Err(Error::InvalidArgument("Only square tiles are supported".into()));
         }
 

@@ -119,7 +119,7 @@ pub fn read_cog_chunk(cog_location: &CogTileLocation, mut reader: impl Read + Se
 #[simd_bounds]
 pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     cog_location: &CogTileLocation,
-    tile_size: u16,
+    tile_size: u32,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
@@ -136,7 +136,7 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 #[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     cog_location: &CogTileLocation,
-    tile_size: u16,
+    tile_size: u32,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
@@ -201,7 +201,7 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     Ok(arr)
 }
 
-fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: u16) -> Result<AlignedVec<T>> {
+fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: u32) -> Result<AlignedVec<T>> {
     let decoded_len = tile_size as usize * tile_size as usize;
     let mut decode_buf = AlignedVecUnderConstruction::new(decoded_len);
 

@@ -41,7 +41,7 @@ impl WebTiles {
 
             let top_left_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.top_left());
             let top_left_tile = Tile::for_coordinate(top_left_coordinate, pyramid.zoom_level);
-            let tile_aligned = top_left_tile.coordinate_pixel_offset(top_left_coordinate, meta.tile_size as u32) == Some((0, 0));
+            let tile_aligned = top_left_tile.coordinate_pixel_offset(top_left_coordinate, meta.tile_size) == Some((0, 0));
 
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(
@@ -54,12 +54,11 @@ impl WebTiles {
                     zoom_levels[web_tile.z as usize].insert(web_tile, TileSource::Aligned(*cog_tile));
                 });
             } else {
-                let zoom_level_offset = meta.tile_size as i32 / Tile::TILE_SIZE as i32 - 1;
                 let pyramid_geo_ref = GeoReference::with_origin(
                     "EPSG:3857",
                     pyramid.raster_size,
                     meta.geo_reference.bottom_left(),
-                    CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level + zoom_level_offset)),
+                    CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level, meta.tile_size)),
                     Option::<f64>::None,
                 );
 
@@ -184,12 +183,12 @@ fn trim_empty_zoom_levels(zoom_levels: &mut Vec<HashMap<Tile, TileSource>>) {
     }
 }
 
-fn generate_tiles_for_extent(geo_transform: [f64; 6], raster_size: RasterSize, tile_size: u16, zoom: i32) -> Vec<Tile> {
+fn generate_tiles_for_extent(geo_transform: [f64; 6], raster_size: RasterSize, tile_size: u32, zoom: i32) -> Vec<Tile> {
     let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
     let top_left_tile = Tile::for_coordinate(top_left, zoom);
 
-    let tiles_wide = (raster_size.cols.count() as u16).div_ceil(tile_size);
-    let tiles_high = (raster_size.rows.count() as u16).div_ceil(tile_size);
+    let tiles_wide = (raster_size.cols.count() as u32).div_ceil(tile_size);
+    let tiles_high = (raster_size.rows.count() as u32).div_ceil(tile_size);
 
     let mut tiles = Vec::new();
     // Iteration has to be done in row-major order so the tiles match the order of the tile lists from the COG
@@ -208,7 +207,7 @@ fn generate_tiles_for_extent(geo_transform: [f64; 6], raster_size: RasterSize, t
     tiles
 }
 
-fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, pyramid: &PyramidInfo, tile_size: u16) -> Vec<Tile> {
+fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, pyramid: &PyramidInfo, tile_size: u32) -> Vec<Tile> {
     // The geo_transform is from the highest zoom level, the origin does not match unaligned zoom levels
 
     let top_left = crs::web_mercator_to_lat_lon(geo_ref.top_left());
@@ -261,16 +260,15 @@ fn change_georef_cell_size(geo_reference: &GeoReference, cell_size: CellSize) ->
 fn create_cog_tile_web_mercator_bounds(
     pyramid: &PyramidInfo,
     geo_reference: &GeoReference, // georeference of the full cog image
-    tile_size: u16,
+    tile_size: u32,
 ) -> Result<Vec<(CogTileLocation, GeoReference)>> {
     let mut web_tiles = Vec::with_capacity(pyramid.tile_locations.len());
 
-    let zoom_level_offset = (tile_size / Tile::TILE_SIZE) as i32 - 1;
-    let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level + zoom_level_offset));
+    let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level, tile_size));
     let geo_ref_zoom_level = change_georef_cell_size(geo_reference, cell_size);
 
-    let tiles_wide = (pyramid.raster_size.cols.count() as u16).div_ceil(tile_size) as usize;
-    let tiles_high = (pyramid.raster_size.rows.count() as u16).div_ceil(tile_size) as usize;
+    let tiles_wide = (pyramid.raster_size.cols.count() as u32).div_ceil(tile_size) as usize;
+    let tiles_high = (pyramid.raster_size.rows.count() as u32).div_ceil(tile_size) as usize;
 
     if tiles_wide * tiles_high != pyramid.tile_locations.len() {
         return Err(Error::InvalidArgument(format!(
@@ -320,7 +318,7 @@ fn create_cog_tile_web_mercator_bounds(
 pub struct WebTileInfo {
     pub min_zoom: i32,
     pub max_zoom: i32,
-    pub tile_size: u16,
+    pub tile_size: u32,
     pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
     pub statistics: Option<CogStats>,
@@ -506,12 +504,12 @@ mod tests {
 
     use super::*;
 
-    const COG_TILE_SIZE: u16 = 256;
+    const COG_TILE_SIZE: u32 = 256;
 
     fn create_test_cog(
         input_tif: &Path,
         output_tif: &Path,
-        tile_size: u16,
+        tile_size: u32,
         compression: Option<Compression>,
         predictor: Option<PredictorSelection>,
         output_type: Option<ArrayDataType>,
@@ -805,7 +803,7 @@ mod tests {
 
     #[test_log::test]
     fn read_test_cog_512() -> Result<()> {
-        const COG_TILE_SIZE: u16 = 512;
+        const COG_TILE_SIZE: u32 = 512;
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
@@ -1020,7 +1018,7 @@ mod tests {
         Ok(())
     }
 
-    fn create_unaligned_test_cog(dir: &Path, tile_size: u16) -> Result<PathBuf> {
+    fn create_unaligned_test_cog(dir: &Path, tile_size: u32) -> Result<PathBuf> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let output = dir.join(format!("cog_{tile_size}px.tif"));
 

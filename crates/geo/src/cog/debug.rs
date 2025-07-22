@@ -21,10 +21,8 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
 
     let tiles_wide = (pyramid.raster_size.cols.count() as usize).div_ceil(tile_size as usize);
 
+    let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level, tile_size);
     let mut current_ll = cog_geo_ref.top_left();
-
-    let zoom_level_offset = (tile_size as i32 / 256) - 1;
-    let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level + zoom_level_offset);
 
     for (index, cog_tile) in pyramid.tile_locations.iter().enumerate() {
         let tile_data = cog.read_tile_data_as::<u8>(cog_tile, &mut reader)?;

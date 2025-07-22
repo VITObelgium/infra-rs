@@ -31,7 +31,7 @@ impl<T: ArrayNum> RasterBuilder<T> {
             crs::epsg::WGS84_WEB_MERCATOR.to_string(),
             raster_size,
             lower_left,
-            CellSize::square(Tile::pixel_size_at_zoom_level(zoom)),
+            CellSize::square(Tile::pixel_size_at_zoom_level(zoom, tile_size as u32)),
             Some(T::NODATA),
         );
 
@@ -153,7 +153,7 @@ mod tests {
         .await
         .unwrap();
 
-        let expected = DenseRaster::<f32>::read(&test_data_dir.join("reference/reassembled_from_tiles.tif")).unwrap();
+        let expected = DenseRaster::<f32>::read(test_data_dir.join("reference/reassembled_from_tiles.tif")).unwrap();
         assert_eq!(expected, raster);
     }
 }

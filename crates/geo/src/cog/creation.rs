@@ -13,7 +13,7 @@ pub enum PredictorSelection {
 pub struct CogCreationOptions {
     pub min_zoom: Option<i32>,
     pub zoom_level_strategy: ZoomLevelStrategy,
-    pub tile_size: u16,
+    pub tile_size: u32,
     pub compression: Option<Compression>,
     pub predictor: Option<PredictorSelection>,
     pub allow_sparse: bool,
@@ -260,7 +260,7 @@ mod tests {
 
     #[test]
     fn cog_creation_512px() -> Result<()> {
-        const TILE_SIZE: u16 = 512;
+        const TILE_SIZE: u32 = 512;
 
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");

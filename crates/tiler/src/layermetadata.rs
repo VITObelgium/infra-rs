@@ -63,7 +63,7 @@ pub struct LayerMetadata {
     pub data_type: ArrayDataType,
     pub epsg: Option<Epsg>,
     pub tile_format: TileFormat,
-    pub tile_size: Option<u16>,
+    pub tile_size: Option<u32>,
     pub supports_dpi_ratio: bool,
     pub source_format: LayerSourceType,
     pub scheme: String,
