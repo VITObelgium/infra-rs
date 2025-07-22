@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
     RasterMetadata, Result, Rows, Window,
-    cog::{CogTileLocation, HorizontalUnpredictable, io, reader::PyramidInfo},
+    cog::{CogStats, CogTileLocation, HorizontalUnpredictable, io, reader::PyramidInfo},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -318,7 +318,10 @@ fn create_cog_tile_web_mercator_bounds(
 pub struct WebTileInfo {
     pub min_zoom: i32,
     pub max_zoom: i32,
+    pub tile_size: u16,
+    pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
+    pub statistics: Option<CogStats>,
 }
 
 #[derive(Debug, Clone)]
@@ -342,7 +345,10 @@ impl WebTilesReader {
         WebTileInfo {
             min_zoom: self.web_tiles.min_zoom(),
             max_zoom: self.web_tiles.max_zoom(),
+            tile_size: self.cog.metadata().tile_size,
+            data_type: self.data_type(),
             bounds: self.data_bounds(),
+            statistics: self.cog.metadata().statistics.clone(),
         }
     }
 
@@ -354,7 +360,10 @@ impl WebTilesReader {
         self.cog.metadata()
     }
 
-    fn tile_source(&self, tile: &Tile) -> Option<&TileSource> {
+    /// For a given tile, returns which cog tiles are used to construct the tile data.
+    /// In case of an aligned overview, this will be a single cog tile.
+    /// In case of an unaligned overview, this will be a list of cog tiles with their cutout information.
+    pub fn tile_source(&self, tile: &Tile) -> Option<&TileSource> {
         self.web_tiles.tile_source(tile)
     }
 
