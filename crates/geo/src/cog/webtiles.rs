@@ -39,8 +39,9 @@ impl WebTiles {
         for pyramid in &meta.pyramids {
             // log::info!("Aligned {current_zoom} {}x{}", image_width, image_height);
 
-            let tile_aligned = pyramid.raster_size.cols.count() % meta.tile_size as i32 == 0
-                && pyramid.raster_size.rows.count() % meta.tile_size as i32 == 0;
+            let top_left_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.top_left());
+            let top_left_tile = Tile::for_coordinate(top_left_coordinate, pyramid.zoom_level);
+            let tile_aligned = top_left_tile.coordinate_pixel_offset(top_left_coordinate, meta.tile_size as u32) == Some((0, 0));
 
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(
@@ -53,11 +54,12 @@ impl WebTiles {
                     zoom_levels[web_tile.z as usize].insert(web_tile, TileSource::Aligned(*cog_tile));
                 });
             } else {
+                let zoom_level_offset = meta.tile_size as i32 / Tile::TILE_SIZE as i32 - 1;
                 let pyramid_geo_ref = GeoReference::with_origin(
                     "EPSG:3857",
                     pyramid.raster_size,
                     meta.geo_reference.bottom_left(),
-                    CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level)),
+                    CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level + zoom_level_offset)),
                     Option::<f64>::None,
                 );
 
@@ -220,10 +222,9 @@ fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, pyramid: &Pyramid
         "Tile size must be a factor of {}",
         Tile::TILE_SIZE
     );
-    let tile_size_factor = (tile_size / Tile::TILE_SIZE) as f64;
 
-    let tiles_wide = ((bottom_right_tile.x - top_left_tile.x + 1) as f64 / tile_size_factor).ceil() as i32;
-    let tiles_high = ((bottom_right_tile.y - top_left_tile.y + 1) as f64 / tile_size_factor).ceil() as i32;
+    let tiles_wide = bottom_right_tile.x - top_left_tile.x + 1;
+    let tiles_high = bottom_right_tile.y - top_left_tile.y + 1;
 
     let mut tiles = Vec::new();
     // Iteration has to be done in row-major order so the tiles match the order of the tile lists from the COG
@@ -264,7 +265,8 @@ fn create_cog_tile_web_mercator_bounds(
 ) -> Result<Vec<(CogTileLocation, GeoReference)>> {
     let mut web_tiles = Vec::with_capacity(pyramid.tile_locations.len());
 
-    let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level));
+    let zoom_level_offset = (tile_size / Tile::TILE_SIZE) as i32 - 1;
+    let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(pyramid.zoom_level + zoom_level_offset));
     let geo_ref_zoom_level = change_georef_cell_size(geo_reference, cell_size);
 
     let tiles_wide = (pyramid.raster_size.cols.count() as u16).div_ceil(tile_size) as usize;
@@ -843,7 +845,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn generate_tiles_for_extent_unaligned() -> Result<()> {
+    fn generate_tiles_for_extent_unaligned_256px() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
         let cog = WebTilesReader::from_cog(CogAccessor::from_file(&cog_path)?)?;
@@ -851,6 +853,31 @@ mod tests {
         let pyramid = cog.pyramid_info(7).expect("Zoom level 7 not found");
 
         let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, pyramid, COG_TILE_SIZE);
+        assert_eq!(tiles.len(), 6);
+        assert_eq!(
+            tiles,
+            vec![
+                Tile { z: 7, x: 64, y: 42 },
+                Tile { z: 7, x: 65, y: 42 },
+                Tile { z: 7, x: 66, y: 42 },
+                Tile { z: 7, x: 64, y: 43 },
+                Tile { z: 7, x: 65, y: 43 },
+                Tile { z: 7, x: 66, y: 43 },
+            ]
+        );
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn generate_tiles_for_extent_unaligned_512px() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE * 2)?;
+        let cog = WebTilesReader::from_cog(CogAccessor::from_file(&cog_path)?)?;
+
+        let pyramid = cog.pyramid_info(7).expect("Zoom level 7 not found");
+
+        let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, pyramid, COG_TILE_SIZE * 2);
         assert_eq!(tiles.len(), 6);
         assert_eq!(
             tiles,
@@ -900,35 +927,75 @@ mod tests {
     }
 
     #[test_log::test]
-    fn generate_tile_sources() -> Result<()> {
+    fn generate_tile_sources_256px() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
         let cog = WebTilesReader::from_cog(CogAccessor::from_file(&cog_path)?)?;
 
-        {
-            let tile_sources = cog.zoom_level_tile_sources(8).expect("Zoom level 8 not found");
-            let web_tile = Tile { z: 8, x: 132, y: 85 };
+        let tile_sources = cog.zoom_level_tile_sources(8).expect("Zoom level 8 not found");
+        let web_tile = Tile { z: 8, x: 132, y: 85 };
 
-            let tile = tile_sources.get(&web_tile).unwrap();
-            match tile {
-                TileSource::Aligned(_) => panic!("Expected unaligned tile source for tile {tile:?}"),
-                TileSource::Unaligned(items) => {
-                    assert_eq!(1, items.len());
-                    let (tile_location, cutout) = items.first().unwrap();
+        let tile = tile_sources.get(&web_tile).unwrap();
+        match tile {
+            TileSource::Aligned(_) => panic!("Expected unaligned tile source for tile {tile:?}"),
+            TileSource::Unaligned(items) => {
+                assert_eq!(1, items.len());
+                let (tile_location, cutout) = items.first().unwrap();
 
-                    assert_eq!(
-                        tile_location.offset,
-                        264600 /* offset of the cog tile at 0 based index 2 (top right cog tile)*/
-                    );
+                assert_eq!(
+                    tile_location.offset,
+                    264600 /* offset of the cog tile at 0 based index 2 (top right cog tile)*/
+                );
 
-                    assert_eq!(cutout.cols, 128);
-                    assert_eq!(cutout.rows, 256);
-                    assert_eq!(cutout.src_col_offset, 128);
-                    assert_eq!(cutout.src_row_offset, 0);
-                    assert_eq!(cutout.dst_col_offset, 0);
-                    assert_eq!(cutout.src_row_offset, 0);
-                }
+                assert_eq!(cutout.cols, 128);
+                assert_eq!(cutout.rows, 256);
+                assert_eq!(cutout.src_col_offset, 128);
+                assert_eq!(cutout.src_row_offset, 0);
+                assert_eq!(cutout.dst_col_offset, 0);
+                assert_eq!(cutout.dst_row_offset, 0);
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn generate_tile_sources_512px() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE * 2)?;
+        let cog_accessor = CogAccessor::from_file(&cog_path)?;
+        let cog_tiles = cog_accessor.pyramid_info(7).unwrap().tile_locations.clone();
+        let cog = WebTilesReader::from_cog(cog_accessor)?;
+
+        let tile_sources = cog.zoom_level_tile_sources(7).expect("Zoom level 7 not found");
+        let web_tile = Tile { z: 7, x: 65, y: 42 };
+
+        let tile = tile_sources.get(&web_tile).unwrap();
+        match tile {
+            TileSource::Aligned(_) => panic!("Expected unaligned tile source for tile {tile:?}"),
+            TileSource::Unaligned(items) => {
+                assert_eq!(2, items.len());
+                let (tile_location, cutout) = &items[0];
+                assert_eq!(tile_location.offset, cog_tiles[0].offset);
+
+                assert_eq!(cutout.cols, 256);
+                assert_eq!(cutout.rows, 256);
+                assert_eq!(cutout.src_row_offset, 0);
+                assert_eq!(cutout.src_col_offset, 256);
+                assert_eq!(cutout.dst_row_offset, 256);
+                assert_eq!(cutout.dst_col_offset, 0);
+
+                let (tile_location, cutout) = &items[1];
+                assert_eq!(tile_location.offset, cog_tiles[1].offset);
+
+                assert_eq!(cutout.cols, 256);
+                assert_eq!(cutout.rows, 256);
+                assert_eq!(cutout.src_col_offset, 0);
+                assert_eq!(cutout.src_row_offset, 0);
+                assert_eq!(cutout.dst_col_offset, 256);
+                assert_eq!(cutout.dst_row_offset, 256);
             }
         }
 

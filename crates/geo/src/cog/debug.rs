@@ -12,7 +12,9 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     let cog = CogAccessor::from_file(cog_path)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
-    let pyramid = cog.pyramid_info(zoom_level).expect("Zoom level not available: {zoom_level}");
+    let pyramid = cog
+        .pyramid_info(zoom_level)
+        .unwrap_or_else(|| panic!("Zoom level not available: {zoom_level}"));
 
     let tile_size = cog.metadata().tile_size;
     let cog_geo_ref = &cog.metadata().geo_reference;
@@ -20,7 +22,9 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     let tiles_wide = (pyramid.raster_size.cols.count() as usize).div_ceil(tile_size as usize);
 
     let mut current_ll = cog_geo_ref.top_left();
-    let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level);
+
+    let zoom_level_offset = (tile_size as i32 / 256) - 1;
+    let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level + zoom_level_offset);
 
     for (index, cog_tile) in pyramid.tile_locations.iter().enumerate() {
         let tile_data = cog.read_tile_data_as::<u8>(cog_tile, &mut reader)?;

@@ -70,7 +70,7 @@ impl Tile {
         let x_offset = (coord.longitude - top_left.longitude) / pixels_per_lon;
         let y_offset = (top_left.latitude - coord.latitude) / pixels_per_lat;
 
-        if x_offset < 0.0 || y_offset < 0.0 || x_offset >= tile_size as f64 || y_offset >= tile_size as f64 {
+        if x_offset < -1e-6 || y_offset < -1e-6 || x_offset >= tile_size as f64 || y_offset >= tile_size as f64 {
             return None;
         }
 
