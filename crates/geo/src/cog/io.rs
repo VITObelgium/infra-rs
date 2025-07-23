@@ -27,22 +27,22 @@ pub struct CogHeaderReader {
 }
 
 impl CogHeaderReader {
-    pub fn from_stream(mut stream: impl Read + Seek) -> Result<Self> {
-        // Immediately read the cog header into the buffer
+    pub fn from_stream(mut stream: impl Read) -> Result<Self> {
+        // Read up to COG_HEADER_SIZE bytes, handling partial reads
         let mut buffer = vec![0; COG_HEADER_SIZE];
+        let mut total_bytes_read = 0;
 
-        match stream.read_exact(&mut buffer) {
-            Ok(_) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => {
-                // Determine the filesize and adjust the buffer size accordingly
-                let file_size = stream.seek(SeekFrom::End(0))?;
-                buffer.resize(file_size as usize, 0);
-                stream.seek(SeekFrom::Start(0))?;
-                stream.read_exact(&mut buffer)?;
+        while total_bytes_read < COG_HEADER_SIZE {
+            let bytes_read = stream.read(&mut buffer[total_bytes_read..])?;
+            if bytes_read == 0 {
+                // EOF reached before filling the buffer
+                break;
             }
-            Err(e) => return Err(e.into()),
+
+            total_bytes_read += bytes_read;
         }
 
+        buffer.truncate(total_bytes_read);
         Self::from_buffer(buffer)
     }
 
