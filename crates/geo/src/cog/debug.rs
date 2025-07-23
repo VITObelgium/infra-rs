@@ -1,10 +1,10 @@
 use num::NumCast;
 
 use crate::{
-    Array as _, CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
+    CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
     cog::{CogAccessor, WebTilesReader},
+    crs,
     nodata::Nodata as _,
-    raster::{DenseRaster, RasterIO as _},
 };
 use std::path::Path;
 
@@ -25,11 +25,9 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     let mut current_ll = cog_geo_ref.top_left();
 
     for (index, cog_tile) in pyramid.tile_locations.iter().enumerate() {
-        let tile_data = cog.read_tile_data_as::<u8>(cog_tile, &mut reader)?;
+        let tile_data = cog.read_tile_data(cog_tile, &mut reader)?;
 
-        log::info!("Index: {index}");
         if index % tiles_wide == 0 {
-            log::info!("New row");
             current_ll.set_x(cog_geo_ref.top_left().x());
             current_ll -= Point::new(0.0, tile_size as f64 * pixel_size);
         } else {
@@ -37,17 +35,17 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
         }
 
         if !tile_data.is_empty() {
-            let (_, data) = tile_data.into_raw_parts();
             let geo_ref = GeoReference::with_origin(
-                "EPSG:3857",
+                crs::epsg::WGS84_WEB_MERCATOR.to_string(),
                 RasterSize::square(cog.metadata().tile_size as i32),
                 current_ll,
                 CellSize::square(pixel_size),
                 Some(u8::NODATA),
             );
 
-            let filename = output_dir.join(format!("{zoom_level}")).join(format!("{index}.tif"));
-            DenseRaster::new(geo_ref, data)?.write(&filename)?;
+            let mut tile_data = tile_data.with_metadata(geo_ref)?;
+            let filename = output_dir.join(zoom_level.to_string()).join(format!("{index}.tif"));
+            tile_data.write(&filename)?;
         }
     }
 
@@ -63,16 +61,16 @@ pub fn dump_web_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
         .ok_or_else(|| Error::Runtime(format!("Zoom level {zoom_level} not available")))?
         .keys()
     {
-        if let Some(tile_data) = cog.read_tile_data_as::<u8>(tile, &mut reader)?
+        if let Some(tile_data) = cog.read_tile_data(tile, &mut reader)?
             && !tile_data.is_empty()
         {
             let geo_ref = GeoReference::from_tile(tile, cog.cog_metadata().tile_size as usize, 1).with_nodata(NumCast::from(u8::NODATA));
-            let (_, data) = tile_data.into_raw_parts();
+            let mut tile_data = tile_data.with_metadata(geo_ref)?;
 
             let filename = output_dir
                 .join(format!("{zoom_level}"))
                 .join(format!("{}_{}_{}.tif", tile.z, tile.x, tile.y));
-            DenseRaster::new(geo_ref, data)?.write(&filename)?;
+            tile_data.write(&filename)?;
         }
     }
 
