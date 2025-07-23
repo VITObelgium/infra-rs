@@ -61,6 +61,12 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
         }
     }
 
+    pub fn with_metadata<M: ArrayMetadata>(self, meta: M) -> Result<DenseArray<T, M>> {
+        assert!(meta.size() == self.size());
+        let (_, data) = self.into_raw_parts();
+        DenseArray::<T, M>::new(meta, data)
+    }
+
     pub fn into_raw_parts(self) -> (Metadata, AlignedVec<T>) {
         (self.meta, self.data)
     }

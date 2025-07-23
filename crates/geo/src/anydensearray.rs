@@ -221,6 +221,21 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
+    pub fn with_metadata<M: ArrayMetadata>(self, meta: M) -> Result<AnyDenseArray<M>> {
+        Ok(match self {
+            AnyDenseArray::U8(raster) => AnyDenseArray::U8(raster.with_metadata(meta)?),
+            AnyDenseArray::U16(raster) => AnyDenseArray::U16(raster.with_metadata(meta)?),
+            AnyDenseArray::U32(raster) => AnyDenseArray::U32(raster.with_metadata(meta)?),
+            AnyDenseArray::U64(raster) => AnyDenseArray::U64(raster.with_metadata(meta)?),
+            AnyDenseArray::I8(raster) => AnyDenseArray::I8(raster.with_metadata(meta)?),
+            AnyDenseArray::I16(raster) => AnyDenseArray::I16(raster.with_metadata(meta)?),
+            AnyDenseArray::I32(raster) => AnyDenseArray::I32(raster.with_metadata(meta)?),
+            AnyDenseArray::I64(raster) => AnyDenseArray::I64(raster.with_metadata(meta)?),
+            AnyDenseArray::F32(raster) => AnyDenseArray::F32(raster.with_metadata(meta)?),
+            AnyDenseArray::F64(raster) => AnyDenseArray::F64(raster.with_metadata(meta)?),
+        })
+    }
+
     pub fn min_max(&self) -> Result<Option<std::ops::RangeInclusive<f64>>> {
         Ok(match self {
             AnyDenseArray::U8(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
