@@ -27,12 +27,12 @@ pub struct CogHeaderReader {
 }
 
 impl CogHeaderReader {
-    pub fn from_stream(mut stream: impl Read) -> Result<Self> {
-        // Read up to COG_HEADER_SIZE bytes, handling partial reads
-        let mut buffer = vec![0; COG_HEADER_SIZE];
+    pub fn from_stream(mut stream: impl Read, header_size: usize) -> Result<Self> {
+        // Read up to header_size bytes, handling partial reads
+        let mut buffer = vec![0; header_size];
         let mut total_bytes_read = 0;
 
-        while total_bytes_read < COG_HEADER_SIZE {
+        while total_bytes_read < header_size {
             let bytes_read = stream.read(&mut buffer[total_bytes_read..])?;
             if bytes_read == 0 {
                 // EOF reached before filling the buffer
@@ -59,8 +59,12 @@ impl Read for CogHeaderReader {
     fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
         if self.pos + buf.len() > self.buffer.len() {
             return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                "Read outside of the COG header buffer",
+                std::io::ErrorKind::UnexpectedEof,
+                format!(
+                    "Read outside of the COG header buffer (current position: {}, buffer size: {})",
+                    self.pos,
+                    self.buffer.len()
+                ),
             ));
         }
 
@@ -76,7 +80,7 @@ impl Seek for CogHeaderReader {
             SeekFrom::Start(offset) => offset as usize,
             SeekFrom::End(_) => {
                 return Err(std::io::Error::new(
-                    std::io::ErrorKind::InvalidInput,
+                    std::io::ErrorKind::UnexpectedEof,
                     "Seek from end is not supported for BufferedReader",
                 ));
             }
@@ -92,7 +96,7 @@ impl Seek for CogHeaderReader {
 
         if seek_pos >= self.buffer.len() {
             return Err(std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
+                std::io::ErrorKind::UnexpectedEof,
                 "Seek outside of the COG header buffer",
             ));
         }

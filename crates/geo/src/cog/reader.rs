@@ -112,7 +112,24 @@ impl CogAccessor {
     }
 
     pub fn from_file(path: &Path) -> Result<Self> {
-        Self::new(CogHeaderReader::from_stream(File::open(path)?)?)
+        let mut buffer_factor = 1;
+        // This could be improved to reuse the existing buffer and append to it when the buffer is not large enough
+        loop {
+            let res = Self::new(CogHeaderReader::from_stream(
+                File::open(path)?,
+                io::COG_HEADER_SIZE * buffer_factor,
+            )?);
+            match res {
+                Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
+                    if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
+                    // If the error is an EOF, we need more data to parse the header
+                    buffer_factor *= 2;
+                }
+                Ok(cog) => return Ok(cog),
+                Err(e) => return Err(e),
+            }
+        }
     }
 
     /// Create a `CogTileIndex` from a buffer containing the COG header the size of the buffer must match the `io::COG_HEADER_SIZE`.
@@ -210,7 +227,7 @@ impl CogAccessor {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Array as _, RasterSize, ZoomLevelStrategy,
+        Array as _, RasterSize, Tile, ZoomLevelStrategy,
         cog::{CogCreationOptions, create_cog_tiles, creation::PredictorSelection},
         crs, testutils,
     };
@@ -239,6 +256,41 @@ mod tests {
             aligned_levels: None,
         };
         create_cog_tiles(input_tif, output_tif, opts)?;
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn cog_metadata_larger_then_default_header_size() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(2),
+            zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
+            tile_size: Tile::TILE_SIZE,
+            allow_sparse: false,
+            compression: None,
+            predictor: None,
+            output_data_type: Some(ArrayDataType::Uint8),
+            aligned_levels: None,
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        let cog = CogAccessor::from_file(&output)?;
+
+        let meta = cog.metadata();
+        assert_eq!(meta.tile_size, opts.tile_size);
+        assert_eq!(meta.data_type, opts.output_data_type.unwrap());
+        assert_eq!(meta.min_zoom, 2);
+        assert_eq!(meta.max_zoom, 10);
+        assert_eq!(meta.compression, None);
+        assert_eq!(meta.predictor, None);
+        assert_eq!(meta.geo_reference.nodata(), Some(255.0));
+        assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
+        assert!(!cog.metadata().pyramids.is_empty(), "Pyramids should not be empty");
 
         Ok(())
     }
