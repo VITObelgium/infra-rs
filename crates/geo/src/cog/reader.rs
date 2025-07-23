@@ -25,8 +25,8 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     // Classic TIFF has magic number 42
     // BigTIFF has magic number 43
     let is_big_tiff = match header[0..4] {
-        [0x43, 0x4f, 0x47, 0x00] => true,  // BigTIFF magic number
         [0x49, 0x49, 0x2a, 0x00] => false, // Classic TIFF magic number
+        [0x49, 0x49, 0x2b, 0x00] => true,  // BigTIFF magic number
         _ => return Err(Error::InvalidArgument("Not a valid COG file".into())),
     };
 
