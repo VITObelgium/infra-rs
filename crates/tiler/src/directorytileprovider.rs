@@ -38,7 +38,7 @@ impl DirectoryTileProvider {
         let mut layers = HashMap::new();
 
         for file_entry in std::fs::read_dir(input_dir)?.flatten() {
-            if !file_entry.file_type()?.is_file() || RasterFormat::guess_from_path(&file_entry.path()) == RasterFormat::Unknown {
+            if !file_entry.file_type()?.is_file() || RasterFormat::guess_from_path(file_entry.path()) == RasterFormat::Unknown {
                 continue;
             }
 

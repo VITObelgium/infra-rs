@@ -40,7 +40,9 @@ impl CogTileProvider {
             max_zoom: meta.max_zoom,
             tile_size: Some(meta.tile_size),
             tile_format: TileFormat::RasterTile,
-            name: "COG".into(),
+            name: path
+                .file_name()
+                .map_or("COG".to_string(), |name| name.to_string_lossy().into_owned()),
             description: String::default(),
             epsg: Some(crs::epsg::WGS84_WEB_MERCATOR),
             bounds: wgs84_meta.latlonbounds().array(),
@@ -208,9 +210,9 @@ impl TileProvider for CogTileProvider {
         )?;
 
         if !tile_data.data.is_empty()
-            && let Some((x, y)) = tile.coordinate_pixel_offset(coord, tile_size as u32)
+            && let Some((x, y)) = tile.coordinate_pixel_offset(coord, tile_size)
         {
-            let index = (y * tile_size as u32 + x) as usize;
+            let index = (y * tile_size + x) as usize;
             Ok(tile_data.data.get(index).map(|v| *v as f32))
         } else {
             Ok(None)
