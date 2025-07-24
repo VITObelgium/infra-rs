@@ -149,7 +149,7 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
 #[cfg(test)]
 mod tests {
     use crate::{
-        cog::{CogAccessor, Predictor},
+        cog::{Predictor, TiffReader},
         testutils,
     };
 
@@ -175,12 +175,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(7, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(7, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 2); // 6 to 7
-            assert_eq!(meta.tile_size, 256);
+            assert_eq!(meta.tile_size()?, 256);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
             assert_eq!(meta.data_type, ArrayDataType::Uint8);
@@ -200,12 +203,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(10, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(10, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 5); // 5 levels from 6 to 10
-            assert_eq!(meta.tile_size, 256);
+            assert_eq!(meta.tile_size()?, 256);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::FloatingPoint));
             assert_eq!(meta.data_type, ArrayDataType::Float32);
@@ -225,12 +231,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(10, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(10, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 5); // 5 levels from 6 to 10
-            assert_eq!(meta.tile_size, 256);
+            assert_eq!(meta.tile_size()?, 256);
         }
 
         {
@@ -247,12 +256,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(9, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(9, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 3); // 5 levels from 7 to 9
-            assert_eq!(meta.tile_size, 256);
+            assert_eq!(meta.tile_size()?, 256);
         }
 
         Ok(())
@@ -280,12 +292,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(7, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(7, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 2); // from 6 to 7
-            assert_eq!(meta.tile_size, TILE_SIZE);
+            assert_eq!(meta.tile_size()?, TILE_SIZE);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
             assert_eq!(meta.data_type, ArrayDataType::Uint8);
@@ -305,12 +320,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(9, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(9, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 4); // from 6 to 9
-            assert_eq!(meta.tile_size, TILE_SIZE);
+            assert_eq!(meta.tile_size()?, TILE_SIZE);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
             assert_eq!(meta.data_type, ArrayDataType::Float32);
@@ -330,12 +348,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(9, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(9, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 4); // from 6 to 9
-            assert_eq!(meta.tile_size, TILE_SIZE);
+            assert_eq!(meta.tile_size()?, TILE_SIZE);
         }
 
         {
@@ -352,12 +373,15 @@ mod tests {
             };
 
             create_cog_tiles(&input, &output, opts)?;
-            let cog = CogAccessor::from_file(&output)?;
+            let cog = TiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(8, meta.tile_size));
+            assert_eq!(
+                meta.geo_reference.cell_size_x(),
+                Tile::pixel_size_at_zoom_level(8, meta.tile_size()?)
+            );
             assert_eq!(meta.pyramids.len(), 2); // from 7 to 8
-            assert_eq!(meta.tile_size, TILE_SIZE);
+            assert_eq!(meta.tile_size()?, TILE_SIZE);
         }
 
         Ok(())

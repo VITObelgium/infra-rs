@@ -29,31 +29,33 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<bool> {
     };
 
     let offset = if is_big_tiff { 16 } else { 8 };
+    assert!(header.len() >= offset + 43, "Provided header is too small to contain GDAL metadata");
 
     // GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n
-    let first_line = std::str::from_utf8(&header[offset..offset + 43])
-        .map_err(|e| Error::InvalidArgument(format!("Invalid UTF-8 in COG header: {e}")))?;
+    if let Ok(first_line) = std::str::from_utf8(&header[offset..offset + 43]) {
+        // // The header size is at bytes 30..36 (6 bytes)
+        // let header_size_str = &first_line[30..36];
+        // let header_size: usize = header_size_str
+        //     .trim()
+        //     .parse()
+        //     .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {e}")))?;
 
-    // // The header size is at bytes 30..36 (6 bytes)
-    // let header_size_str = &first_line[30..36];
-    // let header_size: usize = header_size_str
-    //     .trim()
-    //     .parse()
-    //     .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {e}")))?;
+        // let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
+        // log::debug!("Header: {header_str}");
 
-    // let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
-    // log::debug!("Header: {header_str}");
-
-    Ok(first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE="))
+        Ok(first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE="))
+    } else {
+        Ok(false)
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct TiffTileLocation {
+pub struct TiffChunkLocation {
     pub offset: u64,
     pub size: u64,
 }
 
-impl TiffTileLocation {
+impl TiffChunkLocation {
     pub fn range_to_fetch(&self) -> Range<u64> {
         if self.size == 0 {
             return Range { start: 0, end: 0 };
@@ -69,12 +71,18 @@ impl TiffTileLocation {
 #[derive(Debug, Clone)]
 pub struct PyramidInfo {
     pub raster_size: RasterSize,
-    pub tile_locations: Vec<TiffTileLocation>,
+    pub tile_locations: Vec<TiffChunkLocation>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RasterDataLayout {
+    Tiled(u32),  // Tile size in pixels
+    Strips(u32), // Rows per strip
 }
 
 #[derive(Debug, Clone)]
 pub struct GeoTiffMetadata {
-    pub tile_size: u32,
+    pub data_layout: RasterDataLayout,
     pub band_count: u32,
     pub is_cog: bool,
     pub data_type: ArrayDataType,
@@ -85,12 +93,21 @@ pub struct GeoTiffMetadata {
     pub pyramids: Vec<PyramidInfo>,
 }
 
+impl GeoTiffMetadata {
+    pub fn tile_size(&self) -> Result<u32> {
+        match self.data_layout {
+            RasterDataLayout::Tiled(size) => Ok(size),
+            RasterDataLayout::Strips(_) => Err(Error::Runtime("Cannot determine tile size for TIFF with striped layout".into())),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
-pub struct CogAccessor {
+pub struct TiffReader {
     meta: GeoTiffMetadata,
 }
 
-impl CogAccessor {
+impl TiffReader {
     pub fn is_cog(path: &Path) -> bool {
         let mut header = vec![0u8; io::COG_HEADER_SIZE];
         match File::open(path) {
@@ -137,7 +154,7 @@ impl CogAccessor {
         let mut meta = reader.parse_cog_header()?;
         meta.is_cog = is_cog;
 
-        Ok(CogAccessor { meta })
+        Ok(TiffReader { meta })
     }
 
     pub fn metadata(&self) -> &GeoTiffMetadata {
@@ -151,7 +168,7 @@ impl CogAccessor {
     /// Read the tile data for the given tile using the provided reader.
     /// This method will return an error if the tile does not exist in the COG index
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
-    pub fn read_tile_data(&self, cog_tile: &TiffTileLocation, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
+    pub fn read_tile_data(&self, cog_tile: &TiffChunkLocation, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
         Ok(match self.meta.data_type {
             ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_tile_data_as::<u8>(cog_tile, &mut reader)?),
             ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_tile_data_as::<u16>(cog_tile, &mut reader)?),
@@ -169,9 +186,11 @@ impl CogAccessor {
     #[simd_bounds]
     pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        cog_tile: &TiffTileLocation,
+        cog_tile: &TiffChunkLocation,
         mut reader: impl Read + Seek,
     ) -> Result<DenseArray<T>> {
+        let tile_size = self.meta.tile_size()?;
+
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
                 "Tile data type mismatch: expected {:?}, got {:?}",
@@ -182,7 +201,7 @@ impl CogAccessor {
 
         io::read_tile_data(
             cog_tile,
-            self.meta.tile_size,
+            tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
@@ -193,9 +212,11 @@ impl CogAccessor {
     #[simd_bounds]
     pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        cog_tile: &TiffTileLocation,
+        cog_tile: &TiffChunkLocation,
         cog_chunk: &[u8],
     ) -> Result<DenseArray<T>> {
+        let tile_size = self.meta.tile_size()?;
+
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
                 "Tile data type mismatch: expected {:?}, got {:?}",
@@ -206,7 +227,7 @@ impl CogAccessor {
 
         let tile_data = io::parse_tile_data(
             cog_tile,
-            self.meta.tile_size,
+            tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
@@ -224,7 +245,7 @@ mod tests {
     use crate::{
         Array as _, RasterSize, Tile, ZoomLevelStrategy,
         cog::{CogCreationOptions, create_cog_tiles, creation::PredictorSelection},
-        crs, testutils,
+        crs, raster, testutils,
     };
 
     use super::*;
@@ -256,34 +277,34 @@ mod tests {
     }
 
     #[test_log::test]
-    fn cog_metadata_larger_then_default_header_size() -> Result<()> {
+    fn geotiff_non_cog() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let output = tmp.path().join("cog.tif");
 
-        let opts = CogCreationOptions {
-            min_zoom: Some(2),
-            zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
-            tile_size: Tile::TILE_SIZE,
-            allow_sparse: false,
-            compression: None,
-            predictor: None,
-            output_data_type: Some(ArrayDataType::Uint8),
-            aligned_levels: None,
-        };
-        create_cog_tiles(&input, &output, opts)?;
+        let options = vec![
+            "-f".to_string(),
+            "GTiff".to_string(),
+            "-co".to_string(),
+            "NUM_THREADS=ALL_CPUS".to_string(),
+        ];
 
-        let cog = CogAccessor::from_file(&output)?;
+        let creation_options: Vec<(String, String)> = vec![];
 
-        let meta = cog.metadata();
-        assert_eq!(meta.tile_size, opts.tile_size);
-        assert_eq!(meta.data_type, opts.output_data_type.unwrap());
+        let src_ds = raster::io::dataset::open_read_only(input)?;
+        raster::algo::warp_to_disk_cli(&src_ds, &output, &options, &creation_options)?;
+
+        let tiff = TiffReader::from_file(&output)?;
+        let meta = tiff.metadata();
+        assert!(!meta.is_cog);
+        assert_eq!(meta.data_layout, RasterDataLayout::Strips(3));
+        assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
-        assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
-        assert_eq!(cog.metadata().pyramids.len(), 9); // zoom levels 2 to 10
+        assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
+        assert_eq!(meta.pyramids.len(), 1);
 
         Ok(())
     }
@@ -296,10 +317,10 @@ mod tests {
         let output = tmp.path().join("cog.tif");
 
         create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
-        let cog = CogAccessor::from_file(&output)?;
+        let cog = TiffReader::from_file(&output)?;
 
         let meta = cog.metadata();
-        assert_eq!(meta.tile_size, COG_TILE_SIZE);
+        assert_eq!(meta.data_layout, RasterDataLayout::Tiled(COG_TILE_SIZE));
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
@@ -331,6 +352,40 @@ mod tests {
     }
 
     #[test_log::test]
+    fn cog_metadata_larger_then_default_header_size() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(2),
+            zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
+            tile_size: Tile::TILE_SIZE,
+            allow_sparse: false,
+            compression: None,
+            predictor: None,
+            output_data_type: Some(ArrayDataType::Uint8),
+            aligned_levels: None,
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        let cog = TiffReader::from_file(&output)?;
+
+        let meta = cog.metadata();
+        assert!(meta.is_cog);
+        assert_eq!(meta.data_layout, RasterDataLayout::Tiled(opts.tile_size));
+        assert_eq!(meta.data_type, opts.output_data_type.unwrap());
+        assert_eq!(meta.compression, None);
+        assert_eq!(meta.predictor, None);
+        assert_eq!(meta.geo_reference.nodata(), Some(255.0));
+        assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
+        assert_eq!(meta.pyramids.len(), 9); // zoom levels 2 to 10
+
+        Ok(())
+    }
+
+    #[test_log::test]
     fn compare_compression_results() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
@@ -349,8 +404,8 @@ mod tests {
             true,
         )?;
 
-        let cog_no_compression = CogAccessor::from_file(&no_compression_output)?;
-        let cog_lzw_compression = CogAccessor::from_file(&lzw_compression_output)?;
+        let cog_no_compression = TiffReader::from_file(&no_compression_output)?;
+        let cog_lzw_compression = TiffReader::from_file(&lzw_compression_output)?;
 
         for (pyramid_no_compression, pyramid_lzw) in cog_no_compression
             .metadata()

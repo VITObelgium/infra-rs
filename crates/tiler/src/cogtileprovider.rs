@@ -6,7 +6,7 @@ use std::{
     sync::Arc,
 };
 
-use geo::cog::{CogAccessor, HorizontalUnpredictable, WebTilesReader};
+use geo::cog::{HorizontalUnpredictable, TiffReader, WebTilesReader};
 use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
@@ -29,7 +29,7 @@ pub struct CogTileProvider {
 
 impl CogTileProvider {
     pub fn new(path: &Path, _opts: &TileProviderOptions) -> Result<Self> {
-        let cog = WebTilesReader::from_cog(CogAccessor::from_file(path)?)?;
+        let cog = WebTilesReader::from_cog(TiffReader::from_file(path)?)?;
         let meta = cog.cog_metadata();
         let tile_info = cog.tile_info();
         let wgs84_meta = meta.geo_reference.warped_to_epsg(crs::epsg::WGS84)?;
@@ -39,7 +39,7 @@ impl CogTileProvider {
             path: PathBuf::from(path),
             min_zoom: tile_info.min_zoom,
             max_zoom: tile_info.max_zoom,
-            tile_size: Some(meta.tile_size),
+            tile_size: Some(meta.tile_size()?),
             tile_format: TileFormat::RasterTile,
             name: path
                 .file_name()
@@ -72,7 +72,7 @@ impl CogTileProvider {
     }
 
     pub fn tiff_is_cog(path: &Path) -> bool {
-        CogAccessor::is_cog(path)
+        TiffReader::is_cog(path)
     }
 
     #[geo::simd_bounds]

@@ -4,7 +4,10 @@ use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
     ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows,
-    cog::{Compression, GeoTiffMetadata, Predictor, TiffStats, TiffTileLocation, projectioninfo::ModelType, reader::PyramidInfo, stats},
+    cog::{
+        Compression, GeoTiffMetadata, Predictor, RasterDataLayout, TiffChunkLocation, TiffStats, projectioninfo::ModelType,
+        reader::PyramidInfo, stats,
+    },
     crs,
 };
 
@@ -22,8 +25,8 @@ impl<R: Read + Seek> TiffDecoder<R> {
         })
     }
 
-    fn is_tiled(&mut self) -> Result<bool> {
-        Ok(self.decoder.tile_count()? > 0)
+    fn is_tiled(&mut self) -> bool {
+        self.decoder.get_chunk_type() == tiff::decoder::ChunkType::Tile
     }
 
     #[allow(dead_code)]
@@ -193,15 +196,6 @@ impl<R: Read + Seek> TiffDecoder<R> {
     }
 
     pub fn parse_cog_header(&mut self) -> Result<GeoTiffMetadata> {
-        if !self.is_tiled()? {
-            return Err(Error::InvalidArgument("Only tiled TIFFs are supported".into()));
-        }
-
-        let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)?;
-        if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? {
-            return Err(Error::InvalidArgument("Only square tiles are supported".into()));
-        }
-
         let bits_per_sample = match self.decoder.get_tag(Tag::BitsPerSample) {
             Ok(Value::Short(bits)) => bits,
             Ok(Value::List(_)) => {
@@ -261,6 +255,19 @@ impl<R: Read + Seek> TiffDecoder<R> {
         let raster_size = self.read_raster_size()?;
         let nodata = self.read_nodata_value()?;
         let projection = self.read_projection_info()?;
+        let is_tiled = self.is_tiled();
+
+        let data_layout = if is_tiled {
+            let tile_size = self.decoder.get_tag_u32(Tag::TileWidth)?;
+            if tile_size != self.decoder.get_tag_u32(Tag::TileLength)? {
+                return Err(Error::InvalidArgument("Only square tiles are supported".into()));
+            }
+
+            RasterDataLayout::Tiled(tile_size)
+        } else {
+            let rows = self.decoder.get_tag_u32(Tag::RowsPerStrip)?;
+            RasterDataLayout::Strips(rows)
+        };
 
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
         let mut pyramids = Vec::new();
@@ -269,13 +276,23 @@ impl<R: Read + Seek> TiffDecoder<R> {
             let image_width = self.decoder.get_tag_u32(Tag::ImageWidth)?;
             let image_height = self.decoder.get_tag_u32(Tag::ImageLength)?;
 
-            let tile_offsets = self.decoder.get_tag_u64_vec(Tag::TileOffsets)?;
-            let tile_byte_counts = self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?;
-            debug_assert_eq!(tile_offsets.len(), tile_byte_counts.len());
+            let (offsets, byte_counts) = if is_tiled {
+                (
+                    self.decoder.get_tag_u64_vec(Tag::TileOffsets)?,
+                    self.decoder.get_tag_u64_vec(Tag::TileByteCounts)?,
+                )
+            } else {
+                (
+                    self.decoder.get_tag_u64_vec(Tag::StripOffsets)?,
+                    self.decoder.get_tag_u64_vec(Tag::StripByteCounts)?,
+                )
+            };
 
-            let mut tile_locations = Vec::with_capacity(tile_offsets.len());
-            tile_offsets.iter().zip(tile_byte_counts.iter()).for_each(|(offset, byte_count)| {
-                tile_locations.push(TiffTileLocation {
+            debug_assert_eq!(offsets.len(), byte_counts.len());
+
+            let mut tile_locations = Vec::with_capacity(offsets.len());
+            offsets.iter().zip(byte_counts.iter()).for_each(|(offset, byte_count)| {
+                tile_locations.push(TiffChunkLocation {
                     offset: *offset,
                     size: *byte_count,
                 });
@@ -298,7 +315,7 @@ impl<R: Read + Seek> TiffDecoder<R> {
             .unwrap_or_default();
 
         Ok(GeoTiffMetadata {
-            tile_size,
+            data_layout,
             data_type,
             band_count: samples_per_pixel,
             compression,

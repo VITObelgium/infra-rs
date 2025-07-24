@@ -24,7 +24,7 @@ mod webtiles;
 
 use projectioninfo::ProjectionInfo;
 
-pub use reader::{CogAccessor, TiffTileLocation, GeoTiffMetadata};
+pub use reader::{GeoTiffMetadata, RasterDataLayout, TiffChunkLocation, TiffReader};
 pub use stats::TiffStats;
 pub use utils::HorizontalUnpredictable;
 pub use webtiles::{TileSource, WebTileInfo, WebTilesReader};

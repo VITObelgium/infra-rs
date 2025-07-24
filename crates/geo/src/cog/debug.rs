@@ -2,17 +2,17 @@ use num::NumCast;
 
 use crate::{
     CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
-    cog::{CogAccessor, WebTilesReader},
+    cog::{TiffReader, WebTilesReader},
     crs,
     nodata::Nodata as _,
 };
 use std::path::Path;
 
 pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
-    let cog = CogAccessor::from_file(cog_path)?;
+    let cog = TiffReader::from_file(cog_path)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
-    let tile_size = cog.metadata().tile_size;
+    let tile_size = cog.metadata().tile_size()?;
     let cell_size = cog.metadata().geo_reference.cell_size_x();
 
     let main_zoom_level = Tile::zoom_level_for_pixel_size(cell_size, crate::ZoomLevelStrategy::Closest, tile_size);
@@ -26,7 +26,6 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
         .pyramid_info((main_zoom_level - zoom_level) as usize)
         .unwrap_or_else(|| panic!("Zoom level not available: {zoom_level}"));
 
-    let tile_size = cog.metadata().tile_size;
     let cog_geo_ref = &cog.metadata().geo_reference;
 
     let tiles_wide = (pyramid.raster_size.cols.count() as usize).div_ceil(tile_size as usize);
@@ -47,7 +46,7 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
         if !tile_data.is_empty() {
             let geo_ref = GeoReference::with_origin(
                 crs::epsg::WGS84_WEB_MERCATOR.to_string(),
-                RasterSize::square(cog.metadata().tile_size as i32),
+                RasterSize::square(tile_size as i32),
                 current_ll,
                 CellSize::square(pixel_size),
                 Some(u8::NODATA),
@@ -63,8 +62,10 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
 }
 
 pub fn dump_web_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
-    let cog = WebTilesReader::from_cog(CogAccessor::from_file(cog_path)?)?;
+    let cog = WebTilesReader::from_cog(TiffReader::from_file(cog_path)?)?;
     let mut reader = std::fs::File::open(cog_path)?;
+
+    let tile_size = cog.cog_metadata().tile_size()?;
 
     for tile in cog
         .zoom_level_tile_sources(zoom_level)
@@ -74,7 +75,7 @@ pub fn dump_web_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
         if let Some(tile_data) = cog.read_tile_data(tile, &mut reader)?
             && !tile_data.is_empty()
         {
-            let geo_ref = GeoReference::from_tile(tile, cog.cog_metadata().tile_size as usize, 1).with_nodata(NumCast::from(u8::NODATA));
+            let geo_ref = GeoReference::from_tile(tile, tile_size as usize, 1).with_nodata(NumCast::from(u8::NODATA));
             let mut tile_data = tile_data.with_metadata(geo_ref)?;
 
             let filename = output_dir
