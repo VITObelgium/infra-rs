@@ -1,8 +1,8 @@
 use crate::{
     AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, GeoReference, RasterSize,
     cog::{
-        CogStats, Compression, Predictor,
-        decoder::CogDecoder,
+        Compression, Predictor, TiffStats,
+        decoder::TiffDecoder,
         io::{self, CogHeaderReader},
         utils::HorizontalUnpredictable,
     },
@@ -21,13 +21,11 @@ use std::{
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
-fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
-    // Classic TIFF has magic number 42
-    // BigTIFF has magic number 43
-    let is_big_tiff = match header[0..4] {
-        [0x49, 0x49, 0x2a, 0x00] => false, // Classic TIFF magic number
-        [0x49, 0x49, 0x2b, 0x00] => true,  // BigTIFF magic number
-        _ => return Err(Error::InvalidArgument("Not a valid COG file".into())),
+fn verify_gdal_ghost_data(header: &[u8]) -> Result<bool> {
+    let is_big_tiff = match header[2] {
+        0x2a => false, // Classic TIFF magic number
+        0x2b => true,  // BigTIFF magic number
+        _ => return Err(Error::InvalidArgument("Not a valid TIFF file".into())),
     };
 
     let offset = if is_big_tiff { 16 } else { 8 };
@@ -35,9 +33,6 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     // GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n
     let first_line = std::str::from_utf8(&header[offset..offset + 43])
         .map_err(|e| Error::InvalidArgument(format!("Invalid UTF-8 in COG header: {e}")))?;
-    if !first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE=") {
-        return Err(Error::InvalidArgument("COG not created with gdal".into()));
-    }
 
     // // The header size is at bytes 30..36 (6 bytes)
     // let header_size_str = &first_line[30..36];
@@ -49,16 +44,16 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<()> {
     // let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
     // log::debug!("Header: {header_str}");
 
-    Ok(())
+    Ok(first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE="))
 }
 
 #[derive(Debug, Clone, Copy)]
-pub struct CogTileLocation {
+pub struct TiffTileLocation {
     pub offset: u64,
     pub size: u64,
 }
 
-impl CogTileLocation {
+impl TiffTileLocation {
     pub fn range_to_fetch(&self) -> Range<u64> {
         if self.size == 0 {
             return Range { start: 0, end: 0 };
@@ -74,24 +69,25 @@ impl CogTileLocation {
 #[derive(Debug, Clone)]
 pub struct PyramidInfo {
     pub raster_size: RasterSize,
-    pub tile_locations: Vec<CogTileLocation>,
+    pub tile_locations: Vec<TiffTileLocation>,
 }
 
 #[derive(Debug, Clone)]
-pub struct CogMetadata {
+pub struct GeoTiffMetadata {
     pub tile_size: u32,
-    pub data_type: ArrayDataType,
     pub band_count: u32,
-    pub geo_reference: GeoReference,
+    pub is_cog: bool,
+    pub data_type: ArrayDataType,
     pub compression: Option<Compression>,
     pub predictor: Option<Predictor>,
-    pub statistics: Option<CogStats>,
+    pub statistics: Option<TiffStats>,
+    pub geo_reference: GeoReference,
     pub pyramids: Vec<PyramidInfo>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CogAccessor {
-    meta: CogMetadata,
+    meta: GeoTiffMetadata,
 }
 
 impl CogAccessor {
@@ -135,14 +131,16 @@ impl CogAccessor {
     }
 
     fn new(reader: CogHeaderReader) -> Result<Self> {
-        verify_gdal_ghost_data(reader.cog_header())?;
-        let mut reader = CogDecoder::new(reader)?;
-        let meta = reader.parse_cog_header()?;
+        let is_cog = verify_gdal_ghost_data(reader.cog_header())?;
+
+        let mut reader = TiffDecoder::new(reader)?;
+        let mut meta = reader.parse_cog_header()?;
+        meta.is_cog = is_cog;
 
         Ok(CogAccessor { meta })
     }
 
-    pub fn metadata(&self) -> &CogMetadata {
+    pub fn metadata(&self) -> &GeoTiffMetadata {
         &self.meta
     }
 
@@ -153,7 +151,7 @@ impl CogAccessor {
     /// Read the tile data for the given tile using the provided reader.
     /// This method will return an error if the tile does not exist in the COG index
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
-    pub fn read_tile_data(&self, cog_tile: &CogTileLocation, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
+    pub fn read_tile_data(&self, cog_tile: &TiffTileLocation, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
         Ok(match self.meta.data_type {
             ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_tile_data_as::<u8>(cog_tile, &mut reader)?),
             ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_tile_data_as::<u16>(cog_tile, &mut reader)?),
@@ -171,7 +169,7 @@ impl CogAccessor {
     #[simd_bounds]
     pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        cog_tile: &CogTileLocation,
+        cog_tile: &TiffTileLocation,
         mut reader: impl Read + Seek,
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {
@@ -195,7 +193,7 @@ impl CogAccessor {
     #[simd_bounds]
     pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        cog_tile: &CogTileLocation,
+        cog_tile: &TiffTileLocation,
         cog_chunk: &[u8],
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.meta.data_type {

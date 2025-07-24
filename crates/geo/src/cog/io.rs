@@ -1,7 +1,7 @@
 use crate::{
     Array, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Rows, Window,
     cog::{
-        CogTileLocation, Compression, Predictor,
+        Compression, Predictor, TiffTileLocation,
         utils::{self, HorizontalUnpredictable},
     },
     raster::intersection::CutOut,
@@ -106,7 +106,7 @@ impl Seek for CogHeaderReader {
     }
 }
 
-pub fn read_cog_chunk(cog_location: &CogTileLocation, mut reader: impl Read + Seek) -> Result<Vec<u8>> {
+pub fn read_cog_chunk(cog_location: &TiffTileLocation, mut reader: impl Read + Seek) -> Result<Vec<u8>> {
     let chunk_range = cog_location.range_to_fetch();
     if chunk_range.start == chunk_range.end {
         return Ok(Vec::default());
@@ -122,7 +122,7 @@ pub fn read_cog_chunk(cog_location: &CogTileLocation, mut reader: impl Read + Se
 
 #[simd_bounds]
 pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    cog_location: &CogTileLocation,
+    cog_location: &TiffTileLocation,
     tile_size: u32,
     nodata: Option<f64>,
     compression: Option<Compression>,
@@ -139,7 +139,7 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 
 #[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    cog_location: &CogTileLocation,
+    cog_location: &TiffTileLocation,
     tile_size: u32,
     nodata: Option<f64>,
     compression: Option<Compression>,

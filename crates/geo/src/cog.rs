@@ -24,8 +24,8 @@ mod webtiles;
 
 use projectioninfo::ProjectionInfo;
 
-pub use reader::{CogAccessor, CogMetadata, CogTileLocation};
-pub use stats::CogStats;
+pub use reader::{CogAccessor, TiffTileLocation, GeoTiffMetadata};
+pub use stats::TiffStats;
 pub use utils::HorizontalUnpredictable;
 pub use webtiles::{TileSource, WebTileInfo, WebTilesReader};
 

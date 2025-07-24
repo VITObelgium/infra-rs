@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
     RasterMetadata, Result, Rows, Window, ZoomLevelStrategy,
-    cog::{CogStats, CogTileLocation, HorizontalUnpredictable, io, reader::PyramidInfo},
+    cog::{HorizontalUnpredictable, TiffStats, TiffTileLocation, io, reader::PyramidInfo},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -11,7 +11,7 @@ use std::{
 
 use crate::{
     LatLonBounds, Point, RasterSize, Tile,
-    cog::{CogAccessor, CogMetadata},
+    cog::{CogAccessor, GeoTiffMetadata},
     crs,
 };
 
@@ -23,8 +23,8 @@ const LANES: usize = inf::simd::LANES;
 
 #[derive(Debug, Clone)]
 pub enum TileSource {
-    Aligned(CogTileLocation),
-    Unaligned(Vec<(CogTileLocation, CutOut)>),
+    Aligned(TiffTileLocation),
+    Unaligned(Vec<(TiffTileLocation, CutOut)>),
 }
 
 #[derive(Debug, Clone)]
@@ -33,7 +33,7 @@ pub struct WebTiles {
 }
 
 impl WebTiles {
-    pub fn from_cog_metadata(meta: &CogMetadata) -> Result<Self> {
+    pub fn from_cog_metadata(meta: &GeoTiffMetadata) -> Result<Self> {
         let mut zoom_levels = vec![HashMap::default(); 22];
 
         let mut zoom_level = Tile::zoom_level_for_pixel_size(meta.geo_reference.cell_size_x(), ZoomLevelStrategy::Closest, meta.tile_size);
@@ -261,7 +261,7 @@ fn create_cog_tile_web_mercator_bounds(
     geo_reference: &GeoReference, // georeference of the full cog image
     zoom_level: i32,
     tile_size: u32,
-) -> Result<Vec<(CogTileLocation, GeoReference)>> {
+) -> Result<Vec<(TiffTileLocation, GeoReference)>> {
     let mut web_tiles = Vec::with_capacity(pyramid.tile_locations.len());
 
     let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(zoom_level, tile_size));
@@ -321,7 +321,7 @@ pub struct WebTileInfo {
     pub tile_size: u32,
     pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
-    pub statistics: Option<CogStats>,
+    pub statistics: Option<TiffStats>,
 }
 
 #[derive(Debug, Clone)]
@@ -356,7 +356,7 @@ impl WebTilesReader {
         self.web_tiles.data_bounds()
     }
 
-    pub fn cog_metadata(&self) -> &CogMetadata {
+    pub fn cog_metadata(&self) -> &GeoTiffMetadata {
         self.cog.metadata()
     }
 
@@ -426,7 +426,7 @@ impl WebTilesReader {
     #[simd_bounds]
     fn merge_tile_sources<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        tile_sources: &[(CogTileLocation, CutOut)],
+        tile_sources: &[(TiffTileLocation, CutOut)],
         cog_chunks: &[&[u8]],
     ) -> Result<DenseArray<T>> {
         let tile_size = self.cog_metadata().tile_size as usize;

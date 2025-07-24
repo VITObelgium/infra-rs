@@ -4,18 +4,18 @@ use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
     ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows,
-    cog::{CogMetadata, CogStats, CogTileLocation, Compression, Predictor, projectioninfo::ModelType, reader::PyramidInfo, stats},
+    cog::{Compression, GeoTiffMetadata, Predictor, TiffStats, TiffTileLocation, projectioninfo::ModelType, reader::PyramidInfo, stats},
     crs,
 };
 
 use super::ProjectionInfo;
 
-pub struct CogDecoder<R: Read + Seek> {
+pub struct TiffDecoder<R: Read + Seek> {
     /// TIFF decoder
     decoder: tiff::decoder::Decoder<R>,
 }
 
-impl<R: Read + Seek> CogDecoder<R> {
+impl<R: Read + Seek> TiffDecoder<R> {
     pub fn new(stream: R) -> Result<Self> {
         Ok(Self {
             decoder: tiff::decoder::Decoder::new(stream)?.with_limits(tiff::decoder::Limits::unlimited()),
@@ -80,7 +80,7 @@ impl<R: Read + Seek> CogDecoder<R> {
         }
     }
 
-    fn read_gdal_metadata(&mut self) -> Result<Option<CogStats>> {
+    fn read_gdal_metadata(&mut self) -> Result<Option<TiffStats>> {
         if let Ok(gdal_metadata) = self.decoder.get_tag_ascii_string(Tag::Unknown(42112)) {
             return Ok(Some(stats::parse_statistics(&gdal_metadata)?));
         }
@@ -192,7 +192,7 @@ impl<R: Read + Seek> CogDecoder<R> {
         Ok(Some(proj_info))
     }
 
-    pub fn parse_cog_header(&mut self) -> Result<CogMetadata> {
+    pub fn parse_cog_header(&mut self) -> Result<GeoTiffMetadata> {
         if !self.is_tiled()? {
             return Err(Error::InvalidArgument("Only tiled TIFFs are supported".into()));
         }
@@ -275,7 +275,7 @@ impl<R: Read + Seek> CogDecoder<R> {
 
             let mut tile_locations = Vec::with_capacity(tile_offsets.len());
             tile_offsets.iter().zip(tile_byte_counts.iter()).for_each(|(offset, byte_count)| {
-                tile_locations.push(CogTileLocation {
+                tile_locations.push(TiffTileLocation {
                     offset: *offset,
                     size: *byte_count,
                 });
@@ -297,7 +297,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             .and_then(|proj| proj.epsg().map(|epsg| epsg.to_string()))
             .unwrap_or_default();
 
-        Ok(CogMetadata {
+        Ok(GeoTiffMetadata {
             tile_size,
             data_type,
             band_count: samples_per_pixel,
@@ -306,6 +306,7 @@ impl<R: Read + Seek> CogDecoder<R> {
             geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
             statistics,
             pyramids,
+            is_cog: false,
         })
     }
 }

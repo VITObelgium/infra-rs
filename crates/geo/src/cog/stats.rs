@@ -7,7 +7,7 @@ use xml::reader::{EventReader, XmlEvent};
     derive(tsify::Tsify, serde::Serialize, serde::Deserialize),
     tsify(from_wasm_abi, into_wasm_abi)
 )]
-pub struct CogStats {
+pub struct TiffStats {
     pub minimum_value: f64,
     pub maximum_value: f64,
     pub mean: f64,
@@ -28,8 +28,8 @@ pub struct CogStats {
 //   <Item name="ZOOM_LEVEL" domain="TILING_SCHEME">10</Item>
 // </GDALMetadata>
 
-pub fn parse_statistics(xml: &str) -> crate::Result<CogStats> {
-    let mut stats = CogStats::default();
+pub fn parse_statistics(xml: &str) -> crate::Result<TiffStats> {
+    let mut stats = TiffStats::default();
 
     let mut current_name: Option<String> = None;
     let mut current_domain: Option<String> = None;
