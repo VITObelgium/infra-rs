@@ -98,7 +98,7 @@ pub fn create_mbtiles(
     }
     let max_zoom = opts
         .max_zoom
-        .unwrap_or_else(|| Tile::zoom_level_for_pixel_size(georef.cell_size_x(), opts.zoom_level_strategy));
+        .unwrap_or_else(|| Tile::zoom_level_for_pixel_size(georef.cell_size_x(), opts.zoom_level_strategy, opts.tile_size));
     progress.reset(2u64.pow(max_zoom as u32));
 
     let tiler_options = tileproviderfactory::TileProviderOptions {

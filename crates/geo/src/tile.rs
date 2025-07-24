@@ -218,9 +218,10 @@ impl Tile {
     /// - `PreferLower`: Chooses the next lower integer zoom level (floor), ensuring the pixel size is greater than or equal to the requested size.
     /// - `Closest`: Chooses the closest integer zoom level (round) to the computed value.
     /// - `Manual(i32)`: Uses a manually specified zoom level ignoring any calculations.
-    pub fn zoom_level_for_pixel_size(pixel_size: f64, strategy: ZoomLevelStrategy) -> i32 {
+    pub fn zoom_level_for_pixel_size(pixel_size: f64, strategy: ZoomLevelStrategy, tile_size: u32) -> i32 {
         const INITIAL_RESOLUTION: f64 = EARTH_CIRCUMFERENCE_M / Tile::TILE_SIZE as f64; // meters/pixel at zoom 0
-        let zoom = (INITIAL_RESOLUTION / pixel_size).log2();
+        let zoom_level_offset = tile_size / Tile::TILE_SIZE - 1;
+        let zoom = (INITIAL_RESOLUTION / pixel_size).log2() - zoom_level_offset as f64;
 
         match strategy {
             ZoomLevelStrategy::PreferHigher => zoom.ceil() as i32,
@@ -344,11 +345,23 @@ mod tests {
 
     #[test]
     fn calculate_zoom_level() {
-        assert_eq!(Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferHigher), 14);
-        assert_eq!(Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferHigher), 11);
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferHigher, Tile::TILE_SIZE),
+            14
+        );
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferHigher, Tile::TILE_SIZE),
+            11
+        );
 
-        assert_eq!(Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferLower), 13);
-        assert_eq!(Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferLower), 10);
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(10.0, ZoomLevelStrategy::PreferLower, Tile::TILE_SIZE),
+            13
+        );
+        assert_eq!(
+            Tile::zoom_level_for_pixel_size(100.0, ZoomLevelStrategy::PreferLower, Tile::TILE_SIZE),
+            10
+        );
     }
 
     #[test]

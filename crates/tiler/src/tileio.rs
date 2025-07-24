@@ -258,7 +258,7 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
             }
         };
 
-        let zoom_level = Tile::zoom_level_for_pixel_size(cell_size, opts.zoom_level_strategy);
+        let zoom_level = Tile::zoom_level_for_pixel_size(cell_size, opts.zoom_level_strategy, Tile::TILE_SIZE);
 
         let mut name = path
             .file_stem()

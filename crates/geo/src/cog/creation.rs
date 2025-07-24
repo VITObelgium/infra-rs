@@ -111,7 +111,7 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
     if let Some(min_zoom) = opts.min_zoom {
         let georef = GeoReference::from_file(input)?.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
         let tile_size_offset = (opts.tile_size / 256 - 1) as i32;
-        let max_zoom = Tile::zoom_level_for_pixel_size(georef.cell_size_x(), opts.zoom_level_strategy) - tile_size_offset;
+        let max_zoom = Tile::zoom_level_for_pixel_size(georef.cell_size_x(), opts.zoom_level_strategy, opts.tile_size);
 
         let mut overview_count = (max_zoom - min_zoom) as usize;
         if overview_count == 0 && tile_size_offset > 0 {
@@ -178,8 +178,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.min_zoom, 6);
-            assert_eq!(meta.max_zoom, 7);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(7, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 2); // 6 to 7
             assert_eq!(meta.tile_size, 256);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
@@ -203,8 +203,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.max_zoom, 10);
-            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(10, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 5); // 5 levels from 6 to 10
             assert_eq!(meta.tile_size, 256);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::FloatingPoint));
@@ -228,8 +228,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.max_zoom, 10);
-            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(10, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 5); // 5 levels from 6 to 10
             assert_eq!(meta.tile_size, 256);
         }
 
@@ -250,8 +250,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.max_zoom, 9);
-            assert_eq!(meta.min_zoom, 7);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(9, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 3); // 5 levels from 7 to 9
             assert_eq!(meta.tile_size, 256);
         }
 
@@ -283,8 +283,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.min_zoom, 6);
-            assert_eq!(meta.max_zoom, 7);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(7, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 2); // from 6 to 7
             assert_eq!(meta.tile_size, TILE_SIZE);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
@@ -308,8 +308,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.max_zoom, 9);
-            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(9, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 4); // from 6 to 9
             assert_eq!(meta.tile_size, TILE_SIZE);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
@@ -333,8 +333,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.max_zoom, 9);
-            assert_eq!(meta.min_zoom, 6);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(9, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 4); // from 6 to 9
             assert_eq!(meta.tile_size, TILE_SIZE);
         }
 
@@ -355,8 +355,8 @@ mod tests {
             let cog = CogAccessor::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(meta.max_zoom, 8);
-            assert_eq!(meta.min_zoom, 7);
+            assert_eq!(meta.geo_reference.cell_size_x(), Tile::pixel_size_at_zoom_level(8, meta.tile_size));
+            assert_eq!(meta.pyramids.len(), 2); // from 7 to 8
             assert_eq!(meta.tile_size, TILE_SIZE);
         }
 

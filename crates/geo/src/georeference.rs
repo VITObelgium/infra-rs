@@ -530,11 +530,11 @@ impl GeoReference {
     }
 
     #[cfg(feature = "gdal")]
-    pub fn aligned_to_xyz_tiles_for_zoom_level(&self, zoom_level: i32) -> Result<GeoReference> {
+    pub fn aligned_to_xyz_tiles_for_zoom_level(&self, zoom_level: i32, tile_size: u32) -> Result<GeoReference> {
         /// Create a new `GeoReference` that is aligned to the XYZ tile grid used for serving tiles.
         /// Such an aligned grid is used as a warping target for rasters from which tiles can be extracted
         /// and served as XYZ tiles.
-        use crate::{Tile, crs};
+        use crate::crs;
 
         if self.projection.is_empty() {
             return Err(Error::InvalidArgument(
@@ -550,7 +550,7 @@ impl GeoReference {
         let top_left_tile = crate::Tile::for_coordinate(top_left, zoom_level).web_mercator_bounds();
         let bottom_right_tile = crate::Tile::for_coordinate(bottom_right, zoom_level).web_mercator_bounds();
 
-        let cell_size = (top_left_tile.bottom_right().x() - top_left_tile.top_left().x()) / Tile::TILE_SIZE as f64;
+        let cell_size = (top_left_tile.bottom_right().x() - top_left_tile.top_left().x()) / tile_size as f64;
         let raster_size = RasterSize {
             rows: Rows(((top_left_tile.top_left().y() - bottom_right_tile.bottom_right().y()) / cell_size).ceil() as i32),
             cols: Columns(((bottom_right_tile.bottom_right().x() - top_left_tile.top_left().x()) / cell_size).ceil() as i32),
@@ -567,9 +567,13 @@ impl GeoReference {
     /// Create a new `GeoReference` that is aligned to the XYZ tile grid used for serving tiles.
     /// Such an aligned grid is used as a warping target for rasters from which tiles can be extracted
     /// and served as XYZ tiles.
-    pub fn aligned_to_xyz_tiles_auto_detect_zoom_level(&self, strategy: crate::tile::ZoomLevelStrategy) -> Result<GeoReference> {
-        let zoom = Tile::zoom_level_for_pixel_size(self.cell_size_x(), strategy);
-        self.aligned_to_xyz_tiles_for_zoom_level(zoom)
+    pub fn aligned_to_xyz_tiles_auto_detect_zoom_level(
+        &self,
+        strategy: crate::tile::ZoomLevelStrategy,
+        tile_size: u32,
+    ) -> Result<GeoReference> {
+        let zoom = Tile::zoom_level_for_pixel_size(self.cell_size_x(), strategy, tile_size);
+        self.aligned_to_xyz_tiles_for_zoom_level(zoom, tile_size)
     }
 
     pub fn intersection(&self, other: &GeoReference) -> Result<GeoReference> {

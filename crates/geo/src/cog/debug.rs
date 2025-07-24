@@ -12,8 +12,18 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     let cog = CogAccessor::from_file(cog_path)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
+    let tile_size = cog.metadata().tile_size;
+    let cell_size = cog.metadata().geo_reference.cell_size_x();
+
+    let main_zoom_level = Tile::zoom_level_for_pixel_size(cell_size, crate::ZoomLevelStrategy::Closest, tile_size);
+    if (Tile::pixel_size_at_zoom_level(main_zoom_level, tile_size) - cell_size).abs() > 1e-6 {
+        return Err(Error::Runtime(format!(
+            "This COGs cell size does not match web tile zoom level {main_zoom_level}",
+        )));
+    }
+
     let pyramid = cog
-        .pyramid_info(zoom_level)
+        .pyramid_info((main_zoom_level - zoom_level) as usize)
         .unwrap_or_else(|| panic!("Zoom level not available: {zoom_level}"));
 
     let tile_size = cog.metadata().tile_size;

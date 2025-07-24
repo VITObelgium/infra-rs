@@ -74,14 +74,11 @@ impl CogTileLocation {
 #[derive(Debug, Clone)]
 pub struct PyramidInfo {
     pub raster_size: RasterSize,
-    pub zoom_level: i32,
     pub tile_locations: Vec<CogTileLocation>,
 }
 
 #[derive(Debug, Clone)]
 pub struct CogMetadata {
-    pub min_zoom: i32,
-    pub max_zoom: i32,
     pub tile_size: u32,
     pub data_type: ArrayDataType,
     pub band_count: u32,
@@ -149,8 +146,8 @@ impl CogAccessor {
         &self.meta
     }
 
-    pub fn pyramid_info(&self, zoom_level: i32) -> Option<&PyramidInfo> {
-        self.meta.pyramids.iter().find(|p| p.zoom_level == zoom_level)
+    pub fn pyramid_info(&self, index: usize) -> Option<&PyramidInfo> {
+        self.meta.pyramids.get(index)
     }
 
     /// Read the tile data for the given tile using the provided reader.
@@ -284,13 +281,11 @@ mod tests {
         let meta = cog.metadata();
         assert_eq!(meta.tile_size, opts.tile_size);
         assert_eq!(meta.data_type, opts.output_data_type.unwrap());
-        assert_eq!(meta.min_zoom, 2);
-        assert_eq!(meta.max_zoom, 10);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
-        assert!(!cog.metadata().pyramids.is_empty(), "Pyramids should not be empty");
+        assert_eq!(cog.metadata().pyramids.len(), 9); // zoom levels 2 to 10
 
         Ok(())
     }
@@ -308,14 +303,12 @@ mod tests {
         let meta = cog.metadata();
         assert_eq!(meta.tile_size, COG_TILE_SIZE);
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
-        assert_eq!(meta.min_zoom, 7);
-        assert_eq!(meta.max_zoom, 10);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
+        assert_eq!(cog.metadata().pyramids.len(), 4); // zoom levels 7 to 10
 
-        assert!(!cog.metadata().pyramids.is_empty(), "Pyramids should not be empty");
         // Decode all cog tile
         let mut reader = File::open(&output)?;
         for pyramid in cog.metadata().pyramids.iter() {
