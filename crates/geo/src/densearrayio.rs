@@ -7,13 +7,52 @@ use crate::DenseArray;
 use crate::GeoReference;
 use crate::Result;
 use crate::array::ArrayInterop as _;
+use crate::cog::Compression;
+use crate::cog::Predictor;
 use crate::raster;
 use crate::raster::RasterIO;
+use crate::raster::TiffChunkType;
+use crate::raster::WriteRasterOptions;
 use gdal::raster::GdalType;
 use inf::allocate::AlignedVecUnderConstruction;
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
+
+fn write_raster_options_to_gdal(options: WriteRasterOptions) -> Vec<String> {
+    match options {
+        WriteRasterOptions::Default => Vec::default(),
+        WriteRasterOptions::GeoTiff(tiff_opts) => {
+            let mut opts = Vec::default();
+            opts.push(format!(
+                "TILED={}",
+                match tiff_opts.chunk_type {
+                    TiffChunkType::Tiled => "YES",
+                    TiffChunkType::Striped => "NO",
+                }
+            ));
+
+            opts.push(format!(
+                "COMPRESS={}",
+                match tiff_opts.compression {
+                    Some(Compression::Lzw) => "LZW",
+                    None => "NONE",
+                }
+            ));
+
+            opts.push(format!(
+                "PREDICTOR={}",
+                match tiff_opts.predictor {
+                    None => "1",
+                    Some(Predictor::Horizontal) => "2",
+                    Some(Predictor::FloatingPoint) => "3",
+                }
+            ));
+
+            opts
+        }
+    }
+}
 
 #[simd_macro::simd_bounds]
 impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T, Metadata> {
@@ -44,6 +83,14 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
         let georef = self.metadata().geo_reference();
         self.restore_nodata(); // Ensure nodata values are restored to the metadata value before writing
         raster::io::dataset::write(self.as_slice(), &georef, path, &[])?;
+        self.init_nodata();
+        Ok(())
+    }
+
+    fn write_with_options(&mut self, path: impl AsRef<Path>, options: WriteRasterOptions) -> Result {
+        let georef = self.metadata().geo_reference();
+        self.restore_nodata(); // Ensure nodata values are restored to the metadata value before writing
+        raster::io::dataset::write(self.as_slice(), &georef, path, &write_raster_options_to_gdal(options))?;
         self.init_nodata();
         Ok(())
     }

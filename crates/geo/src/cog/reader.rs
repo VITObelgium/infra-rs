@@ -1,5 +1,5 @@
 use crate::{
-    AnyDenseArray, ArrayDataType, ArrayNum, DenseArray, GeoReference, RasterSize,
+    AnyDenseArray, ArrayDataType, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, GeoReference, RasterSize,
     cog::{
         Compression, Predictor, TiffStats,
         decoder::TiffDecoder,
@@ -8,6 +8,7 @@ use crate::{
     },
 };
 
+use inf::allocate;
 use simd_macro::simd_bounds;
 
 use crate::{Error, Result};
@@ -49,6 +50,12 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<bool> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ChunkOptimizations {
+    Cog,
+    None,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct TiffChunkLocation {
     pub offset: u64,
@@ -56,14 +63,37 @@ pub struct TiffChunkLocation {
 }
 
 impl TiffChunkLocation {
-    pub fn range_to_fetch(&self) -> Range<u64> {
+    pub fn size_to_fetch(&self, chunk_type: ChunkOptimizations) -> usize {
+        if self.size == 0 {
+            return 0;
+        }
+
+        match chunk_type {
+            ChunkOptimizations::Cog => {
+                // For tiled COGs, the size includes the 4-byte tag at the start of the tile
+                self.size as usize + 4
+            }
+            ChunkOptimizations::None => {
+                // For striped COGs, the size is just the size of the strip
+                self.size as usize
+            }
+        }
+    }
+
+    pub fn range_to_fetch(&self, chunk_type: ChunkOptimizations) -> Range<u64> {
         if self.size == 0 {
             return Range { start: 0, end: 0 };
         }
 
-        Range {
-            start: self.offset - 4,
-            end: self.offset + self.size,
+        match chunk_type {
+            ChunkOptimizations::Cog => Range {
+                start: self.offset - 4, // Skip the 4-byte tag at the start of the tile
+                end: self.offset + self.size,
+            },
+            ChunkOptimizations::None => Range {
+                start: self.offset,
+                end: self.offset + self.size,
+            },
         }
     }
 }
@@ -71,13 +101,13 @@ impl TiffChunkLocation {
 #[derive(Debug, Clone)]
 pub struct PyramidInfo {
     pub raster_size: RasterSize,
-    pub tile_locations: Vec<TiffChunkLocation>,
+    pub chunk_locations: Vec<TiffChunkLocation>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RasterDataLayout {
-    Tiled(u32),  // Tile size in pixels
-    Strips(u32), // Rows per strip
+    Tiled(u32),   // Tile size in pixels
+    Striped(u32), // Rows per strip
 }
 
 #[derive(Debug, Clone)]
@@ -85,6 +115,7 @@ pub struct GeoTiffMetadata {
     pub data_layout: RasterDataLayout,
     pub band_count: u32,
     pub is_cog: bool,
+    pub chunk_optimizations: ChunkOptimizations,
     pub data_type: ArrayDataType,
     pub compression: Option<Compression>,
     pub predictor: Option<Predictor>,
@@ -94,20 +125,20 @@ pub struct GeoTiffMetadata {
 }
 
 impl GeoTiffMetadata {
-    pub fn tile_size(&self) -> Result<u32> {
+    pub fn chunk_row_length(&self) -> Result<u32> {
         match self.data_layout {
             RasterDataLayout::Tiled(size) => Ok(size),
-            RasterDataLayout::Strips(_) => Err(Error::Runtime("Cannot determine tile size for TIFF with striped layout".into())),
+            RasterDataLayout::Striped(rows) => Ok(rows * self.geo_reference.columns().count() as u32),
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub struct TiffReader {
+pub struct GeoTiffReader {
     meta: GeoTiffMetadata,
 }
 
-impl TiffReader {
+impl GeoTiffReader {
     pub fn is_cog(path: &Path) -> bool {
         let mut header = vec![0u8; io::COG_HEADER_SIZE];
         match File::open(path) {
@@ -153,8 +184,13 @@ impl TiffReader {
         let mut reader = TiffDecoder::new(reader)?;
         let mut meta = reader.parse_cog_header()?;
         meta.is_cog = is_cog;
+        meta.chunk_optimizations = if is_cog {
+            ChunkOptimizations::Cog
+        } else {
+            ChunkOptimizations::None
+        };
 
-        Ok(TiffReader { meta })
+        Ok(GeoTiffReader { meta })
     }
 
     pub fn metadata(&self) -> &GeoTiffMetadata {
@@ -163,6 +199,79 @@ impl TiffReader {
 
     pub fn pyramid_info(&self, index: usize) -> Option<&PyramidInfo> {
         self.meta.pyramids.get(index)
+    }
+
+    fn read_tiled_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+        &self,
+        reader: &mut (impl Read + Seek),
+        chunks: &[TiffChunkLocation],
+        tile_size: u32,
+    ) -> Result<DenseArray<T, M>> {
+        let geo_ref = &self.meta.geo_reference;
+        let mut data = allocate::AlignedVecUnderConstruction::new(geo_ref.raster_size().cell_count());
+
+        let right_edge_cols = geo_ref.columns().count() as usize % tile_size as usize;
+        let tiles_per_row = (geo_ref.columns().count() as usize).div_ceil(tile_size as usize);
+
+        let mut tile_buf = vec![T::NODATA; tile_size as usize * tile_size as usize];
+        for (chunk_index, chunk_offset) in chunks.iter().enumerate() {
+            let col_start = (chunk_index % tiles_per_row) * tile_size as usize;
+            let row_start = chunk_index / tiles_per_row;
+            let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
+            let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
+
+            self.read_tile_data_into_buffer_as(chunk_offset, reader, &mut tile_buf)?;
+
+            for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
+                if row_start * tile_size as usize + tile_row_index >= geo_ref.rows().count() as usize {
+                    break; // Skip rows that are outside the raster bounds
+                }
+
+                let index_start = ((row_start * tile_size as usize + tile_row_index) * geo_ref.columns().count() as usize) + col_start;
+                let data_slice = &mut unsafe { data.as_slice_mut() }[index_start..index_start + row_size];
+                data_slice.copy_from_slice(&tile_row_data[0..row_size]);
+            }
+        }
+
+        DenseArray::new_init_nodata(M::with_geo_reference(geo_ref.clone()), unsafe { data.assume_init() })
+    }
+
+    fn read_striped_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+        &self,
+        reader: &mut (impl Read + Seek),
+        chunks: &[TiffChunkLocation],
+        rows_per_strip: u32,
+    ) -> Result<DenseArray<T, M>> {
+        let geo_ref = &self.meta.geo_reference;
+        let mut data = allocate::AlignedVecUnderConstruction::new(geo_ref.raster_size().cell_count());
+
+        let strip_size = self.meta.geo_reference.columns().count() as usize * rows_per_strip as usize;
+        for (stripe_offset, stripe_buf) in chunks.iter().zip(unsafe { data.as_slice_mut() }.chunks_mut(strip_size)) {
+            //debug_assert_eq!(stripe_offset.size as usize, stripe_buf.len());
+            self.read_tile_data_into_buffer_as(stripe_offset, reader, stripe_buf)?;
+        }
+
+        DenseArray::new_init_nodata(M::with_geo_reference(geo_ref.clone()), unsafe { data.assume_init() })
+    }
+
+    pub fn read_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+        &self,
+        reader: &mut (impl Read + Seek),
+    ) -> Result<DenseArray<T, M>> {
+        if let Some(pyramid) = self.meta.pyramids.first() {
+            if pyramid.chunk_locations.is_empty() {
+                return Err(Error::Runtime("No tiles available in the geotiff".into()));
+            }
+
+            match self.meta.data_layout {
+                RasterDataLayout::Tiled(tile_size) => return self.read_tiled_as::<T, M>(reader, &pyramid.chunk_locations, tile_size),
+                RasterDataLayout::Striped(rows_per_strip) => {
+                    return self.read_striped_as::<T, M>(reader, &pyramid.chunk_locations, rows_per_strip);
+                }
+            }
+        }
+
+        Err(Error::Runtime("No raster data available in the geotiff".into()))
     }
 
     /// Read the tile data for the given tile using the provided reader.
@@ -189,7 +298,7 @@ impl TiffReader {
         cog_tile: &TiffChunkLocation,
         mut reader: impl Read + Seek,
     ) -> Result<DenseArray<T>> {
-        let tile_size = self.meta.tile_size()?;
+        let tile_size = self.meta.chunk_row_length()?;
 
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
@@ -205,8 +314,40 @@ impl TiffReader {
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
+            self.meta.chunk_optimizations,
             &mut reader,
         )
+    }
+
+    #[simd_bounds]
+    pub fn read_tile_data_into_buffer_as<T: ArrayNum + HorizontalUnpredictable>(
+        &self,
+        cog_tile: &TiffChunkLocation,
+        reader: &mut (impl Read + Seek),
+        tile_data: &mut [T],
+    ) -> Result<()> {
+        let row_length = self.meta.chunk_row_length()?;
+
+        if T::TYPE != self.meta.data_type {
+            return Err(Error::InvalidArgument(format!(
+                "Tile data type mismatch: expected {:?}, got {:?}",
+                self.meta.data_type,
+                T::TYPE
+            )));
+        }
+
+        io::read_tile_data_into_buffer(
+            cog_tile,
+            row_length,
+            self.meta.geo_reference.nodata(),
+            self.meta.compression,
+            self.meta.predictor,
+            self.meta.chunk_optimizations,
+            reader,
+            tile_data,
+        )?;
+
+        Ok(())
     }
 
     #[simd_bounds]
@@ -215,7 +356,7 @@ impl TiffReader {
         cog_tile: &TiffChunkLocation,
         cog_chunk: &[u8],
     ) -> Result<DenseArray<T>> {
-        let tile_size = self.meta.tile_size()?;
+        let tile_size = self.meta.chunk_row_length()?;
 
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
@@ -231,6 +372,7 @@ impl TiffReader {
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
+            self.meta.chunk_optimizations,
             None,
             cog_chunk,
         )?;
@@ -245,7 +387,9 @@ mod tests {
     use crate::{
         Array as _, RasterSize, Tile, ZoomLevelStrategy,
         cog::{CogCreationOptions, create_cog_tiles, creation::PredictorSelection},
-        crs, raster, testutils,
+        crs,
+        raster::{self, DenseRaster, GeoTiffWriteOptions, RasterIO, TiffChunkType, WriteRasterOptions},
+        testutils,
     };
 
     use super::*;
@@ -295,10 +439,10 @@ mod tests {
         let src_ds = raster::io::dataset::open_read_only(input)?;
         raster::algo::warp_to_disk_cli(&src_ds, &output, &options, &creation_options)?;
 
-        let tiff = TiffReader::from_file(&output)?;
+        let tiff = GeoTiffReader::from_file(&output)?;
         let meta = tiff.metadata();
         assert!(!meta.is_cog);
-        assert_eq!(meta.data_layout, RasterDataLayout::Strips(3));
+        assert_eq!(meta.data_layout, RasterDataLayout::Striped(3));
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
@@ -317,13 +461,14 @@ mod tests {
         let output = tmp.path().join("cog.tif");
 
         create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
-        let cog = TiffReader::from_file(&output)?;
+        let cog = GeoTiffReader::from_file(&output)?;
 
         let meta = cog.metadata();
         assert_eq!(meta.data_layout, RasterDataLayout::Tiled(COG_TILE_SIZE));
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
+        assert_eq!(meta.chunk_optimizations, ChunkOptimizations::Cog);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
         assert_eq!(cog.metadata().pyramids.len(), 4); // zoom levels 7 to 10
@@ -331,9 +476,9 @@ mod tests {
         // Decode all cog tile
         let mut reader = File::open(&output)?;
         for pyramid in cog.metadata().pyramids.iter() {
-            assert!(!pyramid.tile_locations.is_empty(), "Pyramid tile locations should not be empty");
+            assert!(!pyramid.chunk_locations.is_empty(), "Pyramid tile locations should not be empty");
 
-            for tile in &pyramid.tile_locations {
+            for tile in &pyramid.chunk_locations {
                 if tile.size == 0 {
                     continue; // Skip empty tiles
                 }
@@ -370,7 +515,7 @@ mod tests {
         };
         create_cog_tiles(&input, &output, opts)?;
 
-        let cog = TiffReader::from_file(&output)?;
+        let cog = GeoTiffReader::from_file(&output)?;
 
         let meta = cog.metadata();
         assert!(meta.is_cog);
@@ -381,6 +526,46 @@ mod tests {
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
         assert_eq!(meta.pyramids.len(), 9); // zoom levels 2 to 10
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_striped_raster() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let geotiff = GeoTiffReader::from_file(&input)?;
+
+        let raster = geotiff.read_raster_as::<u8, GeoReference>(&mut File::open(&input)?)?;
+        let gdal_raster = DenseRaster::<u8>::read(input)?;
+
+        assert_eq!(raster, gdal_raster);
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_tiled_raster() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let tiled_geotiff = tmp.path().join("tiled_geotiff.tif");
+
+        {
+            // Create a copy of the landuse raster (striped) as a tiled GeoTIFF
+            let mut ras = DenseRaster::<u8>::read(&input)?;
+            let geo_tiff_options = GeoTiffWriteOptions {
+                chunk_type: TiffChunkType::Tiled,
+                ..Default::default()
+            };
+
+            ras.write_with_options(&tiled_geotiff, WriteRasterOptions::GeoTiff(geo_tiff_options))?;
+        }
+
+        let geotiff = GeoTiffReader::from_file(&tiled_geotiff)?;
+        let mut reader = File::open(&tiled_geotiff)?;
+        let raster = geotiff.read_raster_as::<u8, GeoReference>(&mut reader)?;
+        let gdal_raster = DenseRaster::<u8>::read(input)?;
+
+        assert_eq!(raster, gdal_raster);
 
         Ok(())
     }
@@ -404,8 +589,8 @@ mod tests {
             true,
         )?;
 
-        let cog_no_compression = TiffReader::from_file(&no_compression_output)?;
-        let cog_lzw_compression = TiffReader::from_file(&lzw_compression_output)?;
+        let cog_no_compression = GeoTiffReader::from_file(&no_compression_output)?;
+        let cog_lzw_compression = GeoTiffReader::from_file(&lzw_compression_output)?;
 
         for (pyramid_no_compression, pyramid_lzw) in cog_no_compression
             .metadata()
@@ -414,14 +599,18 @@ mod tests {
             .zip(cog_lzw_compression.metadata().pyramids.iter())
         {
             assert!(
-                pyramid_no_compression.tile_locations.len() == pyramid_lzw.tile_locations.len(),
+                pyramid_no_compression.chunk_locations.len() == pyramid_lzw.chunk_locations.len(),
                 "Pyramid tile locations should match in count"
             );
 
             let mut no_compression_reader = File::open(&no_compression_output)?;
             let mut lzw_compression_reader = File::open(&lzw_compression_output)?;
 
-            for (tile, tile_lzw) in pyramid_no_compression.tile_locations.iter().zip(pyramid_lzw.tile_locations.iter()) {
+            for (tile, tile_lzw) in pyramid_no_compression
+                .chunk_locations
+                .iter()
+                .zip(pyramid_lzw.chunk_locations.iter())
+            {
                 let tile_data_no_compression = cog_no_compression.read_tile_data(tile, &mut no_compression_reader).unwrap();
                 let tile_data_lzw_compression = cog_lzw_compression.read_tile_data(tile_lzw, &mut lzw_compression_reader).unwrap();
 

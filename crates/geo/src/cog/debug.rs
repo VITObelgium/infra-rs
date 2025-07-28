@@ -2,17 +2,17 @@ use num::NumCast;
 
 use crate::{
     CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
-    cog::{TiffReader, WebTilesReader},
+    cog::{GeoTiffReader, WebTilesReader},
     crs,
     nodata::Nodata as _,
 };
 use std::path::Path;
 
 pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
-    let cog = TiffReader::from_file(cog_path)?;
+    let cog = GeoTiffReader::from_file(cog_path)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
-    let tile_size = cog.metadata().tile_size()?;
+    let tile_size = cog.metadata().chunk_row_length()?;
     let cell_size = cog.metadata().geo_reference.cell_size_x();
 
     let main_zoom_level = Tile::zoom_level_for_pixel_size(cell_size, crate::ZoomLevelStrategy::Closest, tile_size);
@@ -33,7 +33,7 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level, tile_size);
     let mut current_ll = cog_geo_ref.top_left();
 
-    for (index, cog_tile) in pyramid.tile_locations.iter().enumerate() {
+    for (index, cog_tile) in pyramid.chunk_locations.iter().enumerate() {
         let tile_data = cog.read_tile_data(cog_tile, &mut reader)?;
 
         if index % tiles_wide == 0 {
@@ -62,10 +62,10 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
 }
 
 pub fn dump_web_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
-    let cog = WebTilesReader::from_cog(TiffReader::from_file(cog_path)?)?;
+    let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(cog_path)?)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
-    let tile_size = cog.cog_metadata().tile_size()?;
+    let tile_size = cog.cog_metadata().chunk_row_length()?;
 
     for tile in cog
         .zoom_level_tile_sources(zoom_level)

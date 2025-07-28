@@ -5,8 +5,10 @@ use tiff::{decoder::ifd::Value, tags::Tag};
 use crate::{
     ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows,
     cog::{
-        Compression, GeoTiffMetadata, Predictor, RasterDataLayout, TiffChunkLocation, TiffStats, projectioninfo::ModelType,
-        reader::PyramidInfo, stats,
+        Compression, GeoTiffMetadata, Predictor, RasterDataLayout, TiffChunkLocation, TiffStats,
+        projectioninfo::ModelType,
+        reader::{ChunkOptimizations, PyramidInfo},
+        stats,
     },
     crs,
 };
@@ -266,7 +268,7 @@ impl<R: Read + Seek> TiffDecoder<R> {
             RasterDataLayout::Tiled(tile_size)
         } else {
             let rows = self.decoder.get_tag_u32(Tag::RowsPerStrip)?;
-            RasterDataLayout::Strips(rows)
+            RasterDataLayout::Striped(rows)
         };
 
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
@@ -300,7 +302,7 @@ impl<R: Read + Seek> TiffDecoder<R> {
 
             pyramids.push(PyramidInfo {
                 raster_size: RasterSize::with_rows_cols(Rows(image_height as i32), Columns(image_width as i32)),
-                tile_locations,
+                chunk_locations: tile_locations,
             });
 
             if !self.decoder.more_images() {
@@ -320,6 +322,7 @@ impl<R: Read + Seek> TiffDecoder<R> {
             band_count: samples_per_pixel,
             compression,
             predictor,
+            chunk_optimizations: ChunkOptimizations::None,
             geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
             statistics,
             pyramids,

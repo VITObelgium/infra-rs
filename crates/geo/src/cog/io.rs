@@ -2,11 +2,13 @@ use crate::{
     Array, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Rows, Window,
     cog::{
         Compression, Predictor, TiffChunkLocation,
+        reader::ChunkOptimizations,
         utils::{self, HorizontalUnpredictable},
     },
     raster::intersection::CutOut,
 };
-use inf::allocate::{self, AlignedVec, AlignedVecUnderConstruction, aligned_vec_from_slice};
+use inf::allocate::{self};
+use inf::{allocate::AlignedVecUnderConstruction, cast};
 use simd_macro::simd_bounds;
 use weezl::{BitOrder, decode::Decoder};
 
@@ -106,18 +108,25 @@ impl Seek for CogHeaderReader {
     }
 }
 
-pub fn read_cog_chunk(cog_location: &TiffChunkLocation, mut reader: impl Read + Seek) -> Result<Vec<u8>> {
-    let chunk_range = cog_location.range_to_fetch();
-    if chunk_range.start == chunk_range.end {
-        return Ok(Vec::default());
-    }
+pub fn read_chunk(
+    cog_location: &TiffChunkLocation,
+    reader: &mut (impl Read + Seek),
+    chunk_optimizations: ChunkOptimizations,
+    buf: &mut [u8],
+) -> Result<()> {
+    let chunk_range = cog_location.range_to_fetch(chunk_optimizations);
+    debug_assert!(chunk_range.start != chunk_range.end, "Empty chunk passed to read_cog_chunk");
+    debug_assert!(
+        buf.len() == (chunk_range.end - chunk_range.start) as usize,
+        "Buffer size does not match chunk size {} <-> {}",
+        buf.len(),
+        chunk_range.end - chunk_range.start
+    );
 
     reader.seek(SeekFrom::Start(chunk_range.start))?;
+    reader.read_exact(buf)?;
 
-    let mut buf = vec![0; (chunk_range.end - chunk_range.start) as usize];
-    reader.read_exact(&mut buf)?;
-
-    Ok(buf)
+    Ok(())
 }
 
 #[simd_bounds]
@@ -127,75 +136,81 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    mut reader: impl Read + Seek,
+    chunk_optimizations: ChunkOptimizations,
+    reader: &mut (impl Read + Seek),
 ) -> Result<DenseArray<T>> {
     if cog_location.size == 0 {
         return Ok(DenseArray::empty());
     }
 
-    let cog_chunk = read_cog_chunk(cog_location, &mut reader)?;
-    parse_tile_data(cog_location, tile_size, nodata, compression, predictor, None, &cog_chunk)
+    let mut cog_chunk = vec![0; cog_location.size_to_fetch(chunk_optimizations)];
+    read_chunk(cog_location, reader, chunk_optimizations, &mut cog_chunk)?;
+    parse_tile_data(
+        cog_location,
+        tile_size,
+        nodata,
+        compression,
+        predictor,
+        chunk_optimizations,
+        None,
+        &cog_chunk,
+    )
+}
+
+#[simd_bounds]
+pub fn read_tile_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
+    chunk: &TiffChunkLocation,
+    row_length: u32,
+    nodata: Option<f64>,
+    compression: Option<Compression>,
+    predictor: Option<Predictor>,
+    chunk_optimizations: ChunkOptimizations,
+    reader: &mut (impl Read + Seek),
+    tile_data: &mut [T],
+) -> Result<()> {
+    if chunk.size == 0 {
+        // Empty chunk means geotiff was created with sparse tiles support and this is a sparse tile
+        tile_data.fill(cast::option(nodata).ok_or_else(|| Error::Runtime("Invalid nodata value".into()))?);
+    }
+
+    let mut cog_chunk = vec![0; chunk.size_to_fetch(chunk_optimizations)];
+    read_chunk(chunk, reader, chunk_optimizations, &mut cog_chunk)?;
+    parse_chunk_data_into_buffer(
+        chunk,
+        row_length,
+        compression,
+        predictor,
+        chunk_optimizations,
+        &cog_chunk,
+        tile_data,
+    )?;
+
+    Ok(())
 }
 
 #[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    cog_location: &TiffChunkLocation,
+    chunk: &TiffChunkLocation,
     tile_size: u32,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
+    chunk_optimizations: ChunkOptimizations,
     cutout: Option<&CutOut>,
-    cog_chunk: &[u8],
+    chunk_data: &[u8],
 ) -> Result<DenseArray<T>> {
-    debug_assert!(cog_chunk.len() > 4);
-    // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
-    let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&cog_chunk[0..4]).unwrap();
-    if cog_location.size != u32::from_le_bytes(size_bytes) as u64 {
-        return Err(Error::Runtime("Tile size does not match the expected size".into()));
-    }
-
-    let mut tile_data = match compression {
-        Some(Compression::Lzw) => lzw_decompress_to::<T>(&cog_chunk[4..], tile_size)?,
-        None => {
-            let tile_size = tile_size as usize;
-            if cog_chunk[4..].len() != (tile_size * tile_size * std::mem::size_of::<T>()) {
-                return Err(Error::Runtime(
-                    "Uncompressed tile data size does not match the expected size".into(),
-                ));
-            }
-
-            let byte_slice = &cog_chunk[4..];
-            aligned_vec_from_slice::<T>(bytemuck::cast_slice(byte_slice))
-        }
-    };
-
-    match predictor {
-        None => {}
-        Some(Predictor::Horizontal) => {
-            utils::unpredict_horizontal(&mut tile_data, tile_size);
-        }
-        Some(Predictor::FloatingPoint) => match T::TYPE {
-            ArrayDataType::Float32 => {
-                let mut fp32_data = allocate::cast_aligned_vec::<T, f32>(tile_data);
-                fp32_data = utils::unpredict_fp32(&mut fp32_data, tile_size);
-                tile_data = allocate::cast_aligned_vec::<f32, T>(fp32_data);
-            }
-            ArrayDataType::Float64 => {
-                let mut fp64_data = allocate::cast_aligned_vec::<T, f64>(tile_data);
-                fp64_data = utils::unpredict_fp64(&mut fp64_data, tile_size);
-                tile_data = allocate::cast_aligned_vec::<f64, T>(fp64_data);
-            }
-            _ => return Err(Error::Runtime("Floating point predictor only supported for f32 and f64".into())),
-        },
-    }
-
     let mut meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), nodata);
-    let mut arr = DenseArray::<T>::new_init_nodata(meta, tile_data)?;
+    let mut tile_data = AlignedVecUnderConstruction::new(tile_size as usize * tile_size as usize);
+
+    parse_chunk_data_into_buffer(chunk, tile_size, compression, predictor, chunk_optimizations, chunk_data, unsafe {
+        tile_data.as_slice_mut()
+    })?;
+
+    let mut arr = DenseArray::<T>::new_init_nodata(meta, unsafe { tile_data.assume_init() })?;
 
     if let Some(cutout) = cutout {
         let size = RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols));
         let window = Window::new(Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset), size);
-
         let cutout_data = allocate::aligned_vec_from_iter(arr.iter_window(window));
 
         meta = RasterMetadata::sized_with_nodata(size, nodata);
@@ -205,13 +220,69 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     Ok(arr)
 }
 
-fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: u32) -> Result<AlignedVec<T>> {
-    let decoded_len = tile_size as usize * tile_size as usize;
-    let mut decode_buf = AlignedVecUnderConstruction::new(decoded_len);
+#[simd_bounds]
+pub fn parse_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
+    chunk: &TiffChunkLocation,
+    row_length: u32,
+    compression: Option<Compression>,
+    predictor: Option<Predictor>,
+    chunk_optimizations: ChunkOptimizations,
+    chunk_data: &[u8],
+    decoded_chunk_data: &mut [T],
+) -> Result<()> {
+    debug_assert!(chunk_data.len() > 4);
+
+    let data_offset = if chunk_optimizations == ChunkOptimizations::Cog {
+        // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
+        let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&chunk_data[0..4]).unwrap();
+        if chunk.size != u32::from_le_bytes(size_bytes) as u64 {
+            return Err(Error::Runtime("Tile size does not match the expected size".into()));
+        }
+
+        4
+    } else {
+        0
+    };
+
+    match compression {
+        Some(Compression::Lzw) => lzw_decompress_to::<T>(&chunk_data[data_offset..], decoded_chunk_data)?,
+        None => {
+            if chunk_data[data_offset..].len() != std::mem::size_of_val(decoded_chunk_data) {
+                return Err(Error::Runtime(format!(
+                    "Uncompressed tile data size ({}) does not match the expected size {}",
+                    chunk_data[data_offset..].len(),
+                    std::mem::size_of_val(decoded_chunk_data)
+                )));
+            }
+
+            decoded_chunk_data.copy_from_slice(bytemuck::cast_slice(&chunk_data[data_offset..]));
+        }
+    };
+
+    match predictor {
+        None => {}
+        Some(Predictor::Horizontal) => {
+            utils::unpredict_horizontal(decoded_chunk_data, row_length);
+        }
+        Some(Predictor::FloatingPoint) => match T::TYPE {
+            ArrayDataType::Float32 => {
+                utils::unpredict_fp32(bytemuck::cast_slice_mut(decoded_chunk_data), row_length);
+            }
+            ArrayDataType::Float64 => {
+                utils::unpredict_fp64(bytemuck::cast_slice_mut(decoded_chunk_data), row_length);
+            }
+            _ => return Err(Error::Runtime("Floating point predictor only supported for f32 and f64".into())),
+        },
+    }
+
+    Ok(())
+}
+
+fn lzw_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<()> {
+    let decode_buf_byte_length = std::mem::size_of_val(decode_buf);
 
     {
-        // Safety: The buffer is allocated with enough capacity to hold the decoded data
-        let mut stream = BufWriter::new(unsafe { decode_buf.as_byte_slice_mut() });
+        let mut stream = BufWriter::new(bytemuck::cast_slice_mut(decode_buf));
 
         // Use MSB bit order and 8 as the initial code size, which is standard for TIFF LZW
         let decode_result = Decoder::with_tiff_size_switch(BitOrder::Msb, 8)
@@ -222,17 +293,12 @@ fn lzw_decompress_to<T: ArrayNum>(data: &[u8], tile_size: u32) -> Result<Aligned
             return Err(Error::Runtime("LZW decompression did not read all input bytes".into()));
         }
 
-        if decode_result.bytes_written != decoded_len * std::mem::size_of::<T>() {
+        if decode_result.bytes_written != decode_buf_byte_length {
             return Err(Error::Runtime("LZW decompression did not write all tile pixels".into()));
         }
 
         decode_result.status?;
     };
 
-    let decode_buf = unsafe {
-        // Safety: We verified the decoded length matches the expected size
-        decode_buf.assume_init()
-    };
-
-    Ok(decode_buf)
+    Ok(())
 }

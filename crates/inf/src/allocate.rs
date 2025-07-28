@@ -38,6 +38,16 @@ impl<T: bytemuck::AnyBitPattern> AlignedVecUnderConstruction<T> {
         }
     }
 
+    /// Obtain the underlying buffer as a mutable byte slice
+    /// # Safety
+    /// The caller must ensure that the buffer is used correctly and that the data is not accessed in an invalid way.
+    pub unsafe fn as_slice_mut(&mut self) -> &mut [T] {
+        unsafe {
+            // Safety: The buffer is allocated with enough capacity to hold the decoded data
+            std::slice::from_raw_parts_mut(self.vec.as_mut_ptr().cast::<T>(), self.vec.capacity())
+        }
+    }
+
     /// Obtain the underlying buffer as a mutable slice of `MaybeUninit<T>`.
     /// This allows the caller to initialize the elements of the vec.
     pub fn as_uninit_slice_mut(&mut self) -> &mut [MaybeUninit<T>] {

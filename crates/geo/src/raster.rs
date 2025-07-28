@@ -7,7 +7,10 @@ pub mod io;
 
 use std::path::Path;
 
-use crate::GeoReference;
+use crate::{
+    GeoReference,
+    cog::{Compression, Predictor},
+};
 
 // pub mod warp;
 use super::Result;
@@ -34,6 +37,30 @@ mod python;
 #[cfg(all(feature = "python", feature = "arrow"))]
 pub use python::pyraster::PyRaster;
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum TiffChunkType {
+    #[default]
+    Striped,
+    Tiled,
+}
+
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct GeoTiffWriteOptions {
+    /// data layout of the raster (in tiles or strips)
+    pub chunk_type: TiffChunkType,
+    /// The compression type to use for writing the raster
+    pub compression: Option<Compression>,
+    /// The predictor selection to use for writing the raster
+    pub predictor: Option<Predictor>,
+}
+
+pub enum WriteRasterOptions {
+    /// Write the raster with the default options
+    Default,
+    /// Write the raster with the provided options
+    GeoTiff(GeoTiffWriteOptions),
+}
+
 /// Raster IO operations trait
 pub trait RasterIO
 where
@@ -50,8 +77,11 @@ where
     /// Areas outside of the original raster will be filled with the nodata value
     fn read_bounds(path: impl AsRef<Path>, region: &GeoReference, band_index: usize) -> Result<Self>;
 
-    /// Write the full raster to disk
+    /// Write the full raster to disk (raster type is detected based on the file extension, default options are used)
     fn write(&mut self, path: impl AsRef<Path>) -> Result;
+
+    /// Write the full raster to disk
+    fn write_with_options(&mut self, path: impl AsRef<Path>, options: WriteRasterOptions) -> Result;
 }
 
 /// Trait for raster types that can handle nodata values and need te exchanged with external code
