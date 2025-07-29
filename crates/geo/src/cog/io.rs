@@ -2,7 +2,7 @@ use crate::{
     Array, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Rows, Window,
     cog::{
         Compression, Predictor, TiffChunkLocation,
-        reader::ChunkOptimizations,
+        reader::TiffOptimizations,
         utils::{self, HorizontalUnpredictable},
     },
     raster::intersection::CutOut,
@@ -111,7 +111,7 @@ impl Seek for CogHeaderReader {
 pub fn read_chunk(
     cog_location: &TiffChunkLocation,
     reader: &mut (impl Read + Seek),
-    chunk_optimizations: ChunkOptimizations,
+    chunk_optimizations: TiffOptimizations,
     buf: &mut [u8],
 ) -> Result<()> {
     let chunk_range = cog_location.range_to_fetch(chunk_optimizations);
@@ -136,7 +136,7 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: ChunkOptimizations,
+    chunk_optimizations: TiffOptimizations,
     reader: &mut (impl Read + Seek),
 ) -> Result<DenseArray<T>> {
     if cog_location.size == 0 {
@@ -164,7 +164,7 @@ pub fn read_tile_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: ChunkOptimizations,
+    chunk_optimizations: TiffOptimizations,
     reader: &mut (impl Read + Seek),
     tile_data: &mut [T],
 ) -> Result<()> {
@@ -195,7 +195,7 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: ChunkOptimizations,
+    chunk_optimizations: TiffOptimizations,
     cutout: Option<&CutOut>,
     chunk_data: &[u8],
 ) -> Result<DenseArray<T>> {
@@ -226,13 +226,13 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
     row_length: u32,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: ChunkOptimizations,
+    chunk_optimizations: TiffOptimizations,
     chunk_data: &[u8],
     decoded_chunk_data: &mut [T],
 ) -> Result<()> {
     debug_assert!(chunk_data.len() > 4);
 
-    let data_offset = if chunk_optimizations == ChunkOptimizations::Cog {
+    let data_offset = if chunk_optimizations == TiffOptimizations::Cog {
         // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
         let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&chunk_data[0..4]).unwrap();
         if chunk.size != u32::from_le_bytes(size_bytes) as u64 {

@@ -471,7 +471,7 @@ impl WebTilesReader {
     ) -> Result<Option<DenseArray<T>>> {
         if let Some(tile_source) = self.tile_source(tile) {
             match tile_source {
-                TileSource::Aligned(cog_tile) => Ok(Some(self.cog.read_tile_data_as::<T>(cog_tile, &mut reader)?)),
+                TileSource::Aligned(cog_tile) => Ok(Some(self.cog.read_chunk_as::<T>(cog_tile, &mut reader)?)),
                 TileSource::Unaligned(tile_sources) => {
                     let cog_chunks: Vec<Vec<u8>> = tile_sources
                         .iter()

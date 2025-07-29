@@ -51,7 +51,7 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<bool> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ChunkOptimizations {
+pub enum TiffOptimizations {
     Cog,
     None,
 }
@@ -63,34 +63,34 @@ pub struct TiffChunkLocation {
 }
 
 impl TiffChunkLocation {
-    pub fn size_to_fetch(&self, chunk_type: ChunkOptimizations) -> usize {
+    pub fn size_to_fetch(&self, chunk_type: TiffOptimizations) -> usize {
         if self.size == 0 {
             return 0;
         }
 
         match chunk_type {
-            ChunkOptimizations::Cog => {
+            TiffOptimizations::Cog => {
                 // For tiled COGs, the size includes the 4-byte tag at the start of the tile
                 self.size as usize + 4
             }
-            ChunkOptimizations::None => {
+            TiffOptimizations::None => {
                 // For striped COGs, the size is just the size of the strip
                 self.size as usize
             }
         }
     }
 
-    pub fn range_to_fetch(&self, chunk_type: ChunkOptimizations) -> Range<u64> {
+    pub fn range_to_fetch(&self, chunk_type: TiffOptimizations) -> Range<u64> {
         if self.size == 0 {
             return Range { start: 0, end: 0 };
         }
 
         match chunk_type {
-            ChunkOptimizations::Cog => Range {
+            TiffOptimizations::Cog => Range {
                 start: self.offset - 4, // Skip the 4-byte tag at the start of the tile
                 end: self.offset + self.size,
             },
-            ChunkOptimizations::None => Range {
+            TiffOptimizations::None => Range {
                 start: self.offset,
                 end: self.offset + self.size,
             },
@@ -115,7 +115,7 @@ pub struct GeoTiffMetadata {
     pub data_layout: RasterDataLayout,
     pub band_count: u32,
     pub is_cog: bool,
-    pub chunk_optimizations: ChunkOptimizations,
+    pub chunk_optimizations: TiffOptimizations,
     pub data_type: ArrayDataType,
     pub compression: Option<Compression>,
     pub predictor: Option<Predictor>,
@@ -128,7 +128,7 @@ impl GeoTiffMetadata {
     pub fn chunk_row_length(&self) -> Result<u32> {
         match self.data_layout {
             RasterDataLayout::Tiled(size) => Ok(size),
-            RasterDataLayout::Striped(rows) => Ok(rows * self.geo_reference.columns().count() as u32),
+            RasterDataLayout::Striped(_) => Ok(self.geo_reference.columns().count() as u32),
         }
     }
 }
@@ -184,11 +184,7 @@ impl GeoTiffReader {
         let mut reader = TiffDecoder::new(reader)?;
         let mut meta = reader.parse_cog_header()?;
         meta.is_cog = is_cog;
-        meta.chunk_optimizations = if is_cog {
-            ChunkOptimizations::Cog
-        } else {
-            ChunkOptimizations::None
-        };
+        meta.chunk_optimizations = if is_cog { TiffOptimizations::Cog } else { TiffOptimizations::None };
 
         Ok(GeoTiffReader { meta })
     }
@@ -279,26 +275,26 @@ impl GeoTiffReader {
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
     pub fn read_tile_data(&self, cog_tile: &TiffChunkLocation, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
         Ok(match self.meta.data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_tile_data_as::<u8>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_tile_data_as::<u16>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_tile_data_as::<u32>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_tile_data_as::<u64>(cog_tile, &mut reader)?),
-            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_tile_data_as::<i8>(cog_tile, &mut reader)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_tile_data_as::<i16>(cog_tile, &mut reader)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_tile_data_as::<i32>(cog_tile, &mut reader)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_tile_data_as::<i64>(cog_tile, &mut reader)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_tile_data_as::<f32>(cog_tile, &mut reader)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_tile_data_as::<f64>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_chunk_as::<u8>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_chunk_as::<u16>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_chunk_as::<u32>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_chunk_as::<u64>(cog_tile, &mut reader)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_chunk_as::<i8>(cog_tile, &mut reader)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_chunk_as::<i16>(cog_tile, &mut reader)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_chunk_as::<i32>(cog_tile, &mut reader)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_chunk_as::<i64>(cog_tile, &mut reader)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_chunk_as::<f32>(cog_tile, &mut reader)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_chunk_as::<f64>(cog_tile, &mut reader)?),
         })
     }
 
     #[simd_bounds]
-    pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
+    pub fn read_chunk_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
         cog_tile: &TiffChunkLocation,
         mut reader: impl Read + Seek,
     ) -> Result<DenseArray<T>> {
-        let tile_size = self.meta.chunk_row_length()?;
+        let chunk_row_size = self.meta.chunk_row_length()?;
 
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
@@ -310,7 +306,7 @@ impl GeoTiffReader {
 
         io::read_tile_data(
             cog_tile,
-            tile_size,
+            chunk_row_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
@@ -468,7 +464,7 @@ mod tests {
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
-        assert_eq!(meta.chunk_optimizations, ChunkOptimizations::Cog);
+        assert_eq!(meta.chunk_optimizations, TiffOptimizations::Cog);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
         assert_eq!(cog.metadata().pyramids.len(), 4); // zoom levels 7 to 10
@@ -488,7 +484,7 @@ mod tests {
                 assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
                 assert_eq!(tile_data.data_type(), meta.data_type);
 
-                let tile_data = cog.read_tile_data_as::<u8>(tile, &mut reader)?;
+                let tile_data = cog.read_chunk_as::<u8>(tile, &mut reader)?;
                 assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
             }
         }
@@ -544,6 +540,37 @@ mod tests {
     }
 
     #[test_log::test]
+    fn read_striped_raster_with_predictor() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let striped_geotiff = tmp.path().join("tiled_striped.tif");
+
+        {
+            // Create a copy of the landuse raster (striped) as a tiled GeoTIFF
+            let mut ras = DenseRaster::<u8>::read(&input)?;
+            let geo_tiff_options = GeoTiffWriteOptions {
+                chunk_type: TiffChunkType::Striped,
+                compression: Some(Compression::Lzw),
+                predictor: Some(Predictor::Horizontal),
+            };
+
+            ras.write_with_options(&striped_geotiff, WriteRasterOptions::GeoTiff(geo_tiff_options))?;
+        }
+
+        let geotiff = GeoTiffReader::from_file(&striped_geotiff)?;
+        assert_eq!(geotiff.metadata().compression, Some(Compression::Lzw));
+        assert_eq!(geotiff.metadata().predictor, Some(Predictor::Horizontal));
+
+        let mut reader = File::open(&striped_geotiff)?;
+        let raster = geotiff.read_raster_as::<u8, GeoReference>(&mut reader)?;
+        let gdal_raster = DenseRaster::<u8>::read(input)?;
+
+        assert_eq!(raster, gdal_raster);
+
+        Ok(())
+    }
+
+    #[test_log::test]
     fn read_tiled_raster() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
@@ -561,6 +588,8 @@ mod tests {
         }
 
         let geotiff = GeoTiffReader::from_file(&tiled_geotiff)?;
+        assert_eq!(geotiff.metadata().data_layout, RasterDataLayout::Tiled(256));
+
         let mut reader = File::open(&tiled_geotiff)?;
         let raster = geotiff.read_raster_as::<u8, GeoReference>(&mut reader)?;
         let gdal_raster = DenseRaster::<u8>::read(input)?;

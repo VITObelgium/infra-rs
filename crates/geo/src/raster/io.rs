@@ -365,10 +365,9 @@ pub mod dataset {
             c_opts.add_string(opt)?;
         }
 
-        if driver_options.is_empty() && driver.description().unwrap_or_default() == "GTiff" {
+        if driver_options.is_empty() && driver.description().unwrap_or_default() == RasterFormat::GeoTiff.gdal_driver_name() {
             // Provide sane default for GeoTIFF files
             c_opts.add_string("COMPRESS=LZW")?;
-            c_opts.add_string("TILED=YES")?;
             c_opts.add_string("NUM_THREADS=ALL_CPUS")?;
         }
 

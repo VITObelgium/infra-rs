@@ -7,7 +7,7 @@ use crate::{
     cog::{
         Compression, GeoTiffMetadata, Predictor, RasterDataLayout, TiffChunkLocation, TiffStats,
         projectioninfo::ModelType,
-        reader::{ChunkOptimizations, PyramidInfo},
+        reader::{PyramidInfo, TiffOptimizations},
         stats,
     },
     crs,
@@ -322,7 +322,7 @@ impl<R: Read + Seek> TiffDecoder<R> {
             band_count: samples_per_pixel,
             compression,
             predictor,
-            chunk_optimizations: ChunkOptimizations::None,
+            chunk_optimizations: TiffOptimizations::None,
             geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
             statistics,
             pyramids,
