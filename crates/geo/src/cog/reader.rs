@@ -198,7 +198,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_tiled_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+    fn read_tiled_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
         &self,
         reader: &mut (impl Read + Seek),
         chunks: &[TiffChunkLocation],
@@ -217,7 +217,7 @@ impl GeoTiffReader {
             let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
             let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
 
-            self.read_tile_data_into_buffer_as(chunk_offset, reader, &mut tile_buf)?;
+            self.read_chunk_data_into_buffer_as(chunk_offset, reader, &mut tile_buf)?;
 
             for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
                 if row_start * tile_size as usize + tile_row_index >= geo_ref.rows().count() as usize {
@@ -234,7 +234,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_striped_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+    fn read_striped_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
         &self,
         reader: &mut (impl Read + Seek),
         chunks: &[TiffChunkLocation],
@@ -246,7 +246,7 @@ impl GeoTiffReader {
         let strip_size = self.meta.geo_reference.columns().count() as usize * rows_per_strip as usize;
         for (stripe_offset, stripe_buf) in chunks.iter().zip(unsafe { data.as_slice_mut() }.chunks_mut(strip_size)) {
             //debug_assert_eq!(stripe_offset.size as usize, stripe_buf.len());
-            self.read_tile_data_into_buffer_as(stripe_offset, reader, stripe_buf)?;
+            self.read_chunk_data_into_buffer_as(stripe_offset, reader, stripe_buf)?;
         }
 
         DenseArray::new_init_nodata(M::with_geo_reference(geo_ref.clone()), unsafe { data.assume_init() })
@@ -263,9 +263,11 @@ impl GeoTiffReader {
             }
 
             match self.meta.data_layout {
-                RasterDataLayout::Tiled(tile_size) => return self.read_tiled_as::<T, M>(reader, &pyramid.chunk_locations, tile_size),
+                RasterDataLayout::Tiled(tile_size) => {
+                    return self.read_tiled_raster_as::<T, M>(reader, &pyramid.chunk_locations, tile_size);
+                }
                 RasterDataLayout::Striped(rows_per_strip) => {
-                    return self.read_striped_as::<T, M>(reader, &pyramid.chunk_locations, rows_per_strip);
+                    return self.read_striped_raster_as::<T, M>(reader, &pyramid.chunk_locations, rows_per_strip);
                 }
             }
         }
@@ -301,7 +303,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    pub fn read_tile_data_into_buffer_as<T: ArrayNum + HorizontalUnpredictable>(
+    pub fn read_chunk_data_into_buffer_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
         cog_tile: &TiffChunkLocation,
         reader: &mut (impl Read + Seek),
