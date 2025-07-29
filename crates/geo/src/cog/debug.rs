@@ -1,7 +1,7 @@
 use num::NumCast;
 
 use crate::{
-    CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
+    AnyDenseArray, ArrayDataType, CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
     cog::{GeoTiffReader, WebTilesReader},
     crs,
     nodata::Nodata as _,
@@ -34,7 +34,18 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     let mut current_ll = cog_geo_ref.top_left();
 
     for (index, cog_tile) in pyramid.chunk_locations.iter().enumerate() {
-        let tile_data = cog.read_tile_data(cog_tile, &mut reader)?;
+        let tile_data = match cog.metadata().data_type {
+            ArrayDataType::Uint8 => AnyDenseArray::U8(cog.read_chunk_as::<u8>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(cog.read_chunk_as::<u16>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(cog.read_chunk_as::<u32>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(cog.read_chunk_as::<u64>(cog_tile, &mut reader)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(cog.read_chunk_as::<i8>(cog_tile, &mut reader)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(cog.read_chunk_as::<i16>(cog_tile, &mut reader)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(cog.read_chunk_as::<i32>(cog_tile, &mut reader)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(cog.read_chunk_as::<i64>(cog_tile, &mut reader)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(cog.read_chunk_as::<f32>(cog_tile, &mut reader)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(cog.read_chunk_as::<f64>(cog_tile, &mut reader)?),
+        };
 
         if index % tiles_wide == 0 {
             current_ll.set_x(cog_geo_ref.top_left().x());

@@ -273,24 +273,6 @@ impl GeoTiffReader {
         Err(Error::Runtime("No raster data available in the geotiff".into()))
     }
 
-    /// Read the tile data for the given tile using the provided reader.
-    /// This method will return an error if the tile does not exist in the COG index
-    /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
-    pub fn read_tile_data(&self, cog_tile: &TiffChunkLocation, mut reader: impl Read + Seek) -> Result<AnyDenseArray> {
-        Ok(match self.meta.data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_chunk_as::<u8>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_chunk_as::<u16>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_chunk_as::<u32>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_chunk_as::<u64>(cog_tile, &mut reader)?),
-            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_chunk_as::<i8>(cog_tile, &mut reader)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_chunk_as::<i16>(cog_tile, &mut reader)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_chunk_as::<i32>(cog_tile, &mut reader)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_chunk_as::<i64>(cog_tile, &mut reader)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_chunk_as::<f32>(cog_tile, &mut reader)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_chunk_as::<f64>(cog_tile, &mut reader)?),
-        })
-    }
-
     #[simd_bounds]
     pub fn read_chunk_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
