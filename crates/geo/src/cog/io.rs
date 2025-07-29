@@ -226,13 +226,13 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
     row_length: u32,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: TiffOptimizations,
+    tiff_optimizations: TiffOptimizations,
     chunk_data: &[u8],
     decoded_chunk_data: &mut [T],
 ) -> Result<()> {
     debug_assert!(chunk_data.len() > 4);
 
-    let data_offset = if chunk_optimizations == TiffOptimizations::Cog {
+    let data_offset = if tiff_optimizations == TiffOptimizations::Cog {
         // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
         let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&chunk_data[0..4]).unwrap();
         if chunk.size != u32::from_le_bytes(size_bytes) as u64 {
