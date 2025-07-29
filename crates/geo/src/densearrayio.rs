@@ -49,6 +49,14 @@ fn write_raster_options_to_gdal(options: WriteRasterOptions) -> Vec<String> {
                 }
             ));
 
+            opts.push(format!(
+                "SPARSE_OK={}",
+                match tiff_opts.sparse_ok {
+                    true => "TRUE",
+                    false => "FALSE",
+                }
+            ));
+
             opts
         }
     }

@@ -50,8 +50,10 @@ pub struct GeoTiffWriteOptions {
     pub chunk_type: TiffChunkType,
     /// The compression type to use for writing the raster
     pub compression: Option<Compression>,
-    /// The predictor selection to use for writing the raster
+    /// The predictor selection to use for writing the raster (only relevant when compression is used)
     pub predictor: Option<Predictor>,
+    /// Sparse files have 0 tile/strip offsets for blocks that contain only nodata  and save space
+    pub sparse_ok: bool,
 }
 
 pub enum WriteRasterOptions {

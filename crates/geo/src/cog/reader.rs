@@ -552,6 +552,7 @@ mod tests {
                 chunk_type: TiffChunkType::Striped,
                 compression: Some(Compression::Lzw),
                 predictor: Some(Predictor::Horizontal),
+                ..Default::default()
             };
 
             ras.write_with_options(&striped_geotiff, WriteRasterOptions::GeoTiff(geo_tiff_options))?;
