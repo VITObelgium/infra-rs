@@ -197,6 +197,7 @@ impl GeoTiffReader {
         self.meta.pyramids.get(index)
     }
 
+    #[simd_bounds]
     fn read_tiled_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
         &self,
         reader: &mut (impl Read + Seek),
@@ -232,6 +233,7 @@ impl GeoTiffReader {
         DenseArray::new_init_nodata(M::with_geo_reference(geo_ref.clone()), unsafe { data.assume_init() })
     }
 
+    #[simd_bounds]
     fn read_striped_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
         &self,
         reader: &mut (impl Read + Seek),
@@ -250,6 +252,7 @@ impl GeoTiffReader {
         DenseArray::new_init_nodata(M::with_geo_reference(geo_ref.clone()), unsafe { data.assume_init() })
     }
 
+    #[simd_bounds]
     pub fn read_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
         &self,
         reader: &mut (impl Read + Seek),
