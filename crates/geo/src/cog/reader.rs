@@ -1,5 +1,5 @@
 use crate::{
-    AnyDenseArray, ArrayDataType, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, GeoReference, RasterSize,
+    ArrayDataType, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, GeoReference, RasterSize,
     cog::{
         Compression, Predictor, TiffStats,
         decoder::TiffDecoder,
@@ -466,10 +466,9 @@ mod tests {
                     continue; // Skip empty tiles
                 }
 
-                let tile_data = cog.read_tile_data(tile, &mut reader)?;
+                let tile_data = cog.read_chunk_as::<u8>(tile, &mut reader)?;
 
                 assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
-                assert_eq!(tile_data.data_type(), meta.data_type);
 
                 let tile_data = cog.read_chunk_as::<u8>(tile, &mut reader)?;
                 assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
@@ -628,8 +627,10 @@ mod tests {
                 .iter()
                 .zip(pyramid_lzw.chunk_locations.iter())
             {
-                let tile_data_no_compression = cog_no_compression.read_tile_data(tile, &mut no_compression_reader).unwrap();
-                let tile_data_lzw_compression = cog_lzw_compression.read_tile_data(tile_lzw, &mut lzw_compression_reader).unwrap();
+                let tile_data_no_compression = cog_no_compression.read_chunk_as::<u8>(tile, &mut no_compression_reader).unwrap();
+                let tile_data_lzw_compression = cog_lzw_compression
+                    .read_chunk_as::<u8>(tile_lzw, &mut lzw_compression_reader)
+                    .unwrap();
 
                 assert_eq!(tile_data_no_compression, tile_data_lzw_compression);
             }
