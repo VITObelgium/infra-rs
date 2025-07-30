@@ -22,15 +22,15 @@ use std::{
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
-fn verify_gdal_ghost_data(header: &[u8]) -> Result<bool> {
+fn verify_gdal_ghost_data(header: &[u8]) -> bool {
     let is_big_tiff = match header[2] {
         0x2a => false, // Classic TIFF magic number
         0x2b => true,  // BigTIFF magic number
-        _ => return Err(Error::InvalidArgument("Not a valid TIFF file".into())),
+        _ => return false,
     };
 
     let offset = if is_big_tiff { 16 } else { 8 };
-    assert!(header.len() >= offset + 43, "Provided header is too small to contain GDAL metadata");
+    debug_assert!(header.len() >= offset + 43, "Provided header is too small to contain GDAL metadata");
 
     // GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n
     if let Ok(first_line) = std::str::from_utf8(&header[offset..offset + 43]) {
@@ -44,9 +44,9 @@ fn verify_gdal_ghost_data(header: &[u8]) -> Result<bool> {
         // let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
         // log::debug!("Header: {header_str}");
 
-        Ok(first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE="))
+        first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE=")
     } else {
-        Ok(false)
+        false
     }
 }
 
@@ -114,7 +114,6 @@ pub enum RasterDataLayout {
 pub struct GeoTiffMetadata {
     pub data_layout: RasterDataLayout,
     pub band_count: u32,
-    pub is_cog: bool,
     pub chunk_optimizations: TiffOptimizations,
     pub data_type: ArrayDataType,
     pub compression: Option<Compression>,
@@ -125,11 +124,26 @@ pub struct GeoTiffMetadata {
 }
 
 impl GeoTiffMetadata {
+    pub fn from_buffer(buf: Vec<u8>) -> Result<Self> {
+        let is_cog = verify_gdal_ghost_data(&buf);
+        let reader = CogHeaderReader::from_buffer(buf)?;
+
+        let mut decoder = TiffDecoder::new(reader)?;
+        let mut meta = decoder.parse_cog_header()?;
+        meta.chunk_optimizations = if is_cog { TiffOptimizations::Cog } else { TiffOptimizations::None };
+
+        Ok(meta)
+    }
+
     pub fn chunk_row_length(&self) -> Result<u32> {
         match self.data_layout {
             RasterDataLayout::Tiled(size) => Ok(size),
             RasterDataLayout::Striped(_) => Ok(self.geo_reference.columns().count() as u32),
         }
+    }
+
+    pub fn is_cog(&self) -> bool {
+        self.chunk_optimizations == TiffOptimizations::Cog
     }
 }
 
@@ -149,7 +163,7 @@ impl GeoTiffReader {
             Err(_) => return false,
         };
 
-        verify_gdal_ghost_data(&header).is_ok()
+        verify_gdal_ghost_data(&header)
     }
 
     pub fn from_file(path: &Path) -> Result<Self> {
@@ -179,11 +193,10 @@ impl GeoTiffReader {
     }
 
     fn new(reader: CogHeaderReader) -> Result<Self> {
-        let is_cog = verify_gdal_ghost_data(reader.cog_header())?;
+        let is_cog = verify_gdal_ghost_data(reader.cog_header());
 
         let mut reader = TiffDecoder::new(reader)?;
         let mut meta = reader.parse_cog_header()?;
-        meta.is_cog = is_cog;
         meta.chunk_optimizations = if is_cog { TiffOptimizations::Cog } else { TiffOptimizations::None };
 
         Ok(GeoTiffReader { meta })
@@ -424,7 +437,7 @@ mod tests {
 
         let tiff = GeoTiffReader::from_file(&output)?;
         let meta = tiff.metadata();
-        assert!(!meta.is_cog);
+        assert!(!meta.is_cog());
         assert_eq!(meta.data_layout, RasterDataLayout::Striped(3));
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
@@ -500,7 +513,7 @@ mod tests {
         let cog = GeoTiffReader::from_file(&output)?;
 
         let meta = cog.metadata();
-        assert!(meta.is_cog);
+        assert!(meta.is_cog());
         assert_eq!(meta.data_layout, RasterDataLayout::Tiled(opts.tile_size));
         assert_eq!(meta.data_type, opts.output_data_type.unwrap());
         assert_eq!(meta.compression, None);

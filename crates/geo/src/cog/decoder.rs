@@ -326,7 +326,6 @@ impl<R: Read + Seek> TiffDecoder<R> {
             geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
             statistics,
             pyramids,
-            is_cog: false,
         })
     }
 }
