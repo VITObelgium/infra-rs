@@ -20,6 +20,7 @@ pub mod io;
 mod projectioninfo;
 mod reader;
 mod stats;
+pub mod tileio;
 mod utils;
 mod webtiles;
 

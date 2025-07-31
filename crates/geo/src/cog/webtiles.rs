@@ -68,13 +68,6 @@ impl WebTiles {
                 let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level, tile_size);
                 let cog_tile_bounds = create_cog_tile_web_mercator_bounds(pyramid, &pyramid_geo_ref, zoom_level, tile_size).unwrap();
 
-                log::info!(
-                    "Unaligned zoom level: {} Web tiles {} Cog tiles {}",
-                    zoom_level,
-                    tiles.len(),
-                    pyramid.chunk_locations.len(),
-                );
-
                 for tile in &tiles {
                     let mut tile_sources = Vec::new();
                     let web_tile_georef = GeoReference::from_tile(tile, tile_size as usize, 1);

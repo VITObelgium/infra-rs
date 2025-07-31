@@ -5,6 +5,7 @@ use crate::{
         decoder::TiffDecoder,
         gdalghostdata::GdalGhostData,
         io::{self, CogHeaderReader},
+        tileio,
         utils::HorizontalUnpredictable,
     },
 };
@@ -246,7 +247,7 @@ impl GeoTiffReader {
             )));
         }
 
-        io::read_tile_data(
+        tileio::read_tile_data(
             chunk,
             chunk_row_size,
             self.meta.geo_reference.nodata(),
@@ -301,7 +302,7 @@ impl GeoTiffReader {
             )));
         }
 
-        let tile_data = io::parse_tile_data(
+        let tile_data = tileio::parse_tile_data(
             tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
