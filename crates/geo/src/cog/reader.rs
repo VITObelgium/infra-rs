@@ -84,6 +84,10 @@ impl GeoTiffMetadata {
             RasterDataLayout::Striped(_) => Ok(self.geo_reference.columns().count() as u32),
         }
     }
+
+    pub fn is_tiled(&self) -> bool {
+        matches!(self.data_layout, RasterDataLayout::Tiled(_))
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -227,9 +231,9 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    pub fn read_chunk_as<T: ArrayNum + HorizontalUnpredictable>(
+    pub fn read_tile_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        cog_tile: &TiffChunkLocation,
+        chunk: &TiffChunkLocation,
         mut reader: impl Read + Seek,
     ) -> Result<DenseArray<T>> {
         let chunk_row_size = self.meta.chunk_row_length()?;
@@ -243,7 +247,7 @@ impl GeoTiffReader {
         }
 
         io::read_tile_data(
-            cog_tile,
+            chunk,
             chunk_row_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
@@ -255,9 +259,9 @@ impl GeoTiffReader {
     #[simd_bounds]
     pub fn read_chunk_data_into_buffer_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
-        cog_tile: &TiffChunkLocation,
+        chunk: &TiffChunkLocation,
         reader: &mut (impl Read + Seek),
-        tile_data: &mut [T],
+        chunk_data: &mut [T],
     ) -> Result<()> {
         let row_length = self.meta.chunk_row_length()?;
 
@@ -269,21 +273,24 @@ impl GeoTiffReader {
             )));
         }
 
-        io::read_tile_data_into_buffer(
-            cog_tile,
+        io::read_chunk_data_into_buffer(
+            chunk,
             row_length,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
             reader,
-            tile_data,
+            chunk_data,
         )?;
 
         Ok(())
     }
 
     #[simd_bounds]
-    pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(&self, cog_chunk: &[u8]) -> Result<DenseArray<T>> {
+    /// Parses the tile data from a byte slice into a `DenseArray<T>`.
+    /// Only call this for parsing tiled data layout.
+    pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(&self, tile_data: &[u8]) -> Result<DenseArray<T>> {
+        assert!(self.meta.is_tiled(), "expected tiled data layout");
         let tile_size = self.meta.chunk_row_length()?;
 
         if T::TYPE != self.meta.data_type {
@@ -300,7 +307,7 @@ impl GeoTiffReader {
             self.meta.compression,
             self.meta.predictor,
             None,
-            cog_chunk,
+            tile_data,
         )?;
 
         Ok(tile_data)
@@ -407,11 +414,11 @@ mod tests {
                     continue; // Skip empty tiles
                 }
 
-                let tile_data = cog.read_chunk_as::<u8>(tile, &mut reader)?;
+                let tile_data = cog.read_tile_as::<u8>(tile, &mut reader)?;
 
                 assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
 
-                let tile_data = cog.read_chunk_as::<u8>(tile, &mut reader)?;
+                let tile_data = cog.read_tile_as::<u8>(tile, &mut reader)?;
                 assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
             }
         }
@@ -567,9 +574,9 @@ mod tests {
                 .iter()
                 .zip(pyramid_lzw.chunk_locations.iter())
             {
-                let tile_data_no_compression = cog_no_compression.read_chunk_as::<u8>(tile, &mut no_compression_reader).unwrap();
+                let tile_data_no_compression = cog_no_compression.read_tile_as::<u8>(tile, &mut no_compression_reader).unwrap();
                 let tile_data_lzw_compression = cog_lzw_compression
-                    .read_chunk_as::<u8>(tile_lzw, &mut lzw_compression_reader)
+                    .read_tile_as::<u8>(tile_lzw, &mut lzw_compression_reader)
                     .unwrap();
 
                 assert_eq!(tile_data_no_compression, tile_data_lzw_compression);

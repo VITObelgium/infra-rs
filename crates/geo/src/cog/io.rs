@@ -142,7 +142,7 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 }
 
 #[simd_bounds]
-pub fn read_tile_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
+pub fn read_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
     chunk: &TiffChunkLocation,
     row_length: u32,
     nodata: Option<f64>,
