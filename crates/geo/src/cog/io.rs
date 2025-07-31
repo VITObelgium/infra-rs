@@ -14,7 +14,7 @@ use weezl::{BitOrder, decode::Decoder};
 use crate::{Error, Result};
 use std::io::{BufWriter, Read, Seek, SeekFrom};
 
-pub const COG_HEADER_SIZE: usize = 64 * 1024; // 64 KiB, which is usually sufficient for the COG header
+pub const COG_HEADER_SIZE: usize = 16 * 1024; // 16 KiB, which is usually sufficient for the COG header
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
