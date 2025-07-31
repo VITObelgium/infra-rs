@@ -119,6 +119,7 @@ impl GeoTiffReader {
                 {
                     // If the error is an EOF, we need more data to parse the header
                     buffer_factor *= 2;
+                    log::debug!("Cog header dit not fit in default header size, retry with header size factor {buffer_factor}");
                 }
                 Ok(cog) => return Ok(cog),
                 Err(e) => return Err(e),
@@ -426,7 +427,7 @@ mod tests {
         let output = tmp.path().join("cog.tif");
 
         let opts = CogCreationOptions {
-            min_zoom: Some(2),
+            min_zoom: Some(4),
             zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
             tile_size: Tile::TILE_SIZE,
             allow_sparse: false,
@@ -446,7 +447,7 @@ mod tests {
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
-        assert_eq!(meta.pyramids.len(), 9); // zoom levels 2 to 10
+        assert_eq!(meta.pyramids.len(), 7); // zoom levels 4 to 10
 
         Ok(())
     }
