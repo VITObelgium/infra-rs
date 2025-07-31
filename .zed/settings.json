@@ -13,6 +13,9 @@
   "lsp": {
     "rust-analyzer": {
       "initialization_options": {
+        "rust": {
+          "analyzerTargetDir": true
+        },
         "cargo": {
           "features": ["gdal", "tui"]
         },

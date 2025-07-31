@@ -3,6 +3,7 @@ use crate::{
     cog::{
         Compression, Predictor, TiffStats,
         decoder::TiffDecoder,
+        gdalghostdata::GdalGhostData,
         io::{self, CogHeaderReader},
         utils::HorizontalUnpredictable,
     },
@@ -22,40 +23,6 @@ use std::{
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
-fn verify_gdal_ghost_data(header: &[u8]) -> bool {
-    let is_big_tiff = match header[2] {
-        0x2a => false, // Classic TIFF magic number
-        0x2b => true,  // BigTIFF magic number
-        _ => return false,
-    };
-
-    let offset = if is_big_tiff { 16 } else { 8 };
-    debug_assert!(header.len() >= offset + 43, "Provided header is too small to contain GDAL metadata");
-
-    // GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n
-    if let Ok(first_line) = std::str::from_utf8(&header[offset..offset + 43]) {
-        // // The header size is at bytes 30..36 (6 bytes)
-        // let header_size_str = &first_line[30..36];
-        // let header_size: usize = header_size_str
-        //     .trim()
-        //     .parse()
-        //     .map_err(|e| Error::InvalidArgument(format!("Invalid header size: {e}")))?;
-
-        // let header_str = String::from_utf8_lossy(&header[offset + 43..offset + 43 + header_size]);
-        // log::debug!("Header: {header_str}");
-
-        first_line.starts_with("GDAL_STRUCTURAL_METADATA_SIZE=")
-    } else {
-        false
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TiffOptimizations {
-    Cog,
-    None,
-}
-
 #[derive(Debug, Clone, Copy)]
 pub struct TiffChunkLocation {
     pub offset: u64,
@@ -63,37 +30,18 @@ pub struct TiffChunkLocation {
 }
 
 impl TiffChunkLocation {
-    pub fn size_to_fetch(&self, chunk_type: TiffOptimizations) -> usize {
-        if self.size == 0 {
-            return 0;
-        }
-
-        match chunk_type {
-            TiffOptimizations::Cog => {
-                // For tiled COGs, the size includes the 4-byte tag at the start of the tile
-                self.size as usize + 4
-            }
-            TiffOptimizations::None => {
-                // For striped COGs, the size is just the size of the strip
-                self.size as usize
-            }
-        }
+    pub fn is_sparse(&self) -> bool {
+        self.offset == 0 && self.size == 0
     }
 
-    pub fn range_to_fetch(&self, chunk_type: TiffOptimizations) -> Range<u64> {
+    pub fn range_to_fetch(&self) -> Range<u64> {
         if self.size == 0 {
             return Range { start: 0, end: 0 };
         }
 
-        match chunk_type {
-            TiffOptimizations::Cog => Range {
-                start: self.offset - 4, // Skip the 4-byte tag at the start of the tile
-                end: self.offset + self.size,
-            },
-            TiffOptimizations::None => Range {
-                start: self.offset,
-                end: self.offset + self.size,
-            },
+        Range {
+            start: self.offset,
+            end: self.offset + self.size,
         }
     }
 }
@@ -114,7 +62,6 @@ pub enum RasterDataLayout {
 pub struct GeoTiffMetadata {
     pub data_layout: RasterDataLayout,
     pub band_count: u32,
-    pub chunk_optimizations: TiffOptimizations,
     pub data_type: ArrayDataType,
     pub compression: Option<Compression>,
     pub predictor: Option<Predictor>,
@@ -125,14 +72,10 @@ pub struct GeoTiffMetadata {
 
 impl GeoTiffMetadata {
     pub fn from_buffer(buf: Vec<u8>) -> Result<Self> {
-        let is_cog = verify_gdal_ghost_data(&buf);
         let reader = CogHeaderReader::from_buffer(buf)?;
-
         let mut decoder = TiffDecoder::new(reader)?;
-        let mut meta = decoder.parse_cog_header()?;
-        meta.chunk_optimizations = if is_cog { TiffOptimizations::Cog } else { TiffOptimizations::None };
 
-        Ok(meta)
+        decoder.parse_cog_header()
     }
 
     pub fn chunk_row_length(&self) -> Result<u32> {
@@ -140,10 +83,6 @@ impl GeoTiffMetadata {
             RasterDataLayout::Tiled(size) => Ok(size),
             RasterDataLayout::Striped(_) => Ok(self.geo_reference.columns().count() as u32),
         }
-    }
-
-    pub fn is_cog(&self) -> bool {
-        self.chunk_optimizations == TiffOptimizations::Cog
     }
 }
 
@@ -163,7 +102,7 @@ impl GeoTiffReader {
             Err(_) => return false,
         };
 
-        verify_gdal_ghost_data(&header)
+        GdalGhostData::from_tiff_header_buffer(&header).is_some_and(|ghost| ghost.is_cog())
     }
 
     pub fn from_file(path: &Path) -> Result<Self> {
@@ -193,13 +132,11 @@ impl GeoTiffReader {
     }
 
     fn new(reader: CogHeaderReader) -> Result<Self> {
-        let is_cog = verify_gdal_ghost_data(reader.cog_header());
-
         let mut reader = TiffDecoder::new(reader)?;
-        let mut meta = reader.parse_cog_header()?;
-        meta.chunk_optimizations = if is_cog { TiffOptimizations::Cog } else { TiffOptimizations::None };
 
-        Ok(GeoTiffReader { meta })
+        Ok(GeoTiffReader {
+            meta: reader.parse_cog_header()?,
+        })
     }
 
     pub fn metadata(&self) -> &GeoTiffMetadata {
@@ -310,7 +247,6 @@ impl GeoTiffReader {
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
-            self.meta.chunk_optimizations,
             &mut reader,
         )
     }
@@ -338,7 +274,6 @@ impl GeoTiffReader {
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
-            self.meta.chunk_optimizations,
             reader,
             tile_data,
         )?;
@@ -347,11 +282,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
-        &self,
-        cog_tile: &TiffChunkLocation,
-        cog_chunk: &[u8],
-    ) -> Result<DenseArray<T>> {
+    pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(&self, cog_chunk: &[u8]) -> Result<DenseArray<T>> {
         let tile_size = self.meta.chunk_row_length()?;
 
         if T::TYPE != self.meta.data_type {
@@ -363,12 +294,10 @@ impl GeoTiffReader {
         }
 
         let tile_data = io::parse_tile_data(
-            cog_tile,
             tile_size,
             self.meta.geo_reference.nodata(),
             self.meta.compression,
             self.meta.predictor,
-            self.meta.chunk_optimizations,
             None,
             cog_chunk,
         )?;
@@ -437,7 +366,6 @@ mod tests {
 
         let tiff = GeoTiffReader::from_file(&output)?;
         let meta = tiff.metadata();
-        assert!(!meta.is_cog());
         assert_eq!(meta.data_layout, RasterDataLayout::Striped(3));
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
@@ -464,7 +392,6 @@ mod tests {
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
-        assert_eq!(meta.chunk_optimizations, TiffOptimizations::Cog);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
         assert_eq!(cog.metadata().pyramids.len(), 4); // zoom levels 7 to 10
@@ -513,7 +440,6 @@ mod tests {
         let cog = GeoTiffReader::from_file(&output)?;
 
         let meta = cog.metadata();
-        assert!(meta.is_cog());
         assert_eq!(meta.data_layout, RasterDataLayout::Tiled(opts.tile_size));
         assert_eq!(meta.data_type, opts.output_data_type.unwrap());
         assert_eq!(meta.compression, None);

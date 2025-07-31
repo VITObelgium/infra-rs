@@ -15,6 +15,7 @@ pub mod debug;
 #[cfg(feature = "gdal")]
 mod creation;
 mod decoder;
+mod gdalghostdata;
 pub mod io;
 mod projectioninfo;
 mod reader;
@@ -24,7 +25,7 @@ mod webtiles;
 
 use projectioninfo::ProjectionInfo;
 
-pub use reader::{GeoTiffMetadata, RasterDataLayout, TiffChunkLocation, GeoTiffReader};
+pub use reader::{GeoTiffMetadata, GeoTiffReader, RasterDataLayout, TiffChunkLocation};
 pub use stats::TiffStats;
 pub use utils::HorizontalUnpredictable;
 pub use webtiles::{TileSource, WebTileInfo, WebTilesReader};

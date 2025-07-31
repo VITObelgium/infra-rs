@@ -397,17 +397,17 @@ impl WebTilesReader {
 
     pub fn parse_tile_data(&self, tile_source: &TileSource, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
         match tile_source {
-            TileSource::Aligned(cog_tile) => Ok(match self.data_type() {
-                ArrayDataType::Uint8 => AnyDenseArray::U8(self.cog.parse_tile_data_as::<u8>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Uint16 => AnyDenseArray::U16(self.cog.parse_tile_data_as::<u16>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Uint32 => AnyDenseArray::U32(self.cog.parse_tile_data_as::<u32>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Uint64 => AnyDenseArray::U64(self.cog.parse_tile_data_as::<u64>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Int8 => AnyDenseArray::I8(self.cog.parse_tile_data_as::<i8>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Int16 => AnyDenseArray::I16(self.cog.parse_tile_data_as::<i16>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Int32 => AnyDenseArray::I32(self.cog.parse_tile_data_as::<i32>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Int64 => AnyDenseArray::I64(self.cog.parse_tile_data_as::<i64>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Float32 => AnyDenseArray::F32(self.cog.parse_tile_data_as::<f32>(cog_tile, cog_chunks[0])?),
-                ArrayDataType::Float64 => AnyDenseArray::F64(self.cog.parse_tile_data_as::<f64>(cog_tile, cog_chunks[0])?),
+            TileSource::Aligned(_) => Ok(match self.data_type() {
+                ArrayDataType::Uint8 => AnyDenseArray::U8(self.cog.parse_tile_data_as::<u8>(cog_chunks[0])?),
+                ArrayDataType::Uint16 => AnyDenseArray::U16(self.cog.parse_tile_data_as::<u16>(cog_chunks[0])?),
+                ArrayDataType::Uint32 => AnyDenseArray::U32(self.cog.parse_tile_data_as::<u32>(cog_chunks[0])?),
+                ArrayDataType::Uint64 => AnyDenseArray::U64(self.cog.parse_tile_data_as::<u64>(cog_chunks[0])?),
+                ArrayDataType::Int8 => AnyDenseArray::I8(self.cog.parse_tile_data_as::<i8>(cog_chunks[0])?),
+                ArrayDataType::Int16 => AnyDenseArray::I16(self.cog.parse_tile_data_as::<i16>(cog_chunks[0])?),
+                ArrayDataType::Int32 => AnyDenseArray::I32(self.cog.parse_tile_data_as::<i32>(cog_chunks[0])?),
+                ArrayDataType::Int64 => AnyDenseArray::I64(self.cog.parse_tile_data_as::<i64>(cog_chunks[0])?),
+                ArrayDataType::Float32 => AnyDenseArray::F32(self.cog.parse_tile_data_as::<f32>(cog_chunks[0])?),
+                ArrayDataType::Float64 => AnyDenseArray::F64(self.cog.parse_tile_data_as::<f64>(cog_chunks[0])?),
             }),
             TileSource::Unaligned(tile_sources) => Ok(match self.data_type() {
                 ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
@@ -438,13 +438,11 @@ impl WebTilesReader {
         ));
 
         for ((cog_location, cutout), cog_chunck) in tile_sources.iter().zip(cog_chunks) {
-            let chunk_range = cog_location.range_to_fetch(self.cog_metadata().chunk_optimizations);
-            if chunk_range.start == chunk_range.end {
+            if cog_location.is_sparse() {
                 return Ok(DenseArray::empty());
             }
 
-            let tile_cutout = self.cog.parse_tile_data_as::<T>(cog_location, cog_chunck)?;
-
+            let tile_cutout = self.cog.parse_tile_data_as::<T>(cog_chunck)?;
             let dest_window = Window::new(
                 Cell::from_row_col(cutout.dst_row_offset, cutout.dst_col_offset),
                 RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
@@ -476,8 +474,8 @@ impl WebTilesReader {
                     let cog_chunks: Vec<Vec<u8>> = tile_sources
                         .iter()
                         .flat_map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
-                            let mut chunk = vec![0; cog_tile_offset.size_to_fetch(self.cog_metadata().chunk_optimizations)];
-                            io::read_chunk(cog_tile_offset, &mut reader, self.cog_metadata().chunk_optimizations, &mut chunk)?;
+                            let mut chunk = vec![0; cog_tile_offset.size as usize];
+                            io::read_chunk(cog_tile_offset, &mut reader, &mut chunk)?;
                             Ok(chunk)
                         })
                         .collect();

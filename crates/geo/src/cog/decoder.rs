@@ -5,10 +5,8 @@ use tiff::{decoder::ifd::Value, tags::Tag};
 use crate::{
     ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows,
     cog::{
-        Compression, GeoTiffMetadata, Predictor, RasterDataLayout, TiffChunkLocation, TiffStats,
-        projectioninfo::ModelType,
-        reader::{PyramidInfo, TiffOptimizations},
-        stats,
+        Compression, GeoTiffMetadata, Predictor, RasterDataLayout, TiffChunkLocation, TiffStats, projectioninfo::ModelType,
+        reader::PyramidInfo, stats,
     },
     crs,
 };
@@ -322,7 +320,6 @@ impl<R: Read + Seek> TiffDecoder<R> {
             band_count: samples_per_pixel,
             compression,
             predictor,
-            chunk_optimizations: TiffOptimizations::None,
             geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
             statistics,
             pyramids,

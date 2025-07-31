@@ -2,7 +2,6 @@ use crate::{
     Array, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Rows, Window,
     cog::{
         Compression, Predictor, TiffChunkLocation,
-        reader::TiffOptimizations,
         utils::{self, HorizontalUnpredictable},
     },
     raster::intersection::CutOut,
@@ -108,13 +107,8 @@ impl Seek for CogHeaderReader {
     }
 }
 
-pub fn read_chunk(
-    cog_location: &TiffChunkLocation,
-    reader: &mut (impl Read + Seek),
-    chunk_optimizations: TiffOptimizations,
-    buf: &mut [u8],
-) -> Result<()> {
-    let chunk_range = cog_location.range_to_fetch(chunk_optimizations);
+pub fn read_chunk(cog_location: &TiffChunkLocation, reader: &mut (impl Read + Seek), buf: &mut [u8]) -> Result<()> {
+    let chunk_range = cog_location.range_to_fetch();
     debug_assert!(chunk_range.start != chunk_range.end, "Empty chunk passed to read_cog_chunk");
     debug_assert!(
         buf.len() == (chunk_range.end - chunk_range.start) as usize,
@@ -136,25 +130,15 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: TiffOptimizations,
     reader: &mut (impl Read + Seek),
 ) -> Result<DenseArray<T>> {
     if cog_location.size == 0 {
         return Ok(DenseArray::empty());
     }
 
-    let mut cog_chunk = vec![0; cog_location.size_to_fetch(chunk_optimizations)];
-    read_chunk(cog_location, reader, chunk_optimizations, &mut cog_chunk)?;
-    parse_tile_data(
-        cog_location,
-        tile_size,
-        nodata,
-        compression,
-        predictor,
-        chunk_optimizations,
-        None,
-        &cog_chunk,
-    )
+    let mut cog_chunk = vec![0; cog_location.size as usize];
+    read_chunk(cog_location, reader, &mut cog_chunk)?;
+    parse_tile_data(tile_size, nodata, compression, predictor, None, &cog_chunk)
 }
 
 #[simd_bounds]
@@ -164,7 +148,6 @@ pub fn read_tile_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: TiffOptimizations,
     reader: &mut (impl Read + Seek),
     tile_data: &mut [T],
 ) -> Result<()> {
@@ -173,38 +156,26 @@ pub fn read_tile_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
         tile_data.fill(cast::option(nodata).ok_or_else(|| Error::Runtime("Invalid nodata value".into()))?);
     }
 
-    let mut cog_chunk = vec![0; chunk.size_to_fetch(chunk_optimizations)];
-    read_chunk(chunk, reader, chunk_optimizations, &mut cog_chunk)?;
-    parse_chunk_data_into_buffer(
-        chunk,
-        row_length,
-        compression,
-        predictor,
-        chunk_optimizations,
-        &cog_chunk,
-        tile_data,
-    )?;
+    let mut cog_chunk = vec![0; chunk.size as usize];
+    read_chunk(chunk, reader, &mut cog_chunk)?;
+    parse_chunk_data_into_buffer(row_length, compression, predictor, &cog_chunk, tile_data)?;
 
     Ok(())
 }
 
 #[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
-    chunk: &TiffChunkLocation,
     tile_size: u32,
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    chunk_optimizations: TiffOptimizations,
     cutout: Option<&CutOut>,
     chunk_data: &[u8],
 ) -> Result<DenseArray<T>> {
     let mut meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), nodata);
     let mut tile_data = AlignedVecUnderConstruction::new(tile_size as usize * tile_size as usize);
 
-    parse_chunk_data_into_buffer(chunk, tile_size, compression, predictor, chunk_optimizations, chunk_data, unsafe {
-        tile_data.as_slice_mut()
-    })?;
+    parse_chunk_data_into_buffer(tile_size, compression, predictor, chunk_data, unsafe { tile_data.as_slice_mut() })?;
 
     let mut arr = DenseArray::<T>::new_init_nodata(meta, unsafe { tile_data.assume_init() })?;
 
@@ -222,40 +193,26 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 
 #[simd_bounds]
 pub fn parse_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
-    chunk: &TiffChunkLocation,
     row_length: u32,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    tiff_optimizations: TiffOptimizations,
     chunk_data: &[u8],
     decoded_chunk_data: &mut [T],
 ) -> Result<()> {
     debug_assert!(chunk_data.len() > 4);
 
-    let data_offset = if tiff_optimizations == TiffOptimizations::Cog {
-        // cog_chunk contains the tile data with the first 4 bytes being the size of the tile as cross-check
-        let size_bytes: [u8; 4] = <[u8; 4]>::try_from(&chunk_data[0..4]).unwrap();
-        if chunk.size != u32::from_le_bytes(size_bytes) as u64 {
-            return Err(Error::Runtime("Tile size does not match the expected size".into()));
-        }
-
-        4
-    } else {
-        0
-    };
-
     match compression {
-        Some(Compression::Lzw) => lzw_decompress_to::<T>(&chunk_data[data_offset..], decoded_chunk_data)?,
+        Some(Compression::Lzw) => lzw_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
         None => {
-            if chunk_data[data_offset..].len() != std::mem::size_of_val(decoded_chunk_data) {
+            if chunk_data.len() != std::mem::size_of_val(decoded_chunk_data) {
                 return Err(Error::Runtime(format!(
                     "Uncompressed tile data size ({}) does not match the expected size {}",
-                    chunk_data[data_offset..].len(),
+                    chunk_data.len(),
                     std::mem::size_of_val(decoded_chunk_data)
                 )));
             }
 
-            decoded_chunk_data.copy_from_slice(bytemuck::cast_slice(&chunk_data[data_offset..]));
+            decoded_chunk_data.copy_from_slice(bytemuck::cast_slice(chunk_data));
         }
     };
 
