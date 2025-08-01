@@ -90,7 +90,7 @@ test_debug_simd:
 test_release_simd testfilter:
   cargo +nightly nextest run --profile ci --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector '{{testfilter}}'
 
-test_release_slow :
+test_release_slow:
   cargo nextest run --profile slow --workspace --release --features=serde,gdal,gdal-static,derive,vector
 
 test_debug_py: pybootstrap
