@@ -88,7 +88,7 @@ impl CogTileProvider {
             .tileprovider_data
             .as_ref()
             .and_then(|data| data.downcast_ref::<WebTilesReader>())
-            .map(|cog| cog.read_tile_data_as::<T>(tile, std::fs::File::open(&meta.path)?));
+            .map(|cog| cog.read_tile_data_as::<T>(tile, &mut std::fs::File::open(&meta.path)?));
 
         match tile {
             Some(Ok(Some(tile_data))) => Ok(tile_data),

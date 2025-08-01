@@ -24,9 +24,8 @@ impl GeoTiffMetadata {
         // This could be improved to reuse the existing buffer and append to it when the buffer is not large enough
         loop {
             let reader = CogHeaderReader::from_stream(File::open(path)?, io::COG_HEADER_SIZE * buffer_factor)?;
-            let mut decoder = TiffDecoder::new(reader)?;
+            let res = TiffDecoder::new(reader).and_then(|mut decoder| decoder.parse_cog_header());
 
-            let res = decoder.parse_cog_header();
             match res {
                 Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
                     if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>

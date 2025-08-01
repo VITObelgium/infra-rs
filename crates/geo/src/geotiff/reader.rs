@@ -1,13 +1,6 @@
 use crate::{
     ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, RasterSize,
-    geotiff::{
-        GeoTiffMetadata,
-        decoder::TiffDecoder,
-        gdalghostdata::GdalGhostData,
-        io::{self, CogHeaderReader},
-        tileio,
-        utils::HorizontalUnpredictable,
-    },
+    geotiff::{GeoTiffMetadata, gdalghostdata::GdalGhostData, io, tileio, utils::HorizontalUnpredictable},
 };
 
 use inf::allocate;
@@ -79,32 +72,8 @@ impl GeoTiffReader {
     }
 
     pub fn from_file(path: &Path) -> Result<Self> {
-        let mut buffer_factor = 1;
-        // This could be improved to reuse the existing buffer and append to it when the buffer is not large enough
-        loop {
-            let res = Self::new(CogHeaderReader::from_stream(
-                File::open(path)?,
-                io::COG_HEADER_SIZE * buffer_factor,
-            )?);
-            match res {
-                Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
-                    if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
-                {
-                    // If the error is an EOF, we need more data to parse the header
-                    buffer_factor *= 2;
-                    log::debug!("Cog header dit not fit in default header size, retry with header size factor {buffer_factor}");
-                }
-                Ok(cog) => return Ok(cog),
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
-    fn new(reader: CogHeaderReader) -> Result<Self> {
-        let mut reader = TiffDecoder::new(reader)?;
-
         Ok(GeoTiffReader {
-            meta: reader.parse_cog_header()?,
+            meta: GeoTiffMetadata::from_file(path)?,
         })
     }
 
