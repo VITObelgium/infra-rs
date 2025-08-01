@@ -1,6 +1,6 @@
 use crate::{
     ArrayDataType, ArrayNum,
-    cog::{
+    geotiff::{
         Compression, Predictor, TiffChunkLocation,
         utils::{self, HorizontalUnpredictable},
     },

@@ -1,0 +1,27 @@
+mod decoder;
+mod gdalghostdata;
+pub mod io;
+mod metadata;
+mod projectioninfo;
+mod reader;
+mod stats;
+pub mod tileio;
+mod utils;
+
+use projectioninfo::ProjectionInfo;
+
+pub use metadata::GeoTiffMetadata;
+pub use reader::{ChunkDataLayout, GeoTiffReader, PyramidInfo, TiffChunkLocation};
+pub use stats::TiffStats;
+pub use utils::HorizontalUnpredictable;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Compression {
+    Lzw,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Predictor {
+    Horizontal,
+    FloatingPoint,
+}

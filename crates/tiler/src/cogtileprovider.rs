@@ -6,8 +6,11 @@ use std::{
     sync::Arc,
 };
 
-use geo::cog::{GeoTiffMetadata, GeoTiffReader, HorizontalUnpredictable, WebTilesReader};
 use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs};
+use geo::{
+    cog::WebTilesReader,
+    geotiff::{GeoTiffMetadata, GeoTiffReader, HorizontalUnpredictable},
+};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 #[cfg(feature = "simd")]

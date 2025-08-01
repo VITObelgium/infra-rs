@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::{ArrayDataType, GeoReference, Result, Tile, ZoomLevelStrategy, cog::Compression, crs, raster};
+use crate::{ArrayDataType, GeoReference, Result, Tile, ZoomLevelStrategy, crs, geotiff::Compression, raster};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PredictorSelection {
@@ -149,7 +149,7 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
 #[cfg(test)]
 mod tests {
     use crate::{
-        cog::{GeoTiffReader, Predictor},
+        geotiff::{GeoTiffReader, Predictor},
         testutils,
     };
 

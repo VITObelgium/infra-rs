@@ -2,13 +2,14 @@ use num::NumCast;
 
 use crate::{
     AnyDenseArray, ArrayDataType, CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
-    cog::{GeoTiffMetadata, GeoTiffReader, WebTilesReader},
+    cog::WebTilesReader,
     crs,
+    geotiff::{GeoTiffMetadata, GeoTiffReader},
     nodata::Nodata as _,
 };
 use std::path::Path;
 
-pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
+pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
     let cog = GeoTiffReader::from_file(cog_path)?;
     let mut reader = std::fs::File::open(cog_path)?;
 

@@ -1,7 +1,7 @@
 use crate::{
-    ArrayDataType, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, GeoReference, RasterSize,
-    cog::{
-        Compression, Predictor, TiffStats,
+    ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, RasterSize,
+    geotiff::{
+        GeoTiffMetadata,
         decoder::TiffDecoder,
         gdalghostdata::GdalGhostData,
         io::{self, CogHeaderReader},
@@ -54,63 +54,9 @@ pub struct PyramidInfo {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum RasterDataLayout {
+pub enum ChunkDataLayout {
     Tiled(u32),   // Tile size in pixels
     Striped(u32), // Rows per strip
-}
-
-#[derive(Debug, Clone)]
-pub struct GeoTiffMetadata {
-    pub data_layout: RasterDataLayout,
-    pub band_count: u32,
-    pub data_type: ArrayDataType,
-    pub compression: Option<Compression>,
-    pub predictor: Option<Predictor>,
-    pub statistics: Option<TiffStats>,
-    pub geo_reference: GeoReference,
-    pub pyramids: Vec<PyramidInfo>,
-}
-
-impl GeoTiffMetadata {
-    pub fn from_file(path: &Path) -> Result<Self> {
-        let mut buffer_factor = 1;
-        // This could be improved to reuse the existing buffer and append to it when the buffer is not large enough
-        loop {
-            let reader = CogHeaderReader::from_stream(File::open(path)?, io::COG_HEADER_SIZE * buffer_factor)?;
-            let mut decoder = TiffDecoder::new(reader)?;
-
-            let res = decoder.parse_cog_header();
-            match res {
-                Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
-                    if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
-                {
-                    // If the error is an EOF, we need more data to parse the header
-                    buffer_factor *= 2;
-                    log::debug!("Cog header dit not fit in default header size, retry with header size factor {buffer_factor}");
-                }
-                Ok(meta) => return Ok(meta),
-                Err(e) => return Err(e),
-            }
-        }
-    }
-
-    pub fn from_buffer(buf: Vec<u8>) -> Result<Self> {
-        let reader = CogHeaderReader::from_buffer(buf)?;
-        let mut decoder = TiffDecoder::new(reader)?;
-
-        decoder.parse_cog_header()
-    }
-
-    pub fn chunk_row_length(&self) -> u32 {
-        match self.data_layout {
-            RasterDataLayout::Tiled(size) => size,
-            RasterDataLayout::Striped(_) => self.geo_reference.columns().count() as u32,
-        }
-    }
-
-    pub fn is_tiled(&self) -> bool {
-        matches!(self.data_layout, RasterDataLayout::Tiled(_))
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -236,10 +182,10 @@ impl GeoTiffReader {
             }
 
             match self.meta.data_layout {
-                RasterDataLayout::Tiled(tile_size) => {
+                ChunkDataLayout::Tiled(tile_size) => {
                     return self.read_tiled_raster_as::<T, M>(reader, &pyramid.chunk_locations, tile_size);
                 }
-                RasterDataLayout::Striped(rows_per_strip) => {
+                ChunkDataLayout::Striped(rows_per_strip) => {
                     return self.read_striped_raster_as::<T, M>(reader, &pyramid.chunk_locations, rows_per_strip);
                 }
             }
@@ -309,9 +255,10 @@ impl GeoTiffReader {
 #[cfg(test)]
 mod tests {
     use crate::{
-        Array as _, RasterSize, Tile, ZoomLevelStrategy,
-        cog::{CogCreationOptions, create_cog_tiles, creation::PredictorSelection},
+        Array as _, ArrayDataType, GeoReference, RasterSize, Tile, ZoomLevelStrategy,
+        cog::{CogCreationOptions, PredictorSelection, create_cog_tiles},
         crs,
+        geotiff::{Compression, Predictor},
         raster::{self, DenseRaster, GeoTiffWriteOptions, RasterIO, TiffChunkType, WriteRasterOptions},
         testutils,
     };
@@ -365,7 +312,7 @@ mod tests {
 
         let tiff = GeoTiffReader::from_file(&output)?;
         let meta = tiff.metadata();
-        assert_eq!(meta.data_layout, RasterDataLayout::Striped(3));
+        assert_eq!(meta.data_layout, ChunkDataLayout::Striped(3));
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
@@ -387,7 +334,7 @@ mod tests {
         let cog = GeoTiffReader::from_file(&output)?;
 
         let meta = cog.metadata();
-        assert_eq!(meta.data_layout, RasterDataLayout::Tiled(COG_TILE_SIZE));
+        assert_eq!(meta.data_layout, ChunkDataLayout::Tiled(COG_TILE_SIZE));
         assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
@@ -439,7 +386,7 @@ mod tests {
         let cog = GeoTiffReader::from_file(&output)?;
 
         let meta = cog.metadata();
-        assert_eq!(meta.data_layout, RasterDataLayout::Tiled(opts.tile_size));
+        assert_eq!(meta.data_layout, ChunkDataLayout::Tiled(opts.tile_size));
         assert_eq!(meta.data_type, opts.output_data_type.unwrap());
         assert_eq!(meta.compression, None);
         assert_eq!(meta.predictor, None);
@@ -513,7 +460,7 @@ mod tests {
         }
 
         let geotiff = GeoTiffReader::from_file(&tiled_geotiff)?;
-        assert_eq!(geotiff.metadata().data_layout, RasterDataLayout::Tiled(256));
+        assert_eq!(geotiff.metadata().data_layout, ChunkDataLayout::Tiled(256));
 
         let mut reader = File::open(&tiled_geotiff)?;
         let raster = geotiff.read_raster_as::<u8, GeoReference>(&mut reader)?;

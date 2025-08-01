@@ -25,6 +25,7 @@ mod error;
 #[cfg(feature = "gdal")]
 pub mod gdalinterop;
 mod georeference;
+pub mod geotiff;
 mod latlonbounds;
 mod nodata;
 pub mod raster;

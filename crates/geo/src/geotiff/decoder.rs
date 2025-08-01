@@ -3,12 +3,11 @@ use std::io::{Read, Seek};
 use tiff::{decoder::ifd::Value, tags::Tag};
 
 use crate::{
-    ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows,
-    cog::{
-        Compression, GeoTiffMetadata, Predictor, RasterDataLayout, TiffChunkLocation, TiffStats, projectioninfo::ModelType,
+    ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows, crs,
+    geotiff::{
+        ChunkDataLayout, Compression, GeoTiffMetadata, Predictor, TiffChunkLocation, TiffStats, projectioninfo::ModelType,
         reader::PyramidInfo, stats,
     },
-    crs,
 };
 
 use super::ProjectionInfo;
@@ -263,10 +262,10 @@ impl<R: Read + Seek> TiffDecoder<R> {
                 return Err(Error::InvalidArgument("Only square tiles are supported".into()));
             }
 
-            RasterDataLayout::Tiled(tile_size)
+            ChunkDataLayout::Tiled(tile_size)
         } else {
             let rows = self.decoder.get_tag_u32(Tag::RowsPerStrip)?;
-            RasterDataLayout::Striped(rows)
+            ChunkDataLayout::Striped(rows)
         };
 
         // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.

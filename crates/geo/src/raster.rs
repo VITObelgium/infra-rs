@@ -9,7 +9,7 @@ use std::path::Path;
 
 use crate::{
     GeoReference,
-    cog::{Compression, Predictor},
+    geotiff::{Compression, Predictor},
 };
 
 // pub mod warp;

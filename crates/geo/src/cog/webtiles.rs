@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
     RasterMetadata, Result, Rows, Window, ZoomLevelStrategy,
-    cog::{HorizontalUnpredictable, TiffChunkLocation, TiffStats, io, reader::PyramidInfo, tileio},
+    geotiff::{GeoTiffMetadata, HorizontalUnpredictable, PyramidInfo, TiffChunkLocation, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -9,7 +9,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use crate::{LatLonBounds, Point, RasterSize, Tile, cog::GeoTiffMetadata, crs};
+use crate::{LatLonBounds, Point, RasterSize, Tile, crs};
 
 use num::NumCast;
 use simd_macro::simd_bounds;
@@ -542,7 +542,8 @@ mod tests {
 
     use crate::{
         Nodata as _, ZoomLevelStrategy,
-        cog::{CogCreationOptions, Compression, Predictor, PredictorSelection, create_cog_tiles, debug},
+        cog::{CogCreationOptions, PredictorSelection, create_cog_tiles, debug},
+        geotiff::{Compression, Predictor},
         testutils,
     };
 
@@ -1055,7 +1056,7 @@ mod tests {
             let cog_path = create_unaligned_test_cog(&output_dir, tile_size)?;
 
             for zoom_level in 7..=8 {
-                debug::dump_cog_tiles(&cog_path, zoom_level, &output_dir.join("cog_tile").join(format!("{tile_size}px")))?;
+                debug::dump_tiff_tiles(&cog_path, zoom_level, &output_dir.join("cog_tile").join(format!("{tile_size}px")))?;
                 debug::dump_web_tiles(&cog_path, zoom_level, &output_dir.join("web_tile").join(format!("{tile_size}px")))?;
             }
         }

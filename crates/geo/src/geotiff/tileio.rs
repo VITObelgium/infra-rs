@@ -6,7 +6,7 @@ use simd_macro::simd_bounds;
 use crate::{
     Array as _, ArrayInterop as _, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Result, Rows,
     Window,
-    cog::{
+    geotiff::{
         Compression, HorizontalUnpredictable, Predictor, TiffChunkLocation,
         io::{parse_chunk_data_into_buffer, read_chunk},
     },
