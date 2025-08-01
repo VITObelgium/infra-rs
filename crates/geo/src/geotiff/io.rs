@@ -2,6 +2,7 @@ use crate::{
     ArrayDataType, ArrayNum,
     geotiff::{
         Compression, Predictor, TiffChunkLocation,
+        gdalghostdata::GdalGhostData,
         utils::{self, HorizontalUnpredictable},
     },
 };
@@ -10,12 +11,31 @@ use simd_macro::simd_bounds;
 use weezl::{BitOrder, decode::Decoder};
 
 use crate::{Error, Result};
-use std::io::{BufWriter, Read, Seek, SeekFrom};
+use std::{
+    fs::File,
+    io::{BufWriter, Read, Seek, SeekFrom},
+    path::Path,
+};
 
 pub const COG_HEADER_SIZE: usize = 16 * 1024; // 16 KiB, which is usually sufficient for the COG header
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
+
+// Detect if the file at the given path is a Cloud Optimized GeoTIFF (COG).
+/// Detection is done based on the presence of the Gdal Ghost Data in the TIFF header,
+pub fn file_is_cog(path: &Path) -> bool {
+    File::open(path).is_ok_and(|mut f| stream_is_cog(&mut f))
+}
+
+pub fn stream_is_cog(stream: &mut impl Read) -> bool {
+    let mut header = vec![0u8; COG_HEADER_SIZE];
+    if stream.read_exact(&mut header).is_err() {
+        return false;
+    }
+
+    GdalGhostData::from_tiff_header_buffer(&header).is_some_and(|ghost| ghost.is_cog())
+}
 
 /// This reader buffers the first 64 KiB of the source stream, which is usually sufficient for reading the COG header.
 /// This way multiple io calls are avoided when reading the header.
@@ -26,13 +46,21 @@ pub struct CogHeaderReader {
 }
 
 impl CogHeaderReader {
-    pub fn from_stream(mut stream: impl Read, header_size: usize) -> Result<Self> {
+    pub fn from_stream(stream: &mut impl Read, header_size: usize) -> Result<Self> {
         // Read up to header_size bytes, handling partial reads
-        let mut buffer = vec![0; header_size];
+        let mut buffer = Vec::default();
+        Self::append_from_stream_to_buffer(&mut buffer, stream, header_size)?;
+        Self::from_buffer(buffer)
+    }
+
+    fn append_from_stream_to_buffer(buffer: &mut Vec<u8>, stream: &mut impl Read, size: usize) -> Result<()> {
+        let initial_buf_len = buffer.len();
+        buffer.resize(initial_buf_len + size, 0);
+
         let mut total_bytes_read = 0;
 
-        while total_bytes_read < header_size {
-            let bytes_read = stream.read(&mut buffer[total_bytes_read..])?;
+        while total_bytes_read < size {
+            let bytes_read = stream.read(&mut buffer[initial_buf_len + total_bytes_read..])?;
             if bytes_read == 0 {
                 // EOF reached before filling the buffer
                 break;
@@ -41,8 +69,21 @@ impl CogHeaderReader {
             total_bytes_read += bytes_read;
         }
 
-        buffer.truncate(total_bytes_read);
-        Self::from_buffer(buffer)
+        buffer.truncate(initial_buf_len + total_bytes_read);
+
+        Ok(())
+    }
+
+    /// Increases the current buffer size by a factor of 2, resets the read position to 0,
+    pub fn increase_buffer_size(&mut self, stream: &mut (impl Read + Seek)) -> Result<()> {
+        let current_size = self.buffer.len();
+        stream.seek(SeekFrom::Start(current_size as u64))?;
+        Self::append_from_stream_to_buffer(&mut self.buffer, stream, current_size)?;
+
+        // Reset position to the start of the buffer
+        self.pos = 0;
+
+        Ok(())
     }
 
     pub fn from_buffer(buffer: Vec<u8>) -> Result<Self> {

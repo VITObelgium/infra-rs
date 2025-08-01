@@ -1,6 +1,6 @@
 use crate::{
     ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, GeoReference, RasterSize,
-    geotiff::{GeoTiffMetadata, gdalghostdata::GdalGhostData, io, utils::HorizontalUnpredictable},
+    geotiff::{GeoTiffMetadata, io, utils::HorizontalUnpredictable},
 };
 
 use inf::allocate;
@@ -8,7 +8,7 @@ use num::NumCast;
 use simd_macro::simd_bounds;
 
 use crate::{Error, Result};
-use std::{fs::File, io::Read, ops::Range, path::Path};
+use std::{fs::File, ops::Range, path::Path};
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
@@ -55,19 +55,6 @@ pub struct GeoTiffReader {
 }
 
 impl GeoTiffReader {
-    pub fn is_cog(path: &Path) -> bool {
-        let mut header = vec![0u8; io::COG_HEADER_SIZE];
-        match File::open(path) {
-            Ok(mut file) => match file.read_exact(&mut header) {
-                Ok(()) => {}
-                Err(_) => return false,
-            },
-            Err(_) => return false,
-        };
-
-        GdalGhostData::from_tiff_header_buffer(&header).is_some_and(|ghost| ghost.is_cog())
-    }
-
     pub fn from_file(path: &Path) -> Result<Self> {
         Ok(GeoTiffReader {
             meta: GeoTiffMetadata::from_file(path)?,

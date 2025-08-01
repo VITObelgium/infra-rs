@@ -6,10 +6,10 @@ use std::{
     sync::Arc,
 };
 
-use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs};
+use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs, geotiff};
 use geo::{
     cog::WebTilesReader,
-    geotiff::{GeoTiffMetadata, GeoTiffReader, HorizontalUnpredictable},
+    geotiff::{GeoTiffMetadata, HorizontalUnpredictable},
 };
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
@@ -75,7 +75,7 @@ impl CogTileProvider {
     }
 
     pub fn tiff_is_cog(path: &Path) -> bool {
-        GeoTiffReader::is_cog(path)
+        geotiff::io::file_is_cog(path)
     }
 
     #[geo::simd_bounds]

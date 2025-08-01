@@ -1,4 +1,5 @@
 use std::fs::File;
+use std::io::Seek;
 use std::path::Path;
 
 use crate::geotiff::reader::PyramidInfo;
@@ -20,29 +21,40 @@ pub struct GeoTiffMetadata {
 
 impl GeoTiffMetadata {
     pub fn from_file(path: &Path) -> Result<Self> {
-        let mut buffer_factor = 1;
-        // This could be improved to reuse the existing buffer and append to it when the buffer is not large enough
-        loop {
-            let reader = CogHeaderReader::from_stream(File::open(path)?, io::COG_HEADER_SIZE * buffer_factor)?;
-            let res = TiffDecoder::new(reader).and_then(|mut decoder| decoder.parse_cog_header());
+        let mut file_reader = File::open(path)?;
+        if io::stream_is_cog(&mut file_reader) {
+            file_reader.seek(std::io::SeekFrom::Start(0))?;
 
-            match res {
-                Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
-                    if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
-                {
-                    // If the error is an EOF, we need more data to parse the header
-                    buffer_factor *= 2;
-                    log::debug!("Cog header dit not fit in default header size, retry with header size factor {buffer_factor}");
+            // This is a COG, try to read the tiff metadata with as litte io calls as possible by using the `CogHeaderReader`.
+            // This errors however if a read occurs that is larger than the default header size.
+            // In that case we will increase the header size until we can read the header successfully.
+            let mut cog_buffer_reader = CogHeaderReader::from_stream(&mut file_reader, io::COG_HEADER_SIZE)?;
+
+            loop {
+                let res = TiffDecoder::new(&mut cog_buffer_reader).and_then(|mut decoder| decoder.parse_cog_header());
+
+                match res {
+                    Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
+                        if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
+                    {
+                        // If the error is an EOF, we need more data to parse the header
+                        cog_buffer_reader.increase_buffer_size(&mut file_reader)?;
+                        log::debug!("Cog header dit not fit in default header size, retry with increased buffer size");
+                    }
+                    Ok(meta) => return Ok(meta),
+                    Err(e) => return Err(e),
                 }
-                Ok(meta) => return Ok(meta),
-                Err(e) => return Err(e),
             }
+        } else {
+            file_reader.seek(std::io::SeekFrom::Start(0))?;
+            let mut decoder = TiffDecoder::new(&mut file_reader)?;
+            decoder.parse_cog_header()
         }
     }
 
     pub fn from_buffer(buf: Vec<u8>) -> Result<Self> {
-        let reader = CogHeaderReader::from_buffer(buf)?;
-        let mut decoder = TiffDecoder::new(reader)?;
+        let mut reader = CogHeaderReader::from_buffer(buf)?;
+        let mut decoder = TiffDecoder::new(&mut reader)?;
 
         decoder.parse_cog_header()
     }

@@ -12,13 +12,13 @@ use crate::{
 
 use super::ProjectionInfo;
 
-pub struct TiffDecoder<R: Read + Seek> {
+pub struct TiffDecoder<'a, R: Read + Seek> {
     /// TIFF decoder
-    decoder: tiff::decoder::Decoder<R>,
+    decoder: tiff::decoder::Decoder<&'a mut R>,
 }
 
-impl<R: Read + Seek> TiffDecoder<R> {
-    pub fn new(stream: R) -> Result<Self> {
+impl<'a, R: Read + Seek> TiffDecoder<'a, R> {
+    pub fn new(stream: &'a mut R) -> Result<Self> {
         Ok(Self {
             decoder: tiff::decoder::Decoder::new(stream)?.with_limits(tiff::decoder::Limits::unlimited()),
         })
