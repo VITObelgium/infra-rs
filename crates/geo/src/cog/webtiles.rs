@@ -24,6 +24,9 @@ pub enum TileSource {
 }
 
 #[derive(Debug, Clone)]
+/// `WebTiles` is a structure that holds the necessary information to read Web xyz tiles from a cog.
+/// It is constructed from the metadata of a COG file, which contains information about the tiff tile layout and the locations of the tiff tiles in the COG.
+/// Tiff tiles don't always have a one-to-one mapping to web tiles, so this structure contains the necessary information to create web tiles from 1 or more tiff tiles.
 pub struct WebTiles {
     zoom_levels: Vec<HashMap<Tile, TileSource>>,
 }
@@ -414,6 +417,49 @@ impl WebTilesReader {
     }
 
     #[simd_bounds]
+    pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
+        &self,
+        tile: &Tile,
+        reader: &mut (impl Read + Seek),
+    ) -> Result<Option<DenseArray<T>>> {
+        if T::TYPE != self.cog_meta.data_type {
+            return Err(Error::InvalidArgument(format!(
+                "Tile data type mismatch: expected {:?}, got {:?}",
+                self.cog_meta.data_type,
+                T::TYPE
+            )));
+        }
+
+        if let Some(tile_source) = self.tile_source(tile) {
+            match tile_source {
+                TileSource::Aligned(cog_tile) => Ok(Some(tileio::read_tile_data(
+                    cog_tile,
+                    self.cog_meta.chunk_row_length(),
+                    self.cog_meta.geo_reference.nodata(),
+                    self.cog_meta.compression,
+                    self.cog_meta.predictor,
+                    reader,
+                )?)),
+                TileSource::Unaligned(tile_sources) => {
+                    let cog_chunks: Vec<Vec<u8>> = tile_sources
+                        .iter()
+                        .flat_map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
+                            let mut chunk = vec![0; cog_tile_offset.size as usize];
+                            io::read_chunk(cog_tile_offset, reader, &mut chunk)?;
+                            Ok(chunk)
+                        })
+                        .collect();
+
+                    let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
+                    Ok(Some(self.merge_tile_sources(tile_sources, &cog_chunk_refs)?))
+                }
+            }
+        } else {
+            Ok(None)
+        }
+    }
+
+    #[simd_bounds]
     /// Parses the tile data from a byte slice into a `DenseArray<T>`.
     /// Only call this for parsing tiled data layout.
     fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(&self, tile_data: &[u8]) -> Result<DenseArray<T>> {
@@ -475,58 +521,6 @@ impl WebTilesReader {
         }
 
         Ok(arr)
-    }
-
-    #[simd_bounds]
-    pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
-        &self,
-        tile: &Tile,
-        mut reader: impl Read + Seek,
-    ) -> Result<Option<DenseArray<T>>> {
-        if let Some(tile_source) = self.tile_source(tile) {
-            match tile_source {
-                TileSource::Aligned(cog_tile) => Ok(Some(self.read_tile_as::<T>(cog_tile, &mut reader)?)),
-                TileSource::Unaligned(tile_sources) => {
-                    let cog_chunks: Vec<Vec<u8>> = tile_sources
-                        .iter()
-                        .flat_map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
-                            let mut chunk = vec![0; cog_tile_offset.size as usize];
-                            io::read_chunk(cog_tile_offset, &mut reader, &mut chunk)?;
-                            Ok(chunk)
-                        })
-                        .collect();
-
-                    let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
-                    Ok(Some(self.merge_tile_sources(tile_sources, &cog_chunk_refs)?))
-                }
-            }
-        } else {
-            Ok(None)
-        }
-    }
-
-    #[simd_bounds]
-    pub fn read_tile_as<T: ArrayNum + HorizontalUnpredictable>(
-        &self,
-        chunk: &TiffChunkLocation,
-        mut reader: impl Read + Seek,
-    ) -> Result<DenseArray<T>> {
-        if T::TYPE != self.cog_meta.data_type {
-            return Err(Error::InvalidArgument(format!(
-                "Tile data type mismatch: expected {:?}, got {:?}",
-                self.cog_meta.data_type,
-                T::TYPE
-            )));
-        }
-
-        tileio::read_tile_data(
-            chunk,
-            self.cog_meta.chunk_row_length(),
-            self.cog_meta.geo_reference.nodata(),
-            self.cog_meta.compression,
-            self.cog_meta.predictor,
-            &mut reader,
-        )
     }
 }
 
