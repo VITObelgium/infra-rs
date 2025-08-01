@@ -79,7 +79,7 @@ build_release:
 build: build_release
 
 test_debug test_name='' $RUST_LOG="debug":
-  cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_name}}
+  cargo nextest run -v --profile ci --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_name}}
 
 test_release test_name='':
   cargo nextest run --profile ci --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_name}}

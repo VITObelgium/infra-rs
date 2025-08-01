@@ -58,3 +58,121 @@ impl GeoTiffMetadata {
         matches!(self.data_layout, ChunkDataLayout::Tiled(_))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::{
+        Tile, ZoomLevelStrategy,
+        cog::{CogCreationOptions, PredictorSelection, create_cog_tiles},
+        crs, raster, testutils,
+    };
+
+    use super::*;
+
+    fn create_test_cog(
+        input_tif: &Path,
+        output_tif: &Path,
+        tile_size: u32,
+        compression: Option<Compression>,
+        predictor: Option<PredictorSelection>,
+        output_type: Option<ArrayDataType>,
+        allow_sparse: bool,
+    ) -> Result<()> {
+        let opts = CogCreationOptions {
+            min_zoom: Some(7),
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
+            tile_size,
+            allow_sparse,
+            compression,
+            predictor,
+            output_data_type: output_type,
+            aligned_levels: None,
+        };
+        create_cog_tiles(input_tif, output_tif, opts)?;
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn cog_metadata() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        create_test_cog(&input, &output, Tile::TILE_SIZE, None, None, None, true)?;
+
+        let meta = GeoTiffMetadata::from_file(&output)?;
+        assert_eq!(meta.data_layout, ChunkDataLayout::Tiled(Tile::TILE_SIZE));
+        assert_eq!(meta.data_type, ArrayDataType::Uint8);
+        assert_eq!(meta.compression, None);
+        assert_eq!(meta.predictor, None);
+        assert_eq!(meta.geo_reference.nodata(), Some(255.0));
+        assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
+        assert_eq!(meta.pyramids.len(), 4); // zoom levels 7 to 10
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn cog_metadata_larger_then_default_header_size() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(4),
+            zoom_level_strategy: ZoomLevelStrategy::PreferHigher,
+            tile_size: Tile::TILE_SIZE,
+            allow_sparse: false,
+            compression: None,
+            predictor: None,
+            output_data_type: Some(ArrayDataType::Uint8),
+            aligned_levels: None,
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        let meta = GeoTiffMetadata::from_file(&output)?;
+        assert_eq!(meta.data_layout, ChunkDataLayout::Tiled(opts.tile_size));
+        assert_eq!(meta.data_type, opts.output_data_type.unwrap());
+        assert_eq!(meta.compression, None);
+        assert_eq!(meta.predictor, None);
+        assert_eq!(meta.geo_reference.nodata(), Some(255.0));
+        assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
+        assert_eq!(meta.pyramids.len(), 7); // zoom levels 4 to 10
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn geotiff_non_cog() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let options = vec![
+            "-f".to_string(),
+            "GTiff".to_string(),
+            "-co".to_string(),
+            "NUM_THREADS=ALL_CPUS".to_string(),
+        ];
+
+        let creation_options: Vec<(String, String)> = vec![];
+
+        let src_ds = raster::io::dataset::open_read_only(input)?;
+        raster::algo::warp_to_disk_cli(&src_ds, &output, &options, &creation_options)?;
+
+        let meta = GeoTiffMetadata::from_file(&output)?;
+        assert_eq!(meta.data_layout, ChunkDataLayout::Striped(3));
+        assert_eq!(meta.data_type, ArrayDataType::Uint8);
+        assert_eq!(meta.compression, None);
+        assert_eq!(meta.predictor, None);
+        assert_eq!(meta.geo_reference.nodata(), Some(255.0));
+        assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
+        assert_eq!(meta.pyramids.len(), 1);
+
+        Ok(())
+    }
+}

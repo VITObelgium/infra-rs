@@ -1,19 +1,50 @@
 use num::NumCast;
+use simd_macro::simd_bounds;
 
 use crate::{
-    AnyDenseArray, ArrayDataType, CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
+    AnyDenseArray, ArrayDataType, ArrayNum, CellSize, DenseArray, Error, GeoReference, Point, RasterSize, Result, Tile,
     cog::WebTilesReader,
     crs,
-    geotiff::{GeoTiffMetadata, GeoTiffReader},
+    geotiff::{GeoTiffMetadata, HorizontalUnpredictable, TiffChunkLocation, tileio},
     nodata::Nodata as _,
 };
-use std::path::Path;
+use std::{
+    io::{Read, Seek},
+    path::Path,
+};
+
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
+
+#[simd_bounds]
+fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
+    cog_tile: &TiffChunkLocation,
+    meta: &GeoTiffMetadata,
+    reader: &mut (impl Read + Seek),
+) -> Result<DenseArray<T>> {
+    if T::TYPE != meta.data_type {
+        return Err(Error::InvalidArgument(format!(
+            "Tile data type mismatch: expected {:?}, got {:?}",
+            meta.data_type,
+            T::TYPE
+        )));
+    }
+
+    tileio::read_tile_data::<T>(
+        cog_tile,
+        meta.chunk_row_length(),
+        meta.geo_reference.nodata(),
+        meta.compression,
+        meta.predictor,
+        reader,
+    )
+}
 
 pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
-    let mut cog = GeoTiffReader::from_file(cog_path)?;
+    let meta = GeoTiffMetadata::from_file(cog_path)?;
 
-    let tile_size = cog.metadata().chunk_row_length();
-    let cell_size = cog.metadata().geo_reference.cell_size_x();
+    let tile_size = meta.chunk_row_length();
+    let cell_size = meta.geo_reference.cell_size_x();
 
     let main_zoom_level = Tile::zoom_level_for_pixel_size(cell_size, crate::ZoomLevelStrategy::Closest, tile_size);
     if (Tile::pixel_size_at_zoom_level(main_zoom_level, tile_size) - cell_size).abs() > 1e-6 {
@@ -22,31 +53,33 @@ pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> R
         )));
     }
 
-    let pyramid = cog
-        .pyramid_info((main_zoom_level - zoom_level) as usize)
+    let pyramid = meta
+        .pyramids
+        .get((main_zoom_level - zoom_level) as usize)
         .unwrap_or_else(|| panic!("Zoom level not available: {zoom_level}"));
 
     let tiles_wide = (pyramid.raster_size.cols.count() as usize).div_ceil(tile_size as usize);
 
     let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level, tile_size);
-    let mut current_ll = cog.metadata().geo_reference.top_left();
+    let mut current_ll = meta.geo_reference.top_left();
+    let mut reader = std::fs::File::open(cog_path)?;
 
     for (index, cog_tile) in pyramid.chunk_locations.clone().iter().enumerate() {
-        let tile_data = match cog.metadata().data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(cog.read_chunk_as::<u8>(cog_tile)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(cog.read_chunk_as::<u16>(cog_tile)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(cog.read_chunk_as::<u32>(cog_tile)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(cog.read_chunk_as::<u64>(cog_tile)?),
-            ArrayDataType::Int8 => AnyDenseArray::I8(cog.read_chunk_as::<i8>(cog_tile)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(cog.read_chunk_as::<i16>(cog_tile)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(cog.read_chunk_as::<i32>(cog_tile)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(cog.read_chunk_as::<i64>(cog_tile)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(cog.read_chunk_as::<f32>(cog_tile)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(cog.read_chunk_as::<f64>(cog_tile)?),
+        let tile_data = match meta.data_type {
+            ArrayDataType::Uint8 => AnyDenseArray::U8(read_tile_data::<u8>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(read_tile_data::<u16>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(read_tile_data::<u32>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(read_tile_data::<u64>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(read_tile_data::<i8>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(read_tile_data::<i16>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(read_tile_data::<i32>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(read_tile_data::<i64>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(read_tile_data::<f32>(cog_tile, &meta, &mut reader)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(read_tile_data::<f64>(cog_tile, &meta, &mut reader)?),
         };
 
         if index % tiles_wide == 0 {
-            current_ll.set_x(cog.metadata().geo_reference.top_left().x());
+            current_ll.set_x(meta.geo_reference.top_left().x());
             current_ll -= Point::new(0.0, tile_size as f64 * pixel_size);
         } else {
             current_ll.set_x(current_ll.x() + (tile_size as f64 * pixel_size));
