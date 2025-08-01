@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
     RasterMetadata, Result, Rows, Window, ZoomLevelStrategy,
-    cog::{HorizontalUnpredictable, TiffChunkLocation, TiffStats, io, reader::PyramidInfo},
+    cog::{HorizontalUnpredictable, TiffChunkLocation, TiffStats, io, reader::PyramidInfo, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -9,11 +9,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use crate::{
-    LatLonBounds, Point, RasterSize, Tile,
-    cog::{GeoTiffMetadata, GeoTiffReader},
-    crs,
-};
+use crate::{LatLonBounds, Point, RasterSize, Tile, cog::GeoTiffMetadata, crs};
 
 use num::NumCast;
 use simd_macro::simd_bounds;
@@ -36,7 +32,7 @@ impl WebTiles {
     pub fn from_cog_metadata(meta: &GeoTiffMetadata) -> Result<Self> {
         let mut zoom_levels = vec![HashMap::default(); 22];
 
-        let tile_size = meta.chunk_row_length()?;
+        let tile_size = meta.chunk_row_length();
         let mut zoom_level = Tile::zoom_level_for_pixel_size(meta.geo_reference.cell_size_x(), ZoomLevelStrategy::Closest, tile_size);
         if (Tile::pixel_size_at_zoom_level(zoom_level, tile_size) - meta.geo_reference.cell_size_x()).abs() > 1e-6 {
             return Err(Error::Runtime(format!(
@@ -321,28 +317,28 @@ pub struct WebTileInfo {
 #[derive(Debug, Clone)]
 pub struct WebTilesReader {
     web_tiles: WebTiles,
-    cog: GeoTiffReader,
+    cog_meta: GeoTiffMetadata,
 }
 
 impl WebTilesReader {
     pub fn data_type(&self) -> ArrayDataType {
-        self.cog.metadata().data_type
+        self.cog_meta.data_type
     }
 
-    pub fn from_cog(cog: GeoTiffReader) -> Result<Self> {
-        let web_tiles = WebTiles::from_cog_metadata(cog.metadata())?;
+    pub fn new(cog_meta: GeoTiffMetadata) -> Result<Self> {
+        let web_tiles = WebTiles::from_cog_metadata(&cog_meta)?;
 
-        Ok(Self { web_tiles, cog })
+        Ok(Self { web_tiles, cog_meta })
     }
 
     pub fn tile_info(&self) -> WebTileInfo {
         WebTileInfo {
             min_zoom: self.web_tiles.min_zoom(),
             max_zoom: self.web_tiles.max_zoom(),
-            tile_size: self.cog.metadata().chunk_row_length().unwrap_or(Tile::TILE_SIZE),
+            tile_size: self.cog_meta.chunk_row_length(),
             data_type: self.data_type(),
             bounds: self.data_bounds(),
-            statistics: self.cog.metadata().statistics.clone(),
+            statistics: self.cog_meta.statistics.clone(),
         }
     }
 
@@ -351,7 +347,7 @@ impl WebTilesReader {
     }
 
     pub fn cog_metadata(&self) -> &GeoTiffMetadata {
-        self.cog.metadata()
+        &self.cog_meta
     }
 
     /// For a given tile, returns which cog tiles are used to construct the tile data.
@@ -391,16 +387,16 @@ impl WebTilesReader {
     pub fn parse_tile_data(&self, tile_source: &TileSource, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
         match tile_source {
             TileSource::Aligned(_) => Ok(match self.data_type() {
-                ArrayDataType::Uint8 => AnyDenseArray::U8(self.cog.parse_tile_data_as::<u8>(cog_chunks[0])?),
-                ArrayDataType::Uint16 => AnyDenseArray::U16(self.cog.parse_tile_data_as::<u16>(cog_chunks[0])?),
-                ArrayDataType::Uint32 => AnyDenseArray::U32(self.cog.parse_tile_data_as::<u32>(cog_chunks[0])?),
-                ArrayDataType::Uint64 => AnyDenseArray::U64(self.cog.parse_tile_data_as::<u64>(cog_chunks[0])?),
-                ArrayDataType::Int8 => AnyDenseArray::I8(self.cog.parse_tile_data_as::<i8>(cog_chunks[0])?),
-                ArrayDataType::Int16 => AnyDenseArray::I16(self.cog.parse_tile_data_as::<i16>(cog_chunks[0])?),
-                ArrayDataType::Int32 => AnyDenseArray::I32(self.cog.parse_tile_data_as::<i32>(cog_chunks[0])?),
-                ArrayDataType::Int64 => AnyDenseArray::I64(self.cog.parse_tile_data_as::<i64>(cog_chunks[0])?),
-                ArrayDataType::Float32 => AnyDenseArray::F32(self.cog.parse_tile_data_as::<f32>(cog_chunks[0])?),
-                ArrayDataType::Float64 => AnyDenseArray::F64(self.cog.parse_tile_data_as::<f64>(cog_chunks[0])?),
+                ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(cog_chunks[0])?),
+                ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(cog_chunks[0])?),
+                ArrayDataType::Uint32 => AnyDenseArray::U32(self.parse_tile_data_as::<u32>(cog_chunks[0])?),
+                ArrayDataType::Uint64 => AnyDenseArray::U64(self.parse_tile_data_as::<u64>(cog_chunks[0])?),
+                ArrayDataType::Int8 => AnyDenseArray::I8(self.parse_tile_data_as::<i8>(cog_chunks[0])?),
+                ArrayDataType::Int16 => AnyDenseArray::I16(self.parse_tile_data_as::<i16>(cog_chunks[0])?),
+                ArrayDataType::Int32 => AnyDenseArray::I32(self.parse_tile_data_as::<i32>(cog_chunks[0])?),
+                ArrayDataType::Int64 => AnyDenseArray::I64(self.parse_tile_data_as::<i64>(cog_chunks[0])?),
+                ArrayDataType::Float32 => AnyDenseArray::F32(self.parse_tile_data_as::<f32>(cog_chunks[0])?),
+                ArrayDataType::Float64 => AnyDenseArray::F64(self.parse_tile_data_as::<f64>(cog_chunks[0])?),
             }),
             TileSource::Unaligned(tile_sources) => Ok(match self.data_type() {
                 ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
@@ -418,12 +414,39 @@ impl WebTilesReader {
     }
 
     #[simd_bounds]
+    /// Parses the tile data from a byte slice into a `DenseArray<T>`.
+    /// Only call this for parsing tiled data layout.
+    fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(&self, tile_data: &[u8]) -> Result<DenseArray<T>> {
+        assert!(self.cog_meta.is_tiled(), "expected tiled data layout");
+        let tile_size = self.cog_meta.chunk_row_length();
+
+        if T::TYPE != self.cog_meta.data_type {
+            return Err(Error::InvalidArgument(format!(
+                "Tile data type mismatch: expected {:?}, got {:?}",
+                self.cog_meta.data_type,
+                T::TYPE
+            )));
+        }
+
+        let tile_data = tileio::parse_tile_data(
+            tile_size,
+            self.cog_meta.geo_reference.nodata(),
+            self.cog_meta.compression,
+            self.cog_meta.predictor,
+            None,
+            tile_data,
+        )?;
+
+        Ok(tile_data)
+    }
+
+    #[simd_bounds]
     fn merge_tile_sources<T: ArrayNum + HorizontalUnpredictable>(
         &self,
         tile_sources: &[(TiffChunkLocation, CutOut)],
         cog_chunks: &[&[u8]],
     ) -> Result<DenseArray<T>> {
-        let tile_size = self.cog_metadata().chunk_row_length()? as usize;
+        let tile_size = self.cog_metadata().chunk_row_length() as usize;
 
         let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(
             RasterSize::square(tile_size as i32),
@@ -435,7 +458,7 @@ impl WebTilesReader {
                 return Ok(DenseArray::empty());
             }
 
-            let tile_cutout = self.cog.parse_tile_data_as::<T>(cog_chunck)?;
+            let tile_cutout = self.parse_tile_data_as::<T>(cog_chunck)?;
             let dest_window = Window::new(
                 Cell::from_row_col(cutout.dst_row_offset, cutout.dst_col_offset),
                 RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
@@ -462,7 +485,7 @@ impl WebTilesReader {
     ) -> Result<Option<DenseArray<T>>> {
         if let Some(tile_source) = self.tile_source(tile) {
             match tile_source {
-                TileSource::Aligned(cog_tile) => Ok(Some(self.cog.read_tile_as::<T>(cog_tile, &mut reader)?)),
+                TileSource::Aligned(cog_tile) => Ok(Some(self.read_tile_as::<T>(cog_tile, &mut reader)?)),
                 TileSource::Unaligned(tile_sources) => {
                     let cog_chunks: Vec<Vec<u8>> = tile_sources
                         .iter()
@@ -480,6 +503,30 @@ impl WebTilesReader {
         } else {
             Ok(None)
         }
+    }
+
+    #[simd_bounds]
+    pub fn read_tile_as<T: ArrayNum + HorizontalUnpredictable>(
+        &self,
+        chunk: &TiffChunkLocation,
+        mut reader: impl Read + Seek,
+    ) -> Result<DenseArray<T>> {
+        if T::TYPE != self.cog_meta.data_type {
+            return Err(Error::InvalidArgument(format!(
+                "Tile data type mismatch: expected {:?}, got {:?}",
+                self.cog_meta.data_type,
+                T::TYPE
+            )));
+        }
+
+        tileio::read_tile_data(
+            chunk,
+            self.cog_meta.chunk_row_length(),
+            self.cog_meta.geo_reference.nodata(),
+            self.cog_meta.compression,
+            self.cog_meta.predictor,
+            &mut reader,
+        )
     }
 }
 
@@ -536,7 +583,7 @@ mod tests {
         {
             // Allow sparse tiles, this would reduce the size if the bounds
             create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
-            let reader = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let reader = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
 
             let data_bounds = reader.data_bounds();
             assert_relative_eq!(data_bounds.northwest(), Tile { z: 10, x: 519, y: 340 }.upper_left());
@@ -546,7 +593,7 @@ mod tests {
         {
             // Don't allow sparse tiles, The bounds should now match the extent of the lowest zoom level
             create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, false)?;
-            let reader = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let reader = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
             assert!(reader.tile_info().max_zoom == 10);
 
             let data_bounds = reader.data_bounds();
@@ -568,7 +615,7 @@ mod tests {
         let reference_tile_data = {
             // Create a test COG file without compression
             create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
 
             let mut reader = File::open(&output)?;
             cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("None_u8").unwrap()
@@ -577,7 +624,7 @@ mod tests {
         {
             // Create a test COG file with LZW compression and no predictor
             create_test_cog(&input, &output, COG_TILE_SIZE, Some(Compression::Lzw), None, None, true)?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
 
             let mut reader = File::open(&output)?;
             let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader).expect("LZW_u8").unwrap();
@@ -595,7 +642,7 @@ mod tests {
                 None,
                 true,
             )?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
             assert_eq!(cog.cog_metadata().predictor, Some(Predictor::Horizontal));
 
             let mut reader = File::open(&output)?;
@@ -617,7 +664,7 @@ mod tests {
                 Some(ArrayDataType::Int32),
                 true,
             )?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
             assert_eq!(cog.cog_metadata().predictor, Some(Predictor::Horizontal));
 
             let mut reader = File::open(&output)?;
@@ -640,7 +687,7 @@ mod tests {
                 Some(ArrayDataType::Float32),
                 true,
             )?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
             assert_eq!(cog.cog_metadata().predictor, None);
             assert_eq!(cog.tile_info().max_zoom, 10);
 
@@ -665,7 +712,7 @@ mod tests {
                 Some(ArrayDataType::Float32),
                 true,
             )?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
             assert_eq!(cog.cog_metadata().predictor, Some(Predictor::FloatingPoint));
 
             let mut reader = File::open(&output)?;
@@ -688,7 +735,7 @@ mod tests {
                 Some(ArrayDataType::Float64),
                 true,
             )?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
             assert_eq!(cog.cog_metadata().predictor, Some(Predictor::FloatingPoint));
 
             let mut reader = File::open(&output)?;
@@ -708,7 +755,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
-        let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&cog_path)?)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
         let meta = cog.tile_info();
         assert_eq!(meta.min_zoom, 7);
@@ -814,10 +861,10 @@ mod tests {
         let reference_tile_data = {
             // Create a test COG file without compression
             create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
 
             let meta = cog.cog_metadata();
-            assert_eq!(meta.chunk_row_length()?, COG_TILE_SIZE);
+            assert_eq!(meta.chunk_row_length(), COG_TILE_SIZE);
             assert_eq!(meta.data_type, ArrayDataType::Uint8);
             assert_eq!(cog.tile_info().min_zoom, 7);
             assert_eq!(cog.tile_info().max_zoom, 9);
@@ -829,7 +876,7 @@ mod tests {
         {
             // Create a test COG file with LZW compression and no predictor
             create_test_cog(&input, &output, COG_TILE_SIZE, Some(Compression::Lzw), None, None, true)?;
-            let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&output)?)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
 
             let mut reader = File::open(&output)?;
             let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, &mut reader)?;
@@ -843,7 +890,7 @@ mod tests {
     fn generate_tiles_for_extent_unaligned_256px() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
-        let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&cog_path)?)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
         let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, 7, COG_TILE_SIZE);
         assert_eq!(tiles.len(), 6);
@@ -866,7 +913,7 @@ mod tests {
     fn generate_tiles_for_extent_unaligned_512px() -> Result<()> {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE * 2)?;
-        let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&cog_path)?)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
         let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, 7, COG_TILE_SIZE * 2);
         assert_eq!(tiles.len(), 6);
@@ -890,16 +937,16 @@ mod tests {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
 
-        let cog_accessor = GeoTiffReader::from_file(&cog_path)?;
+        let meta = GeoTiffMetadata::from_file(&cog_path)?;
         let zoom_level_8_index = 2;
-        let cog_tiles = cog_accessor.pyramid_info(zoom_level_8_index).unwrap().chunk_locations.clone();
+        let cog_tiles = meta.pyramids.get(zoom_level_8_index).unwrap().chunk_locations.clone();
 
-        let cog = WebTilesReader::from_cog(cog_accessor)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
         let bounds = super::create_cog_tile_web_mercator_bounds(
             cog.pyramid_info(8).unwrap(),
             &cog.cog_metadata().geo_reference,
             8,
-            cog.cog_metadata().chunk_row_length()?,
+            cog.cog_metadata().chunk_row_length(),
         )?;
 
         {
@@ -924,7 +971,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
-        let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(&cog_path)?)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
         let tile_sources = cog.zoom_level_tile_sources(8).expect("Zoom level 8 not found");
         let web_tile = Tile { z: 8, x: 132, y: 85 };
@@ -958,10 +1005,10 @@ mod tests {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE * 2)?;
-        let cog_accessor = GeoTiffReader::from_file(&cog_path)?;
+        let meta = GeoTiffMetadata::from_file(&cog_path)?;
         let zoom_level_7_index = 2;
-        let cog_tiles = cog_accessor.pyramid_info(zoom_level_7_index).unwrap().chunk_locations.clone();
-        let cog = WebTilesReader::from_cog(cog_accessor)?;
+        let cog_tiles = meta.pyramids.get(zoom_level_7_index).unwrap().chunk_locations.clone();
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
         assert_eq!(cog.tile_info().max_zoom, 9);
 

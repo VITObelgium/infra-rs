@@ -2,7 +2,7 @@ use num::NumCast;
 
 use crate::{
     AnyDenseArray, ArrayDataType, CellSize, Error, GeoReference, Point, RasterSize, Result, Tile,
-    cog::{GeoTiffReader, WebTilesReader},
+    cog::{GeoTiffMetadata, GeoTiffReader, WebTilesReader},
     crs,
     nodata::Nodata as _,
 };
@@ -12,7 +12,7 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
     let cog = GeoTiffReader::from_file(cog_path)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
-    let tile_size = cog.metadata().chunk_row_length()?;
+    let tile_size = cog.metadata().chunk_row_length();
     let cell_size = cog.metadata().geo_reference.cell_size_x();
 
     let main_zoom_level = Tile::zoom_level_for_pixel_size(cell_size, crate::ZoomLevelStrategy::Closest, tile_size);
@@ -35,16 +35,16 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
 
     for (index, cog_tile) in pyramid.chunk_locations.iter().enumerate() {
         let tile_data = match cog.metadata().data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(cog.read_tile_as::<u8>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(cog.read_tile_as::<u16>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(cog.read_tile_as::<u32>(cog_tile, &mut reader)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(cog.read_tile_as::<u64>(cog_tile, &mut reader)?),
-            ArrayDataType::Int8 => AnyDenseArray::I8(cog.read_tile_as::<i8>(cog_tile, &mut reader)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(cog.read_tile_as::<i16>(cog_tile, &mut reader)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(cog.read_tile_as::<i32>(cog_tile, &mut reader)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(cog.read_tile_as::<i64>(cog_tile, &mut reader)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(cog.read_tile_as::<f32>(cog_tile, &mut reader)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(cog.read_tile_as::<f64>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint8 => AnyDenseArray::U8(cog.read_chunk_as::<u8>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(cog.read_chunk_as::<u16>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(cog.read_chunk_as::<u32>(cog_tile, &mut reader)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(cog.read_chunk_as::<u64>(cog_tile, &mut reader)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(cog.read_chunk_as::<i8>(cog_tile, &mut reader)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(cog.read_chunk_as::<i16>(cog_tile, &mut reader)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(cog.read_chunk_as::<i32>(cog_tile, &mut reader)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(cog.read_chunk_as::<i64>(cog_tile, &mut reader)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(cog.read_chunk_as::<f32>(cog_tile, &mut reader)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(cog.read_chunk_as::<f64>(cog_tile, &mut reader)?),
         };
 
         if index % tiles_wide == 0 {
@@ -73,10 +73,10 @@ pub fn dump_cog_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Re
 }
 
 pub fn dump_web_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
-    let cog = WebTilesReader::from_cog(GeoTiffReader::from_file(cog_path)?)?;
+    let cog = WebTilesReader::new(GeoTiffMetadata::from_file(cog_path)?)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
-    let tile_size = cog.cog_metadata().chunk_row_length()?;
+    let tile_size = cog.cog_metadata().chunk_row_length();
 
     for tile in cog
         .zoom_level_tile_sources(zoom_level)

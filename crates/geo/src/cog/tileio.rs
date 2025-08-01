@@ -43,10 +43,13 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
     cutout: Option<&CutOut>,
     chunk_data: &[u8],
 ) -> Result<DenseArray<T>> {
-    let mut meta = RasterMetadata::sized_with_nodata(RasterSize::square(tile_size as i32), nodata);
-    let mut tile_data = AlignedVecUnderConstruction::new(tile_size as usize * tile_size as usize);
+    let raster_size = RasterSize::square(tile_size as i32);
+    let mut meta = RasterMetadata::sized_with_nodata(raster_size, nodata);
+    let mut tile_data = AlignedVecUnderConstruction::new(raster_size.cell_count());
 
-    parse_chunk_data_into_buffer(tile_size, compression, predictor, chunk_data, unsafe { tile_data.as_slice_mut() })?;
+    parse_chunk_data_into_buffer(raster_size.cols.count() as u32, compression, predictor, chunk_data, unsafe {
+        tile_data.as_slice_mut()
+    })?;
 
     let mut arr = DenseArray::<T>::new_init_nodata(meta, unsafe { tile_data.assume_init() })?;
 

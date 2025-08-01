@@ -72,6 +72,28 @@ pub struct GeoTiffMetadata {
 }
 
 impl GeoTiffMetadata {
+    pub fn from_file(path: &Path) -> Result<Self> {
+        let mut buffer_factor = 1;
+        // This could be improved to reuse the existing buffer and append to it when the buffer is not large enough
+        loop {
+            let reader = CogHeaderReader::from_stream(File::open(path)?, io::COG_HEADER_SIZE * buffer_factor)?;
+            let mut decoder = TiffDecoder::new(reader)?;
+
+            let res = decoder.parse_cog_header();
+            match res {
+                Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
+                    if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
+                {
+                    // If the error is an EOF, we need more data to parse the header
+                    buffer_factor *= 2;
+                    log::debug!("Cog header dit not fit in default header size, retry with header size factor {buffer_factor}");
+                }
+                Ok(meta) => return Ok(meta),
+                Err(e) => return Err(e),
+            }
+        }
+    }
+
     pub fn from_buffer(buf: Vec<u8>) -> Result<Self> {
         let reader = CogHeaderReader::from_buffer(buf)?;
         let mut decoder = TiffDecoder::new(reader)?;
@@ -79,10 +101,10 @@ impl GeoTiffMetadata {
         decoder.parse_cog_header()
     }
 
-    pub fn chunk_row_length(&self) -> Result<u32> {
+    pub fn chunk_row_length(&self) -> u32 {
         match self.data_layout {
-            RasterDataLayout::Tiled(size) => Ok(size),
-            RasterDataLayout::Striped(_) => Ok(self.geo_reference.columns().count() as u32),
+            RasterDataLayout::Tiled(size) => size,
+            RasterDataLayout::Striped(_) => self.geo_reference.columns().count() as u32,
         }
     }
 
@@ -130,11 +152,6 @@ impl GeoTiffReader {
                 Err(e) => return Err(e),
             }
         }
-    }
-
-    /// Create a `CogTileIndex` from a buffer containing the COG header the size of the buffer must match the `io::COG_HEADER_SIZE`.
-    pub fn from_cog_header(buffer: Vec<u8>) -> Result<Self> {
-        Self::new(CogHeaderReader::from_buffer(buffer)?)
     }
 
     fn new(reader: CogHeaderReader) -> Result<Self> {
@@ -232,12 +249,12 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    pub fn read_tile_as<T: ArrayNum + HorizontalUnpredictable>(
+    pub fn read_chunk_as<T: ArrayNum + HorizontalUnpredictable>(
         &self,
         chunk: &TiffChunkLocation,
         mut reader: impl Read + Seek,
     ) -> Result<DenseArray<T>> {
-        let chunk_row_size = self.meta.chunk_row_length()?;
+        let chunk_row_size = self.meta.chunk_row_length();
 
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
@@ -264,7 +281,7 @@ impl GeoTiffReader {
         reader: &mut (impl Read + Seek),
         chunk_data: &mut [T],
     ) -> Result<()> {
-        let row_length = self.meta.chunk_row_length()?;
+        let row_length = self.meta.chunk_row_length();
 
         if T::TYPE != self.meta.data_type {
             return Err(Error::InvalidArgument(format!(
@@ -285,33 +302,6 @@ impl GeoTiffReader {
         )?;
 
         Ok(())
-    }
-
-    #[simd_bounds]
-    /// Parses the tile data from a byte slice into a `DenseArray<T>`.
-    /// Only call this for parsing tiled data layout.
-    pub fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(&self, tile_data: &[u8]) -> Result<DenseArray<T>> {
-        assert!(self.meta.is_tiled(), "expected tiled data layout");
-        let tile_size = self.meta.chunk_row_length()?;
-
-        if T::TYPE != self.meta.data_type {
-            return Err(Error::InvalidArgument(format!(
-                "Tile data type mismatch: expected {:?}, got {:?}",
-                self.meta.data_type,
-                T::TYPE
-            )));
-        }
-
-        let tile_data = tileio::parse_tile_data(
-            tile_size,
-            self.meta.geo_reference.nodata(),
-            self.meta.compression,
-            self.meta.predictor,
-            None,
-            tile_data,
-        )?;
-
-        Ok(tile_data)
     }
 }
 
@@ -411,15 +401,15 @@ mod tests {
             assert!(!pyramid.chunk_locations.is_empty(), "Pyramid tile locations should not be empty");
 
             for tile in &pyramid.chunk_locations {
-                if tile.size == 0 {
+                if tile.is_sparse() {
                     continue; // Skip empty tiles
                 }
 
-                let tile_data = cog.read_tile_as::<u8>(tile, &mut reader)?;
+                let tile_data = cog.read_chunk_as::<u8>(tile, &mut reader)?;
 
                 assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
 
-                let tile_data = cog.read_tile_as::<u8>(tile, &mut reader)?;
+                let tile_data = cog.read_chunk_as::<u8>(tile, &mut reader)?;
                 assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
             }
         }
@@ -575,9 +565,9 @@ mod tests {
                 .iter()
                 .zip(pyramid_lzw.chunk_locations.iter())
             {
-                let tile_data_no_compression = cog_no_compression.read_tile_as::<u8>(tile, &mut no_compression_reader).unwrap();
+                let tile_data_no_compression = cog_no_compression.read_chunk_as::<u8>(tile, &mut no_compression_reader).unwrap();
                 let tile_data_lzw_compression = cog_lzw_compression
-                    .read_tile_as::<u8>(tile_lzw, &mut lzw_compression_reader)
+                    .read_chunk_as::<u8>(tile_lzw, &mut lzw_compression_reader)
                     .unwrap();
 
                 assert_eq!(tile_data_no_compression, tile_data_lzw_compression);
