@@ -22,13 +22,13 @@ pub struct GeoTiffMetadata {
 impl GeoTiffMetadata {
     pub fn from_file(path: &Path) -> Result<Self> {
         let mut file_reader = File::open(path)?;
-        if io::stream_is_cog(&mut file_reader) {
-            file_reader.seek(std::io::SeekFrom::Start(0))?;
+        let mut cog_buffer_reader = CogHeaderReader::from_stream(&mut file_reader, io::COG_HEADER_SIZE)?;
+        if io::stream_is_cog(&mut cog_buffer_reader) {
+            cog_buffer_reader.seek(std::io::SeekFrom::Start(0))?;
 
             // This is a COG, try to read the tiff metadata with as litte io calls as possible by using the `CogHeaderReader`.
             // This errors however if a read occurs that is larger than the default header size.
-            // In that case we will increase the header size until we can read the header successfully.
-            let mut cog_buffer_reader = CogHeaderReader::from_stream(&mut file_reader, io::COG_HEADER_SIZE)?;
+            // In that case we will increase the buffer size until we can read the header successfully.
 
             loop {
                 let res = TiffDecoder::new(&mut cog_buffer_reader).and_then(|mut decoder| decoder.parse_cog_header());
