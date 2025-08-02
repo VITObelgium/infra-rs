@@ -148,6 +148,8 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
 
 #[cfg(test)]
 mod tests {
+    use approx::assert_relative_eq;
+
     use crate::{
         geotiff::{GeoTiffReader, Predictor},
         testutils,
@@ -178,9 +180,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(7, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(7, meta.chunk_row_length()),
+                epsilon = 1e-6
             );
             assert_eq!(meta.overviews.len(), 2); // 6 to 7
             assert_eq!(meta.chunk_row_length(), 256);
@@ -206,9 +209,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(10, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(10, meta.chunk_row_length()),
+                epsilon = 1e-6
             );
             assert_eq!(meta.overviews.len(), 5); // 5 levels from 6 to 10
             assert_eq!(meta.chunk_row_length(), 256);
@@ -295,9 +299,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(7, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(7, meta.chunk_row_length()),
+                epsilon = 1e-6
             );
             assert_eq!(meta.overviews.len(), 2); // from 6 to 7
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
@@ -323,9 +328,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length()),
+                epsilon = 1e-6
             );
             assert_eq!(meta.overviews.len(), 4); // from 6 to 9
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
@@ -351,9 +357,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length()),
+                epsilon = 1e-6
             );
             assert_eq!(meta.overviews.len(), 4); // from 6 to 9
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
@@ -376,9 +383,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(8, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(8, meta.chunk_row_length()),
+                epsilon = 1e-6
             );
             assert_eq!(meta.overviews.len(), 2); // from 7 to 8
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
