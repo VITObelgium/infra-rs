@@ -2,7 +2,7 @@ use std::fs::File;
 use std::io::Seek;
 use std::path::Path;
 
-use crate::geotiff::reader::PyramidInfo;
+use crate::geotiff::reader::TiffOverview;
 use crate::geotiff::{ChunkDataLayout, io::CogHeaderReader};
 use crate::geotiff::{Compression, Predictor, TiffStats, decoder, io};
 use crate::{ArrayDataType, Error, GeoReference, Result};
@@ -16,7 +16,7 @@ pub struct GeoTiffMetadata {
     pub predictor: Option<Predictor>,
     pub statistics: Option<TiffStats>,
     pub geo_reference: GeoReference,
-    pub pyramids: Vec<PyramidInfo>,
+    pub overviews: Vec<TiffOverview>,
 }
 
 impl GeoTiffMetadata {
@@ -118,7 +118,7 @@ mod tests {
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
-        assert_eq!(meta.pyramids.len(), 4); // zoom levels 7 to 10
+        assert_eq!(meta.overviews.len(), 4); // zoom levels 7 to 10
 
         Ok(())
     }
@@ -149,7 +149,7 @@ mod tests {
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
-        assert_eq!(meta.pyramids.len(), 7); // zoom levels 4 to 10
+        assert_eq!(meta.overviews.len(), 7); // zoom levels 4 to 10
 
         Ok(())
     }
@@ -180,7 +180,7 @@ mod tests {
         assert_eq!(meta.predictor, None);
         assert_eq!(meta.geo_reference.nodata(), Some(255.0));
         assert_eq!(meta.geo_reference.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
-        assert_eq!(meta.pyramids.len(), 1);
+        assert_eq!(meta.overviews.len(), 1);
 
         Ok(())
     }

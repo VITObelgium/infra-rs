@@ -37,7 +37,7 @@ impl TiffChunkLocation {
 }
 
 #[derive(Debug, Clone)]
-pub struct PyramidInfo {
+pub struct TiffOverview {
     pub raster_size: RasterSize,
     pub chunk_locations: Vec<TiffChunkLocation>,
 }
@@ -66,8 +66,8 @@ impl GeoTiffReader {
         &self.meta
     }
 
-    pub fn pyramid_info(&self, index: usize) -> Option<&PyramidInfo> {
-        self.meta.pyramids.get(index)
+    pub fn overview_info(&self, index: usize) -> Option<&TiffOverview> {
+        self.meta.overviews.get(index)
     }
 
     fn geo_ref(&self) -> &GeoReference {
@@ -129,32 +129,32 @@ impl GeoTiffReader {
 
     #[simd_bounds]
     pub fn read_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(&mut self) -> Result<DenseArray<T, M>> {
-        self.read_pyramid_as(0)
+        self.read_overview_as(0)
     }
 
     #[simd_bounds]
-    /// Reads a pyramid raster at the specified index
-    /// pyramid 0 is the full resolution raster, and each subsequent pyramid is a downsampled version.
-    pub fn read_pyramid_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+    /// Reads an overview raster at the specified index
+    /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
+    pub fn read_overview_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
         &mut self,
-        pyramid_index: usize,
+        overview_index: usize,
     ) -> Result<DenseArray<T, M>> {
-        if let Some(pyramid) = self.meta.pyramids.get(pyramid_index).cloned() {
-            if pyramid.chunk_locations.is_empty() {
+        if let Some(overview) = self.meta.overviews.get(overview_index).cloned() {
+            if overview.chunk_locations.is_empty() {
                 return Err(Error::Runtime("No tiles available in the geotiff".into()));
             }
 
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    return self.read_tiled_raster_as::<T, M>(&pyramid.chunk_locations, tile_size);
+                    return self.read_tiled_raster_as::<T, M>(&overview.chunk_locations, tile_size);
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
-                    return self.read_striped_raster_as::<T, M>(&pyramid.chunk_locations, rows_per_strip);
+                    return self.read_striped_raster_as::<T, M>(&overview.chunk_locations, rows_per_strip);
                 }
             }
         }
 
-        Err(Error::Runtime(format!("No overview available with index {pyramid_index}")))
+        Err(Error::Runtime(format!("No overview available with index {overview_index}")))
     }
 
     #[simd_bounds]
@@ -325,11 +325,11 @@ mod tests {
         let mut cog_no_compression = GeoTiffReader::from_file(&no_compression_output)?;
         let mut cog_lzw_compression = GeoTiffReader::from_file(&lzw_compression_output)?;
 
-        for pyramid_index in 0..cog_no_compression.metadata().pyramids.len() {
-            let pyramid_no_compression = cog_no_compression.read_pyramid_as::<u8, RasterMetadata>(pyramid_index)?;
-            let pyramid_lzw = cog_lzw_compression.read_pyramid_as::<u8, RasterMetadata>(pyramid_index)?;
+        for overview_index in 0..cog_no_compression.metadata().overviews.len() {
+            let overview_no_compression = cog_no_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
+            let overview_lzw = cog_lzw_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
 
-            assert_eq!(pyramid_no_compression, pyramid_lzw);
+            assert_eq!(overview_no_compression, overview_lzw);
         }
 
         Ok(())

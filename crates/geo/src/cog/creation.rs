@@ -182,7 +182,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(7, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 2); // 6 to 7
+            assert_eq!(meta.overviews.len(), 2); // 6 to 7
             assert_eq!(meta.chunk_row_length(), 256);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
@@ -210,7 +210,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(10, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 5); // 5 levels from 6 to 10
+            assert_eq!(meta.overviews.len(), 5); // 5 levels from 6 to 10
             assert_eq!(meta.chunk_row_length(), 256);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::FloatingPoint));
@@ -238,7 +238,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(10, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 5); // 5 levels from 6 to 10
+            assert_eq!(meta.overviews.len(), 5); // 5 levels from 6 to 10
             assert_eq!(meta.chunk_row_length(), 256);
         }
 
@@ -263,7 +263,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 3); // 5 levels from 7 to 9
+            assert_eq!(meta.overviews.len(), 3); // 5 levels from 7 to 9
             assert_eq!(meta.chunk_row_length(), 256);
         }
 
@@ -299,7 +299,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(7, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 2); // from 6 to 7
+            assert_eq!(meta.overviews.len(), 2); // from 6 to 7
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
@@ -327,7 +327,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 4); // from 6 to 9
+            assert_eq!(meta.overviews.len(), 4); // from 6 to 9
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
             assert_eq!(meta.compression, Some(Compression::Lzw));
             assert_eq!(meta.predictor, Some(Predictor::Horizontal));
@@ -355,7 +355,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 4); // from 6 to 9
+            assert_eq!(meta.overviews.len(), 4); // from 6 to 9
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
         }
 
@@ -380,7 +380,7 @@ mod tests {
                 meta.geo_reference.cell_size_x(),
                 Tile::pixel_size_at_zoom_level(8, meta.chunk_row_length())
             );
-            assert_eq!(meta.pyramids.len(), 2); // from 7 to 8
+            assert_eq!(meta.overviews.len(), 2); // from 7 to 8
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
         }
 

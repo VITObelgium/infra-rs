@@ -53,18 +53,18 @@ pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> R
         )));
     }
 
-    let pyramid = meta
-        .pyramids
+    let overview = meta
+        .overviews
         .get((main_zoom_level - zoom_level) as usize)
         .unwrap_or_else(|| panic!("Zoom level not available: {zoom_level}"));
 
-    let tiles_wide = (pyramid.raster_size.cols.count() as usize).div_ceil(tile_size as usize);
+    let tiles_wide = (overview.raster_size.cols.count() as usize).div_ceil(tile_size as usize);
 
     let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level, tile_size);
     let mut current_ll = meta.geo_reference.top_left();
     let mut reader = std::fs::File::open(cog_path)?;
 
-    for (index, cog_tile) in pyramid.chunk_locations.clone().iter().enumerate() {
+    for (index, cog_tile) in overview.chunk_locations.clone().iter().enumerate() {
         let tile_data = match meta.data_type {
             ArrayDataType::Uint8 => AnyDenseArray::U8(read_tile_data::<u8>(cog_tile, &meta, &mut reader)?),
             ArrayDataType::Uint16 => AnyDenseArray::U16(read_tile_data::<u16>(cog_tile, &meta, &mut reader)?),

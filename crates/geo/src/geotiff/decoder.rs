@@ -9,7 +9,7 @@ use crate::{
     ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows, crs,
     geotiff::{
         ChunkDataLayout, Compression, GeoTiffMetadata, Predictor, TiffChunkLocation, TiffStats, projectioninfo::ModelType,
-        reader::PyramidInfo, stats,
+        reader::TiffOverview, stats,
     },
 };
 
@@ -265,7 +265,7 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
     };
 
     // Now loop over the image directories to collect the tile offsets and sizes for the main raster image and all overviews.
-    let mut pyramids = Vec::new();
+    let mut overviews = Vec::new();
 
     loop {
         let image_width = decoder.get_tag_u32(Tag::ImageWidth)?;
@@ -293,7 +293,7 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
             });
         });
 
-        pyramids.push(PyramidInfo {
+        overviews.push(TiffOverview {
             raster_size: RasterSize::with_rows_cols(Rows(image_height as i32), Columns(image_width as i32)),
             chunk_locations: tile_locations,
         });
@@ -317,6 +317,6 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         predictor,
         geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
         statistics,
-        pyramids,
+        overviews,
     })
 }

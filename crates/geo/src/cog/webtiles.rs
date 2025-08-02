@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
     RasterMetadata, Result, Rows, Window, ZoomLevelStrategy,
-    geotiff::{GeoTiffMetadata, HorizontalUnpredictable, PyramidInfo, TiffChunkLocation, TiffStats, io, tileio},
+    geotiff::{GeoTiffMetadata, HorizontalUnpredictable, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -45,27 +45,27 @@ impl WebTiles {
             )));
         }
 
-        for pyramid in &meta.pyramids {
+        for overview in &meta.overviews {
             let top_left_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.top_left());
             let top_left_tile = Tile::for_coordinate(top_left_coordinate, zoom_level);
             let tile_aligned = top_left_tile.coordinate_pixel_offset(top_left_coordinate, tile_size) == Some((0, 0));
 
             if tile_aligned {
-                let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), pyramid.raster_size, tile_size, zoom_level);
-                tiles.into_iter().zip(&pyramid.chunk_locations).for_each(|(web_tile, cog_tile)| {
+                let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
+                tiles.into_iter().zip(&overview.chunk_locations).for_each(|(web_tile, cog_tile)| {
                     zoom_levels[web_tile.z as usize].insert(web_tile, TileSource::Aligned(*cog_tile));
                 });
             } else {
-                let pyramid_geo_ref = GeoReference::with_origin(
+                let overview_geo_ref = GeoReference::with_origin(
                     "EPSG:3857",
-                    pyramid.raster_size,
+                    overview.raster_size,
                     meta.geo_reference.bottom_left(),
                     CellSize::square(Tile::pixel_size_at_zoom_level(zoom_level, tile_size)),
                     Option::<f64>::None,
                 );
 
                 let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level, tile_size);
-                let cog_tile_bounds = create_cog_tile_web_mercator_bounds(pyramid, &pyramid_geo_ref, zoom_level, tile_size).unwrap();
+                let cog_tile_bounds = create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size).unwrap();
 
                 for tile in &tiles {
                     let mut tile_sources = Vec::new();
@@ -250,42 +250,42 @@ fn change_georef_cell_size(geo_reference: &GeoReference, cell_size: CellSize) ->
 }
 
 fn create_cog_tile_web_mercator_bounds(
-    pyramid: &PyramidInfo,
+    overview: &TiffOverview,
     geo_reference: &GeoReference, // georeference of the full cog image
     zoom_level: i32,
     tile_size: u32,
 ) -> Result<Vec<(TiffChunkLocation, GeoReference)>> {
-    let mut web_tiles = Vec::with_capacity(pyramid.chunk_locations.len());
+    let mut web_tiles = Vec::with_capacity(overview.chunk_locations.len());
 
     let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(zoom_level, tile_size));
     let geo_ref_zoom_level = change_georef_cell_size(geo_reference, cell_size);
 
-    let tiles_wide = (pyramid.raster_size.cols.count() as u32).div_ceil(tile_size) as usize;
-    let tiles_high = (pyramid.raster_size.rows.count() as u32).div_ceil(tile_size) as usize;
+    let tiles_wide = (overview.raster_size.cols.count() as u32).div_ceil(tile_size) as usize;
+    let tiles_high = (overview.raster_size.rows.count() as u32).div_ceil(tile_size) as usize;
 
-    if tiles_wide * tiles_high != pyramid.chunk_locations.len() {
+    if tiles_wide * tiles_high != overview.chunk_locations.len() {
         return Err(Error::InvalidArgument(format!(
             "Expected {} tiles, but got {}",
             tiles_wide * tiles_high,
-            pyramid.chunk_locations.len()
+            overview.chunk_locations.len()
         )));
     }
 
     let tile_size = tile_size as i32;
     for ty in 0..tiles_high {
         let mut current_source_cell = Cell::from_row_col(ty as i32 * tile_size, 0);
-        let tile_height = Rows(if current_source_cell.row + tile_size > pyramid.raster_size.rows.count() {
+        let tile_height = Rows(if current_source_cell.row + tile_size > overview.raster_size.rows.count() {
             debug_assert!(ty + 1 == tiles_high);
-            pyramid.raster_size.rows.count() - current_source_cell.row
+            overview.raster_size.rows.count() - current_source_cell.row
         } else {
             tile_size
         });
 
         for tx in 0..tiles_wide {
             current_source_cell.col = tx as i32 * tile_size;
-            let tile_width = Columns(if current_source_cell.col + tile_size > pyramid.raster_size.cols.count() {
+            let tile_width = Columns(if current_source_cell.col + tile_size > overview.raster_size.cols.count() {
                 debug_assert!(tx + 1 == tiles_wide);
-                pyramid.raster_size.cols.count() - current_source_cell.col
+                overview.raster_size.cols.count() - current_source_cell.col
             } else {
                 tile_size
             });
@@ -300,7 +300,7 @@ fn create_cog_tile_web_mercator_bounds(
                 Option::<f64>::None,
             );
 
-            let cog_tile = &pyramid.chunk_locations[ty * tiles_wide + tx];
+            let cog_tile = &overview.chunk_locations[ty * tiles_wide + tx];
             web_tiles.push((*cog_tile, cog_tile_geo_ref));
         }
     }
@@ -364,9 +364,9 @@ impl WebTilesReader {
         self.web_tiles.zoom_level_tile_sources(zoom_level)
     }
 
-    pub fn pyramid_info(&self, zoom_level: i32) -> Option<&PyramidInfo> {
-        let pyramid_index = (self.web_tiles.max_zoom() - zoom_level) as usize;
-        self.cog_metadata().pyramids.get(pyramid_index)
+    pub fn overview(&self, zoom_level: i32) -> Option<&TiffOverview> {
+        let overview_index = (self.web_tiles.max_zoom() - zoom_level) as usize;
+        self.cog_metadata().overviews.get(overview_index)
     }
 
     /// Read the tile data for the given tile using the provided reader.
@@ -934,11 +934,11 @@ mod tests {
 
         let meta = GeoTiffMetadata::from_file(&cog_path)?;
         let zoom_level_8_index = 2;
-        let cog_tiles = meta.pyramids.get(zoom_level_8_index).unwrap().chunk_locations.clone();
+        let cog_tiles = meta.overviews.get(zoom_level_8_index).unwrap().chunk_locations.clone();
 
         let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
         let bounds = super::create_cog_tile_web_mercator_bounds(
-            cog.pyramid_info(8).unwrap(),
+            cog.overview(8).unwrap(),
             &cog.cog_metadata().geo_reference,
             8,
             cog.cog_metadata().chunk_row_length(),
@@ -1002,7 +1002,7 @@ mod tests {
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE * 2)?;
         let meta = GeoTiffMetadata::from_file(&cog_path)?;
         let zoom_level_7_index = 2;
-        let cog_tiles = meta.pyramids.get(zoom_level_7_index).unwrap().chunk_locations.clone();
+        let cog_tiles = meta.overviews.get(zoom_level_7_index).unwrap().chunk_locations.clone();
         let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
         assert_eq!(cog.tile_info().max_zoom, 9);
