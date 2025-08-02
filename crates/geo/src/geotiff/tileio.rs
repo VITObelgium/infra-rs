@@ -1,3 +1,6 @@
+/// Low level tile reading functions for Cloud Optimized GeoTIFFs (COGs).
+/// Use for reading or parsing single cog tiles to `DenseArray<T>`
+/// Clients should use higher-level functions in `cog` module for reading COGs.
 use std::io::{Read, Seek};
 
 use inf::allocate::{self, AlignedVecUnderConstruction};
