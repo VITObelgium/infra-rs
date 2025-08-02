@@ -1,3 +1,6 @@
+/// Low level tiff chunk reading functions
+/// Should only be needed for specific use cases.
+/// Normal clients should use higher-level functions in `cog` module for reading COGs.
 use crate::{
     ArrayDataType, ArrayNum,
     geotiff::{
@@ -37,9 +40,9 @@ pub fn stream_is_cog(stream: &mut impl Read) -> bool {
     GdalGhostData::from_tiff_header_buffer(&header).is_some_and(|ghost| ghost.is_cog())
 }
 
-/// This reader buffers the first 64 KiB of the source stream, which is usually sufficient for reading the COG header.
+/// This reader buffers the first x bytes of the source stream, which is usually sufficient for reading the COG header.
 /// This way multiple io calls are avoided when reading the header.
-/// Read operations outside of the header will be redirected to the underlying file stream.
+/// Read operations outside of the header will cause `UnexpectedEof` error.
 pub struct CogHeaderReader {
     buffer: Vec<u8>,
     pos: usize,
