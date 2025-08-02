@@ -3,8 +3,8 @@ use std::io::Seek;
 use std::path::Path;
 
 use crate::geotiff::reader::PyramidInfo;
-use crate::geotiff::{ChunkDataLayout, decoder::TiffDecoder, io::CogHeaderReader};
-use crate::geotiff::{Compression, Predictor, TiffStats, io};
+use crate::geotiff::{ChunkDataLayout, io::CogHeaderReader};
+use crate::geotiff::{Compression, Predictor, TiffStats, decoder, io};
 use crate::{ArrayDataType, Error, GeoReference, Result};
 
 #[derive(Debug, Clone)]
@@ -31,7 +31,7 @@ impl GeoTiffMetadata {
             // In that case we will increase the buffer size until we can read the header successfully.
 
             loop {
-                let res = TiffDecoder::new(&mut cog_buffer_reader).and_then(|mut decoder| decoder.parse_cog_header());
+                let res = decoder::parse_geotiff_metadata(&mut cog_buffer_reader);
 
                 match res {
                     Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
@@ -47,16 +47,13 @@ impl GeoTiffMetadata {
             }
         } else {
             file_reader.seek(std::io::SeekFrom::Start(0))?;
-            let mut decoder = TiffDecoder::new(&mut file_reader)?;
-            decoder.parse_cog_header()
+            decoder::parse_geotiff_metadata(&mut file_reader)
         }
     }
 
     pub fn from_buffer(buf: Vec<u8>) -> Result<Self> {
         let mut reader = CogHeaderReader::from_buffer(buf)?;
-        let mut decoder = TiffDecoder::new(&mut reader)?;
-
-        decoder.parse_cog_header()
+        decoder::parse_geotiff_metadata(&mut reader)
     }
 
     pub fn chunk_row_length(&self) -> u32 {
