@@ -53,6 +53,11 @@ impl WebTiles {
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
                 tiles.into_iter().zip(&overview.chunk_locations).for_each(|(web_tile, cog_tile)| {
+                    let zoom_level = web_tile.z as usize;
+                    if zoom_level >= zoom_levels.len() {
+                        zoom_levels.resize(zoom_level + 1, HashMap::default());
+                    }
+
                     zoom_levels[web_tile.z as usize].insert(web_tile, TileSource::Aligned(*cog_tile));
                 });
             } else {
