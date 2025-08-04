@@ -3,7 +3,7 @@ use crate::{
     geotiff::{GeoTiffMetadata, io, utils::HorizontalUnpredictable},
 };
 
-use inf::allocate;
+use inf::{allocate, cast};
 use num::NumCast;
 use simd_macro::simd_bounds;
 
@@ -80,12 +80,14 @@ impl GeoTiffReader {
         chunks: &[TiffChunkLocation],
         tile_size: u32,
     ) -> Result<DenseArray<T, M>> {
-        let mut data = allocate::AlignedVecUnderConstruction::new(self.geo_ref().raster_size().cell_count());
+        let nodata = cast::option::<T>(self.geo_ref().nodata()).unwrap_or(T::NODATA);
+        //let mut data = allocate::AlignedVecUnderConstruction::new(self.geo_ref().raster_size().cell_count());
+        let mut data = allocate::aligned_vec_filled_with(nodata, self.geo_ref().raster_size().cell_count());
 
         let right_edge_cols = self.geo_ref().columns().count() as usize % tile_size as usize;
         let tiles_per_row = (self.geo_ref().columns().count() as usize).div_ceil(tile_size as usize);
 
-        let mut tile_buf = vec![T::NODATA; tile_size as usize * tile_size as usize];
+        let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
         for (chunk_index, chunk_offset) in chunks.iter().enumerate() {
             let col_start = (chunk_index % tiles_per_row) * tile_size as usize;
             let row_start = chunk_index / tiles_per_row;
@@ -101,12 +103,12 @@ impl GeoTiffReader {
 
                 let index_start =
                     ((row_start * tile_size as usize + tile_row_index) * self.geo_ref().columns().count() as usize) + col_start;
-                let data_slice = &mut unsafe { data.as_slice_mut() }[index_start..index_start + row_size];
+                let data_slice = &mut data[index_start..index_start + row_size];
                 data_slice.copy_from_slice(&tile_row_data[0..row_size]);
             }
         }
 
-        DenseArray::new_init_nodata(M::with_geo_reference(self.geo_ref().clone()), unsafe { data.assume_init() })
+        DenseArray::new_init_nodata(M::with_geo_reference(self.geo_ref().clone()), data )
     }
 
     #[simd_bounds]
