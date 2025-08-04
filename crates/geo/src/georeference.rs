@@ -298,12 +298,24 @@ impl GeoReference {
         (self.convert_x_to_col_fraction(x)).floor() as i32
     }
 
+    pub fn x_to_nearest_col(&self, x: f64) -> i32 {
+        (self.convert_x_to_col_fraction(x)).round() as i32
+    }
+
     pub fn y_to_row(&self, y: f64) -> i32 {
         (self.convert_y_to_row_fraction(y)).floor() as i32
     }
 
+    pub fn y_to_nearest_row(&self, y: f64) -> i32 {
+        (self.convert_y_to_row_fraction(y)).round() as i32
+    }
+
     pub fn point_to_cell(&self, p: Point<f64>) -> Cell {
         Cell::from_row_col(self.y_to_row(p.y()), self.x_to_col(p.x()))
+    }
+
+    pub fn point_to_nearest_cell(&self, p: Point<f64>) -> Cell {
+        Cell::from_row_col(self.y_to_nearest_row(p.y()), self.x_to_nearest_col(p.x()))
     }
 
     pub fn is_point_on_map(&self, p: Point<f64>) -> bool {

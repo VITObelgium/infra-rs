@@ -34,8 +34,9 @@ pub fn intersect_georeference(src_meta: &GeoReference, dst_meta: &GeoReference) 
     let intersect = src_bbox.intersection(&dst_bbox);
 
     // Calulate the cell in the source extent that corresponds to the top left cell of the intersect
-    //let intersect_top_left_cell = src_meta.point_to_cell(*intersect.top_left() + Point::new(src_cellsize.x() / 2.0, src_cellsize.y() / 2.0));
-    let intersect_top_left_cell = src_meta.point_to_cell(intersect.top_left());
+    // Take the nearest one, otherwise in case of non-integer cell sizes, we might take a cell to the left,
+    // because the cell index is e.g 32.99999999 due to floating point precision issues.
+    let intersect_top_left_cell = src_meta.point_to_nearest_cell(intersect.top_left());
 
     let result = CutOut {
         src_col_offset: intersect_top_left_cell.col,
