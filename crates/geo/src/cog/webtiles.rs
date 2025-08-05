@@ -471,6 +471,14 @@ impl WebTilesReader {
         assert!(self.cog_meta.is_tiled(), "expected tiled data layout");
         let tile_size = self.cog_meta.chunk_row_length();
 
+        if tile_data.is_empty() {
+            // Empty tile data means this is a sparse tile, return a nodata array
+            return Ok(DenseArray::filled_with_nodata(RasterMetadata::sized(
+                RasterSize::square(tile_size as i32),
+                T::TYPE,
+            )));
+        }
+
         if T::TYPE != self.cog_meta.data_type {
             return Err(Error::InvalidArgument(format!(
                 "Tile data type mismatch: expected {:?}, got {:?}",
@@ -506,7 +514,7 @@ impl WebTilesReader {
 
         for ((cog_location, cutout), cog_chunck) in tile_sources.iter().zip(cog_chunks) {
             if cog_location.is_sparse() {
-                return Ok(DenseArray::empty());
+                continue; // Skip sparse tiles, they are already filled with nodata
             }
 
             let tile_cutout = self.parse_tile_data_as::<T>(cog_chunck)?;
