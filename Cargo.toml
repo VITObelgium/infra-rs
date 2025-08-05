@@ -1,14 +1,14 @@
 [package]
 name = "infra-rs"
-version = "0.2.1"
+version = "2025.8.6"
 edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
-    "gdal[core,netcdf,zstd]",
-    "hdf5[core,zlib]",
-    "netcdf-c[core,netcdf-4,hdf5]",
-    "tiff[core,lzma,zstd]",
+  "gdal[core,netcdf,zstd]",
+  "hdf5[core,zlib]",
+  "netcdf-c[core,netcdf-4,hdf5]",
+  "tiff[core,lzma,zstd]",
 ] # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
 overlay-triplets-path = "vcpkg-overlay/triplets"
@@ -23,16 +23,16 @@ x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 
 [workspace]
 members = [
-    "crates/geo",
-    "crates/geo/vector_derive",
-    "crates/inf",
-    "crates/raster-tile",
-    "crates/sqlite",
-    "crates/tiler",
-    "tools/creatembtiles",
-    "tools/createcog",
-    "tools/tiles2raster",
-    "tools/tileserver",
+  "crates/geo",
+  "crates/geo/vector_derive",
+  "crates/inf",
+  "crates/raster-tile",
+  "crates/sqlite",
+  "crates/tiler",
+  "tools/creatembtiles",
+  "tools/createcog",
+  "tools/tiles2raster",
+  "tools/tileserver",
 ]
 
 [dependencies]

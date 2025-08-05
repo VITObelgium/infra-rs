@@ -3,7 +3,7 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      - "v*"
 
 env:
   CARGO_TERM_COLOR: always
@@ -12,20 +12,23 @@ jobs:
   create-release:
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
-      release_id: ${{ steps.create_release.outputs.id }}
+      tag_name: ${{ steps.tag.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Get tag name
+        id: tag
+        run: echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
       - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
+        run: |
+          gh release create ${{ steps.tag.outputs.tag_name }} \
+            --title "Release ${{ steps.tag.outputs.tag_name }}" \
+            --generate-notes \
+            --draft=false \
+            --prerelease=false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          draft: false
-          prerelease: false
 
   build-and-upload:
     needs: create-release
@@ -41,10 +44,10 @@ jobs:
             target: x86_64-pc-windows-msvc
             artifact_name: windows-x86_64
             vcpkg_triplet: x64-windows-static-release
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: macos-x86_64
-            vcpkg_triplet: x64-osx-release
+          # - os: macos-latest
+          #   target: x86_64-apple-darwin
+          #   artifact_name: macos-x86_64
+          #   vcpkg_triplet: x64-osx-release
           - os: macos-latest
             target: aarch64-apple-darwin
             artifact_name: macos-arm64
@@ -78,7 +81,7 @@ jobs:
             ${{ matrix.os }}-${{ matrix.target }}-
             ${{ matrix.os }}-
 
-      - name: Set VCPKG_DEFAULT_TRIPLET
+      - name: Set VCPKG environment variables
         run: |
           echo "VCPKG_DEFAULT_TRIPLET=${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
           echo "VCPKG_DEFAULT_HOST_TRIPLET=${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
@@ -88,109 +91,60 @@ jobs:
         run: just bootstrap
 
       - name: Build tools for release
-        run: |
-          cargo build --release --target ${{ matrix.target }} \
-            -p createcog \
-            -p creatembtiles \
-            -p tiles2raster \
-            -p tileserver
+        run: cargo build --release --target ${{ matrix.target }} -p createcog -p creatembtiles -p tiles2raster -p tileserver
 
-      - name: Create artifact directory
-        run: mkdir -p artifacts
-        shell: bash
-
-      - name: Copy binaries (Unix)
+      - name: Create archives and upload (Unix)
         if: matrix.os != 'windows-2025'
         run: |
-          cp target/${{ matrix.target }}/release/createcog artifacts/createcog
-          cp target/${{ matrix.target }}/release/creatembtiles artifacts/creatembtiles
-          cp target/${{ matrix.target }}/release/tiles2raster artifacts/tiles2raster
-          cp target/${{ matrix.target }}/release/tileserver artifacts/tileserver
-
-      - name: Copy binaries (Windows)
-        if: matrix.os == 'windows-2025'
-        run: |
-          cp target/${{ matrix.target }}/release/createcog.exe artifacts/createcog.exe
-          cp target/${{ matrix.target }}/release/creatembtiles.exe artifacts/creatembtiles.exe
-          cp target/${{ matrix.target }}/release/tiles2raster.exe artifacts/tiles2raster.exe
-          cp target/${{ matrix.target }}/release/tileserver.exe artifacts/tileserver.exe
-        shell: bash
-
-      - name: Create archive (Unix)
-        if: matrix.os != 'windows-2025'
-        run: |
-          cd artifacts
-          tar -czf ../infra-rs-${{ matrix.artifact_name }}.tar.gz *
-          cd ..
-
-      - name: Create archive (Windows)
-        if: matrix.os == 'windows-2025'
-        run: |
-          cd artifacts
-          7z a ../infra-rs-${{ matrix.artifact_name }}.zip *
-          cd ..
-        shell: bash
-
-      - name: Upload Release Asset (Unix)
-        if: matrix.os != 'windows-2025'
-        uses: actions/upload-release-asset@v1
+          # Create individual archives for each tool
+          for tool in createcog creatembtiles tiles2raster tileserver; do
+            mkdir -p ${tool}-temp
+            cp target/${{ matrix.target }}/release/${tool} ${tool}-temp/
+            tar -czf ${tool}-${{ matrix.artifact_name }}.tar.gz -C ${tool}-temp ${tool}
+            rm -rf ${tool}-temp
+            gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-${{ matrix.artifact_name }}.tar.gz
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./infra-rs-${{ matrix.artifact_name }}.tar.gz
-          asset_name: infra-rs-${{ matrix.artifact_name }}.tar.gz
-          asset_content_type: application/gzip
 
-      - name: Upload Release Asset (Windows)
+      - name: Create archives and upload (Windows)
         if: matrix.os == 'windows-2025'
-        uses: actions/upload-release-asset@v1
+        run: |
+          # Create individual archives for each tool
+          for tool in createcog creatembtiles tiles2raster tileserver; do
+            mkdir -p ${tool}-temp
+            cp target/${{ matrix.target }}/release/${tool}.exe ${tool}-temp/
+            cd ${tool}-temp
+            7z a ../${tool}-${{ matrix.artifact_name }}.zip ${tool}.exe
+            cd ..
+            rm -rf ${tool}-temp
+            gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-${{ matrix.artifact_name }}.zip
+          done
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./infra-rs-${{ matrix.artifact_name }}.zip
-          asset_name: infra-rs-${{ matrix.artifact_name }}.zip
-          asset_content_type: application/zip
+        shell: bash
 
   generate-checksums:
     needs: [create-release, build-and-upload]
     runs-on: ubuntu-latest
     steps:
-      - name: Download release assets
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const fs = require('fs');
-            const { data: release } = await github.rest.repos.getRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: '${{ needs.create-release.outputs.release_id }}'
-            });
+      - uses: actions/checkout@v4
 
-            for (const asset of release.assets) {
-              const { data: assetData } = await github.rest.repos.getReleaseAsset({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                asset_id: asset.id,
-                headers: {
-                  Accept: 'application/octet-stream'
-                }
-              });
-              fs.writeFileSync(asset.name, Buffer.from(assetData));
-            }
+      - name: Download release assets
+        run: |
+          gh release download ${{ needs.create-release.outputs.tag_name }} \
+            --pattern "*-*.tar.gz" \
+            --pattern "*-*.zip"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Generate checksums
         run: |
-          sha256sum *.tar.gz *.zip > checksums.txt
+          sha256sum *-*.tar.gz *-*.zip > checksums.txt 2>/dev/null || sha256sum *-*.tar.gz > checksums.txt 2>/dev/null || sha256sum *-*.zip > checksums.txt
           cat checksums.txt
 
       - name: Upload checksums
-        uses: actions/upload-release-asset@v1
+        run: |
+          gh release upload ${{ needs.create-release.outputs.tag_name }} checksums.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ./checksums.txt
-          asset_name: checksums.txt
-          asset_content_type: text/plain

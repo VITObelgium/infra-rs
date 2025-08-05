@@ -1854,7 +1854,7 @@ dependencies = [
 
 [[package]]
 name = "infra-rs"
-version = "0.2.1"
+version = "2025.8.6"
 dependencies = [
  "geo",
  "inf",
