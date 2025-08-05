@@ -12,25 +12,27 @@ pub const TRUE: std::ffi::c_int = 1;
 
 pub struct Config {
     pub debug_logging: bool,
-    pub proj_db_search_location: PathBuf,
+    pub proj_db_search_location: Option<PathBuf>,
     pub config_options: Vec<(String, String)>,
 }
 
 impl Config {
     pub fn apply(&self) -> Result<()> {
         setup_logging(self.debug_logging);
-        let proj_db_path = self.proj_db_search_location.to_string_lossy().to_string();
-        if !proj_db_path.is_empty() {
-            gdal::config::set_config_option("PROJ_DATA", proj_db_path.as_str())?;
+        if let Some(search_location) = &self.proj_db_search_location {
+            let proj_db_path = search_location.to_string_lossy().to_string();
+            if !proj_db_path.is_empty() {
+                gdal::config::set_config_option("PROJ_DATA", proj_db_path.as_str())?;
 
-            // Also set the environment variable unless it is already set by the user
-            // e.g. Spatialite library does not use gdal settings
-            if std::env::var_os("PROJ_DATA").is_none() {
-                // # Safety
-                // The config is applied at te beginning of the program
-                // so not race conditions should occur
-                unsafe {
-                    std::env::set_var("PROJ_DATA", proj_db_path.as_str());
+                // Also set the environment variable unless it is already set by the user
+                // e.g. Spatialite library does not use gdal settings
+                if std::env::var_os("PROJ_DATA").is_none() {
+                    // # Safety
+                    // The config is applied at te beginning of the program
+                    // so not race conditions should occur
+                    unsafe {
+                        std::env::set_var("PROJ_DATA", proj_db_path.as_str());
+                    }
                 }
             }
         }

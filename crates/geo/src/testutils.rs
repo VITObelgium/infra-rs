@@ -126,7 +126,7 @@ pub fn configure_gdal_data() {
 
     let gdal_config = gdalinterop::Config {
         debug_logging: false,
-        proj_db_search_location: data_dir,
+        proj_db_search_location: Some(data_dir),
         config_options: Vec::default(),
     };
 
