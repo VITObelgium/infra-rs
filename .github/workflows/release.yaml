@@ -1,0 +1,196 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_id: ${{ steps.create_release.outputs.id }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          draft: false
+          prerelease: false
+
+  build-and-upload:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: linux-x86_64
+            vcpkg_triplet: x64-linux-release
+          - os: windows-2025
+            target: x86_64-pc-windows-msvc
+            artifact_name: windows-x86_64
+            vcpkg_triplet: x64-windows-static-release
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            artifact_name: macos-x86_64
+            vcpkg_triplet: x64-osx-release
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: macos-arm64
+            vcpkg_triplet: arm64-osx-release
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+
+      - uses: prefix-dev/setup-pixi@v0.8.8
+
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,sd,fd-find,cargo-vcpkg
+
+      - name: Cache vcpkg packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/vcpkg
+            ~/AppData/Local/vcpkg/archives
+            ./target/vcpkg
+          key: ${{ matrix.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.toml') }}
+          restore-keys: |
+            ${{ matrix.os }}-${{ matrix.target }}-
+            ${{ matrix.os }}-
+
+      - name: Set VCPKG_DEFAULT_TRIPLET
+        run: |
+          echo "VCPKG_DEFAULT_TRIPLET=${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
+          echo "VCPKG_DEFAULT_HOST_TRIPLET=${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
+        shell: bash
+
+      - name: Bootstrap vcpkg dependencies
+        run: just bootstrap
+
+      - name: Build tools for release
+        run: |
+          cargo build --release --target ${{ matrix.target }} \
+            -p createcog \
+            -p creatembtiles \
+            -p tiles2raster \
+            -p tileserver
+
+      - name: Create artifact directory
+        run: mkdir -p artifacts
+        shell: bash
+
+      - name: Copy binaries (Unix)
+        if: matrix.os != 'windows-2025'
+        run: |
+          cp target/${{ matrix.target }}/release/createcog artifacts/createcog
+          cp target/${{ matrix.target }}/release/creatembtiles artifacts/creatembtiles
+          cp target/${{ matrix.target }}/release/tiles2raster artifacts/tiles2raster
+          cp target/${{ matrix.target }}/release/tileserver artifacts/tileserver
+
+      - name: Copy binaries (Windows)
+        if: matrix.os == 'windows-2025'
+        run: |
+          cp target/${{ matrix.target }}/release/createcog.exe artifacts/createcog.exe
+          cp target/${{ matrix.target }}/release/creatembtiles.exe artifacts/creatembtiles.exe
+          cp target/${{ matrix.target }}/release/tiles2raster.exe artifacts/tiles2raster.exe
+          cp target/${{ matrix.target }}/release/tileserver.exe artifacts/tileserver.exe
+        shell: bash
+
+      - name: Create archive (Unix)
+        if: matrix.os != 'windows-2025'
+        run: |
+          cd artifacts
+          tar -czf ../infra-rs-${{ matrix.artifact_name }}.tar.gz *
+          cd ..
+
+      - name: Create archive (Windows)
+        if: matrix.os == 'windows-2025'
+        run: |
+          cd artifacts
+          7z a ../infra-rs-${{ matrix.artifact_name }}.zip *
+          cd ..
+        shell: bash
+
+      - name: Upload Release Asset (Unix)
+        if: matrix.os != 'windows-2025'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./infra-rs-${{ matrix.artifact_name }}.tar.gz
+          asset_name: infra-rs-${{ matrix.artifact_name }}.tar.gz
+          asset_content_type: application/gzip
+
+      - name: Upload Release Asset (Windows)
+        if: matrix.os == 'windows-2025'
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./infra-rs-${{ matrix.artifact_name }}.zip
+          asset_name: infra-rs-${{ matrix.artifact_name }}.zip
+          asset_content_type: application/zip
+
+  generate-checksums:
+    needs: [create-release, build-and-upload]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download release assets
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const { data: release } = await github.rest.repos.getRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: '${{ needs.create-release.outputs.release_id }}'
+            });
+
+            for (const asset of release.assets) {
+              const { data: assetData } = await github.rest.repos.getReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                asset_id: asset.id,
+                headers: {
+                  Accept: 'application/octet-stream'
+                }
+              });
+              fs.writeFileSync(asset.name, Buffer.from(assetData));
+            }
+
+      - name: Generate checksums
+        run: |
+          sha256sum *.tar.gz *.zip > checksums.txt
+          cat checksums.txt
+
+      - name: Upload checksums
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ./checksums.txt
+          asset_name: checksums.txt
+          asset_content_type: text/plain
