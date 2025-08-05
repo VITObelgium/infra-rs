@@ -755,6 +755,30 @@ mod tests {
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
 
+        {
+            // Create a test COG file as float with Zstď compression and float predictor
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Zstd),
+                Some(PredictorSelection::Automatic),
+                Some(ArrayDataType::Float64),
+                true,
+            )?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+            assert_eq!(cog.cog_metadata().predictor, Some(Predictor::FloatingPoint));
+            assert_eq!(cog.cog_metadata().compression, Some(Compression::Zstd));
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog
+                .read_tile_data_as::<f64>(&reference_tile, &mut reader)
+                .expect("ZSTD_f64_predictor")
+                .unwrap();
+
+            assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
         Ok(())
     }
 

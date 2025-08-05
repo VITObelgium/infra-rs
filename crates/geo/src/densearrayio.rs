@@ -36,6 +36,7 @@ fn write_raster_options_to_gdal(options: WriteRasterOptions) -> Vec<String> {
                 "COMPRESS={}",
                 match tiff_opts.compression {
                     Some(Compression::Lzw) => "LZW",
+                    Some(Compression::Zstd) => "ZSTD",
                     None => "NONE",
                 }
             ));

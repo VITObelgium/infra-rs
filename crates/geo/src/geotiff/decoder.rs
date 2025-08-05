@@ -231,9 +231,10 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
     let compression = match decoder.get_tag_u32(Tag::Compression)? {
         1 => None,
         5 => Some(Compression::Lzw),
+        50000 => Some(Compression::Zstd),
         _ => {
             return Err(Error::InvalidArgument(format!(
-                "Only LZW compressed COGs are supported ({})",
+                "Only LZW and ZSTD compressed COGs are supported ({})",
                 decoder.get_tag_u32(Tag::Compression)?
             )));
         }

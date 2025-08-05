@@ -108,7 +108,7 @@ impl GeoTiffReader {
             }
         }
 
-        DenseArray::new_init_nodata(M::with_geo_reference(self.geo_ref().clone()), data )
+        DenseArray::new_init_nodata(M::with_geo_reference(self.geo_ref().clone()), data)
     }
 
     #[simd_bounds]
@@ -324,14 +324,28 @@ mod tests {
             true,
         )?;
 
+        let zstd_compression_output = tmp.path().join("cog_lzw_compression.tif");
+        create_test_cog(
+            &input,
+            &zstd_compression_output,
+            COG_TILE_SIZE,
+            Some(Compression::Zstd),
+            None,
+            None,
+            true,
+        )?;
+
         let mut cog_no_compression = GeoTiffReader::from_file(&no_compression_output)?;
         let mut cog_lzw_compression = GeoTiffReader::from_file(&lzw_compression_output)?;
+        let mut cog_zstd_compression = GeoTiffReader::from_file(&zstd_compression_output)?;
 
         for overview_index in 0..cog_no_compression.metadata().overviews.len() {
             let overview_no_compression = cog_no_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
             let overview_lzw = cog_lzw_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
+            let overview_zstd = cog_zstd_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
 
             assert_eq!(overview_no_compression, overview_lzw);
+            assert_eq!(overview_no_compression, overview_zstd);
         }
 
         Ok(())

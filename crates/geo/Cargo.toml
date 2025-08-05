@@ -50,6 +50,7 @@ thiserror = "2.0"
 vector_derive = { optional = true, path = "vector_derive" }
 tiff = { version = "0.10", default-features = false, optional = true }
 weezl = { version = "0.1", optional = true }
+ruzstd = { version = "0.8", optional = true }
 xml-rs = { version = "0.8", optional = true }
 
 [dev-dependencies]
@@ -74,7 +75,7 @@ default = ["derive", "gdal", "cog"]
 arrow = ["dep:arrow"]
 derive = ["dep:vector_derive"]
 gdal = ["dep:gdal", "dep:gdal-sys", "dep:bon", "geozero/with-gdal"]
-cog = ["dep:weezl", "dep:tiff", "dep:xml-rs"]
+cog = ["dep:weezl", "dep:tiff", "dep:xml-rs", "dep:ruzstd"]
 gdal-static = ["gdal"]
 python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 serde = ["dep:serde"]

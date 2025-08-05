@@ -31,6 +31,7 @@ fn gdal_bool_name(value: bool) -> &'static str {
 fn gdal_compression_name(compression: Option<Compression>) -> &'static str {
     match compression {
         Some(Compression::Lzw) => "LZW",
+        Some(Compression::Zstd) => "ZSTD",
         None => "NONE",
     }
 }

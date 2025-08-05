@@ -18,6 +18,7 @@ pub use utils::HorizontalUnpredictable;
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Compression {
     Lzw,
+    Zstd,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

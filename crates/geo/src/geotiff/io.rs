@@ -10,6 +10,7 @@ use crate::{
     },
 };
 use inf::cast;
+use ruzstd::decoding::StreamingDecoder;
 use simd_macro::simd_bounds;
 use weezl::{BitOrder, decode::Decoder};
 
@@ -199,6 +200,7 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
 
     match compression {
         Some(Compression::Lzw) => lzw_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
+        Some(Compression::Zstd) => zstd_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
         None => {
             if chunk_data.len() != std::mem::size_of_val(decoded_chunk_data) {
                 return Err(Error::Runtime(format!(
@@ -252,6 +254,18 @@ fn lzw_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<(
 
         decode_result.status?;
     };
+
+    Ok(())
+}
+
+fn zstd_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<()> {
+    let decode_buf_byte: &mut [u8] = bytemuck::cast_slice_mut(decode_buf);
+
+    if let Ok(mut decoder) = StreamingDecoder::new(data) {
+        decoder.read_exact(decode_buf_byte)?;
+    } else {
+        return Err(Error::Runtime("Failed to create Zstd decoder".into()));
+    }
 
     Ok(())
 }
