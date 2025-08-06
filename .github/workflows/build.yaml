@@ -4,22 +4,45 @@ on: [push]
 
 jobs:
   compile:
-    name: ${{ matrix.cfg.os }}
+    name: ${{ matrix.cfg.id }}
     runs-on: ${{ matrix.cfg.os }}
     strategy:
       fail-fast: false
       matrix:
         cfg:
-          - { os: ubuntu-latest, id: linux  }
-          - { os: windows-2025, id: windows  }
-          - { os: macos-latest, id: mac  }
+          - {
+              id: linux,
+              os: ubuntu-latest,
+              triplet: x64-linux-release,
+              target: x86_64-unknown-linux-gnu,
+            }
+          - {
+              id: windows,
+              os: windows-2025,
+              triplet: x64-windows-static-release,
+              target: x86_64-pc-windows-msvc,
+            }
+          - {
+              id: mac-arm,
+              os: macos-latest,
+              triplet: arm64-osx-release,
+              target: aarch64-apple-darwin,
+            }
+          - {
+              id: mac-intel,
+              os: macos-latest,
+              triplet: x64-osx-release,
+              target: x86_64-apple-darwin,
+            }
 
     steps:
       - uses: actions/checkout@v4
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: stable,nightly
+          target: ${{ matrix.cfg.target }}
       - uses: prefix-dev/setup-pixi@v0.8.8
+        if: matrix.cfg.id != 'mac-intel'
       - uses: taiki-e/install-action@v2
         with:
           tool: just,sd,fd-find,cargo-vcpkg,cargo-nextest
@@ -32,17 +55,19 @@ jobs:
             ~/AppData/Local/vcpkg/archives
           key: ${{ matrix.cfg.os }}-${{ hashFiles('Cargo.toml') }}
       - name: Build the C++ dependencies using vcpkg
-        run: just bootstrap
+        run: just bootstrap ${{ matrix.cfg.triplet }} ${{ matrix.cfg.target }}
       - name: Install the python environment with pixi
+        if: matrix.cfg.id != 'mac-intel'
         run: just pybootstrap
       - name: Build the project
-        run: just build
+        run: just build ${{ matrix.cfg.target }}
       - name: Run the unit tests
-        run: just test_release
+        run: just test_ci ${{ matrix.cfg.target }}
       - name: Run the unit tests with python feature enabled
-        run: just test_release_py
+        if: matrix.cfg.id != 'mac-intel'
+        run: just test_release_py ${{ matrix.cfg.target }}
       - name: Run the unit tests with simd feature enabled
-        run: just test_simd
+        run: just test_simd ${{ matrix.cfg.target }}
       - name: Build the docs
         run: just doc
       - name: Archive build logs

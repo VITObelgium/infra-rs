@@ -17,6 +17,7 @@ rev = "ce613c4"
 [package.metadata.vcpkg.target]
 # aarch64-apple-darwin = { triplet = "arm64-osx-debugsymbols" }
 # x86_64-pc-windows-msvc = { triplet = "x64-windows-static-debugsymbols" }
+x86_64-unknown-linux-gnu = { triplet = "x64-linux-release" }
 aarch64-apple-darwin = { triplet = "arm64-osx-release" }
 x86_64-apple-darwin = { triplet = "x64-osx-release" }
 x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }

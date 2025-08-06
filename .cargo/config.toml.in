@@ -1,7 +1,7 @@
 [env]
 GDAL_STATIC = "1"
 GDAL_HOME = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@", relative = true }
-PKG_CONFIG = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@/tools/pkgconf/pkgconf", relative = true }
+PKG_CONFIG = { value = "target/vcpkg/installed/@CARGO_VCPKG_HOST_TRIPLET@/tools/pkgconf/pkgconf", relative = true }
 PKG_CONFIG_PATH = { value = "target/vcpkg/installed/@CARGO_VCPKG_TRIPLET@/lib/pkgconfig", relative = true }
 PYO3_PYTHON = { value = ".pixi/envs/default/@PYTHON_EXE@", relative = true }
 

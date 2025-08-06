@@ -1,6 +1,5 @@
-set export
 # detect the vcpkg triplet based on the system information
-VCPKG_DEFAULT_TRIPLET := if os_family() == "windows" {
+default_triplet := if os_family() == "windows" {
     "x64-windows-static-release"
     } else if os() == "macos" {
     if arch() == "aarch64" {
@@ -9,13 +8,23 @@ VCPKG_DEFAULT_TRIPLET := if os_family() == "windows" {
     } else {
     "x64-linux-release"
     }
+default_target := if os_family() == "windows" {
+    "x86_64-pc-windows-msvc"
+    } else if os() == "macos" {
+    if arch() == "aarch64" {
+        "aarch64-apple-darwin"
+    } else { "x86_64-apple-darwin" }
+    } else {
+    "x64-linux-release"
+    }
 PYTHON_EXE := if os_family() == "windows" {
         "python.exe"
     } else {
         "bin/python3"
     }
-VCPKG_DEFAULT_HOST_TRIPLET := VCPKG_DEFAULT_TRIPLET
+VCPKG_DEFAULT_HOST_TRIPLET := default_triplet
 
+set export
 unexport VCPKG_ROOT
 unexport CONDA_ENV
 export VCPKG_OVERLAY_PORTS := join(justfile_directory(), "vcpkg-overlay", "ports")
@@ -28,9 +37,10 @@ export LD_LIBRARY_PATH := if os_family() == "windows" {
     source_directory() / ".pixi/envs/default/lib"
 }
 
-cargo-config-gen:
+cargo-config-gen triplet:
     cp .cargo/config.toml.in .cargo/config.toml
-    sd @CARGO_VCPKG_TRIPLET@ {{VCPKG_DEFAULT_TRIPLET}} .cargo/config.toml
+    sd @CARGO_VCPKG_TRIPLET@ {{triplet}} .cargo/config.toml
+    sd @CARGO_VCPKG_HOST_TRIPLET@ {{VCPKG_DEFAULT_HOST_TRIPLET}} .cargo/config.toml
     sd @PYTHON_EXE@ {{PYTHON_EXE}} .cargo/config.toml
     sd @WORKSPACE_ROOT@ {{justfile_directory()}} .cargo/config.toml
 
@@ -43,9 +53,9 @@ pybootstrap:
 # the gdal.pc file contains shlwapi as link flag for the shlwapi library but this gets ignored
 # by the pkg-config crate implementation, so we need to replace it with a format that is picked up by the crate
 # Warning: gdal fails to build when zstd is enabled and the CONDA_ENV enrironment variable is set
-bootstrap: cargo-config-gen
-    echo "Bootstrapping vcpkg:{{VCPKG_DEFAULT_TRIPLET}}..."
-    cargo vcpkg -v build
+bootstrap triplet=default_triplet target=default_target: (cargo-config-gen triplet)
+    echo "Bootstrapping vcpkg:{{triplet}} for {{target}}..."
+    cargo vcpkg -v build --target {{target}}
     -cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib
     fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- '-l-framework' '-framework'
     fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- ' shlwapi ' ' -lshlwapi '
@@ -67,37 +77,39 @@ doc RUSTDOCFLAGS="-D warnings":
 docdeps:
     cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features --open
 
-build_debug:
-    cargo build --workspace
+build_debug target=default_target:
+    cargo build --workspace --target {{target}}
 
-build_release:
-    cargo build --workspace --release
+build_release target=default_target:
+    cargo build --workspace  --target {{target}} --release
 
-build: build_release
+build target=default_target: (build_release target)
 
-test_debug test_name='' $RUST_LOG="debug":
-    cargo nextest run -v --profile ci --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_name}}
+test_debug target=default_target test_name='' $RUST_LOG="debug":
+    cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_name}}
 
-test_release test_name='':
-    cargo nextest run --profile ci --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_name}}
+test_release target=default_target test_name='' :
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_name}}
 
-test_debug_simd:
-    cargo +nightly nextest run --profile ci --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector
+test_debug_simd target=default_target:
+    cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector
 
-test_release_simd testfilter:
-    cargo +nightly nextest run --profile ci --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector '{{testfilter}}'
+test_release_simd target=default_target testfilter='':
+    cargo +nightly nextest run --profile ci --target {{target}} --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector {{testfilter}}
 
-test_release_slow:
-    cargo nextest run --profile slow --workspace --release --features=serde,gdal,gdal-static,derive,vector
+test_release_slow target=default_target:
+    cargo nextest run --profile slow --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector
 
-test_debug_py: pybootstrap
-    pixi run test_debug
+test_debug_py target=default_target: pybootstrap
+    pixi run test_debug {{ target }}
 
-test_release_py: pybootstrap
-    pixi run test_release
+test_release_py target=default_target: pybootstrap
+    pixi run test_release {{ target }}
 
-test test_name='': (test_debug test_name)
-test_simd testfilter="": (test_release_simd testfilter)
+test test_name='': (test_debug default_target test_name)
+test_ci target=default_target: (test_release target)
+test_ci_py target=default_target: (test_release_py target)
+test_simd target=default_target testfilter='': (test_release_simd target testfilter)
 
 rasterbench:
     cargo bench --bench rasterops --package=geo
