@@ -7,10 +7,8 @@ use tiff::{
 
 use crate::{
     ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows, crs,
-    geotiff::{
-        ChunkDataLayout, Compression, GeoTiffMetadata, Predictor, TiffChunkLocation, TiffStats, projectioninfo::ModelType,
-        reader::TiffOverview, stats,
-    },
+    geotiff::{ChunkDataLayout, GeoTiffMetadata, TiffChunkLocation, TiffStats, projectioninfo::ModelType, reader::TiffOverview, stats},
+    raster::{Compression, Predictor},
 };
 
 use super::ProjectionInfo;

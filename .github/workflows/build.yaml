@@ -65,7 +65,7 @@ jobs:
         run: just test_ci ${{ matrix.cfg.target }}
       - name: Run the unit tests with python feature enabled
         if: matrix.cfg.id != 'mac-intel'
-        run: just test_release_py ${{ matrix.cfg.target }}
+        run: just test_release_py
       - name: Run the unit tests with simd feature enabled
         run: just test_simd ${{ matrix.cfg.target }}
       - name: Build the docs

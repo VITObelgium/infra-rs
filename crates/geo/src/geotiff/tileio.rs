@@ -10,10 +10,10 @@ use crate::{
     Array as _, ArrayInterop as _, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Result, Rows,
     Window,
     geotiff::{
-        Compression, HorizontalUnpredictable, Predictor, TiffChunkLocation,
+        HorizontalUnpredictable, TiffChunkLocation,
         io::{parse_chunk_data_into_buffer, read_chunk},
     },
-    raster::intersection::CutOut,
+    raster::{Compression, Predictor, intersection::CutOut},
 };
 
 #[cfg(feature = "simd")]

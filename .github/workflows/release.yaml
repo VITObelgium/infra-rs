@@ -123,28 +123,3 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
-
-  generate-checksums:
-    needs: [create-release, build-and-upload]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download release assets
-        run: |
-          gh release download ${{ needs.create-release.outputs.tag_name }} \
-            --pattern "*-*.tar.gz" \
-            --pattern "*-*.zip"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Generate checksums
-        run: |
-          sha256sum *-*.tar.gz *-*.zip > checksums.txt 2>/dev/null || sha256sum *-*.tar.gz > checksums.txt 2>/dev/null || sha256sum *-*.zip > checksums.txt
-          cat checksums.txt
-
-      - name: Upload checksums
-        run: |
-          gh release upload ${{ needs.create-release.outputs.tag_name }} checksums.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

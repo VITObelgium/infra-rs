@@ -100,15 +100,14 @@ test_release_simd target=default_target testfilter='':
 test_release_slow target=default_target:
     cargo nextest run --profile slow --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector
 
-test_debug_py target=default_target: pybootstrap
-    pixi run test_debug {{ target }}
+test_debug_py: pybootstrap
+    pixi run test_debug
 
-test_release_py target=default_target: pybootstrap
-    pixi run test_release {{ target }}
+test_release_py: pybootstrap
+    pixi run test_release
 
 test test_name='': (test_debug default_target test_name)
 test_ci target=default_target: (test_release target)
-test_ci_py target=default_target: (test_release_py target)
 test_simd target=default_target testfilter='': (test_release_simd target testfilter)
 
 rasterbench:

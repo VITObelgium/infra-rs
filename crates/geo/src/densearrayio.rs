@@ -1,18 +1,8 @@
 use std::path::Path;
 
-use crate::Array;
-use crate::ArrayMetadata;
-use crate::ArrayNum;
-use crate::DenseArray;
-use crate::GeoReference;
-use crate::Result;
 use crate::array::ArrayInterop as _;
-use crate::geotiff::Compression;
-use crate::geotiff::Predictor;
-use crate::raster;
-use crate::raster::RasterIO;
-use crate::raster::TiffChunkType;
-use crate::raster::WriteRasterOptions;
+use crate::raster::{self, Compression, Predictor, RasterIO, TiffChunkType, WriteRasterOptions};
+use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, GeoReference, Result};
 use gdal::raster::GdalType;
 use inf::allocate::AlignedVecUnderConstruction;
 

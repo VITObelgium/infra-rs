@@ -550,7 +550,7 @@ mod tests {
     use crate::{
         Nodata as _, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles, debug},
-        geotiff::{Compression, Predictor},
+        raster::{Compression, Predictor},
         testutils,
     };
 

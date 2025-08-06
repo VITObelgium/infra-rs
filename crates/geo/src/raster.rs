@@ -7,10 +7,7 @@ pub mod io;
 
 use std::path::Path;
 
-use crate::{
-    GeoReference,
-    geotiff::{Compression, Predictor},
-};
+use crate::GeoReference;
 
 // pub mod warp;
 use super::Result;
@@ -42,6 +39,18 @@ pub enum TiffChunkType {
     #[default]
     Striped,
     Tiled,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Compression {
+    Lzw,
+    Zstd,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Predictor {
+    Horizontal,
+    FloatingPoint,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]

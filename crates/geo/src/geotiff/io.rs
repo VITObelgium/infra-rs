@@ -4,10 +4,11 @@
 use crate::{
     ArrayDataType, ArrayNum,
     geotiff::{
-        Compression, Predictor, TiffChunkLocation,
+        TiffChunkLocation,
         gdalghostdata::GdalGhostData,
         utils::{self, HorizontalUnpredictable},
     },
+    raster::{Compression, Predictor},
 };
 use inf::cast;
 use ruzstd::decoding::StreamingDecoder;

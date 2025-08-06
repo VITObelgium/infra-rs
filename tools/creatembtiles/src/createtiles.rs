@@ -1,5 +1,5 @@
 use geo::cog::PredictorSelection;
-use geo::geotiff::Compression;
+use geo::raster::Compression;
 use rayon::prelude::*;
 use std::path::{Path, PathBuf};
 

@@ -1,6 +1,6 @@
 use anyhow::bail;
 use geo::cog::PredictorSelection;
-use geo::geotiff::Compression;
+use geo::raster::Compression;
 use std::path::{Path, PathBuf};
 use strum::EnumString;
 

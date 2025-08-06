@@ -2,9 +2,12 @@ use std::fs::File;
 use std::io::Seek;
 use std::path::Path;
 
-use crate::geotiff::reader::TiffOverview;
-use crate::geotiff::{ChunkDataLayout, io::CogHeaderReader};
-use crate::geotiff::{Compression, Predictor, TiffStats, decoder, io};
+use crate::geotiff::{
+    ChunkDataLayout, TiffStats, decoder,
+    io::{self, CogHeaderReader},
+    reader::TiffOverview,
+};
+use crate::raster::{Compression, Predictor};
 use crate::{ArrayDataType, Error, GeoReference, Result};
 
 #[derive(Debug, Clone)]

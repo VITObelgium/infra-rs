@@ -200,8 +200,7 @@ mod tests {
     use crate::{
         ArrayDataType, GeoReference, RasterMetadata, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles},
-        geotiff::{Compression, Predictor},
-        raster::{DenseRaster, GeoTiffWriteOptions, RasterIO, TiffChunkType, WriteRasterOptions},
+        raster::{Compression, DenseRaster, GeoTiffWriteOptions, Predictor, RasterIO, TiffChunkType, WriteRasterOptions},
         testutils,
     };
 

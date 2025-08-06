@@ -14,15 +14,3 @@ pub use metadata::GeoTiffMetadata;
 pub use reader::{ChunkDataLayout, GeoTiffReader, TiffChunkLocation, TiffOverview};
 pub use stats::TiffStats;
 pub use utils::HorizontalUnpredictable;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Compression {
-    Lzw,
-    Zstd,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Predictor {
-    Horizontal,
-    FloatingPoint,
-}
