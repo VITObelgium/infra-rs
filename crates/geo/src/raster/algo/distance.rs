@@ -851,10 +851,10 @@ where
     }
 
     for i in 0..resistance_map.len() {
-        if let Some(v) = resistance_map.value(i) {
-            if v < ResistanceRaster::Pixel::zero() {
-                return Err(Error::InvalidArgument("resistance may not be negative".into()));
-            }
+        if let Some(v) = resistance_map.value(i)
+            && v < ResistanceRaster::Pixel::zero()
+        {
+            return Err(Error::InvalidArgument("resistance may not be negative".into()));
         }
     }
 
@@ -917,10 +917,10 @@ where
     }
 
     for i in 0..resistance_map.len() {
-        if let Some(v) = resistance_map.value(i) {
-            if v < ResistanceRaster::Pixel::zero() {
-                return Err(Error::InvalidArgument("resistance may not be negative".into()));
-            }
+        if let Some(v) = resistance_map.value(i)
+            && v < ResistanceRaster::Pixel::zero()
+        {
+            return Err(Error::InvalidArgument("resistance may not be negative".into()));
         }
     }
 

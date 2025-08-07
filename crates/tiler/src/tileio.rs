@@ -58,14 +58,14 @@ pub fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: 
         timestamp
     ));
 
-    if let Ok(ds) = raster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options) {
-        if let Ok(Some(stats)) = ds.rasterband(band_nr)?.get_statistics(true, true) {
-            log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
-            return Ok(Range {
-                start: stats.min,
-                end: stats.max,
-            });
-        }
+    if let Ok(ds) = raster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options)
+        && let Ok(Some(stats)) = ds.rasterband(band_nr)?.get_statistics(true, true)
+    {
+        log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
+        return Ok(Range {
+            start: stats.min,
+            end: stats.max,
+        });
     }
 
     Err(Error::Runtime(format!(

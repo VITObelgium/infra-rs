@@ -204,12 +204,10 @@ pub mod dataset {
             return Err(Error::InvalidArgument("Invalid data buffer provided: incorrect size".to_string()));
         }
 
-        if cut_out_smaller_than_extent {
-            if let Some(nodata) = dst_meta.nodata() {
-                let nodata = NumCast::from(nodata).unwrap_or(T::zero());
-                for dst_data in dst_data.iter_mut() {
-                    let _ = *dst_data.write(nodata);
-                }
+        if cut_out_smaller_than_extent && let Some(nodata) = dst_meta.nodata() {
+            let nodata = NumCast::from(nodata).unwrap_or(T::zero());
+            for dst_data in dst_data.iter_mut() {
+                let _ = *dst_data.write(nodata);
             }
         }
 

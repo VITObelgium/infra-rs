@@ -21,10 +21,10 @@ fn needs_to_be_skipped(field: &Field) -> bool {
         if attr.path().is_ident("vector") {
             let nested = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated).unwrap();
             for meta in nested {
-                if let Meta::Path(path) = meta {
-                    if path.is_ident("skip") {
-                        return true;
-                    }
+                if let Meta::Path(path) = meta
+                    && path.is_ident("skip")
+                {
+                    return true;
                 }
             }
         }
@@ -38,18 +38,18 @@ fn check_col_attr(field: &Field) -> Option<String> {
         if attr.path().is_ident("vector") {
             let nested = attr.parse_args_with(Punctuated::<Meta, Token![,]>::parse_terminated).unwrap();
             for meta in nested {
-                if let Meta::NameValue(name_value) = meta {
-                    if name_value.path.is_ident("column") {
-                        match name_value.value {
-                            Expr::Lit(s) => match s.lit {
-                                Lit::Str(ref s) => return Some(s.value()),
-                                _ => {
-                                    panic!("Expected a string literal as column name");
-                                }
-                            },
+                if let Meta::NameValue(name_value) = meta
+                    && name_value.path.is_ident("column")
+                {
+                    match name_value.value {
+                        Expr::Lit(s) => match s.lit {
+                            Lit::Str(ref s) => return Some(s.value()),
                             _ => {
                                 panic!("Expected a string literal as column name");
                             }
+                        },
+                        _ => {
+                            panic!("Expected a string literal as column name");
                         }
                     }
                 }
@@ -88,10 +88,10 @@ fn is_option_type(tp: &Type) -> Option<&Type> {
 
     if final_segment.ident == "Option" {
         // This is an Option type, now obtain the inner type
-        if let PathArguments::AngleBracketed(args) = &final_segment.arguments {
-            if let Some(GenericArgument::Type(ty)) = args.args.first() {
-                return Some(ty);
-            }
+        if let PathArguments::AngleBracketed(args) = &final_segment.arguments
+            && let Some(GenericArgument::Type(ty)) = args.args.first()
+        {
+            return Some(ty);
         }
     }
 

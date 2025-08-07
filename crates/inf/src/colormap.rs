@@ -371,11 +371,11 @@ impl ProcessedColorMap {
             }
         }
 
-        if let Some(entry) = dict.last() {
-            if value == entry.x {
-                let i = dict.len() - 2;
-                return remap(dict[i].x, dict[i + 1].x, dict[i].y1, dict[i + 1].y0, value);
-            }
+        if let Some(entry) = dict.last()
+            && entry.x == value
+        {
+            let i = dict.len() - 2;
+            return remap(dict[i].x, dict[i + 1].x, dict[i].y1, dict[i + 1].y0, value);
         }
 
         0

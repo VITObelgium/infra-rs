@@ -77,10 +77,10 @@ impl WebTiles {
                     let web_tile_georef = GeoReference::from_tile(tile, tile_size as usize, 1);
 
                     for (cog_tile, bounds) in &cog_tile_bounds {
-                        if web_tile_georef.intersects(bounds).unwrap() {
-                            if let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef) {
-                                tile_sources.push((*cog_tile, cutout));
-                            }
+                        if web_tile_georef.intersects(bounds)?
+                            && let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef)
+                        {
+                            tile_sources.push((*cog_tile, cutout));
                         }
                     }
 

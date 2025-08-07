@@ -397,12 +397,11 @@ impl TileApiHandler {
             _ => Self::fetch_tile_color_mapped(layer_meta, min_value..max_value, cmap, tile, dpi_ratio, tile_size).await?,
         };
 
-        if tile.format == TileFormat::Protobuf {
-            if let Some(host) = headers.get("accept-encoding") {
-                if !(host.to_str().unwrap_or_default().contains("gzip")) {
-                    log::warn!("Requester does not accept gzip compression");
-                }
-            }
+        if tile.format == TileFormat::Protobuf
+            && let Some(host) = headers.get("accept-encoding")
+            && !(host.to_str().unwrap_or_default().contains("gzip"))
+        {
+            log::warn!("Requester does not accept gzip compression");
         }
 
         let _ = self.status_tx.send(StatusEvent::TileServed(layer_id));
@@ -471,12 +470,11 @@ impl TileApiHandler {
             }
         };
 
-        if tile.format == TileFormat::Protobuf {
-            if let Some(host) = headers.get("accept-encoding") {
-                if !(host.to_str().unwrap_or_default().contains("gzip")) {
-                    log::warn!("Requester does not accept gzip compression");
-                }
-            }
+        if tile.format == TileFormat::Protobuf
+            && let Some(host) = headers.get("accept-encoding")
+            && !(host.to_str().unwrap_or_default().contains("gzip"))
+        {
+            log::warn!("Requester does not accept gzip compression");
         }
 
         let _ = self.status_tx.send(StatusEvent::TileServed(layer_id1));
@@ -489,13 +487,13 @@ impl TileApiHandler {
         let top_left = parse_coordinate_param(&query_params, "topleft_lat", "topleft_lon")?;
         let bottom_right = parse_coordinate_param(&query_params, "bottomright_lat", "bottomright_lon")?;
 
-        if let Some(zoom_str) = query_params.get("zoom") {
-            if let Ok(zoom_int) = zoom_str.parse::<i32>() {
-                if zoom_int <= u8::MAX as i32 {
-                    zoom = Some(zoom_int);
-                } else {
-                    return Err(Error::InvalidArgument(format!("Invalid zoom level: {zoom_int}")));
-                }
+        if let Some(zoom_str) = query_params.get("zoom")
+            && let Ok(zoom_int) = zoom_str.parse::<i32>()
+        {
+            if zoom_int <= u8::MAX as i32 {
+                zoom = Some(zoom_int);
+            } else {
+                return Err(Error::InvalidArgument(format!("Invalid zoom level: {zoom_int}")));
             }
         }
 
