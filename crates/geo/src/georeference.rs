@@ -234,6 +234,10 @@ impl GeoReference {
         self.size.cols = cols;
     }
 
+    pub fn coordinate_for_cell(&self, cell: Cell) -> Point<f64> {
+        self.coordinate_for_cell_fraction(cell.col as f64, cell.row as f64)
+    }
+
     /// Translates a cell to a point in the raster.
     /// Cell (0, 0) is the top left corner of the raster.
     fn coordinate_for_cell_fraction(&self, col: f64, row: f64) -> Point {
@@ -335,6 +339,31 @@ impl GeoReference {
 
     pub fn geo_transform(&self) -> GeoTransform {
         self.geo_transform
+    }
+
+    pub fn inverse_geotransform(&self) -> Result<[f64; 6]> {
+        let gt = self.geo_transform;
+        let (x0, a, b, y0, d, e) = (gt[0], gt[1], gt[2], gt[3], gt[4], gt[5]);
+
+        // Compute determinant
+        let det = a * e - b * d;
+        if det == 0.0 {
+            return Err(Error::Runtime("GeoTransform is not invertible".into()));
+        }
+
+        let inv_det = 1.0 / det;
+
+        // Invert 2x2 matrix
+        let ai = e * inv_det;
+        let bi = -b * inv_det;
+        let di = -d * inv_det;
+        let ei = a * inv_det;
+
+        // Invert translation
+        let xi = -(ai * x0 + bi * y0);
+        let yi = -(di * x0 + ei * y0);
+
+        Ok([xi, ai, bi, yi, di, ei])
     }
 
     pub fn projection(&self) -> &str {
