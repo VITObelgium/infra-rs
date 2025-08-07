@@ -69,6 +69,7 @@ jobs:
       - name: Run the unit tests with simd feature enabled
         run: just test_simd ${{ matrix.cfg.target }}
       - name: Build the docs
+        if: matrix.cfg.id != 'mac-intel'
         run: just doc
       - name: Archive build logs
         if: ${{ failure() }}
