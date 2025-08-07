@@ -10,6 +10,7 @@ mod nodata;
 mod polygonize;
 mod quantile;
 mod rasterdiff;
+mod reproject;
 mod statistics;
 #[cfg(feature = "gdal")]
 mod translate;
@@ -32,6 +33,7 @@ pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_di
 
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
+    reproject::reproject, reproject::reproject_to_epsg,
 };
 
 pub use conversion::replace_value;

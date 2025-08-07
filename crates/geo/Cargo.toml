@@ -27,7 +27,7 @@ name = "simd"
 
 [dependencies]
 approx = "0.5"
-# proj4rs = { version = "0.1" }
+proj4rs = { version = "0.1", features = ["geo-types", "crs-definitions"] }
 arrow = { version = "56", optional = true }
 bon = { version = "3.7", optional = true }
 bytemuck = { version = "1.23" }
