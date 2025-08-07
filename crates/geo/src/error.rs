@@ -25,6 +25,8 @@ pub enum Error {
     #[cfg(feature = "gdal")]
     #[error("GDAL error: {0}")]
     GdalError(#[from] gdal::errors::GdalError),
+    #[error("Proj error: {0}")]
+    ProjError(#[from] proj4rs::errors::Error),
     #[cfg(feature = "python")]
     #[error("Python error: {0}")]
     PythonError(#[from] pyo3::PyErr),
