@@ -1,4 +1,7 @@
-use crate::{Array, ArrayNum, CellIterator, CoordinateTransformer, GeoReference, Result, crs, raster::DenseRaster};
+use crate::{
+    Array, ArrayNum, Cell, CellIterator, CoordinateTransformer, GeoReference, Result, coordinatetransformer::Points, crs,
+    raster::DenseRaster,
+};
 
 pub fn reproject_to_epsg<T: ArrayNum>(src: &DenseRaster<T>, epsg: crs::Epsg) -> Result<DenseRaster<T>> {
     // let src_srs = Proj::from_proj_string(src.metadata().projection())?;
@@ -22,58 +25,30 @@ pub fn reproject_to_epsg<T: ArrayNum>(src: &DenseRaster<T>, epsg: crs::Epsg) -> 
 
 pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference) -> Result<DenseRaster<T>> {
     let source_georef = src.metadata();
-
     let coord_trans = CoordinateTransformer::from_epsg(target_georef.projected_epsg().unwrap(), source_georef.projected_epsg().unwrap())?;
 
     let mut result = DenseRaster::<T>::filled_with_nodata(target_georef);
+    let mut points = Points::with_capacity(result.rows().count() as usize);
 
-    for cell in CellIterator::for_raster_with_size(result.size()) {
-        let mut cell_coordinate = result.metadata().cell_center(cell);
-        assert_eq!(result.metadata().point_to_cell(cell_coordinate), cell);
-        coord_trans.transform_point_in_place(&mut cell_coordinate)?;
-
-        let src_cell = source_georef.point_to_cell(cell_coordinate);
-        if source_georef.is_cell_on_map(src_cell) {
-            result.set_cell_value(cell, src.cell_value(src_cell));
+    for row in 0..result.size().rows.count() {
+        for cell in CellIterator::for_single_row_from_raster_with_size(result.size(), row) {
+            points.push(result.metadata().cell_center(cell));
         }
+
+        coord_trans.transform_points_in_place(&mut points)?;
+
+        for (col, point) in points.iter().enumerate() {
+            let src_cell = source_georef.point_to_cell(point);
+            if source_georef.is_cell_on_map(src_cell) {
+                result.set_cell_value(Cell::from_row_col(row, col as i32), src.cell_value(src_cell));
+            }
+        }
+
+        points.clear();
     }
 
     Ok(result)
 }
-
-// pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference) -> Result<DenseRaster<T>> {
-//     let source_georef = src.metadata();
-
-//     let inv_geotrans = source_georef.inverse_geotransform()?;
-
-//     //let src_srs = Proj::from_epsg_code(source_georef.projected_epsg().unwrap().into())?;
-//     //let dst_srs = Proj::from_epsg_code(target_georef.projected_epsg().unwrap().into())?;
-
-//     let mut result = DenseRaster::<T>::filled_with_nodata(target_georef);
-//     let target_georef = result.metadata().clone();
-
-//     let coord_trans = CoordinateTransformer::from_epsg(target_georef.projected_epsg().unwrap(), source_georef.projected_epsg().unwrap())?;
-
-//     for cell in CellIterator::for_raster_with_size(result.size()) {
-//         let mut cell_coordinate = target_georef.coordinate_for_cell(cell);
-//         //assert_eq!(result.metadata().point_to_cell(cell_coordinate), cell);
-
-//         coord_trans.transform_point_in_place(&mut cell_coordinate)?;
-//         //proj4rs::transform::transform(&dst_srs, &src_srs, &mut cell_coordinate)?;
-
-//         let src_cell = crate::Cell::from_row_col(
-//             (inv_geotrans[3] + cell_coordinate.x() * inv_geotrans[4] + cell_coordinate.y() * inv_geotrans[5]).round() as i32,
-//             (inv_geotrans[0] + cell_coordinate.x() * inv_geotrans[1] + cell_coordinate.y() * inv_geotrans[2]).round() as i32,
-//         );
-
-//         //let src_cell = source_georef.point_to_nearest_cell(cell_coordinate);
-//         if source_georef.is_cell_on_map(src_cell) {
-//             result.set_cell_value(cell, src.cell_value(src_cell));
-//         }
-//     }
-
-//     Ok(result)
-// }
 
 #[cfg(test)]
 mod tests {
@@ -120,22 +95,6 @@ mod tests {
             diff.mismatches.len()
         );
 
-        //result.write("/Users/dirk/reproject.tif")?;
-
-        //assert_eq!(gdal, result);
         Ok(())
     }
-
-    // #[test]
-    // fn test_reproject_to_same_epsg() -> Result<()> {
-    //     let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-    //     let src = DenseRaster::<u8>::read(&input).unwrap();
-
-    //     let mut gdal = src.warped_to_epsg(crs::epsg::BELGIAN_LAMBERT72)?;
-    //     gdal.write("/Users/dirk/reproject_gdal_same.tif")?;
-
-    //     let mut result = reproject_to_epsg(&src, crs::epsg::BELGIAN_LAMBERT72)?;
-    //     result.write("/Users/dirk/reproject_same.tif")?;
-    //     Ok(())
-    // }
 }
