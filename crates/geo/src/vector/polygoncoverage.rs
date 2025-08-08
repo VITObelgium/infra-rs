@@ -199,10 +199,10 @@ fn process_region_borders(cell_coverages: Vec<PolygonCellCoverage>) -> Result<Ve
 
             let mut intersecting_coverages: Vec<PolygonCellCoverage> = Vec::new();
             for test_cov in &cell_coverages {
-                if test_cov.name != *region {
-                    if let Ok(true) = output_extent.intersects(&test_cov.output_subgrid_extent) {
-                        intersecting_coverages.push(test_cov.clone());
-                    }
+                if test_cov.name != *region
+                    && let Ok(true) = output_extent.intersects(&test_cov.output_subgrid_extent)
+                {
+                    intersecting_coverages.push(test_cov.clone());
                 }
             }
 
@@ -330,10 +330,10 @@ pub fn create_geometries(
     for i in 0..vector_ds.layer_count() {
         let mut layer = vector_ds.layer(i)?;
 
-        if let Some(ref input_layer) = config.input_layer {
-            if layer.name() != *input_layer {
-                continue;
-            }
+        if let Some(ref input_layer) = config.input_layer
+            && layer.name() != *input_layer
+        {
+            continue;
         }
 
         let (value_column, burn) = match config.burn_value {

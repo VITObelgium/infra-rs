@@ -131,14 +131,13 @@ pub fn rasterize<T: ArrayNum + GdalType + ToString>(
     meta: &GeoReference,
     options: RasterizeOptions<T>,
 ) -> Result<(GeoReference, AlignedVec<T>)> {
-    if options.add {
-        if let Some(nodata_value) = options.meta.nodata() {
-            if nodata_value.is_nan() {
-                return Err(Error::InvalidArgument(
-                    "Rasterize output nodata is nan, this is not compatible with the add algorithm".to_string(),
-                ));
-            }
-        }
+    if options.add
+        && let Some(nodata_value) = options.meta.nodata()
+        && nodata_value.is_nan()
+    {
+        return Err(Error::InvalidArgument(
+            "Rasterize output nodata is nan, this is not compatible with the add algorithm".to_string(),
+        ));
     }
 
     let cli_options: Vec<String> = options.into();
