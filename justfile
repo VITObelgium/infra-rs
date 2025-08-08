@@ -23,6 +23,7 @@ PYTHON_EXE := if os_family() == "windows" {
         "bin/python3"
     }
 VCPKG_DEFAULT_HOST_TRIPLET := default_triplet
+test_filter := ''
 
 set export
 unexport VCPKG_ROOT
@@ -85,17 +86,17 @@ build_release target=default_target:
 
 build target=default_target: (build_release target)
 
-test_debug target=default_target test_name='' $RUST_LOG="debug":
-    cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_name}}
+test_debug target=default_target $RUST_LOG="debug":
+    cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_filter}}
 
-test_release target=default_target test_name='' :
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_name}}
+test_release target=default_target:
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector  {{test_filter}}
 
 test_debug_simd target=default_target:
-    cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector
+    cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector {{test_filter}}
 
-test_release_simd target=default_target testfilter='':
-    cargo +nightly nextest run --profile ci --target {{target}} --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector {{testfilter}}
+test_release_simd target=default_target:
+    cargo +nightly nextest run --profile ci --target {{target}} --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector {{test_filter}}
 
 test_release_slow target=default_target:
     cargo nextest run --profile slow --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector
@@ -106,9 +107,9 @@ test_debug_py: pybootstrap
 test_release_py: pybootstrap
     pixi run test_release
 
-test test_name='': (test_debug default_target test_name)
+test: (test_debug default_target)
 test_ci target=default_target: (test_release target)
-test_simd target=default_target testfilter='': (test_release_simd target testfilter)
+test_simd target=default_target: (test_release_simd target)
 
 rasterbench:
     cargo bench --bench rasterops --package=geo

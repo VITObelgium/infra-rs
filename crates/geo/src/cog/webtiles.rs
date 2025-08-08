@@ -1,6 +1,6 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
-    RasterMetadata, Result, Rows, Window, ZoomLevelStrategy,
+    GeoTransform, RasterMetadata, Result, Rows, Window, ZoomLevelStrategy,
     geotiff::{GeoTiffMetadata, HorizontalUnpredictable, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
@@ -9,7 +9,7 @@ use std::{
     io::{Read, Seek},
 };
 
-use crate::{LatLonBounds, Point, RasterSize, Tile, crs};
+use crate::{LatLonBounds, RasterSize, Tile, crs};
 
 use num::NumCast;
 use simd_macro::simd_bounds;
@@ -180,8 +180,8 @@ fn trim_empty_zoom_levels(zoom_levels: &mut Vec<HashMap<Tile, TileSource>>) {
     }
 }
 
-fn generate_tiles_for_extent(geo_transform: [f64; 6], raster_size: RasterSize, tile_size: u32, zoom: i32) -> Vec<Tile> {
-    let top_left = crs::web_mercator_to_lat_lon(Point::new(geo_transform[0], geo_transform[3]));
+fn generate_tiles_for_extent(geo_transform: GeoTransform, raster_size: RasterSize, tile_size: u32, zoom: i32) -> Vec<Tile> {
+    let top_left = crs::web_mercator_to_lat_lon(geo_transform.top_left());
     let top_left_tile = Tile::for_coordinate(top_left, zoom);
 
     let tiles_wide = (raster_size.cols.count() as u32).div_ceil(tile_size);
@@ -548,7 +548,7 @@ mod tests {
     use path_macro::path;
 
     use crate::{
-        Nodata as _, ZoomLevelStrategy,
+        Nodata as _, Point, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles, debug},
         raster::{Compression, Predictor},
         testutils,

@@ -6,6 +6,47 @@ use crate::Result;
 use crate::crs::Epsg;
 use crate::spatialreference::SpatialReference;
 
+pub struct Points {
+    x: Vec<f64>,
+    y: Vec<f64>,
+}
+
+impl Points {
+    pub fn new() -> Self {
+        Self {
+            x: Vec::new(),
+            y: Vec::new(),
+        }
+    }
+
+    pub fn iter(&self) -> impl Iterator<Item = Point<f64>> {
+        self.x.iter().zip(self.y.iter()).map(|(&x, &y)| Point::new(x, y))
+    }
+
+    pub fn with_capacity(size: usize) -> Self {
+        Self {
+            x: Vec::with_capacity(size),
+            y: Vec::with_capacity(size),
+        }
+    }
+
+    pub fn push(&mut self, point: Point<f64>) {
+        self.x.push(point.x());
+        self.y.push(point.y());
+    }
+
+    pub fn clear(&mut self) {
+        self.x.clear();
+        self.y.clear();
+    }
+}
+
+impl Default for Points {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct CoordinateTransformer {
     source_srs: SpatialReference,
     target_srs: SpatialReference,
@@ -42,6 +83,11 @@ impl CoordinateTransformer {
 
         point.set_x(result_x[0]);
         point.set_y(result_y[0]);
+        Ok(())
+    }
+
+    pub fn transform_points_in_place(&self, points: &mut Points) -> Result<()> {
+        self.transformer.transform_coords(&mut points.x, &mut points.y, &mut [])?;
         Ok(())
     }
 

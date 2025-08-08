@@ -1,5 +1,5 @@
 use crate::{
-    ArrayDataType, ArrayNum, Cell, RasterSize,
+    ArrayDataType, ArrayNum, Cell, GeoTransform, RasterSize,
     array::{ArrayMetadata, Columns, Rows},
 };
 use approx::{AbsDiffEq, RelativeEq};
@@ -81,13 +81,13 @@ pub struct GeoReference {
     /// The size of the image in pixels (width, height)
     size: RasterSize,
     /// The affine transformation.
-    geo_transform: [f64; 6],
+    geo_transform: GeoTransform,
     /// The nodata value.
     nodata: Option<f64>,
 }
 
 impl GeoReference {
-    pub fn new<S: Into<String>>(projection: S, size: RasterSize, geo_transform: [f64; 6], nodata: Option<f64>) -> Self {
+    pub fn new<S: Into<String>>(projection: S, size: RasterSize, geo_transform: GeoTransform, nodata: Option<f64>) -> Self {
         GeoReference {
             projection: projection.into(),
             size,
@@ -109,7 +109,7 @@ impl GeoReference {
         GeoReference {
             projection: String::new(),
             size,
-            geo_transform: [0.0; 6],
+            geo_transform: GeoTransform::new([0.0; 6]),
             nodata,
         }
     }
@@ -121,14 +121,13 @@ impl GeoReference {
         cell_size: CellSize,
         nodata: Option<T>,
     ) -> Self {
-        let geo_transform = [
-            lower_left_coordintate.x(),
-            cell_size.x(),
-            0.0,
-            lower_left_coordintate.y() - (cell_size.y() * size.rows.count() as f64),
-            0.0,
-            cell_size.y(),
-        ];
+        let geo_transform = GeoTransform::from_top_left_and_cell_size(
+            Point::new(
+                lower_left_coordintate.x(),
+                lower_left_coordintate.y() - (cell_size.y() * size.rows.count() as f64),
+            ),
+            cell_size,
+        );
 
         let nodata = match nodata {
             Some(nodata) => nodata.to_f64(),
@@ -159,14 +158,13 @@ impl GeoReference {
 
     pub fn set_extent(&mut self, lower_left_coordintate: Point, size: RasterSize, cell_size: CellSize) {
         self.size = size;
-        self.geo_transform = [
-            lower_left_coordintate.x(),
-            cell_size.x(),
-            0.0,
-            lower_left_coordintate.y() - (cell_size.y() * self.size.rows.count() as f64),
-            0.0,
-            cell_size.y(),
-        ];
+        self.geo_transform = GeoTransform::from_top_left_and_cell_size(
+            Point::new(
+                lower_left_coordintate.x(),
+                lower_left_coordintate.y() - (cell_size.y() * size.rows.count() as f64),
+            ),
+            cell_size,
+        );
     }
 
     pub fn copy_with_nodata<T: ToPrimitive>(&self, nodata: Option<T>) -> Self {
@@ -185,11 +183,11 @@ impl GeoReference {
 
     /// The horizontal cell size of the image.
     pub fn cell_size_x(&self) -> f64 {
-        self.geo_transform[1]
+        self.geo_transform.cell_size_x()
     }
 
     pub fn set_cell_size_x(&mut self, size: f64) {
-        self.geo_transform[1] = size;
+        self.geo_transform.set_cell_size_x(size);
     }
 
     pub fn set_cell_size(&mut self, size: CellSize) {
@@ -199,7 +197,7 @@ impl GeoReference {
 
     /// The verical cell size of the image.
     pub fn cell_size_y(&self) -> f64 {
-        self.geo_transform[5]
+        self.geo_transform.cell_size_y()
     }
 
     pub fn is_north_up(&self) -> bool {
@@ -207,7 +205,7 @@ impl GeoReference {
     }
 
     pub fn set_cell_size_y(&mut self, size: f64) {
-        self.geo_transform[5] = size;
+        self.geo_transform.set_cell_size_y(size);
     }
 
     pub fn set_square_cell_size_north_up(&mut self, size: f64) {
@@ -238,11 +236,8 @@ impl GeoReference {
 
     /// Translates a cell to a point in the raster.
     /// Cell (0, 0) is the top left corner of the raster.
-    fn coordinate_for_cell_fraction(&self, col: f64, row: f64) -> Point<f64> {
-        let x = self.geo_transform[0] + self.geo_transform[1] * col + self.geo_transform[2] * row;
-        let y = self.geo_transform[3] + self.geo_transform[4] * col + self.geo_transform[5] * row;
-
-        Point::new(x, y)
+    fn coordinate_for_cell_fraction(&self, col: f64, row: f64) -> Point {
+        self.geo_transform.apply(col, row)
     }
 
     pub fn cell_lower_left(&self, cell: Cell) -> Point<f64> {
@@ -338,7 +333,7 @@ impl GeoReference {
         LatLonBounds::hull(self.top_left().into(), self.bottom_right().into())
     }
 
-    pub fn geo_transform(&self) -> [f64; 6] {
+    pub fn geo_transform(&self) -> GeoTransform {
         self.geo_transform
     }
 
@@ -462,8 +457,11 @@ impl GeoReference {
             }
         }
 
-        let x_aligned = is_aligned(self.geo_transform[0], other.geo_transform[0], self.cell_size_x());
-        let y_aligned = is_aligned(self.geo_transform[3], other.geo_transform[3], self.cell_size_y());
+        let top_left = self.top_left();
+        let other_top_left = other.top_left();
+
+        let x_aligned = is_aligned(top_left.x(), other_top_left.x(), self.cell_size_x());
+        let y_aligned = is_aligned(top_left.y(), other_top_left.y(), self.cell_size_y());
 
         x_aligned && y_aligned
     }
@@ -482,7 +480,7 @@ impl GeoReference {
 
         let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
         let mut src_ds = mem_driver.create("in-mem", self.columns().count() as usize, self.rows().count() as usize, 0)?;
-        src_ds.set_geo_transform(&self.geo_transform)?;
+        src_ds.set_geo_transform(&self.geo_transform.into())?;
         src_ds.set_projection(&self.projection)?;
 
         // Create a transformer that maps from source pixel/line coordinates
@@ -525,7 +523,7 @@ impl GeoReference {
                         rows: Rows(rows),
                         cols: Columns(cols),
                     },
-                    target_transform,
+                    target_transform.into(),
                     self.nodata,
                 )),
                 Err(e) => {
@@ -734,7 +732,7 @@ mod tests {
         let meta = GeoReference::new(
             "EPSG:4326".to_string(),
             RasterSize::with_rows_cols(Rows(840), Columns(900)),
-            TRANS,
+            TRANS.into(),
             None,
         );
         let bbox = meta.bounding_box();

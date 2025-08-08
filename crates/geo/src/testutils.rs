@@ -95,7 +95,7 @@ pub fn test_metadata_2x2() -> GeoReference {
     GeoReference::new(
         "EPSG:4326".to_string(),
         RasterSize::with_rows_cols(Rows(2), Columns(2)),
-        [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 1.0, 0.0, 0.0].into(),
         Some(NOD),
     )
 }
@@ -105,7 +105,7 @@ pub fn test_metadata_3x3() -> GeoReference {
     GeoReference::new(
         "EPSG:4326".to_string(),
         RasterSize::with_rows_cols(Rows(3), Columns(3)),
-        [0.0, 0.0, 1.0, 1.0, 0.0, 0.0],
+        [0.0, 0.0, 1.0, 1.0, 0.0, 0.0].into(),
         Some(NOD),
     )
 }

@@ -314,7 +314,7 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         band_count: samples_per_pixel,
         compression,
         predictor,
-        geo_reference: GeoReference::new(epsg, raster_size, geo_transform, nodata),
+        geo_reference: GeoReference::new(epsg, raster_size, geo_transform.into(), nodata),
         statistics,
         overviews,
     })

@@ -115,6 +115,15 @@ impl CellIterator {
             current: Cell::from_row_col(0, 0),
         }
     }
+
+    pub fn for_single_row_from_raster_with_size(size: RasterSize, row: i32) -> Self {
+        assert!(row >= 0 && row < size.rows.count(), "Row index out of bounds");
+        CellIterator {
+            rows: Rows(row + 1),
+            cols: size.cols,
+            current: Cell::from_row_col(row, 0),
+        }
+    }
 }
 
 impl Iterator for CellIterator {

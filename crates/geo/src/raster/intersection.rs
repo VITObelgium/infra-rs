@@ -54,7 +54,7 @@ pub fn intersect_georeference(src_meta: &GeoReference, dst_meta: &GeoReference) 
 mod tests {
     use approx::assert_relative_eq;
 
-    use crate::{Cell, CellSize, Columns, Point, RasterSize, Rows};
+    use crate::{Cell, CellSize, Columns, GeoTransform, Point, RasterSize, Rows};
 
     use super::*;
 
@@ -90,14 +90,14 @@ mod tests {
 
     #[test]
     fn intersect_meta_epsg_4326() {
-        const TRANS: [f64; 6] = [
+        const TRANS: GeoTransform = GeoTransform::new([
             -30.000_000_763_788_11,
             0.100_000_001_697_306_9,
             0.0,
             29.999999619212282,
             0.0,
             -0.049_999_998_635_984_29,
-        ];
+        ]);
 
         let meta = GeoReference::new(
             "EPSG:4326".to_string(),
@@ -107,7 +107,10 @@ mod tests {
         );
         assert_relative_eq!(
             meta.cell_center(Cell::from_row_col(0, 0)),
-            Point::new(TRANS[0] + (TRANS[1] / 2.0), TRANS[3] + (TRANS[5] / 2.0)),
+            Point::new(
+                TRANS.top_left().x() + (TRANS.cell_size_x() / 2.0),
+                TRANS.top_left().y() + (TRANS.cell_size_y() / 2.0)
+            ),
             epsilon = 1e-6
         );
 
@@ -132,14 +135,14 @@ mod tests {
         let meta1 = GeoReference::new(
             "EPSG:3857".to_string(),
             RasterSize::with_rows_cols(Rows(256), Columns(256)),
-            [547900.6187481433, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141],
+            [547900.6187481433, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141].into(),
             None,
         );
 
         let meta2 = GeoReference::new(
             "EPSG:3857".to_string(),
             RasterSize::with_rows_cols(Rows(256), Columns(256)),
-            [626172.1357121639, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141],
+            [626172.1357121639, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141].into(),
             None,
         );
 

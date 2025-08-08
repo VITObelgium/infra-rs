@@ -27,6 +27,7 @@ pub mod gdalinterop;
 mod georeference;
 #[cfg(feature = "cog")]
 pub mod geotiff;
+mod geotransform;
 mod latlonbounds;
 mod nodata;
 pub mod raster;
@@ -60,8 +61,8 @@ pub use {
     anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayInterop, array::ArrayMetadata, array::Columns, array::Rows,
     array::Window, arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell, cell::CellIterator,
     coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference,
-    latlonbounds::LatLonBounds, nodata::Nodata, raster::RasterNodataCompatibility, rastermetadata::RasterMetadata, rastersize::RasterSize,
-    rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
+    geotransform::GeoTransform, latlonbounds::LatLonBounds, nodata::Nodata, raster::RasterNodataCompatibility,
+    rastermetadata::RasterMetadata, rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };
 
 #[doc(inline)]

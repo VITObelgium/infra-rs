@@ -171,7 +171,7 @@ pub mod dataset {
                 rows: Rows(height as i32),
                 cols: Columns(width as i32),
             },
-            ds.geo_transform()?,
+            ds.geo_transform()?.into(),
             rasterband.no_data_value(),
         ))
     }
@@ -414,7 +414,7 @@ pub mod dataset {
     }
 
     pub(crate) fn metadata_to_dataset_band(ds: &mut gdal::Dataset, meta: &GeoReference, band_index: usize) -> Result<()> {
-        ds.set_geo_transform(&meta.geo_transform())?;
+        ds.set_geo_transform(&meta.geo_transform().into())?;
         ds.set_projection(meta.projection())?;
         ds.rasterband(band_index)?.set_no_data_value(meta.nodata())?;
         Ok(())
