@@ -1,10 +1,11 @@
 use std::fmt::Debug;
 
 pub type Point<T = f64> = geo_types::Point<T>;
+use approx::{AbsDiffEq, RelativeEq};
 use geo_types::CoordNum;
 use num::Zero;
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Rect<T>
 where
     T: Copy + CoordNum,
@@ -130,6 +131,32 @@ impl From<Rect<f64>> for geo_types::Polygon<f64> {
             ]),
             Vec::default(),
         )
+    }
+}
+
+impl<T> AbsDiffEq for Rect<T>
+where
+    T: PartialEq + std::fmt::Debug + Copy + CoordNum + AbsDiffEq<Epsilon = T>,
+{
+    type Epsilon = T;
+
+    fn default_epsilon() -> Self::Epsilon {
+        T::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.top_left.abs_diff_eq(&other.top_left, epsilon) && self.bottom_right.abs_diff_eq(&other.bottom_right, epsilon)
+    }
+}
+
+impl<T: PartialEq + std::fmt::Debug + Copy + CoordNum + RelativeEq<Epsilon = T>> RelativeEq for Rect<T> {
+    fn default_max_relative() -> Self::Epsilon {
+        T::default_max_relative()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
+        Point::<T>::relative_eq(&self.top_left, &other.top_left, epsilon, max_relative)
+            && Point::<T>::relative_eq(&self.bottom_right, &other.bottom_right, epsilon, max_relative)
     }
 }
 

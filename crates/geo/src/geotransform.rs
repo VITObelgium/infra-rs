@@ -1,6 +1,8 @@
+use std::fmt::Debug;
+
 use crate::{Cell, CellSize, Error, Point, Result};
 
-#[derive(Clone, Debug, Copy, PartialEq, Default)]
+#[derive(Clone, Copy, PartialEq, Default)]
 pub struct GeoTransform([f64; 6]);
 
 impl GeoTransform {
@@ -111,5 +113,18 @@ impl From<[f64; 6]> for GeoTransform {
 impl From<GeoTransform> for [f64; 6] {
     fn from(geo_trans: GeoTransform) -> [f64; 6] {
         geo_trans.0
+    }
+}
+
+impl Debug for GeoTransform {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "GeoTransform(topleft: ({}, {}), pixel_width: {}, pixel_height: {})",
+            self.0[0],
+            self.0[3],
+            self.cell_size_x(),
+            self.cell_size_y()
+        )
     }
 }

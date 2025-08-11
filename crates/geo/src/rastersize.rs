@@ -1,7 +1,7 @@
 use crate::array::{Columns, Rows};
 
 /// Raster size represented by rows and columns.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 pub struct RasterSize {
     pub rows: Rows,
     pub cols: Columns,
@@ -35,5 +35,11 @@ impl RasterSize {
 impl std::fmt::Display for RasterSize {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(rows: {}, cols: {})", self.rows, self.cols)
+    }
+}
+
+impl std::fmt::Debug for RasterSize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
     }
 }

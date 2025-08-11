@@ -90,7 +90,7 @@ test_debug target=default_target $RUST_LOG="debug":
     cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector --no-capture {{test_filter}}
 
 test_release target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector  {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_filter}}
 
 test_debug_simd target=default_target:
     cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector {{test_filter}}
