@@ -30,6 +30,7 @@ pub mod geotiff;
 mod geotransform;
 mod latlonbounds;
 mod nodata;
+mod point;
 pub mod raster;
 #[cfg(feature = "gdal")]
 mod rasteriotests;
@@ -75,4 +76,5 @@ pub use nodata::simd::NodataSimd;
 
 pub use simd_macro::geo_simd_bounds as simd_bounds;
 
-pub type Point<T = f64> = geo_types::Point<T>;
+#[doc(inline)]
+pub use point::Point;
