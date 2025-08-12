@@ -483,9 +483,9 @@ checksum = "1b8e56985ec62d17e9c1001dc89c88ecd7dc08e47eba5ec7c29c7b5eeecde967"
 
 [[package]]
 name = "bon"
-version = "3.6.5"
+version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33d9ef19ae5263a138da9a86871eca537478ab0332a7770bac7e3f08b801f89f"
+checksum = "67a0c21249ad725ebcadcb1b1885f8e3d56e8e6b8924f560268aab000982d637"
 dependencies = [
  "bon-macros",
  "rustversion",
@@ -493,9 +493,9 @@ dependencies = [
 
 [[package]]
 name = "bon-macros"
-version = "3.6.5"
+version = "3.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "577ae008f2ca11ca7641bd44601002ee5ab49ef0af64846ce1ab6057218a5cc1"
+checksum = "a660ebdea4d4d3ec7788cfc9c035b66efb66028b9b97bf6cde7023ccc8e77e28"
 dependencies = [
  "darling 0.21.1",
  "ident_case",
@@ -938,7 +938,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ec09e802f5081de6157da9a75701d6c713d8dc3ba52571fd4bd25f412644e8a6"
 dependencies = [
  "ctor-proc-macro",
- "dtor",
+ "dtor 0.0.6",
+]
+
+[[package]]
+name = "ctor"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "67773048316103656a637612c4a62477603b777d91d9c62ff2290f9cde178fdb"
+dependencies = [
+ "ctor-proc-macro",
+ "dtor 0.1.0",
 ]
 
 [[package]]
@@ -1064,7 +1074,16 @@ version = "0.0.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "97cbdf2ad6846025e8e25df05171abfb30e3ababa12ee0a0e44b9bbe570633a8"
 dependencies = [
- "dtor-proc-macro",
+ "dtor-proc-macro 0.0.5",
+]
+
+[[package]]
+name = "dtor"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e58a0764cddb55ab28955347b45be00ade43d4d6f3ba4bf3dc354e4ec9432934"
+dependencies = [
+ "dtor-proc-macro 0.0.6",
 ]
 
 [[package]]
@@ -1072,6 +1091,12 @@ name = "dtor-proc-macro"
 version = "0.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7454e41ff9012c00d53cf7f475c5e3afa3b91b7c90568495495e8d9bf47a1055"
+
+[[package]]
+name = "dtor-proc-macro"
+version = "0.0.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f678cf4a922c215c63e0de95eb1ff08a958a81d47e485cf9da1e27bf6305cfa5"
 
 [[package]]
 name = "either"
@@ -1347,7 +1372,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "criterion",
- "ctor",
+ "ctor 0.5.0",
  "env_logger",
  "gdal",
  "gdal-sys",
@@ -1838,7 +1863,7 @@ dependencies = [
  "approx",
  "bytemuck",
  "criterion",
- "ctor",
+ "ctor 0.5.0",
  "env_logger",
  "generic-tests",
  "log",
@@ -3392,7 +3417,7 @@ name = "tiler"
 version = "0.1.0"
 dependencies = [
  "approx",
- "ctor",
+ "ctor 0.4.3",
  "gdal",
  "geo",
  "geo-types",
