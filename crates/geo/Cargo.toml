@@ -5,16 +5,16 @@ edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
-  "gdal[core,geos,sqlite3]",
-  "proj[core,embed-data]",
-  "tiff[core,lzma,zip]",
+    "gdal[core,geos,sqlite3]",
+    "proj[core,embed-data]",
+    "tiff[core,lzma,zip]",
 ]
 
 [package.metadata.vcpkg.target]
 x86_64-unknown-linux-gnu = { dependencies = [
-  "gdal[core,geos,iconv,sqlite3]",
-  "proj[core,embed-data]",
-  "tiff[core,lzma,zip]",
+    "gdal[core,geos,iconv,sqlite3]",
+    "proj[core,embed-data]",
+    "tiff[core,lzma,zip]",
 ] }
 
 [[bench]]
@@ -29,7 +29,7 @@ name = "simd"
 approx = "0.5"
 # proj4rs = { version = "0.1" }
 arrow = { version = "56", optional = true }
-bon = { version = "3.6", optional = true }
+bon = { version = "3.7", optional = true }
 bytemuck = { version = "1.23" }
 cfg-if = "1.0"
 gdal = { version = "0.18", optional = true }

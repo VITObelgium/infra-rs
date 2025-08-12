@@ -18,7 +18,7 @@ strum = { version = "0.27", features = ["derive"] }
 thiserror = "2.0"
 
 [dev-dependencies]
-ctor = "0.4"
+ctor = "0.5"
 env_logger = "0.11"
 generic-tests = "0.1"
 test-log = "0.2"
