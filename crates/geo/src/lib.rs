@@ -12,7 +12,7 @@ mod cell;
 pub mod cog;
 pub mod constants;
 mod coordinate;
-#[cfg(feature = "gdal")]
+#[cfg(feature = "proj")]
 mod coordinatetransformer;
 pub mod crs;
 mod densearray;
@@ -53,9 +53,12 @@ pub mod testutils;
 
 use thiserror::Error;
 
+#[cfg(feature = "proj")]
+pub use coordinatetransformer::CoordinateTransformer;
+
 #[cfg(feature = "gdal")]
 #[doc(inline)]
-pub use {coordinatetransformer::CoordinateTransformer, runtimeconfiguration::RuntimeConfiguration, spatialreference::SpatialReference};
+pub use {runtimeconfiguration::RuntimeConfiguration, spatialreference::SpatialReference};
 
 #[doc(inline)]
 pub use {

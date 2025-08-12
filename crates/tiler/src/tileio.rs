@@ -234,7 +234,7 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
         let over_view_count = raster_band.overview_count()?;
 
         let (epsg, source_is_web_mercator, cell_size) = {
-            if let Ok(mut srs) = SpatialReference::from_proj(meta.projection()) {
+            if let Ok(mut srs) = SpatialReference::from_definition(meta.projection()) {
                 let cell_size = if srs.is_projected() {
                     meta.cell_size_x()
                 } else {

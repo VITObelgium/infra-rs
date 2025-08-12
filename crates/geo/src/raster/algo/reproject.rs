@@ -1,6 +1,6 @@
 use crate::{
-    Array, ArrayNum, Cell, CellIterator, CellSize, CoordinateTransformer, GeoReference, Point, RasterSize, Rect, Result,
-    coordinatetransformer::Points, crs, point, raster::DenseRaster,
+    Array, ArrayNum, Cell, CellIterator, CellSize, CoordinateTransformer, GeoReference, Point, RasterSize, Rect, Result, crs, point,
+    raster::DenseRaster,
 };
 
 const DEFAULT_EDGE_POINTS: usize = 10;
@@ -25,7 +25,7 @@ fn reproject_bounding_box_with_edge_sampling(
     // Ensure we have at least 2 points per edge (corners)
     let points_per_edge = edge_points.max(2);
 
-    let mut all_points = Points::with_capacity(points_per_edge * 4);
+    let mut all_points = Vec::with_capacity(points_per_edge * 4);
 
     // Generate points along each edge
     // Top edge (left to right)
@@ -204,7 +204,7 @@ pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference)
     let coord_trans = CoordinateTransformer::from_epsg(target_georef.projected_epsg().unwrap(), source_georef.projected_epsg().unwrap())?;
 
     let mut result = DenseRaster::<T>::filled_with_nodata(target_georef);
-    let mut points = Points::with_capacity(result.rows().count() as usize);
+    let mut points = Vec::with_capacity(result.rows().count() as usize);
 
     for row in 0..result.size().rows.count() {
         for cell in CellIterator::for_single_row_from_raster_with_size(result.size(), row) {
@@ -214,7 +214,7 @@ pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference)
         coord_trans.transform_points_in_place(&mut points)?;
 
         for (col, point) in points.iter().enumerate() {
-            let src_cell = source_georef.point_to_cell(point);
+            let src_cell = source_georef.point_to_cell(*point);
             if source_georef.is_cell_on_map(src_cell) {
                 result.set_cell_value(Cell::from_row_col(row, col as i32), src.cell_value(src_cell));
             }
