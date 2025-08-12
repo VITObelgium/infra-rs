@@ -40,7 +40,7 @@ impl From<&GeoReference> for PyRasterMetadata {
             epsg: meta.projected_epsg().map(|crs| crs.into()),
             size: (meta.columns().count() as usize, meta.rows().count() as usize),
             cell_size: (meta.cell_size().x(), meta.cell_size().y()),
-            geo_transform: meta.geo_transform(),
+            geo_transform: meta.geo_transform().into(),
             nodata: meta.nodata(),
         }
     }
@@ -54,7 +54,7 @@ impl From<&PyRasterMetadata> for GeoReference {
                 rows: Rows(val.size.1 as i32),
                 cols: Columns(val.size.0 as i32),
             },
-            val.geo_transform,
+            val.geo_transform.into(),
             val.nodata,
         )
     }
