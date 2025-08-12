@@ -26,7 +26,11 @@ pub enum Error {
     #[error("GDAL error: {0}")]
     GdalError(#[from] gdal::errors::GdalError),
     #[error("Proj error: {0}")]
-    ProjError(#[from] proj4rs::errors::Error),
+    Proj4rsError(#[from] proj4rs::errors::Error),
+    #[error("Proj error: {0}")]
+    ProjError(#[from] proj::ProjError),
+    #[error("Proj error: {0}")]
+    ProjCreateError(#[from] proj::ProjCreateError),
     #[cfg(feature = "python")]
     #[error("Python error: {0}")]
     PythonError(#[from] pyo3::PyErr),

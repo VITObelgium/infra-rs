@@ -43,10 +43,7 @@ pub fn raster_pixel(raster_path: &Path, band_nr: usize, mut coord: Coordinate, l
     let meta = raster::io::dataset::read_file_metadata_with_options(raster_path, &open_opt)?;
     let srs = SpatialReference::from_definition(meta.projection())?;
     if !srs.is_geographic() || srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
-        let transformer = CoordinateTransformer::new(
-            SpatialReference::from_epsg(crs::epsg::WGS84)?,
-            SpatialReference::from_definition(meta.projection())?,
-        )?;
+        let transformer = CoordinateTransformer::new(&crs::epsg::WGS84.to_string(), meta.projection())?;
         transformer.transform_coordinate_in_place(&mut coord)?;
     }
 
@@ -63,7 +60,7 @@ pub fn metadata_bounds_wgs84(meta: GeoReference) -> Result<LatLonBounds> {
             Err(Error::Runtime("Could not calculate bounds".to_string()))
         }
     } else {
-        let mut srs = SpatialReference::from_proj(meta.projection())?;
+        let mut srs = SpatialReference::from_definition(meta.projection())?;
         let mut result = LatLonBounds::hull(meta.top_left().into(), meta.bottom_right().into());
 
         if srs.is_projected() {
@@ -72,15 +69,21 @@ pub fn metadata_bounds_wgs84(meta: GeoReference) -> Result<LatLonBounds> {
                     web_mercator_to_lat_lon(meta.top_left()),
                     web_mercator_to_lat_lon(meta.bottom_right()),
                 );
+            } else if let Some(epsg) = srs.epsg_cs() {
+                let transformer = CoordinateTransformer::new(&epsg.to_string(), &crs::epsg::WGS84.to_string())?;
+                result = LatLonBounds::hull(
+                    transformer.transform_point(meta.top_left())?.into(),
+                    transformer.transform_point(meta.bottom_right())?.into(),
+                );
             } else {
-                let transformer = CoordinateTransformer::new(srs, SpatialReference::from_epsg(crs::epsg::WGS84)?)?;
+                let transformer = CoordinateTransformer::new(&srs.to_proj()?, &crs::epsg::WGS84.to_string())?;
                 result = LatLonBounds::hull(
                     transformer.transform_point(meta.top_left())?.into(),
                     transformer.transform_point(meta.bottom_right())?.into(),
                 );
             }
         } else if srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
-            let transformer = CoordinateTransformer::new(srs, SpatialReference::from_epsg(crs::epsg::WGS84)?)?;
+            let transformer = CoordinateTransformer::new(&srs.to_proj()?, &crs::epsg::WGS84.to_string())?;
             result = LatLonBounds::hull(
                 transformer.transform_point(meta.top_left())?.into(),
                 transformer.transform_point(meta.bottom_right())?.into(),
