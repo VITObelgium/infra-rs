@@ -243,6 +243,11 @@ pub fn read_dataframe_rows_cb(
     Ok(())
 }
 
+pub fn read_data_frame<TRow: DataRow, P: AsRef<Path>>(path: &P, layer: Option<&str>) -> Result<Vec<TRow>> {
+    let rows: Result<Vec<_>> = DataframeIterator::<TRow>::new(path, layer)?.collect();
+    rows.map_err(|e| Error::Runtime(format!("Failed to read data frame rows: {e}")))
+}
+
 /// Iterator over the rows of a vector dataset that returns a an object
 /// that implements the [`DataRow`] trait
 pub struct DataframeIterator<TRow: DataRow> {
