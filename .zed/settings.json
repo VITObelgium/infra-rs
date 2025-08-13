@@ -17,10 +17,10 @@
           "analyzerTargetDir": true
         },
         "cargo": {
-          "features": ["gdal", "tui"]
+          "features": ["gdal", "proj4rs", "tui"]
         },
         "check": {
-          "features": ["gdal", "tui"],
+          "features": ["gdal", "proj4rs", "tui"],
           "command": "clippy" // rust-analyzer.checkOnSave.command
         }
       }

@@ -10,6 +10,7 @@ mod nodata;
 mod polygonize;
 mod quantile;
 mod rasterdiff;
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
 mod reproject;
 mod statistics;
 #[cfg(feature = "gdal")]
