@@ -1,15 +1,26 @@
 use crate::{
-    Array, ArrayNum, Cell, CellIterator, CellSize, CoordinateTransformer, GeoReference, Point, RasterSize, Rect, Result, crs, point,
-    raster::DenseRaster,
+    Array, ArrayNum, Cell, CellIterator, CellSize, Columns, CoordinateTransformer, GeoReference, Point, RasterSize, Rect, Result, Rows,
+    crs, point, raster::DenseRaster,
 };
 
 const DEFAULT_EDGE_POINTS: usize = 10;
 
-// enum WarpTarget {
-//     Sized(RasterSize),
-//     CellSize(CellSize)
-//     Regular,
-// }
+#[derive(Debug, Clone, Default)]
+pub enum WarpTargetSize {
+    #[default]
+    /// Tries to use the same amount of pixels for the target as for the source.
+    Source,
+    /// Uses the exact raster size for the reprojection target.
+    Sized(RasterSize),
+    /// Uses the provided cell size for the reprojection target.
+    CellSize(CellSize),
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct WarpOptions {
+    pub target_size: WarpTargetSize,
+    pub all_cpus: bool,
+}
 
 /// Reproject a bounding box to a different coordinate system with configurable edge sampling
 ///
@@ -94,8 +105,44 @@ fn reproject_bounding_box_with_edge_sampling(
     Ok(Rect::from_nw_se(top_left, bottom_right))
 }
 
-pub fn reproject_georef_to_epsg(georef: &GeoReference, epsg: crs::Epsg) -> Result<GeoReference> {
-    reproject_georef_to_epsg_with_edge_points(georef, epsg, DEFAULT_EDGE_POINTS)
+pub fn reproject_georef_to_epsg(georef: &GeoReference, epsg: crs::Epsg, target_size: WarpTargetSize) -> Result<GeoReference> {
+    match target_size {
+        WarpTargetSize::Source => reproject_georef_to_epsg_with_edge_points(georef, epsg, DEFAULT_EDGE_POINTS),
+        WarpTargetSize::Sized(raster_size) => {
+            let coord_trans = CoordinateTransformer::from_epsg(georef.projected_epsg().unwrap(), epsg)?;
+            let bbox = reproject_bounding_box_with_edge_sampling(&georef.bounding_box(), &coord_trans, DEFAULT_EDGE_POINTS)?;
+            let cell_size = CellSize::new(
+                bbox.width() / raster_size.cols.count() as f64,
+                -bbox.height() / raster_size.rows.count() as f64,
+            );
+
+            //let aligned_bbox = calculate_reprojected_bounds(&georef.bounding_box(), CellSize::square(cell_size.x()));
+            Ok(GeoReference::with_origin(
+                epsg.to_string(),
+                raster_size,
+                bbox.bottom_left(),
+                cell_size,
+                georef.nodata(),
+            ))
+        }
+        WarpTargetSize::CellSize(cell_size) => {
+            let coord_trans = CoordinateTransformer::from_epsg(georef.projected_epsg().unwrap(), epsg)?;
+            let bbox = reproject_bounding_box_with_edge_sampling(&georef.bounding_box(), &coord_trans, DEFAULT_EDGE_POINTS)?;
+            let aligned_bbox = calculate_reprojected_bounds(&bbox, cell_size);
+            let raster_size = RasterSize::with_rows_cols(
+                Rows((aligned_bbox.height() / cell_size.y().abs()).round() as i32),
+                Columns((aligned_bbox.width() / cell_size.x()).round() as i32),
+            );
+
+            Ok(GeoReference::with_origin(
+                epsg.to_string(),
+                raster_size,
+                aligned_bbox.bottom_left(),
+                cell_size,
+                georef.nodata(),
+            ))
+        }
+    }
 }
 
 /// Reproject a `GeoReference` to a different EPSG with configurable edge sampling
@@ -114,7 +161,7 @@ fn reproject_georef_to_epsg_with_edge_points(georef: &GeoReference, epsg: crs::E
 
     // Calculate optimal resolution by determining the diagonal distance in the source and destination coordinate systems
     let resolution = calculate_optimal_resolution(georef, &coord_trans)?;
-    let aligned_bbox = calculate_reprojected_bounds(&bbox, resolution);
+    let aligned_bbox = calculate_reprojected_bounds(&bbox, CellSize::square(resolution));
 
     // Calculate dimensions with slight tolerance to handle floating point precision
     let height_pixels = aligned_bbox.height() / resolution;
@@ -159,13 +206,13 @@ fn calculate_optimal_resolution(georef: &GeoReference, coord_trans: &CoordinateT
     Ok(dst_diagonal / src_diagonal_pixels)
 }
 
-fn calculate_reprojected_bounds(bbox: &Rect<f64>, resolution: f64) -> Rect<f64> {
-    let width_pixels = (bbox.width() / resolution).round();
-    let height_pixels = (bbox.height() / resolution).round();
+fn calculate_reprojected_bounds(bbox: &Rect<f64>, cell_size: CellSize) -> Rect<f64> {
+    let width_pixels = (bbox.width() / cell_size.x()).round();
+    let height_pixels = (bbox.height() / cell_size.y().abs()).round();
 
     // Calculate new dimensions based on exact pixel counts
-    let new_width = width_pixels * resolution;
-    let new_height = height_pixels * resolution;
+    let new_width = width_pixels * cell_size.x();
+    let new_height = height_pixels * cell_size.y().abs();
 
     // Center the bounds to maintain the same overall coverage
     let center_x = (bbox.top_left().x() + bbox.bottom_right().x()) / 2.0;
@@ -179,23 +226,8 @@ fn calculate_reprojected_bounds(bbox: &Rect<f64>, resolution: f64) -> Rect<f64> 
     Rect::from_nw_se(Point::new(min_x, max_y), Point::new(max_x, min_y))
 }
 
-pub fn reproject_to_epsg<T: ArrayNum>(src: &DenseRaster<T>, epsg: crs::Epsg) -> Result<DenseRaster<T>> {
-    // let src_srs = Proj::from_proj_string(src.metadata().projection())?;
-    // let dst_srs = Proj::from_epsg_code(epsg.into())?;
-
-    // let src_bbox = src.metadata().bounding_box();
-
-    // let mut top_left = src_bbox.top_left();
-    // let mut bottom_right = src_bbox.bottom_right();
-
-    // let dst_top_left = proj4rs::transform::transform(&src_srs, &dst_srs, &mut top_left)?;
-    // let dst_bottom_right = proj4rs::transform::transform(&src_srs, &dst_srs, &mut bottom_right)?;
-
-    // let cell_size_x = dst_bottom_right.x
-
-    // let target_georef = GeoReference::with_origin(dst_srs.projname(), dst_top_left, dst_bottom_right, epsg)?;
-
-    let target_georef = reproject_georef_to_epsg(src.metadata(), epsg)?;
+pub fn reproject_to_epsg<T: ArrayNum>(src: &DenseRaster<T>, epsg: crs::Epsg, opts: Option<WarpOptions>) -> Result<DenseRaster<T>> {
+    let target_georef = reproject_georef_to_epsg(src.metadata(), epsg, opts.map(|o| o.target_size).unwrap_or_default())?;
     reproject(src, target_georef)
 }
 
@@ -230,15 +262,16 @@ pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference)
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
+    use tempfile::TempDir;
 
     use super::*;
     use crate::{
-        raster::{DenseRaster, RasterIO, algo},
+        raster::{self, DenseRaster, RasterIO, algo},
         testutils,
     };
 
     #[test_log::test]
-    fn reproject_to_epsg() -> Result<()> {
+    fn reproject_to_epsg_source_size() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
@@ -252,7 +285,7 @@ mod tests {
         log::info!("GDAL warp took: {:?}", gdal_duration);
 
         let start = std::time::Instant::now();
-        let result = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR)?;
+        let result = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, None)?;
         let reproject_duration = start.elapsed();
         log::info!("Reproject took: {:?}", reproject_duration);
 
@@ -271,13 +304,68 @@ mod tests {
         Ok(())
     }
 
+    #[test_log::test]
+    fn reproject_to_epsg_fixed_size() -> Result<()> {
+        let tmp_dir = TempDir::new()?;
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+
+        let target_size = RasterSize::with_rows_cols(Rows(1000), Columns(1800));
+
+        let gdal_output_path = tmp_dir.path().join("gdal_warped.tif");
+
+        let start = std::time::Instant::now();
+        let src_ds = gdal::Dataset::open(&input)?;
+        raster::algo::warp_to_disk_cli(
+            &src_ds,
+            &gdal_output_path,
+            &[
+                "-t_srs".to_string(),
+                crs::epsg::WGS84_WEB_MERCATOR.to_string(),
+                "-ts".to_string(),
+                target_size.cols.count().to_string(),
+                target_size.rows.count().to_string(),
+            ],
+            &Vec::default(),
+        )?;
+
+        let gdal_duration = start.elapsed();
+        log::info!("GDAL warp took: {:?}", gdal_duration);
+        let src = DenseRaster::<u8>::read(&input).unwrap();
+
+        let opts = super::WarpOptions {
+            target_size: super::WarpTargetSize::Sized(target_size),
+            all_cpus: false,
+        };
+
+        let start = std::time::Instant::now();
+        let result = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, Some(opts))?;
+        let reproject_duration = start.elapsed();
+        log::info!("Reproject took: {:?}", reproject_duration);
+
+        let gdal = DenseRaster::<u8>::read(gdal_output_path)?;
+
+        assert_eq!(gdal.metadata().projected_epsg(), result.metadata().projected_epsg());
+        assert_eq!(gdal.metadata().raster_size(), result.metadata().raster_size());
+        let gdal_bbox = gdal.metadata().bounding_box();
+        let result_bbox = result.metadata().bounding_box();
+
+        assert_relative_eq!(gdal_bbox.width(), result_bbox.width(), epsilon = 1e-4);
+        assert_relative_eq!(gdal_bbox.height(), result_bbox.height(), epsilon = 1e-4);
+        assert_relative_eq!(gdal_bbox, result_bbox, epsilon = 20.0); // Small shifts are allowed
+
+        assert_relative_eq!(gdal.metadata().cell_size(), result.metadata().cell_size(), epsilon = 1e-4);
+        assert_eq!(result.size(), gdal.size());
+
+        Ok(())
+    }
+
     #[test]
     fn reproject_georef_to_epsg() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
         let georef_gdal = src.metadata().warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-        let georef = super::reproject_georef_to_epsg(src.metadata(), crs::epsg::WGS84_WEB_MERCATOR)?;
+        let georef = super::reproject_georef_to_epsg(src.metadata(), crs::epsg::WGS84_WEB_MERCATOR, WarpTargetSize::Source)?;
 
         assert_eq!(georef_gdal.raster_size(), georef.raster_size());
         assert_eq!(georef_gdal.projected_epsg(), georef.projected_epsg());
