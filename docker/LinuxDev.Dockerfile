@@ -1,4 +1,4 @@
-FROM rust:1.88.0-bookworm
+FROM rust:1.88.0-trixie
 
 RUN apt update && apt install -y \
     build-essential \
