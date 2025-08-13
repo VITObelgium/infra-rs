@@ -32,9 +32,11 @@ pub use {translate::translate, translate::translate_file, warp::WarpOptions, war
 #[cfg(feature = "gdal")]
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};
 
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
+pub use {reproject::reproject, reproject::reproject_georef_to_epsg, reproject::reproject_to_epsg};
+
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
-    reproject::reproject, reproject::reproject_georef_to_epsg, reproject::reproject_to_epsg,
 };
 
 pub use conversion::replace_value;

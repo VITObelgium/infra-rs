@@ -12,7 +12,7 @@ mod cell;
 pub mod cog;
 pub mod constants;
 mod coordinate;
-#[cfg(feature = "proj")]
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
 mod coordinatetransformer;
 pub mod crs;
 mod densearray;
@@ -53,6 +53,7 @@ pub mod testutils;
 
 use thiserror::Error;
 
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
 pub use coordinatetransformer::CoordinateTransformer;
 
 #[cfg(feature = "gdal")]
