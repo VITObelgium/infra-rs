@@ -11,8 +11,8 @@ use crate::{
     raster::{Compression, Predictor},
 };
 use inf::cast;
-use ruzstd::decoding::StreamingDecoder;
 use simd_macro::simd_bounds;
+use std::io::Cursor;
 use weezl::{BitOrder, decode::Decoder};
 
 use crate::{Error, Result};
@@ -262,11 +262,9 @@ fn lzw_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<(
 fn zstd_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<()> {
     let decode_buf_byte: &mut [u8] = bytemuck::cast_slice_mut(decode_buf);
 
-    if let Ok(mut decoder) = StreamingDecoder::new(data) {
-        decoder.read_exact(decode_buf_byte)?;
-    } else {
-        return Err(Error::Runtime("Failed to create Zstd decoder".into()));
-    }
+    let cursor = Cursor::new(data);
+    let mut decoder = zstd::stream::Decoder::new(cursor).map_err(|e| Error::Runtime(format!("Failed to create Zstd decoder: {}", e)))?;
+    decoder.read_exact(decode_buf_byte)?;
 
     Ok(())
 }
