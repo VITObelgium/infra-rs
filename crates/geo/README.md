@@ -1,3 +1,10 @@
+## Projection Features
+The `geo` crate supports two projection libraries:
+- **`proj`**: PROJ library binding that is more comprehensive but requires system dependencies (enabled when the gdal feature is enabled)
+- **`proj4rs`** Pure Rust projection library that is lightweight and has no system dependencies and is compatible with wasm
+
+These features are mutually exclusive and should not be enabled both. When the `proj` feature is enabled, it takes precedence over `proj4rs`.
+
 ## Troubleshooting
 
 ### Iconv linker errors

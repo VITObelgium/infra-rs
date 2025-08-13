@@ -53,7 +53,6 @@ pub mod testutils;
 
 use thiserror::Error;
 
-#[cfg(feature = "proj")]
 pub use coordinatetransformer::CoordinateTransformer;
 
 #[cfg(feature = "gdal")]

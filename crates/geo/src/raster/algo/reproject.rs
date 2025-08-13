@@ -226,6 +226,7 @@ pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference)
     Ok(result)
 }
 
+#[cfg(feature = "gdal")]
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
