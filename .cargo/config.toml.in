@@ -94,3 +94,7 @@ rustflags = [
     "-Wfuture_incompatible",
     "-Wnonstandard_style",
 ]
+
+[profile.profiling]
+inherits = "release"
+debug = true
