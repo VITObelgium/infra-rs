@@ -12,6 +12,8 @@ use crate::crs::Epsg;
 pub struct CoordinateTransformer {
     source: Proj,
     target: Proj,
+    source_srs: String,
+    target_srs: String,
 }
 
 impl CoordinateTransformer {
@@ -19,14 +21,24 @@ impl CoordinateTransformer {
         let source = Proj::from_proj_string(source_srs)?;
         let target = Proj::from_proj_string(target_srs)?;
 
-        Ok(CoordinateTransformer { source, target })
+        Ok(CoordinateTransformer {
+            source,
+            target,
+            source_srs: source_srs.into(),
+            target_srs: target_srs.into(),
+        })
     }
 
     pub fn from_epsg(source_epsg: Epsg, target_epsg: Epsg) -> Result<Self> {
         let source = Proj::from_epsg_code(source_epsg.into())?;
         let target = Proj::from_epsg_code(target_epsg.into())?;
 
-        Ok(CoordinateTransformer { source, target })
+        Ok(CoordinateTransformer {
+            source,
+            target,
+            source_srs: source_epsg.to_string(),
+            target_srs: target_epsg.to_string(),
+        })
     }
 
     pub fn transform_point(&self, point: Point) -> Result<Point> {
@@ -56,6 +68,14 @@ impl CoordinateTransformer {
         let res = self.transform_coordinate(*coord)?;
         *coord = res;
         Ok(())
+    }
+
+    pub fn source_srs(&self) -> &str {
+        &self.source_srs
+    }
+
+    pub fn target_srs(&self) -> &str {
+        &self.target_srs
     }
 }
 
