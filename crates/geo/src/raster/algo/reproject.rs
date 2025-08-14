@@ -47,6 +47,15 @@ fn reproject_bounding_box_with_edge_sampling(
     coord_trans: &CoordinateTransformer,
     edge_points: usize,
 ) -> Result<Rect<f64>> {
+    // Helper function to calculate normalized parameter with clamping
+    let calculate_t = |i: usize, points_per_edge: usize| -> f64 {
+        let mut t = i as f64 / (points_per_edge - 1) as f64;
+        if t > 0.99 {
+            t = 1.0;
+        }
+        t
+    };
+
     // Ensure we have at least 2 points per edge (corners)
     let points_per_edge = edge_points.max(2);
 
@@ -55,11 +64,7 @@ fn reproject_bounding_box_with_edge_sampling(
     // Generate points along each edge
     // Top edge (left to right)
     for i in 0..points_per_edge {
-        let mut t = i as f64 / (points_per_edge - 1) as f64;
-        if t > 0.99 {
-            t = 1.0;
-        }
-
+        let t = calculate_t(i, points_per_edge);
         let x = bbox.top_left().x() + t * (bbox.top_right().x() - bbox.top_left().x());
         let y = bbox.top_left().y();
         all_points.push(Point::new(x, y));
@@ -67,10 +72,7 @@ fn reproject_bounding_box_with_edge_sampling(
 
     // Right edge (top to bottom, excluding corners already added)
     for i in 1..points_per_edge - 1 {
-        let mut t = i as f64 / (points_per_edge - 1) as f64;
-        if t > 0.99 {
-            t = 1.0;
-        }
+        let t = calculate_t(i, points_per_edge);
         let x = bbox.top_right().x();
         let y = bbox.top_right().y() + t * (bbox.bottom_right().y() - bbox.top_right().y());
         all_points.push(Point::new(x, y));
@@ -78,10 +80,7 @@ fn reproject_bounding_box_with_edge_sampling(
 
     // Bottom edge (right to left, excluding corner already added)
     for i in 1..points_per_edge {
-        let mut t = i as f64 / (points_per_edge - 1) as f64;
-        if t > 0.99 {
-            t = 1.0;
-        }
+        let t = calculate_t(i, points_per_edge);
         let x = bbox.bottom_right().x() - t * (bbox.bottom_right().x() - bbox.bottom_left().x());
         let y = bbox.bottom_right().y();
         all_points.push(Point::new(x, y));
@@ -89,10 +88,7 @@ fn reproject_bounding_box_with_edge_sampling(
 
     // Left edge (bottom to top, excluding corners already added)
     for i in 1..points_per_edge - 1 {
-        let mut t = i as f64 / (points_per_edge - 1) as f64;
-        if t > 0.99 {
-            t = 1.0;
-        }
+        let t = calculate_t(i, points_per_edge);
         let x = bbox.bottom_left().x();
         let y = bbox.bottom_left().y() - t * (bbox.bottom_left().y() - bbox.top_left().y());
         all_points.push(Point::new(x, y));
@@ -101,18 +97,18 @@ fn reproject_bounding_box_with_edge_sampling(
     // Transform all points
     coord_trans.transform_points_in_place(&mut all_points)?;
 
-    // Find the bounding box of all transformed points
-    let mut min_x = f64::INFINITY;
-    let mut max_x = f64::NEG_INFINITY;
-    let mut min_y = f64::INFINITY;
-    let mut max_y = f64::NEG_INFINITY;
-
-    for point in all_points.iter() {
-        min_x = min_x.min(point.x());
-        max_x = max_x.max(point.x());
-        min_y = min_y.min(point.y());
-        max_y = max_y.max(point.y());
-    }
+    // Find the bounding box of all transformed points in a single pass
+    let (min_x, max_x, min_y, max_y) = all_points.iter().fold(
+        (f64::INFINITY, f64::NEG_INFINITY, f64::INFINITY, f64::NEG_INFINITY),
+        |(min_x, max_x, min_y, max_y), point| {
+            (
+                min_x.min(point.x()),
+                max_x.max(point.x()),
+                min_y.min(point.y()),
+                max_y.max(point.y()),
+            )
+        },
+    );
 
     let top_left = Point::new(min_x, max_y);
     let bottom_right = Point::new(max_x, min_y);
