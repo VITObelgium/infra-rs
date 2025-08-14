@@ -79,7 +79,7 @@ docdeps:
     cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features --open
 
 build_debug target=default_target:
-    cargo build --workspace --target {{target}}
+    cargo build --workspace --features=proj4rs --target {{target}}
 
 build_release target=default_target:
     cargo build --workspace  --target {{target}} --release
