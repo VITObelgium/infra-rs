@@ -1,6 +1,6 @@
 use crate::{
-    Array, ArrayNum, Cell, CellIterator, CellSize, Columns, CoordinateTransformer, GeoReference, Point, RasterSize, Rect, Result, Rows,
-    crs, point, raster::DenseRaster,
+    Array, ArrayNum, Cell, CellSize, Columns, CoordinateTransformer, GeoReference, Point, RasterSize, Rect, Result, Rows, crs, point,
+    raster::DenseRaster,
 };
 
 const DEFAULT_EDGE_POINTS: usize = 20;
@@ -242,52 +242,43 @@ pub fn reproject_to_epsg<T: ArrayNum>(src: &DenseRaster<T>, epsg: crs::Epsg, opt
 }
 
 pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference, opts: &WarpOptions) -> Result<DenseRaster<T>> {
+    let coord_trans = CoordinateTransformer::from_epsg(target_georef.projected_epsg().unwrap(), src.metadata().projected_epsg().unwrap())?;
+    let mut dst = DenseRaster::<T>::filled_with_nodata(target_georef);
+
     if opts.error_threshold > 0.0 {
-        return reproject_with_interpolation(src, target_georef, opts);
+        reproject_with_interpolation(src, &mut dst, &coord_trans, opts)?;
+    } else {
+        reproject_exact(src, &mut dst, &coord_trans)?;
     }
 
-    let source_georef = src.metadata();
-    let coord_trans = CoordinateTransformer::from_epsg(target_georef.projected_epsg().unwrap(), source_georef.projected_epsg().unwrap())?;
+    Ok(dst)
+}
 
-    let mut result = DenseRaster::<T>::filled_with_nodata(target_georef);
-    let mut points = Vec::with_capacity(result.rows().count() as usize);
-
-    for row in 0..result.size().rows.count() {
-        for cell in CellIterator::for_single_row_from_raster_with_size(result.size(), row) {
-            points.push(result.metadata().cell_center(cell));
-        }
-
-        coord_trans.transform_points_in_place(&mut points)?;
-
-        for (col, point) in points.iter().enumerate() {
-            let src_cell = source_georef.point_to_cell(*point);
-            if source_georef.is_cell_on_map(src_cell) {
-                result.set_cell_value(Cell::from_row_col(row, col as i32), src.cell_value(src_cell));
-            }
-        }
-
-        points.clear();
+fn reproject_exact<T: ArrayNum>(src: &DenseRaster<T>, dst: &mut DenseRaster<T>, coord_trans: &CoordinateTransformer) -> Result<()> {
+    let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
+    for row in 0..dst.size().rows.count() {
+        transform_row_exact(dst, row, coord_trans, src.metadata(), src, &mut points)?;
     }
 
-    Ok(result)
+    Ok(())
 }
 
 /// Optimized reproject function using error threshold strategy for linear interpolation
-pub fn reproject_with_interpolation<T: ArrayNum>(
+fn reproject_with_interpolation<T: ArrayNum>(
     src: &DenseRaster<T>,
-    target_georef: GeoReference,
+    dst: &mut DenseRaster<T>,
+    coord_trans: &CoordinateTransformer,
     opts: &WarpOptions,
-) -> Result<DenseRaster<T>> {
+) -> Result<()> {
     let source_georef = src.metadata();
-    let coord_trans = CoordinateTransformer::from_epsg(target_georef.projected_epsg().unwrap(), source_georef.projected_epsg().unwrap())?;
-    let mut result = DenseRaster::<T>::filled_with_nodata(target_georef);
+    let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
 
-    for row in 0..result.size().rows.count() {
-        let row_width = result.size().cols.count();
+    for row in 0..dst.size().rows.count() {
+        let row_width = dst.size().cols.count();
 
         if row_width <= 2 {
             // For very narrow rows, fall back to exact transformation
-            transform_row_exact(&mut result, row, &coord_trans, source_georef, src)?;
+            transform_row_exact(dst, row, coord_trans, source_georef, src, &mut points)?;
             continue;
         }
 
@@ -296,9 +287,9 @@ pub fn reproject_with_interpolation<T: ArrayNum>(
         let middle_cell = Cell::from_row_col(row, row_width / 2);
         let last_cell = Cell::from_row_col(row, row_width - 1);
 
-        let first_pixel = result.metadata().cell_center(first_cell);
-        let middle_pixel = result.metadata().cell_center(middle_cell);
-        let last_pixel = result.metadata().cell_center(last_cell);
+        let first_pixel = dst.metadata().cell_center(first_cell);
+        let middle_pixel = dst.metadata().cell_center(middle_cell);
+        let last_pixel = dst.metadata().cell_center(last_cell);
 
         let first_transformed = coord_trans.transform_point(first_pixel)?;
         let middle_transformed = coord_trans.transform_point(middle_pixel)?;
@@ -314,14 +305,14 @@ pub fn reproject_with_interpolation<T: ArrayNum>(
 
         if error < opts.error_threshold {
             // Use linear interpolation for the entire row
-            interpolate_row(&mut result, row, first_transformed, last_transformed, source_georef, src);
+            interpolate_row(dst, row, first_transformed, last_transformed, source_georef, src);
         } else {
             // Use recursive subdivision or fall back to exact transformation
-            subdivide_and_transform_row(&mut result, row, &coord_trans, source_georef, src, opts.error_threshold)?;
+            subdivide_and_transform_row(dst, row, coord_trans, source_georef, src, opts.error_threshold)?;
         }
     }
 
-    Ok(result)
+    Ok(())
 }
 
 /// Transform a row exactly by transforming each pixel
@@ -331,16 +322,18 @@ fn transform_row_exact<T: ArrayNum>(
     coord_trans: &CoordinateTransformer,
     source_georef: &GeoReference,
     src: &DenseRaster<T>,
+    points: &mut Vec<Point>,
 ) -> Result<()> {
     let row_width = result.size().cols.count();
-    let mut points = Vec::with_capacity(row_width as usize);
+    points.clear();
+    points.reserve(row_width as usize);
 
     for col in 0..row_width {
         let cell = Cell::from_row_col(row, col);
         points.push(result.metadata().cell_center(cell));
     }
 
-    coord_trans.transform_points_in_place(&mut points)?;
+    coord_trans.transform_points_in_place(points)?;
 
     for (col, point) in points.iter().enumerate() {
         let src_cell = source_georef.point_to_cell(*point);
