@@ -3,7 +3,7 @@ use crate::{
     raster::DenseRaster,
 };
 
-const DEFAULT_EDGE_POINTS: usize = 20;
+const EDGE_SAMPLE_COUNT: usize = 20;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub enum WarpTargetSize {
@@ -59,42 +59,31 @@ fn reproject_bounding_box_with_edge_sampling(
     // Ensure we have at least 2 points per edge (corners)
     let points_per_edge = edge_points.max(2);
 
+    // Add points along an edge
+    let add_edge_points = |points: &mut Vec<Point>, start: Point, end: Point, include_start: bool, include_end: bool| {
+        let range_start = if include_start { 0 } else { 1 };
+        let range_end = if include_end { points_per_edge } else { points_per_edge - 1 };
+
+        for i in range_start..range_end {
+            let t = calculate_t(i, points_per_edge);
+            let x = start.x() + t * (end.x() - start.x());
+            let y = start.y() + t * (end.y() - start.y());
+            points.push(Point::new(x, y));
+        }
+    };
+
     let mut all_points = Vec::with_capacity(points_per_edge * 4);
 
     // Generate points along each edge
-    // Top edge (left to right)
-    for i in 0..points_per_edge {
-        let t = calculate_t(i, points_per_edge);
-        let x = bbox.top_left().x() + t * (bbox.top_right().x() - bbox.top_left().x());
-        let y = bbox.top_left().y();
-        all_points.push(Point::new(x, y));
-    }
+    // Top edge (left to right) - include both corners
+    add_edge_points(&mut all_points, bbox.top_left(), bbox.top_right(), true, true);
+    // Right edge (top to bottom) - exclude corners (already added)
+    add_edge_points(&mut all_points, bbox.top_right(), bbox.bottom_right(), false, false);
+    // Bottom edge (right to left) - exclude start corner (already added)
+    add_edge_points(&mut all_points, bbox.bottom_right(), bbox.bottom_left(), false, true);
+    // Left edge (bottom to top) - exclude corners (already added)
+    add_edge_points(&mut all_points, bbox.bottom_left(), bbox.top_left(), false, false);
 
-    // Right edge (top to bottom, excluding corners already added)
-    for i in 1..points_per_edge - 1 {
-        let t = calculate_t(i, points_per_edge);
-        let x = bbox.top_right().x();
-        let y = bbox.top_right().y() + t * (bbox.bottom_right().y() - bbox.top_right().y());
-        all_points.push(Point::new(x, y));
-    }
-
-    // Bottom edge (right to left, excluding corner already added)
-    for i in 1..points_per_edge {
-        let t = calculate_t(i, points_per_edge);
-        let x = bbox.bottom_right().x() - t * (bbox.bottom_right().x() - bbox.bottom_left().x());
-        let y = bbox.bottom_right().y();
-        all_points.push(Point::new(x, y));
-    }
-
-    // Left edge (bottom to top, excluding corners already added)
-    for i in 1..points_per_edge - 1 {
-        let t = calculate_t(i, points_per_edge);
-        let x = bbox.bottom_left().x();
-        let y = bbox.bottom_left().y() - t * (bbox.bottom_left().y() - bbox.top_left().y());
-        all_points.push(Point::new(x, y));
-    }
-
-    // Transform all points
     coord_trans.transform_points_in_place(&mut all_points)?;
 
     // Find the bounding box of all transformed points in a single pass
@@ -119,9 +108,9 @@ pub fn reproject_georef_to_epsg(georef: &GeoReference, epsg: crs::Epsg, target_s
     let coord_trans = CoordinateTransformer::from_epsg(georef.projected_epsg().unwrap(), epsg)?;
 
     match target_size {
-        WarpTargetSize::Source => reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_POINTS),
+        WarpTargetSize::Source => reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, EDGE_SAMPLE_COUNT),
         WarpTargetSize::Sized(raster_size) => {
-            let suggested_bbox = reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_POINTS)?.bounding_box();
+            let suggested_bbox = reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, EDGE_SAMPLE_COUNT)?.bounding_box();
 
             // Calculate pixel size to fit exact requested dimensions
             let pixel_width = suggested_bbox.width() / raster_size.cols.count() as f64;
@@ -137,7 +126,7 @@ pub fn reproject_georef_to_epsg(georef: &GeoReference, epsg: crs::Epsg, target_s
             ))
         }
         WarpTargetSize::CellSize(cell_size) => {
-            let bbox = reproject_bounding_box_with_edge_sampling(&georef.bounding_box(), &coord_trans, DEFAULT_EDGE_POINTS)?;
+            let bbox = reproject_bounding_box_with_edge_sampling(&georef.bounding_box(), &coord_trans, EDGE_SAMPLE_COUNT)?;
             let aligned_bbox = calculate_reprojected_bounds(&bbox, cell_size);
             let raster_size = RasterSize::with_rows_cols(
                 Rows((aligned_bbox.height() / cell_size.y().abs()).round() as i32),
