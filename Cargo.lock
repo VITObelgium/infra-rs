@@ -926,8 +926,7 @@ dependencies = [
 [[package]]
 name = "crs-definitions"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52a5c99491ee16d7f1549494bcab90bdfb2f283ef48a25fc6c870e7e7c9f12bb"
+source = "git+https://github.com/dirkvdb/crs-definitions.git?rev=bb93f0f423558090ff1f927440e64f8f4a8ce906#bb93f0f423558090ff1f927440e64f8f4a8ce906"
 
 [[package]]
 name = "crunchy"
