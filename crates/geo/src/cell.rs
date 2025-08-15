@@ -90,6 +90,12 @@ impl Ord for Cell {
     }
 }
 
+impl From<(i32, i32)> for Cell {
+    fn from((row, col): (i32, i32)) -> Self {
+        Cell::from_row_col(row, col)
+    }
+}
+
 /// Iterator over the cells in a raster
 /// The iterator will yield each cell in the raster based on the specified number of rows and columns.
 /// Iteration will occur from the top-left cell to the bottom-right cell in row-major order.
