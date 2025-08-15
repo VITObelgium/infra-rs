@@ -593,6 +593,84 @@ mod tests {
         Ok(())
     }
 
+    #[test_log::test]
+    fn reproject_to_epsg_cell_size() -> Result<()> {
+        let tmp_dir = TempDir::new()?;
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+
+        let cell_size = CellSize::square(50.0);
+
+        let gdal_output_path = tmp_dir.path().join("gdal_warped.tif");
+
+        let start = std::time::Instant::now();
+        let src_ds = gdal::Dataset::open(&input)?;
+        raster::algo::warp_to_disk_cli(
+            &src_ds,
+            &gdal_output_path,
+            &[
+                "-t_srs".to_string(),
+                crs::epsg::WGS84_WEB_MERCATOR.to_string(),
+                "-tr".to_string(),
+                cell_size.x().to_string(),
+                cell_size.y().abs().to_string(),
+                "-et".to_string(),
+                "0".to_string(),
+            ],
+            &Vec::default(),
+        )?;
+
+        let gdal_duration = start.elapsed();
+        log::info!("GDAL warp took: {:?}", gdal_duration);
+        let src = DenseRaster::<u8>::read(&input).unwrap();
+
+        let mut opts = super::WarpOptions {
+            target_size: super::WarpTargetSize::CellSize(cell_size),
+            all_cpus: false,
+            error_threshold: 0.0,
+        };
+
+        let start = std::time::Instant::now();
+        let result = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let reproject_duration = start.elapsed();
+        log::info!("Reproject took: {:?}", reproject_duration);
+
+        opts.error_threshold = 0.125;
+
+        let start = std::time::Instant::now();
+        let result_optimized = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let reproject_optimized_duration = start.elapsed();
+        log::info!("Reproject optimized took: {:?}", reproject_optimized_duration);
+
+        let gdal = DenseRaster::<u8>::read(gdal_output_path)?;
+
+        assert_eq!(gdal.metadata().projected_epsg(), result.metadata().projected_epsg());
+        let gdal_bbox = gdal.metadata().bounding_box();
+        let result_bbox = result.metadata().bounding_box();
+        let result_optimized_bbox = result_optimized.metadata().bounding_box();
+
+        // Verify cell sizes match
+        assert_relative_eq!(gdal.metadata().cell_size(), result.metadata().cell_size(), epsilon = 1e-4);
+        assert_relative_eq!(result.metadata().cell_size(), cell_size, epsilon = 1e-4);
+
+        assert_relative_eq!(gdal_bbox.width(), result_bbox.width(), epsilon = 1e-4); // Allow larger tolerance for cell size-based reprojection
+        assert_relative_eq!(gdal_bbox.height(), result_bbox.height(), epsilon = 1e-4);
+        assert_relative_eq!(gdal_bbox, result_bbox, epsilon = 20.0); // Small shifts are allowed
+
+        // Verify optimized version produces similar results
+        assert_eq!(result_optimized.metadata().projected_epsg(), result.metadata().projected_epsg());
+        assert_relative_eq!(
+            result_optimized.metadata().cell_size(),
+            result.metadata().cell_size(),
+            epsilon = 1e-4
+        );
+
+        assert_relative_eq!(gdal_bbox.width(), result_optimized_bbox.width(), epsilon = 1e-4);
+        assert_relative_eq!(gdal_bbox.height(), result_optimized_bbox.height(), epsilon = 1e-4);
+        assert_relative_eq!(gdal_bbox, result_optimized_bbox, epsilon = 20.0); // Small shifts are allowed
+
+        Ok(())
+    }
+
     // #[test_log::test]
     // fn reproject_to_epsg_fixed_size_fg() -> Result<()> {
     //     let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
