@@ -1,9 +1,10 @@
 use crate::{
-    Array, ArrayNum, Cell, CellSize, Columns, CoordinateTransformer, GeoReference, Point, RasterSize, Rect, Result, Rows, crs, point,
-    raster::DenseRaster,
+    Array, ArrayNum, Cell, CellSize, Columns, CoordinateTransformer, Error, GeoReference, Point, RasterSize, Rect, Result, Rows, crs,
+    point, raster::DenseRaster,
 };
 
-const EDGE_SAMPLE_COUNT: usize = 20;
+const DEFAULT_EDGE_SAMPLE_COUNT: usize = 20;
+const MIN_EDGE_POINTS: usize = 2;
 
 #[derive(Debug, Clone, Copy, Default)]
 pub enum WarpTargetSize {
@@ -49,15 +50,12 @@ fn reproject_bounding_box_with_edge_sampling(
 ) -> Result<Rect<f64>> {
     // Helper function to calculate normalized parameter with clamping
     let calculate_t = |i: usize, points_per_edge: usize| -> f64 {
-        let mut t = i as f64 / (points_per_edge - 1) as f64;
-        if t > 0.99 {
-            t = 1.0;
-        }
-        t
+        let t = i as f64 / (points_per_edge - 1) as f64;
+        if t > 0.99 { 1.0 } else { t }
     };
 
     // Ensure we have at least 2 points per edge (corners)
-    let points_per_edge = edge_points.max(2);
+    let points_per_edge = edge_points.max(MIN_EDGE_POINTS);
 
     // Add points along an edge
     let add_edge_points = |points: &mut Vec<Point>, start: Point, end: Point, include_start: bool, include_end: bool| {
@@ -105,12 +103,15 @@ fn reproject_bounding_box_with_edge_sampling(
 }
 
 pub fn reproject_georef_to_epsg(georef: &GeoReference, epsg: crs::Epsg, target_size: WarpTargetSize) -> Result<GeoReference> {
-    let coord_trans = CoordinateTransformer::from_epsg(georef.projected_epsg().unwrap(), epsg)?;
+    let source_epsg = georef
+        .projected_epsg()
+        .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
+    let coord_trans = CoordinateTransformer::from_epsg(source_epsg, epsg)?;
 
     match target_size {
-        WarpTargetSize::Source => reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, EDGE_SAMPLE_COUNT),
+        WarpTargetSize::Source => reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT),
         WarpTargetSize::Sized(raster_size) => {
-            let suggested_bbox = reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, EDGE_SAMPLE_COUNT)?.bounding_box();
+            let suggested_bbox = reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?.bounding_box();
 
             // Calculate pixel size to fit exact requested dimensions
             let pixel_width = suggested_bbox.width() / raster_size.cols.count() as f64;
@@ -126,7 +127,7 @@ pub fn reproject_georef_to_epsg(georef: &GeoReference, epsg: crs::Epsg, target_s
             ))
         }
         WarpTargetSize::CellSize(cell_size) => {
-            let bbox = reproject_bounding_box_with_edge_sampling(&georef.bounding_box(), &coord_trans, EDGE_SAMPLE_COUNT)?;
+            let bbox = reproject_bounding_box_with_edge_sampling(&georef.bounding_box(), &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
             let aligned_bbox = calculate_reprojected_bounds(&bbox, cell_size);
             let raster_size = RasterSize::with_rows_cols(
                 Rows((aligned_bbox.height() / cell_size.y().abs()).round() as i32),
@@ -231,7 +232,14 @@ pub fn reproject_to_epsg<T: ArrayNum>(src: &DenseRaster<T>, epsg: crs::Epsg, opt
 }
 
 pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference, opts: &WarpOptions) -> Result<DenseRaster<T>> {
-    let coord_trans = CoordinateTransformer::from_epsg(target_georef.projected_epsg().unwrap(), src.metadata().projected_epsg().unwrap())?;
+    let target_epsg = target_georef
+        .projected_epsg()
+        .ok_or_else(|| Error::InvalidArgument("Target georef has no EPSG code".to_string()))?;
+    let source_epsg = src
+        .metadata()
+        .projected_epsg()
+        .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
+    let coord_trans = CoordinateTransformer::from_epsg(target_epsg, source_epsg)?;
     let mut dst = DenseRaster::<T>::filled_with_nodata(target_georef);
 
     if opts.error_threshold > 0.0 {
@@ -246,7 +254,7 @@ pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference,
 fn reproject_exact<T: ArrayNum>(src: &DenseRaster<T>, dst: &mut DenseRaster<T>, coord_trans: &CoordinateTransformer) -> Result<()> {
     let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
     for row in 0..dst.size().rows.count() {
-        transform_row_exact(dst, row, coord_trans, src.metadata(), src, &mut points)?;
+        transform_row_exact(dst, row, coord_trans, src, &mut points)?;
     }
 
     Ok(())
@@ -267,7 +275,7 @@ fn reproject_with_interpolation<T: ArrayNum>(
 
         if row_width <= 2 {
             // For very narrow rows, fall back to exact transformation
-            transform_row_exact(dst, row, coord_trans, source_georef, src, &mut points)?;
+            transform_row_exact(dst, row, coord_trans, src, &mut points)?;
             continue;
         }
 
@@ -285,11 +293,7 @@ fn reproject_with_interpolation<T: ArrayNum>(
         let last_transformed = coord_trans.transform_point(last_pixel)?;
 
         // Check if linear interpolation is accurate enough for middle pixel
-        let interpolated_middle = Point::new(
-            (first_transformed.x() + last_transformed.x()) / 2.0,
-            (first_transformed.y() + last_transformed.y()) / 2.0,
-        );
-
+        let interpolated_middle = linear_interpolate(first_transformed, last_transformed, 0.5);
         let error = point::euclidenan_distance(middle_transformed, interpolated_middle);
 
         if error < opts.error_threshold {
@@ -309,21 +313,15 @@ fn transform_row_exact<T: ArrayNum>(
     result: &mut DenseRaster<T>,
     row: i32,
     coord_trans: &CoordinateTransformer,
-    source_georef: &GeoReference,
     src: &DenseRaster<T>,
     points: &mut Vec<Point>,
 ) -> Result<()> {
-    let row_width = result.size().cols.count();
+    let num_columns = result.size().cols.count();
     points.clear();
-    points.reserve(row_width as usize);
-
-    for col in 0..row_width {
-        let cell = Cell::from_row_col(row, col);
-        points.push(result.metadata().cell_center(cell));
-    }
-
+    points.extend((0..num_columns).map(|col| result.metadata().cell_center(Cell::from_row_col(row, col))));
     coord_trans.transform_points_in_place(points)?;
 
+    let source_georef = src.metadata();
     for (col, point) in points.iter().enumerate() {
         let src_cell = source_georef.point_to_cell(*point);
         if source_georef.is_cell_on_map(src_cell) {
@@ -332,6 +330,12 @@ fn transform_row_exact<T: ArrayNum>(
     }
 
     Ok(())
+}
+
+/// Linear interpolation between two points
+#[inline]
+fn linear_interpolate(start: Point, end: Point, t: f64) -> Point {
+    Point::new(start.x() + t * (end.x() - start.x()), start.y() + t * (end.y() - start.y()))
 }
 
 /// Interpolate values across a row using linear interpolation between endpoints
@@ -347,11 +351,7 @@ fn interpolate_row<T: ArrayNum>(
 
     for col in 0..row_width {
         let t = if row_width == 1 { 0.0 } else { col as f64 / (row_width - 1) as f64 };
-
-        let interpolated_point = Point::new(
-            first_transformed.x() + t * (last_transformed.x() - first_transformed.x()),
-            first_transformed.y() + t * (last_transformed.y() - first_transformed.y()),
-        );
+        let interpolated_point = linear_interpolate(first_transformed, last_transformed, t);
 
         let src_cell = source_georef.point_to_cell(interpolated_point);
         if source_georef.is_cell_on_map(src_cell) {
@@ -415,11 +415,7 @@ fn subdivide_segment<T: ArrayNum>(
 
     // Check interpolation error
     let t = (middle_col - start_col) as f64 / (end_col - start_col) as f64;
-    let interpolated_middle = Point::new(
-        start_transformed.x() + t * (end_transformed.x() - start_transformed.x()),
-        start_transformed.y() + t * (end_transformed.y() - start_transformed.y()),
-    );
-
+    let interpolated_middle = linear_interpolate(start_transformed, end_transformed, t);
     let error = point::euclidenan_distance(middle_transformed, interpolated_middle);
 
     if error < error_threshold {
@@ -431,10 +427,7 @@ fn subdivide_segment<T: ArrayNum>(
                 (col - start_col) as f64 / (end_col - start_col) as f64
             };
 
-            let interpolated_point = Point::new(
-                start_transformed.x() + t * (end_transformed.x() - start_transformed.x()),
-                start_transformed.y() + t * (end_transformed.y() - start_transformed.y()),
-            );
+            let interpolated_point = linear_interpolate(start_transformed, end_transformed, t);
 
             let src_cell = source_georef.point_to_cell(interpolated_point);
             if source_georef.is_cell_on_map(src_cell) {
