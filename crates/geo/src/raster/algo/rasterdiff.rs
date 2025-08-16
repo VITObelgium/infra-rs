@@ -1,4 +1,4 @@
-use crate::{Array, ArrayNum, Cell};
+use crate::{Array, ArrayMetadata, ArrayNum, Cell};
 
 use crate::{Error, GeoReference, Result};
 
@@ -78,29 +78,16 @@ pub fn raster_files_diff<T: ArrayNum + gdal::raster::GdalType>(
 }
 
 /// Compare two rasters and return a list of cell mismatches
-/// The two rasters must have the same extent, size, cell size and be aligned
-pub fn raster_diff<T: ArrayNum>(
-    lhs: &impl Array<Pixel = T, Metadata = GeoReference>,
-    rhs: &impl Array<Pixel = T, Metadata = GeoReference>,
+/// Only the data is compared, no checks are made to see if the two array are geospatially aligned or have the same cell size.
+pub fn array_diff<TArray: Array<Pixel = T, Metadata = M>, T: ArrayNum, M: ArrayMetadata>(
+    lhs: &TArray,
+    rhs: &TArray,
 ) -> Result<RasterDiffResult<T>> {
     let left_meta = lhs.metadata();
-    let right_meta = rhs.metadata();
 
-    if left_meta.raster_size() != right_meta.raster_size() {
+    if lhs.size() != rhs.size() {
         return Err(Error::InvalidArgument(
             "Rasters have different sizes, diffing is not possible".to_string(),
-        ));
-    }
-
-    if left_meta.cell_size() != right_meta.cell_size() {
-        return Err(Error::InvalidArgument(
-            "Rasters have different cell sizes, diffing is not possible".to_string(),
-        ));
-    }
-
-    if !left_meta.is_aligned_with(right_meta) {
-        return Err(Error::InvalidArgument(
-            "Rasters are not aligned, diffing is not possible".to_string(),
         ));
     }
 
@@ -127,4 +114,28 @@ pub fn raster_diff<T: ArrayNum>(
         });
 
     Ok(raster_diff)
+}
+
+/// Compare two rasters and return a list of cell mismatches
+/// The two rasters must have the same extent, size, cell size and be aligned
+pub fn raster_diff<TArray: Array<Pixel = T, Metadata = GeoReference>, T: ArrayNum>(
+    lhs: &TArray,
+    rhs: &TArray,
+) -> Result<RasterDiffResult<T>> {
+    let left_meta = lhs.metadata();
+    let right_meta = rhs.metadata();
+
+    if left_meta.cell_size() != right_meta.cell_size() {
+        return Err(Error::InvalidArgument(
+            "Rasters have different cell sizes, diffing is not possible".to_string(),
+        ));
+    }
+
+    if !left_meta.is_aligned_with(right_meta) {
+        return Err(Error::InvalidArgument(
+            "Rasters are not aligned, diffing is not possible".to_string(),
+        ));
+    }
+
+    array_diff(lhs, rhs)
 }
