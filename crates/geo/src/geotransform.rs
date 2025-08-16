@@ -1,5 +1,7 @@
 use std::fmt::Debug;
 
+use approx::{AbsDiffEq, RelativeEq};
+
 use crate::{Cell, CellSize, Error, Point, Result};
 
 #[derive(Clone, Copy, PartialEq, Default)]
@@ -126,5 +128,27 @@ impl Debug for GeoTransform {
             self.cell_size_x(),
             self.cell_size_y()
         )
+    }
+}
+
+impl AbsDiffEq for GeoTransform {
+    type Epsilon = f64;
+
+    fn default_epsilon() -> Self::Epsilon {
+        f64::default_epsilon()
+    }
+
+    fn abs_diff_eq(&self, other: &Self, epsilon: Self::Epsilon) -> bool {
+        self.0.abs_diff_eq(&other.0, epsilon)
+    }
+}
+
+impl RelativeEq for GeoTransform {
+    fn default_max_relative() -> Self::Epsilon {
+        f64::default_max_relative()
+    }
+
+    fn relative_eq(&self, other: &Self, epsilon: Self::Epsilon, max_relative: Self::Epsilon) -> bool {
+        self.0.relative_eq(&other.0, epsilon, max_relative)
     }
 }

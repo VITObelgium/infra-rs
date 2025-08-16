@@ -27,13 +27,16 @@ pub use polygonize::polygonize;
 use crate::Array;
 
 #[cfg(feature = "gdal")]
-pub use {translate::translate, translate::translate_file, warp::WarpOptions, warp::warp, warp::warp_cli, warp::warp_to_disk_cli};
+pub use {translate::translate, translate::translate_file, warp::GdalWarpOptions, warp::warp, warp::warp_cli, warp::warp_to_disk_cli};
 
 #[cfg(feature = "gdal")]
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};
 
 #[cfg(any(feature = "proj", feature = "proj4rs"))]
-pub use {reproject::reproject, reproject::reproject_georef_to_epsg, reproject::reproject_to_epsg};
+pub use {
+    reproject::TargetPixelAlignment, reproject::TargetSrs, reproject::WarpOptions, reproject::WarpTargetSize, reproject::reproject,
+    reproject::reproject_georeference,
+};
 
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
@@ -56,9 +59,7 @@ pub mod simd {
 
 pub use {nodata::is_data, nodata::is_nodata, nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::replace_value_by_nodata};
 
-pub use rasterdiff::RasterCellMismatch;
-pub use rasterdiff::RasterDiffResult;
-pub use rasterdiff::raster_diff;
+pub use rasterdiff::{RasterCellMismatch, RasterDiffResult, array_diff, raster_diff};
 
 pub fn assert_dimensions(r1: &impl Array, r2: &impl Array) {
     assert_eq!(r1.columns(), r2.columns(), "Raster column count does not match");

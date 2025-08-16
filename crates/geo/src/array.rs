@@ -19,6 +19,11 @@ pub trait ArrayMetadata: Clone + Debug {
     }
 
     fn with_geo_reference(georef: GeoReference) -> Self;
+
+    fn cell_at_index(&self, index: usize) -> Cell {
+        let col_count = self.size().cols.count() as usize;
+        Cell::from_row_col((index / col_count) as i32, (index % col_count) as i32)
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

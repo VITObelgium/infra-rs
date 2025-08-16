@@ -11,10 +11,10 @@ const LANES: usize = inf::simd::LANES;
 impl<T: crate::ArrayNum + gdal::raster::GdalType> DenseRaster<T> {
     pub fn warped_to_epsg(&self, epsg: crate::crs::Epsg) -> crate::Result<Self> {
         use super::algo;
-        Self::warped_to_epsg_with_opts(self, epsg, &algo::WarpOptions::default())
+        Self::warped_to_epsg_with_opts(self, epsg, &algo::GdalWarpOptions::default())
     }
 
-    pub fn warped_to_epsg_with_opts(&self, epsg: crate::crs::Epsg, opts: &super::algo::WarpOptions) -> crate::Result<Self> {
+    pub fn warped_to_epsg_with_opts(&self, epsg: crate::crs::Epsg, opts: &super::algo::GdalWarpOptions) -> crate::Result<Self> {
         use super::algo;
         use super::io;
         use crate::Array;

@@ -6,6 +6,15 @@ use crate::{
 const DEFAULT_EDGE_SAMPLE_COUNT: usize = 20;
 const MIN_EDGE_POINTS: usize = 2;
 
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub enum TargetPixelAlignment {
+    /// Does not align the target extent to any pixel grid.
+    #[default]
+    No,
+    /// Align the coordinates of the extent of the output file to the pixel grid
+    Yes,
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub enum WarpTargetSize {
     #[default]
@@ -14,7 +23,22 @@ pub enum WarpTargetSize {
     /// Uses the exact raster size for the reprojection target.
     Sized(RasterSize),
     /// Uses the provided cell size for the reprojection target.
-    CellSize(CellSize),
+    CellSize(CellSize, TargetPixelAlignment),
+}
+
+#[derive(Debug, Clone)]
+pub enum TargetSrs {
+    Epsg(crs::Epsg),
+    Proj4(String),
+}
+
+impl std::fmt::Display for TargetSrs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetSrs::Epsg(epsg) => write!(f, "{epsg}"),
+            TargetSrs::Proj4(s) => write!(f, "{s}"),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +49,8 @@ pub struct WarpOptions {
     pub error_threshold: f64,
     /// Process chunks in parallel
     pub all_cpus: bool,
+    /// The target SRS to reproject to
+    pub target_srs: TargetSrs,
 }
 
 impl Default for WarpOptions {
@@ -33,6 +59,7 @@ impl Default for WarpOptions {
             target_size: Default::default(),
             error_threshold: 0.125,
             all_cpus: Default::default(),
+            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
         }
     }
 }
@@ -102,42 +129,46 @@ fn reproject_bounding_box_with_edge_sampling(
     Ok(Rect::from_nw_se(top_left, bottom_right))
 }
 
-pub fn reproject_georef_to_epsg(georef: &GeoReference, epsg: crs::Epsg, target_size: WarpTargetSize) -> Result<GeoReference> {
+pub fn reproject_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<GeoReference> {
     let source_epsg = georef
         .projected_epsg()
         .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
-    let coord_trans = CoordinateTransformer::from_epsg(source_epsg, epsg)?;
+    let coord_trans = CoordinateTransformer::new(&source_epsg.to_string(), &opts.target_srs.to_string())?;
+    let target_georef = reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
 
-    match target_size {
-        WarpTargetSize::Source => reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT),
+    match opts.target_size {
+        WarpTargetSize::Source => Ok(target_georef),
         WarpTargetSize::Sized(raster_size) => {
-            let suggested_bbox = reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?.bounding_box();
+            let bbox = target_georef.bounding_box();
 
             // Calculate pixel size to fit exact requested dimensions
-            let pixel_width = suggested_bbox.width() / raster_size.cols.count() as f64;
-            let pixel_height = suggested_bbox.height() / raster_size.rows.count() as f64;
+            let pixel_width = bbox.width() / raster_size.cols.count() as f64;
+            let pixel_height = bbox.height() / raster_size.rows.count() as f64;
             let cell_size = CellSize::new(pixel_width, -pixel_height);
 
             Ok(GeoReference::with_origin(
-                epsg.to_string(),
+                opts.target_srs.to_string(),
                 raster_size,
-                suggested_bbox.bottom_left(),
+                bbox.bottom_left(),
                 cell_size,
                 georef.nodata(),
             ))
         }
-        WarpTargetSize::CellSize(cell_size) => {
-            let bbox = reproject_bounding_box_with_edge_sampling(&georef.bounding_box(), &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
-            let aligned_bbox = calculate_reprojected_bounds(&bbox, cell_size);
+        WarpTargetSize::CellSize(cell_size, alignment) => {
+            let bbox = match alignment {
+                TargetPixelAlignment::Yes => calculate_target_aligned_bounds(&target_georef.bounding_box(), target_georef.cell_size()),
+                TargetPixelAlignment::No => target_georef.bounding_box(),
+            };
+
             let raster_size = RasterSize::with_rows_cols(
-                Rows((aligned_bbox.height() / cell_size.y().abs()).round() as i32),
-                Columns((aligned_bbox.width() / cell_size.x()).round() as i32),
+                Rows((bbox.height() / cell_size.y().abs()).round() as i32),
+                Columns((bbox.width() / cell_size.x()).round() as i32),
             );
 
             Ok(GeoReference::with_origin(
-                epsg.to_string(),
+                opts.target_srs.to_string(),
                 raster_size,
-                aligned_bbox.bottom_left(),
+                bbox.bottom_left(),
                 cell_size,
                 georef.nodata(),
             ))
@@ -226,22 +257,31 @@ fn calculate_reprojected_bounds(bbox: &Rect<f64>, cell_size: CellSize) -> Rect<f
     Rect::from_nw_se(Point::new(min_x, max_y), Point::new(max_x, min_y))
 }
 
-pub fn reproject_to_epsg<T: ArrayNum>(src: &DenseRaster<T>, epsg: crs::Epsg, opts: &WarpOptions) -> Result<DenseRaster<T>> {
-    let target_georef = reproject_georef_to_epsg(src.metadata(), epsg, opts.target_size)?;
-    reproject(src, target_georef, opts)
+fn calculate_target_aligned_bounds(bbox: &Rect<f64>, cell_size: CellSize) -> Rect<f64> {
+    // Align to pixel grid
+    // This means xmin/resx, ymin/resy, xmax/resx, ymax/resy should all be integers
+    // The aligned extent should include the minimum (original) extent
+
+    let min_x = (bbox.top_left().x() / cell_size.x()).floor() * cell_size.x();
+    let max_x = (bbox.bottom_right().x() / cell_size.x()).ceil() * cell_size.x();
+
+    // Note: cell_size.y() is negative for standard raster coordinates
+    let max_y = (bbox.top_left().y() / cell_size.y().abs()).ceil() * cell_size.y().abs();
+    let min_y = (bbox.bottom_right().y() / cell_size.y().abs()).floor() * cell_size.y().abs();
+
+    Rect::from_nw_se(Point::new(min_x, max_y), Point::new(max_x, min_y))
 }
 
-pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, target_georef: GeoReference, opts: &WarpOptions) -> Result<DenseRaster<T>> {
-    let target_epsg = target_georef
-        .projected_epsg()
-        .ok_or_else(|| Error::InvalidArgument("Target georef has no EPSG code".to_string()))?;
+pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, opts: &WarpOptions) -> Result<DenseRaster<T>> {
     let source_epsg = src
         .metadata()
         .projected_epsg()
         .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
-    let coord_trans = CoordinateTransformer::from_epsg(target_epsg, source_epsg)?;
+
+    let target_georef = reproject_georeference(&src.meta, opts)?;
     let mut dst = DenseRaster::<T>::filled_with_nodata(target_georef);
 
+    let coord_trans = CoordinateTransformer::new(&opts.target_srs.to_string(), &source_epsg.to_string())?;
     if opts.error_threshold > 0.0 {
         reproject_with_interpolation(src, &mut dst, &coord_trans, opts)?;
     } else {
@@ -461,7 +501,7 @@ mod tests {
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
         let start = std::time::Instant::now();
-        let opts = algo::WarpOptions {
+        let opts = algo::GdalWarpOptions {
             all_cpus: false,
             ..Default::default()
         };
@@ -470,18 +510,24 @@ mod tests {
         let gdal_duration = start.elapsed();
         log::info!("GDAL warp took: {:?}", gdal_duration);
 
+        let warp_opts = super::WarpOptions {
+            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+            ..Default::default()
+        };
+
         let start = std::time::Instant::now();
-        let result = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &WarpOptions::default())?;
+        let result = super::reproject(&src, &warp_opts)?;
         let reproject_duration = start.elapsed();
         log::info!("Reproject took: {:?}", reproject_duration);
 
         let warp_opts = super::WarpOptions {
             error_threshold: 0.0,
+            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
             ..Default::default()
         };
 
         let start = std::time::Instant::now();
-        let result_interpolated = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &warp_opts)?;
+        let result_interpolated = super::reproject(&src, &warp_opts)?;
         let reproject_interpolated_duration = start.elapsed();
         log::info!("Reproject interpolated took: {:?}", reproject_interpolated_duration);
 
@@ -546,19 +592,20 @@ mod tests {
 
         let mut opts = super::WarpOptions {
             target_size: super::WarpTargetSize::Sized(target_size),
+            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
             all_cpus: false,
             error_threshold: 0.0,
         };
 
         let start = std::time::Instant::now();
-        let result = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let result = super::reproject(&src, &opts)?;
         let reproject_duration = start.elapsed();
         log::info!("Reproject took: {:?}", reproject_duration);
 
         opts.error_threshold = 0.125;
 
         let start = std::time::Instant::now();
-        let result_optimized = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let result_optimized = super::reproject(&src, &opts)?;
         let reproject_optimized_duration = start.elapsed();
         log::info!("Reproject optimized took: {:?}", reproject_optimized_duration);
 
@@ -594,7 +641,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn reproject_to_epsg_cell_size() -> Result<()> {
+    fn reproject_cell_size() -> Result<()> {
         let tmp_dir = TempDir::new()?;
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
 
@@ -624,20 +671,21 @@ mod tests {
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
         let mut opts = super::WarpOptions {
-            target_size: super::WarpTargetSize::CellSize(cell_size),
+            target_size: super::WarpTargetSize::CellSize(cell_size, TargetPixelAlignment::No),
+            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
             all_cpus: false,
             error_threshold: 0.0,
         };
 
         let start = std::time::Instant::now();
-        let result = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let result = super::reproject(&src, &opts)?;
         let reproject_duration = start.elapsed();
         log::info!("Reproject took: {:?}", reproject_duration);
 
         opts.error_threshold = 0.125;
 
         let start = std::time::Instant::now();
-        let result_optimized = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let result_optimized = super::reproject(&src, &opts)?;
         let reproject_optimized_duration = start.elapsed();
         log::info!("Reproject optimized took: {:?}", reproject_optimized_duration);
 
@@ -694,24 +742,27 @@ mod tests {
 
         // Measure GDAL performance
         let start = std::time::Instant::now();
-        let opts = algo::WarpOptions {
+        let opts = algo::GdalWarpOptions {
             all_cpus: false,
             ..Default::default()
         };
         let _gdal_result = src.warped_to_epsg_with_opts(crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
         let gdal_duration = start.elapsed();
 
-        let mut opts = super::WarpOptions::default();
+        let mut opts = super::WarpOptions {
+            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+            ..Default::default()
+        };
 
         // Measure with interpolation performance
         let start = std::time::Instant::now();
-        let _ = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let _ = super::reproject(&src, &opts)?;
         let optimized_duration = start.elapsed();
 
         // Measure standard implementation performance
         opts.error_threshold = 0.0;
         let start = std::time::Instant::now();
-        let _ = super::reproject_to_epsg(&src, crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
+        let _ = super::reproject(&src, &opts)?;
         let standard_duration = start.elapsed();
 
         log::info!("Performance Benchmark Results:");
@@ -736,7 +787,8 @@ mod tests {
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
         let georef_gdal = src.metadata().warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-        let georef = super::reproject_georef_to_epsg(src.metadata(), crs::epsg::WGS84_WEB_MERCATOR, WarpTargetSize::Source)?;
+        let opts = WarpOptions::default();
+        let georef = super::reproject_georeference(src.metadata(), &opts)?;
 
         assert_eq!(georef_gdal.raster_size(), georef.raster_size());
         assert_eq!(georef_gdal.projected_epsg(), georef.projected_epsg());
@@ -751,4 +803,67 @@ mod tests {
 
         Ok(())
     }
+
+    // #[test]
+    // fn reproject_target_aligned_pixels() -> Result<()> {
+    //     let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+    //     let src = GeoReference::from_file(&input)?;
+
+    //     // Test without target_aligned_pixels
+    //     let opts_no_tap = WarpOptions {
+    //         target_size: WarpTargetSize::CellSize(CellSize::square(100.0), TargetPixelAlignment::No),
+    //         target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+    //         ..Default::default()
+    //     };
+    //     let result_no_tap = super::reproject_georeference(&src, &opts_no_tap)?;
+
+    //     // Test with target_aligned_pixels
+    //     let opts_tap = WarpOptions {
+    //         target_size: WarpTargetSize::CellSize(CellSize::square(100.0), TargetPixelAlignment::Yes),
+    //         ..Default::default()
+    //     };
+    //     let result_tap = super::reproject_georeference(&src, &opts_tap)?;
+
+    //     // The results should have the same cell size
+    //     assert_relative_eq!(result_no_tap.cell_size(), result_tap.cell_size(), epsilon = 1e-4);
+
+    //     // But different bounds alignment - TAP version should have aligned bounds
+    //     let bbox_no_tap = result_no_tap.bounding_box();
+    //     let bbox_tap = result_tap.bounding_box();
+
+    //     let cell_size = result_tap.cell_size();
+
+    //     // With TAP, the bounds should be aligned to the pixel grid
+    //     // xmin / cell_size.x should be an integer (or very close to one)
+    //     let x_alignment_error = (bbox_tap.top_left().x() / cell_size.x()).fract().abs();
+    //     let y_alignment_error = (bbox_tap.top_left().y() / cell_size.y().abs()).fract().abs();
+
+    //     log::info!("X alignment error (TAP): {}", x_alignment_error);
+    //     log::info!("Y alignment error (TAP): {}", y_alignment_error);
+    //     log::info!("No-TAP bbox: {:?}", bbox_no_tap);
+    //     log::info!("TAP bbox: {:?}", bbox_tap);
+    //     log::info!("Cell size: {:?}", cell_size);
+
+    //     // Debug: show the exact alignment calculations
+    //     log::info!("TAP top_left.x / cell_size.x = {}", bbox_tap.top_left().x() / cell_size.x());
+    //     log::info!("TAP top_left.y / cell_size.y = {}", bbox_tap.top_left().y() / cell_size.y().abs());
+
+    //     assert!(
+    //         x_alignment_error < 1e-6,
+    //         "TAP bounds should be aligned to pixel grid in X, error: {}",
+    //         x_alignment_error
+    //     );
+    //     assert!(
+    //         y_alignment_error < 1e-6,
+    //         "TAP bounds should be aligned to pixel grid in Y, error: {}",
+    //         y_alignment_error
+    //     );
+
+    //     // The non-TAP version may or may not be aligned (typically not)
+    //     //
+
+    //     log::error!("Conoare results to gdal");
+
+    //     Ok(())
+    // }
 }

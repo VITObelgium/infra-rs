@@ -9,7 +9,7 @@ use crate::{
 };
 use gdal::cpl::CslStringList;
 
-pub struct WarpOptions {
+pub struct GdalWarpOptions {
     pub resample_algo: gdal::raster::ResampleAlg,
     pub clip_polygon: Option<gdal::vector::Geometry>,
     pub clip_blend_distance: Option<f64>,
@@ -17,9 +17,9 @@ pub struct WarpOptions {
     pub all_cpus: bool,
 }
 
-impl Default for WarpOptions {
+impl Default for GdalWarpOptions {
     fn default() -> Self {
-        WarpOptions {
+        GdalWarpOptions {
             resample_algo: gdal::raster::ResampleAlg::NearestNeighbour,
             clip_polygon: None,
             clip_blend_distance: None,
@@ -29,7 +29,7 @@ impl Default for WarpOptions {
     }
 }
 
-pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &WarpOptions) -> Result<()> {
+pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &GdalWarpOptions) -> Result<()> {
     let mut str_options = CslStringList::new();
     if options.all_cpus {
         str_options.add_string("NUM_THREADS=ALL_CPUS")?;
