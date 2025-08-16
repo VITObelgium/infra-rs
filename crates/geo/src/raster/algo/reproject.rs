@@ -134,7 +134,7 @@ pub fn reproject_georeference(georef: &GeoReference, opts: &WarpOptions) -> Resu
         .projected_epsg()
         .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
     let coord_trans = CoordinateTransformer::new(&source_epsg.to_string(), &opts.target_srs.to_string())?;
-    let target_georef = reproject_georef_to_epsg_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
+    let target_georef = reproject_georef_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
 
     match opts.target_size {
         WarpTargetSize::Source => Ok(target_georef),
@@ -179,7 +179,7 @@ pub fn reproject_georeference(georef: &GeoReference, opts: &WarpOptions) -> Resu
 /// Reproject a `GeoReference` to a different EPSG with configurable edge sampling
 ///
 /// * `edge_points` - Number of points to sample along each edge of the bounding box for more accurate reprojection
-fn reproject_georef_to_epsg_with_edge_points(
+fn reproject_georef_with_edge_points(
     georef: &GeoReference,
     coord_trans: &CoordinateTransformer,
     edge_points: usize,
@@ -496,7 +496,7 @@ mod tests {
     };
 
     #[test_log::test]
-    fn reproject_to_epsg_source_size() -> Result<()> {
+    fn reproject_source_size() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
@@ -561,7 +561,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn reproject_to_epsg_fixed_size() -> Result<()> {
+    fn reproject_fixed_size() -> Result<()> {
         let tmp_dir = TempDir::new()?;
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
 

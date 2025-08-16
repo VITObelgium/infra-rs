@@ -91,6 +91,9 @@ where
     /// Write the full raster to disk (raster type is detected based on the file extension, default options are used)
     fn write(&mut self, path: impl AsRef<Path>) -> Result;
 
+    /// Write the full raster to disk (raster type is detected based on the file extension, default options are used)
+    fn into_write(self, path: impl AsRef<Path>) -> Result;
+
     /// Write the full raster to disk
     fn write_with_options(&mut self, path: impl AsRef<Path>, options: WriteRasterOptions) -> Result;
 }

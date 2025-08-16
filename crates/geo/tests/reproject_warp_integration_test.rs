@@ -17,6 +17,10 @@ mod tests {
         path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data")
     }
 
+    fn test_results_output_dir() -> std::path::PathBuf {
+        path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "reproject_debug")
+    }
+
     fn warp_options_to_gdalwarp_args(opts: &WarpOptions) -> Vec<String> {
         let mut args = Vec::default();
 
@@ -165,6 +169,13 @@ mod tests {
         return warp_using_gdal_binary(input, &tmp_dir, opts);
     }
 
+    fn store_test_output<T: ArrayNum>(geo: DenseRaster<T>, gdal: DenseRaster<T>, name: &str) -> Result<()> {
+        let output_dir = test_results_output_dir();
+        geo.into_write(output_dir.join(format!("{}_geo.tif", name)))?;
+        gdal.into_write(output_dir.join(format!("{}_gdal.tif", name)))?;
+        Ok(())
+    }
+
     #[test_log::test]
     fn test_reproject_vs_gdalwarp_source_size() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
@@ -180,7 +191,7 @@ mod tests {
         compare_raster_metadata(&our_raster, &gdal_raster, 20.0);
         compare_raster_contents(&our_raster, &gdal_raster, 7.5)?;
 
-        Ok(())
+        store_test_output(our_raster, gdal_raster, "source_size_et0")
     }
 
     #[test_log::test]
@@ -200,7 +211,7 @@ mod tests {
         compare_raster_metadata(&our_raster, &gdal_raster, 20.0);
         compare_raster_contents(&our_raster, &gdal_raster, 7.5)?;
 
-        Ok(())
+        store_test_output(our_raster, gdal_raster, "fixed_size_et0")
     }
 
     #[test_log::test]
@@ -220,7 +231,7 @@ mod tests {
         compare_raster_metadata(&our_raster, &gdal_raster, 20.0);
         compare_raster_contents(&our_raster, &gdal_raster, 7.5)?;
 
-        Ok(())
+        store_test_output(our_raster, gdal_raster, "cell_size_et0")
     }
 
     // #[test_log::test]

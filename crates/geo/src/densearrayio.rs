@@ -86,6 +86,10 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
         Ok(())
     }
 
+    fn into_write(mut self, path: impl AsRef<Path>) -> Result {
+        self.write(path)
+    }
+
     fn write_with_options(&mut self, path: impl AsRef<Path>, options: WriteRasterOptions) -> Result {
         let georef = self.metadata().geo_reference();
         self.restore_nodata(); // Ensure nodata values are restored to the metadata value before writing
