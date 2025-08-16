@@ -101,7 +101,7 @@ mod tests {
 
     #[test]
     fn test_statistics_all_nodata() -> Result<()> {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
             Point::new(0.0, 0.0),
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn test_statistics() -> Result<()> {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
             Point::new(0.0, 0.0),

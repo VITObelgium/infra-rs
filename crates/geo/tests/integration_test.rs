@@ -118,7 +118,7 @@ mod tests {
         };
 
         let ds = vector::io::dataset::open_read_only(&path).unwrap();
-        let output_extent = GeoReference::with_origin(
+        let output_extent = GeoReference::with_bottom_left_origin(
             SpatialReference::from_epsg(Epsg::from(31370)).unwrap().to_wkt().unwrap(),
             RasterSize::with_rows_cols(Rows(120), Columns(260)),
             (11000.0, 140000.0).into(),

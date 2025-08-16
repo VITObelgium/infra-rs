@@ -1020,7 +1020,7 @@ mod unspecialized_generictests {
     where
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>>,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(5), Columns(10)),
             Point::new(0.0, 0.0),
@@ -1063,7 +1063,7 @@ mod unspecialized_generictests {
         R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>>,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(5), Columns(10)),
             Point::new(0.0, 0.0),
@@ -1106,7 +1106,7 @@ mod unspecialized_generictests {
         R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(5), Columns(10)),
             Point::new(0.0, 0.0),
@@ -1167,7 +1167,7 @@ mod unspecialized_generictests {
         R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(5), Columns(10)),
             Point::new(0.0, 0.0),
@@ -1252,7 +1252,7 @@ mod unspecialized_generictests {
         R: Array<Pixel = u8, Metadata = GeoReference, WithPixelType<u8> = R>,
         R::WithPixelType<f32>: ArrayCopy<f32, R::WithPixelType<u8>> + RelativeEq,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(5), Columns(10)),
             Point::new(0.0, 0.0),

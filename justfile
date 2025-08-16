@@ -1,3 +1,5 @@
+test_filter := ''
+
 # detect the vcpkg triplet based on the system information
 default_triplet := if os_family() == "windows" {
     "x64-windows-static-release"
@@ -23,7 +25,6 @@ PYTHON_EXE := if os_family() == "windows" {
         "bin/python3"
     }
 VCPKG_DEFAULT_HOST_TRIPLET := default_triplet
-test_filter := ''
 
 set export
 unexport VCPKG_ROOT
@@ -94,6 +95,9 @@ test_debug target=default_target $RUST_LOG="debug":
 
 test_release target=default_target:
     cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_filter}}
+
+test_release_verbose target=default_target:
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector --no-capture {{test_filter}}
 
 test_debug_simd target=default_target:
     cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector {{test_filter}}

@@ -60,14 +60,14 @@ mod tests {
 
     #[test]
     fn test_intersect_metadata() {
-        let meta1 = GeoReference::with_origin(
+        let meta1 = GeoReference::with_bottom_left_origin(
             String::default(),
             RasterSize::with_rows_cols(Rows(3), Columns(5)),
             Point::new(1.0, -10.0),
             CellSize::square(4.0),
             Some(-10.0),
         );
-        let meta2 = GeoReference::with_origin(
+        let meta2 = GeoReference::with_bottom_left_origin(
             String::default(),
             RasterSize::with_rows_cols(Rows(3), Columns(4)),
             Point::new(-3.0, -6.0),

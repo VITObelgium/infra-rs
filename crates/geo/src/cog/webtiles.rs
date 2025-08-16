@@ -61,7 +61,7 @@ impl WebTiles {
                     zoom_levels[web_tile.z as usize].insert(web_tile, TileSource::Aligned(*cog_tile));
                 });
             } else {
-                let overview_geo_ref = GeoReference::with_origin(
+                let overview_geo_ref = GeoReference::with_bottom_left_origin(
                     "EPSG:3857",
                     overview.raster_size,
                     meta.geo_reference.bottom_left(),
@@ -297,7 +297,7 @@ fn create_cog_tile_web_mercator_bounds(
 
             let lower_left_cell = Cell::from_row_col(current_source_cell.row + tile_height.count() - 1, current_source_cell.col);
 
-            let cog_tile_geo_ref = GeoReference::with_origin(
+            let cog_tile_geo_ref = GeoReference::with_bottom_left_origin(
                 "EPSG:3857",
                 RasterSize::with_rows_cols(tile_height, tile_width),
                 geo_ref_zoom_level.cell_lower_left(lower_left_cell),

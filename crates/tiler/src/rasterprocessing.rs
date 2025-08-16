@@ -119,7 +119,7 @@ mod tests {
     fn raster_bounds_invalid_projection_info() {
         let projection = "LOCAL_CS[\"Amersfoort / RD New\",UNIT[\"metre\",1,AUTHORITY[\"EPSG\",\"9001\"]],AXIS[\"Easting\",EAST],AXIS[\"Northing\",NORTH]]";
 
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             projection,
             RasterSize::with_rows_cols(Rows(3250), Columns(2700)),
             Point::new(10000.0, 300000.0),

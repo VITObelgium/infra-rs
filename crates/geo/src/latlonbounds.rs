@@ -22,6 +22,22 @@ impl LatLonBounds {
         bounds.extend(b);
         bounds
     }
+
+    pub fn to_geojson(&self) -> String {
+        format!(
+            r#"{{"type":"Polygon","coordinates":[[[{},{}],[{},{}],[{},{}],[{},{}],[{},{}]]]}}"#,
+            self.northwest().longitude,
+            self.northwest().latitude,
+            self.northeast().longitude,
+            self.northeast().latitude,
+            self.southeast().longitude,
+            self.southeast().latitude,
+            self.southwest().longitude,
+            self.southwest().latitude,
+            self.northwest().longitude,
+            self.northwest().latitude,
+        )
+    }
 }
 
 impl LatLonBounds {

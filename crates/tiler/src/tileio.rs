@@ -121,7 +121,7 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
     let scaled_size = (tile_size * dpi_ratio as u32) as i32;
 
     let projection = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-    let dest_extent = GeoReference::with_origin(
+    let dest_extent = GeoReference::with_bottom_left_origin(
         projection.to_wkt()?,
         RasterSize {
             rows: Rows(scaled_size),

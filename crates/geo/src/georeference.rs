@@ -114,20 +114,14 @@ impl GeoReference {
         }
     }
 
-    pub fn with_origin<S: Into<String>, T: NumCast>(
+    pub fn with_top_left_origin<S: Into<String>, T: NumCast>(
         projection: S,
         size: RasterSize,
-        lower_left_coordintate: Point,
+        top_left_coordintate: Point,
         cell_size: CellSize,
         nodata: Option<T>,
     ) -> Self {
-        let geo_transform = GeoTransform::from_top_left_and_cell_size(
-            Point::new(
-                lower_left_coordintate.x(),
-                lower_left_coordintate.y() - (cell_size.y() * size.rows.count() as f64),
-            ),
-            cell_size,
-        );
+        let geo_transform = GeoTransform::from_top_left_and_cell_size(top_left_coordintate, cell_size);
 
         let nodata = match nodata {
             Some(nodata) => nodata.to_f64(),
@@ -142,12 +136,31 @@ impl GeoReference {
         }
     }
 
+    pub fn with_bottom_left_origin<S: Into<String>, T: NumCast>(
+        projection: S,
+        size: RasterSize,
+        lower_left_coordintate: Point,
+        cell_size: CellSize,
+        nodata: Option<T>,
+    ) -> Self {
+        Self::with_top_left_origin(
+            projection,
+            size,
+            Point::new(
+                lower_left_coordintate.x(),
+                lower_left_coordintate.y() - (cell_size.y() * size.rows.count() as f64),
+            ),
+            cell_size,
+            nodata,
+        )
+    }
+
     pub fn from_tile(tile: &Tile, tile_size: usize, dpi_ratio: u8) -> Self {
         let tile_size = tile_size * dpi_ratio as usize;
         let raster_size = RasterSize::with_rows_cols(Rows(tile_size as i32), Columns(tile_size as i32));
         let pixel_size = Tile::pixel_size_at_zoom_level(tile.z, tile_size as u32) / dpi_ratio as f64;
 
-        GeoReference::with_origin(
+        GeoReference::with_bottom_left_origin(
             "EPSG:3857",
             raster_size,
             crs::lat_lon_to_web_mercator(tile.bounds().southwest()),
@@ -616,7 +629,7 @@ impl GeoReference {
                 cols: Columns((intersection.width() / self.cell_size_x().abs()).round() as i32),
             };
 
-            Ok(GeoReference::with_origin(
+            Ok(GeoReference::with_bottom_left_origin(
                 self.projection(),
                 raster_size,
                 intersection.bottom_left(),
@@ -701,7 +714,7 @@ mod tests {
 
     #[test]
     fn bounding_box_zero_origin() {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             String::new(),
             RasterSize::with_rows_cols(Rows(10), Columns(5)),
             Point::new(0.0, 0.0),
@@ -716,7 +729,7 @@ mod tests {
 
     #[test]
     fn bounding_box_negative_y_origin() {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             String::new(),
             RasterSize::with_rows_cols(Rows(2), Columns(2)),
             Point::new(9.0, -10.0),
@@ -750,7 +763,7 @@ mod tests {
 
     #[test]
     fn point_calculations_zero_origin() {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             String::new(),
             RasterSize::with_rows_cols(Rows(2), Columns(2)),
             Point::new(0.0, 0.0),
@@ -781,7 +794,7 @@ mod tests {
 
     #[test]
     fn point_calculations_non_negative_origin() {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             String::new(),
             RasterSize::with_rows_cols(Rows(2), Columns(2)),
             Point::new(-1.0, -1.0),
@@ -807,7 +820,7 @@ mod tests {
 
     #[test]
     fn point_calculations_non_positive_origin() {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             String::new(),
             RasterSize::with_rows_cols(Rows(2), Columns(2)),
             Point::new(1.0, 1.0),
@@ -826,7 +839,7 @@ mod tests {
     #[test]
     fn test_metadata_intersects() {
         let meta_with_origin = |orig| {
-            GeoReference::with_origin(
+            GeoReference::with_bottom_left_origin(
                 String::new(),
                 RasterSize::with_rows_cols(Rows(3), Columns(3)),
                 orig,
@@ -850,7 +863,7 @@ mod tests {
 
     #[test]
     fn metadata_intersects_only_y_overlap() {
-        let meta1 = GeoReference::with_origin(
+        let meta1 = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(133), Columns(121)),
             Point::new(461_144.591_644_468_2, 6_609_204.087_706_049),
@@ -858,7 +871,7 @@ mod tests {
             Option::<f64>::None,
         );
 
-        let meta2 = GeoReference::with_origin(
+        let meta2 = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(195), Columns(122)),
             Point::new(475_361.878_905_511, 6_607_216.724_970_634),
@@ -871,7 +884,7 @@ mod tests {
 
     #[test]
     fn metadata_intersects_only_x_overlap() {
-        let meta1 = GeoReference::with_origin(
+        let meta1 = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(133), Columns(121)),
             Point::new(461_144.591_644_468_2, 6_609_204.087_706_049),
@@ -879,7 +892,7 @@ mod tests {
             Option::<f64>::None,
         );
 
-        let meta2 = GeoReference::with_origin(
+        let meta2 = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(195), Columns(122)),
             Point::new(461_144.591_644_468_2, 6_807_216.724_970_634),
@@ -892,7 +905,7 @@ mod tests {
 
     #[test]
     fn metadata_intersects_different_but_aligned_cellsize() {
-        let meta1 = GeoReference::with_origin(
+        let meta1 = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
             Point::new(0.0, 0.0),
@@ -902,7 +915,7 @@ mod tests {
 
         assert!(
             meta1
-                .intersects(&GeoReference::with_origin(
+                .intersects(&GeoReference::with_bottom_left_origin(
                     "",
                     RasterSize::with_rows_cols(Rows(4), Columns(4)),
                     Point::new(10.0, 10.0),
@@ -914,7 +927,7 @@ mod tests {
 
         assert!(
             !&meta1
-                .intersects(&GeoReference::with_origin(
+                .intersects(&GeoReference::with_bottom_left_origin(
                     "",
                     RasterSize::with_rows_cols(Rows(4), Columns(4)),
                     Point::new(30.0, 30.0),
@@ -926,7 +939,7 @@ mod tests {
 
         assert!(
             meta1
-                .intersects(&GeoReference::with_origin(
+                .intersects(&GeoReference::with_bottom_left_origin(
                     String::new(),
                     RasterSize::with_rows_cols(Rows(4), Columns(4)),
                     Point::new(11.0, 10.0),
@@ -944,7 +957,7 @@ mod tests {
 
         assert!(
             meta1
-                .intersects(&GeoReference::with_origin(
+                .intersects(&GeoReference::with_bottom_left_origin(
                     String::new(),
                     RasterSize::with_rows_cols(Rows(4), Columns(4)),
                     Point::new(10.0, 11.0),
@@ -961,7 +974,7 @@ mod tests {
         );
 
         assert!(
-            GeoReference::with_origin(
+            GeoReference::with_bottom_left_origin(
                 "",
                 RasterSize::with_rows_cols(Rows(4), Columns(4)),
                 Point::new(11.0, 10.0),
@@ -974,7 +987,7 @@ mod tests {
         );
 
         assert!(
-            GeoReference::with_origin(
+            GeoReference::with_bottom_left_origin(
                 "",
                 RasterSize::with_rows_cols(Rows(4), Columns(4)),
                 Point::new(10.0, 11.0),
@@ -991,7 +1004,7 @@ mod tests {
     fn metadata_set_bottom_left_coordinate() {
         let coord = Point::new(160000.0, 195000.0);
 
-        let mut meta = GeoReference::with_origin(
+        let mut meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(920), Columns(2370)),
             Point::new(22000.0, 153000.0),
@@ -1009,7 +1022,7 @@ mod tests {
     fn warp_metadata() {
         use approx::assert_relative_eq;
 
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "EPSG:31370",
             RasterSize::with_rows_cols(Rows(120), Columns(144)),
             Point::new(-219000.0, -100000.0),
@@ -1041,7 +1054,7 @@ mod tests {
             .to_wkt()
             .unwrap();
 
-        let mut tile_meta = GeoReference::with_origin(
+        let mut tile_meta = GeoReference::with_bottom_left_origin(
             srs,
             raster_size,
             tile.bounds().southwest().into(),

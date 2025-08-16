@@ -114,7 +114,7 @@ mod tests {
 
     #[test]
     fn quantiles_all_nodata() -> Result<()> {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
             Point::new(0.0, 0.0),
@@ -139,7 +139,7 @@ mod tests {
 
     #[test]
     fn quantiles() -> Result<()> {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(2)),
             Point::new(0.0, 0.0),
@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn quantiles_neg_pos() -> Result<()> {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(4)),
             Point::new(0.0, 0.0),

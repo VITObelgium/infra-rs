@@ -27,7 +27,7 @@ impl<T: ArrayNum> RasterBuilder<T> {
         let raster_tile_size = RasterSize::square(tile_size as i32);
         let lower_left = crs::lat_lon_to_web_mercator(lower_left_tile.bounds().southwest());
 
-        let geo_ref = GeoReference::with_origin(
+        let geo_ref = GeoReference::with_bottom_left_origin(
             crs::epsg::WGS84_WEB_MERCATOR.to_string(),
             raster_size,
             lower_left,

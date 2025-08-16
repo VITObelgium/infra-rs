@@ -188,8 +188,8 @@ mod tests {
         let gdal_raster = warp_using_gdal(&input_path, &warp_opts)?;
         let our_raster = reproject(&DenseRaster::<u8>::read(&input_path)?, &warp_opts)?;
 
-        compare_raster_metadata(&our_raster, &gdal_raster, 20.0);
-        compare_raster_contents(&our_raster, &gdal_raster, 7.5)?;
+        compare_raster_metadata(&our_raster, &gdal_raster, 1.0);
+        compare_raster_contents(&our_raster, &gdal_raster, 0.5)?;
 
         store_test_output(our_raster, gdal_raster, "source_size_et0")
     }
@@ -208,8 +208,8 @@ mod tests {
         let gdal_raster = warp_using_gdal(&input_path, &warp_opts)?;
         let our_raster = reproject(&DenseRaster::<u8>::read(&input_path)?, &warp_opts)?;
 
-        compare_raster_metadata(&our_raster, &gdal_raster, 20.0);
-        compare_raster_contents(&our_raster, &gdal_raster, 7.5)?;
+        compare_raster_metadata(&our_raster, &gdal_raster, 1.0);
+        compare_raster_contents(&our_raster, &gdal_raster, 0.5)?;
 
         store_test_output(our_raster, gdal_raster, "fixed_size_et0")
     }
@@ -228,8 +228,8 @@ mod tests {
         let gdal_raster = warp_using_gdal(&input_path, &warp_opts)?;
         let our_raster = reproject(&DenseRaster::<u8>::read(&input_path)?, &warp_opts)?;
 
-        compare_raster_metadata(&our_raster, &gdal_raster, 20.0);
-        compare_raster_contents(&our_raster, &gdal_raster, 7.5)?;
+        compare_raster_metadata(&our_raster, &gdal_raster, 5.0);
+        compare_raster_contents(&our_raster, &gdal_raster, 0.5)?;
 
         store_test_output(our_raster, gdal_raster, "cell_size_et0")
     }

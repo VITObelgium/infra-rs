@@ -243,7 +243,7 @@ mod unspecialized_generictests {
         R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference>,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(0), Columns(0)),
             Point::new(0.0, 0.0),
@@ -276,7 +276,7 @@ mod unspecialized_generictests {
         R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference>,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
             Point::new(0.0, 0.0),
@@ -313,7 +313,7 @@ mod unspecialized_generictests {
         R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference>,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(1), Columns(1)),
             Point::new(0.0, 0.0),
@@ -348,7 +348,7 @@ mod unspecialized_generictests {
         R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference>,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(3)),
             Point::new(0.0, 0.0),
@@ -387,7 +387,7 @@ mod unspecialized_generictests {
         R: Array<Metadata = GeoReference>,
         R::WithPixelType<f64>: Array<Pixel = f64, Metadata = GeoReference> + ArrayInterop<Pixel = f64, Metadata = GeoReference>,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(3), Columns(4)),
             Point::new(0.0, 0.0),

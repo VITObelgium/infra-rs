@@ -86,7 +86,7 @@ pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> R
         }
 
         if !tile_data.is_empty() {
-            let geo_ref = GeoReference::with_origin(
+            let geo_ref = GeoReference::with_bottom_left_origin(
                 crs::epsg::WGS84_WEB_MERCATOR.to_string(),
                 RasterSize::square(tile_size as i32),
                 current_ll,
