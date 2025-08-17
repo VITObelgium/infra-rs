@@ -276,6 +276,7 @@ fn reproject_with_interpolation<T: ArrayNum>(
     opts: &WarpOptions,
 ) -> Result<()> {
     let source_georef = src.metadata();
+    let meta = dst.metadata();
 
     let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
 
@@ -283,7 +284,6 @@ fn reproject_with_interpolation<T: ArrayNum>(
     let row_width = dst.size().cols.count();
     let mut sample_points = Vec::with_capacity(dst.size().cols.count() as usize * 3);
     for row in 0..dst.size().rows.count() {
-        let meta = dst.metadata();
         // Transform first, middle, and last pixels
         sample_points.extend([
             meta.cell_center(Cell::from_row_col(row, 0)),
@@ -298,7 +298,8 @@ fn reproject_with_interpolation<T: ArrayNum>(
         panic!("slice didn't have even length")
     };
 
-    for (row, row_points) in (0..dst.size().rows.count()).into_iter().zip(row_points_chunks) {
+    let error_threshold = opts.error_threshold * meta.cell_size().x();
+    for (row, row_points) in (0..dst.size().rows.count()).zip(row_points_chunks) {
         let row_width = dst.size().cols.count();
 
         if row_width <= 2 {
@@ -315,12 +316,12 @@ fn reproject_with_interpolation<T: ArrayNum>(
         let interpolated_middle = linear_interpolate(first_transformed, last_transformed, 0.5);
         let error = point::euclidenan_distance(middle_transformed, interpolated_middle);
 
-        if error < opts.error_threshold {
+        if error < error_threshold {
             // Use linear interpolation for the entire row
             interpolate_row(dst, row, first_transformed, last_transformed, source_georef, src);
         } else {
             // Use recursive subdivision or fall back to exact transformation
-            subdivide_and_transform_row(dst, row, coord_trans, source_georef, src, opts.error_threshold)?;
+            subdivide_and_transform_row(dst, row, coord_trans, source_georef, src, error_threshold)?;
         }
     }
 
