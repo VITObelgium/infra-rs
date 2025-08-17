@@ -276,9 +276,29 @@ fn reproject_with_interpolation<T: ArrayNum>(
     opts: &WarpOptions,
 ) -> Result<()> {
     let source_georef = src.metadata();
+
     let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
 
+    // First gather all the start middle end pixels for each row so we can transform them in a single batch
+    let row_width = dst.size().cols.count();
+    let mut sample_points = Vec::with_capacity(dst.size().cols.count() as usize * 3);
     for row in 0..dst.size().rows.count() {
+        let meta = dst.metadata();
+        // Transform first, middle, and last pixels
+        sample_points.extend([
+            meta.cell_center(Cell::from_row_col(row, 0)),
+            meta.cell_center(Cell::from_row_col(row, row_width / 2)),
+            meta.cell_center(Cell::from_row_col(row, row_width - 1)),
+        ]);
+    }
+
+    coord_trans.transform_points_in_place(&mut sample_points)?;
+
+    let (row_points_chunks, []) = sample_points.as_chunks::<3>() else {
+        panic!("slice didn't have even length")
+    };
+
+    for (row, row_points) in (0..dst.size().rows.count()).into_iter().zip(row_points_chunks) {
         let row_width = dst.size().cols.count();
 
         if row_width <= 2 {
@@ -287,18 +307,9 @@ fn reproject_with_interpolation<T: ArrayNum>(
             continue;
         }
 
-        // Transform first, middle, and last pixels
-        let first_cell = Cell::from_row_col(row, 0);
-        let middle_cell = Cell::from_row_col(row, row_width / 2);
-        let last_cell = Cell::from_row_col(row, row_width - 1);
-
-        let first_pixel = dst.metadata().cell_center(first_cell);
-        let middle_pixel = dst.metadata().cell_center(middle_cell);
-        let last_pixel = dst.metadata().cell_center(last_cell);
-
-        let first_transformed = coord_trans.transform_point(first_pixel)?;
-        let middle_transformed = coord_trans.transform_point(middle_pixel)?;
-        let last_transformed = coord_trans.transform_point(last_pixel)?;
+        let first_transformed = row_points[0];
+        let middle_transformed = row_points[1];
+        let last_transformed = row_points[2];
 
         // Check if linear interpolation is accurate enough for middle pixel
         let interpolated_middle = linear_interpolate(first_transformed, last_transformed, 0.5);

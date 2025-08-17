@@ -258,9 +258,26 @@ mod tests {
                 target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
                 ..Default::default()
             },
-            "fixed_size_et0",
+            "fixed_size_et_0",
             1.0,
             0.5,
+        )
+    }
+
+    #[test_log::test]
+    fn integration_reproject_vs_gdalwarp_fixed_size_error_threshold() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.125,
+                target_size: WarpTargetSize::Sized(RasterSize::with_rows_cols(Rows(500), Columns(800))),
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                ..Default::default()
+            },
+            "fixed_size_et_0.125",
+            1.0,
+            1.0,
         )
     }
 
@@ -275,9 +292,26 @@ mod tests {
                 target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
                 ..Default::default()
             },
-            "cell_size_et0",
+            "cell_size_et_0",
             5.0,
             0.5,
+        )
+    }
+
+    #[test_log::test]
+    fn integration_reproject_vs_gdalwarp_cell_size_error_threshold() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.125,
+                target_size: WarpTargetSize::CellSize(CellSize::square(75.0), TargetPixelAlignment::No),
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                ..Default::default()
+            },
+            "cell_size_et_0.125",
+            5.0,
+            1.5,
         )
     }
 
