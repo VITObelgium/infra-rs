@@ -51,13 +51,7 @@ fn diff_tiles_as_mvt<T: ArrayNum + gdal::raster::GdalType>(tile1: &DenseArray<T>
 
     let diff = tile2 - tile1;
 
-    let geo_ref = GeoReference::with_origin(
-        "",
-        diff.size(),
-        Point::new(0.0, -(Tile::TILE_SIZE as f64)),
-        CellSize::square(1.0),
-        Option::<f64>::None,
-    );
+    let geo_ref = GeoReference::with_top_left_origin("", diff.size(), Point::new(0.0, 0.0), CellSize::square(1.0), Option::<f64>::None);
 
     let vec_ds = raster::algo::polygonize(&geo_ref, diff.as_ref())?;
 

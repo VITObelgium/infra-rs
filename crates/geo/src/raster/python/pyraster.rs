@@ -22,7 +22,7 @@ pub struct PyRasterMetadata {
     // The raw projection string
     pub projection: String,
     // The EPSG code of the projection
-    pub epsg: Option<u32>,
+    pub epsg: Option<u16>,
     /// The size of the image in pixels (width, height)
     pub size: (usize, usize),
     /// The cell size of the image (xsize, ysize)
