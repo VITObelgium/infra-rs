@@ -12,8 +12,6 @@ mod cell;
 pub mod cog;
 pub mod constants;
 mod coordinate;
-#[cfg(any(feature = "proj", feature = "proj4rs"))]
-mod coordinatetransformer;
 pub mod crs;
 mod densearray;
 #[cfg(feature = "gdal")]
@@ -39,8 +37,8 @@ mod rastersize;
 pub mod rect;
 #[cfg(feature = "gdal")]
 mod runtimeconfiguration;
-#[cfg(feature = "gdal")]
-mod spatialreference;
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
+mod srs;
 mod tile;
 pub mod tileutils;
 #[cfg(feature = "vector")]
@@ -54,11 +52,15 @@ pub mod testutils;
 use thiserror::Error;
 
 #[cfg(any(feature = "proj", feature = "proj4rs"))]
-pub use coordinatetransformer::CoordinateTransformer;
+pub use srs::CoordinateTransformer;
+#[cfg(feature = "proj4rs")]
+pub use srs::Proj4rsCoordinateTransformer;
+#[cfg(feature = "proj")]
+pub use {srs::ProjCoordinateTransformer, srs::SpatialReference};
 
 #[cfg(feature = "gdal")]
 #[doc(inline)]
-pub use {runtimeconfiguration::RuntimeConfiguration, spatialreference::SpatialReference};
+pub use runtimeconfiguration::RuntimeConfiguration;
 
 #[doc(inline)]
 pub use {

@@ -10,28 +10,26 @@ use crate::{
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
-pub struct Epsg(u32);
+pub struct Epsg(u16);
 
 impl Epsg {
-    pub fn new(epsg: u32) -> Self {
+    pub fn new(epsg: u16) -> Self {
         Self(epsg)
     }
-}
 
-impl From<Epsg> for u32 {
-    fn from(val: Epsg) -> u32 {
-        val.0
+    pub fn code(&self) -> u16 {
+        self.0
     }
 }
 
 impl From<Epsg> for u16 {
     fn from(val: Epsg) -> u16 {
-        val.0 as u16
+        val.0
     }
 }
 
-impl From<u32> for Epsg {
-    fn from(val: u32) -> Epsg {
+impl From<u16> for Epsg {
+    fn from(val: u16) -> Epsg {
         Epsg::new(val)
     }
 }

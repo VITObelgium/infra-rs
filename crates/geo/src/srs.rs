@@ -1,12 +1,23 @@
 #[cfg(feature = "proj")]
 mod proj;
 #[cfg(feature = "proj")]
-pub use proj::CoordinateTransformer;
+pub use proj::CoordinateTransformer as ProjCoordinateTransformer;
+#[cfg(feature = "proj")]
+pub use proj::SpatialReference;
+#[cfg(feature = "proj")]
+pub use proj::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
 
 #[cfg(feature = "proj4rs")]
 mod proj4rs;
-#[cfg(all(feature = "proj4rs", not(feature = "proj")))]
-// proj takes precedence over proj4rs if both are enabled
+#[cfg(feature = "proj4rs")]
+pub use proj4rs::CoordinateTransformer as Proj4rsCoordinateTransformer;
+
+#[cfg(all(feature = "proj", not(feature = "proj4rs")))]
+// proj4rs takes precedence over proj if both are enabled
+pub use proj::CoordinateTransformer;
+
+#[cfg(feature = "proj4rs")]
+// proj4rs takes precedence over proj if both are enabled
 pub use proj4rs::CoordinateTransformer;
 
 #[cfg(all(feature = "proj4rs", feature = "proj"))]

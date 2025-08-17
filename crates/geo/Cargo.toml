@@ -36,6 +36,8 @@ proj4rs = { version = "0.1", features = [
   "geo-types",
   "crs-definitions",
 ], optional = true }
+proj4wkt = { version = "0.1", optional = true }
+crs-definitions = { version = "0.3.1", optional = true }
 proj = { version = "0.30.0", optional = true }
 arrow = { version = "56", optional = true }
 bon = { version = "3.7", optional = true }
@@ -80,11 +82,11 @@ tsify = { version = "*", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
-default = ["derive", "gdal", "cog"]
+default = ["derive", "gdal", "cog", "proj4rs"]
 arrow = ["dep:arrow"]
 derive = ["dep:vector_derive"]
 proj = ["dep:proj"]
-proj4rs = ["dep:proj4rs"]
+proj4rs = ["dep:proj4rs", "dep:proj4wkt", "dep:crs-definitions"]
 gdal = ["proj", "dep:gdal", "dep:gdal-sys", "dep:bon", "geozero/with-gdal"]
 cog = ["dep:weezl", "dep:tiff", "dep:xml-rs", "dep:ruzstd"]
 gdal-static = ["gdal"]

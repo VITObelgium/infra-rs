@@ -11,7 +11,7 @@ use crate::{
 };
 
 #[cfg(feature = "gdal")]
-use crate::spatialreference::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
+use crate::srs::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct CellSize {

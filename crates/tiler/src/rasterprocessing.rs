@@ -134,7 +134,7 @@ mod tests {
     fn test_raster_pixel() {
         let result = raster_pixel(&test_raster(), 1, Coordinate::latlon(51.06, 4.52), None).unwrap();
         assert_eq!(result, Some(83.0));
-        let result = raster_pixel(&test_raster(), 1, Coordinate::latlon(51.06, 3.8), None).unwrap();
+        let result = raster_pixel(&test_raster(), 1, Coordinate::latlon(51.059723, 3.80031), None).unwrap();
         assert_eq!(result, Some(42.0));
     }
 

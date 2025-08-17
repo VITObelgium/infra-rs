@@ -925,8 +925,8 @@ dependencies = [
 
 [[package]]
 name = "crs-definitions"
-version = "0.3.0"
-source = "git+https://github.com/dirkvdb/crs-definitions.git?rev=bb93f0f423558090ff1f927440e64f8f4a8ce906#bb93f0f423558090ff1f927440e64f8f4a8ce906"
+version = "0.3.1"
+source = "git+https://github.com/dirkvdb/crs-definitions.git?rev=9d01fb7993537a3ba632bf60899b884434a1d453#9d01fb7993537a3ba632bf60899b884434a1d453"
 
 [[package]]
 name = "crunchy"
@@ -1383,6 +1383,7 @@ dependencies = [
  "bytemuck",
  "cfg-if",
  "criterion",
+ "crs-definitions",
  "ctor",
  "env_logger",
  "gdal",
@@ -1398,6 +1399,7 @@ dependencies = [
  "path_macro",
  "proj",
  "proj4rs",
+ "proj4wkt",
  "pyo3",
  "rand",
  "rayon",
@@ -2212,6 +2214,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
 name = "miniz_oxide"
 version = "0.8.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2261,6 +2269,16 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "tempfile",
+]
+
+[[package]]
+name = "nom"
+version = "7.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
 ]
 
 [[package]]
@@ -2624,6 +2642,19 @@ dependencies = [
  "js-sys",
  "lazy_static",
  "thiserror 2.0.12",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
+name = "proj4wkt"
+version = "0.1.0"
+source = "git+https://github.com/dirkvdb/proj4wkt-rs.git?rev=35e8db67c43e9944dd941d34539886cb727adc41#35e8db67c43e9944dd941d34539886cb727adc41"
+dependencies = [
+ "console_log",
+ "js-sys",
+ "nom",
+ "thiserror 1.0.69",
  "wasm-bindgen",
  "web-sys",
 ]

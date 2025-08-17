@@ -168,7 +168,7 @@ fn read_projection_info<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<Opti
             2048 => {
                 // Geographic Coordinate Reference System GeoKey
                 if key[1] == 0 && key[2] == 1 {
-                    proj_info.geographic_epsg = Some(crs::Epsg::from(key[3] as u32));
+                    proj_info.geographic_epsg = Some(crs::Epsg::from(key[3]));
                 } else {
                     return Err(Error::Runtime("Only inline EPSG codes are supported".into()));
                 }
@@ -176,7 +176,7 @@ fn read_projection_info<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<Opti
             3072 => {
                 // Projected Coordinate Reference System GeoKey
                 if key[1] == 0 && key[2] == 1 {
-                    proj_info.projected_epsg = Some(crs::Epsg::from(key[3] as u32));
+                    proj_info.projected_epsg = Some(crs::Epsg::from(key[3]));
                 } else {
                     return Err(Error::Runtime("Only inline EPSG codes are supported".into()));
                 }
