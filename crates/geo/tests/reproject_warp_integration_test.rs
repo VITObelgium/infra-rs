@@ -176,62 +176,109 @@ mod tests {
         Ok(())
     }
 
-    #[test_log::test]
-    fn test_reproject_vs_gdalwarp_source_size() -> Result<()> {
-        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+    fn run_comparison<T: ArrayNum>(
+        input: &Path,
+        opts: &WarpOptions,
+        name: &str,
+        bbox_tolerance: f64,
+        raster_diff_tolerance: f64,
+    ) -> Result<()> {
+        log::info!("[{name}] Running warp comparison");
 
-        let warp_opts = WarpOptions {
-            error_threshold: 0.0,
-            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
-            ..Default::default()
-        };
-        let gdal_raster = warp_using_gdal(&input_path, &warp_opts)?;
-        let our_raster = reproject(&DenseRaster::<u8>::read(&input_path)?, &warp_opts)?;
+        let start = std::time::Instant::now();
+        let geo_raster = reproject(&DenseRaster::<T>::read(input)?, opts)?;
+        let geo_duration = start.elapsed();
+        log::info!("[{name}] Geo warp duration: {geo_duration:?}");
 
-        compare_raster_metadata(&our_raster, &gdal_raster, 1.0);
-        compare_raster_contents(&our_raster, &gdal_raster, 0.5)?;
+        let start = std::time::Instant::now();
+        let gdal_raster = warp_using_gdal(input, opts)?;
+        let gdal_duration = start.elapsed();
+        log::info!("[{name}] Gdal warp duration {gdal_duration:?}");
 
-        store_test_output(our_raster, gdal_raster, "source_size_et0")
+        if gdal_duration < geo_duration {
+            log::warn!(
+                "[{name}] !!! GDAL warp was faster than Geo warp: {:.2}% faster !!!",
+                (1.0 - geo_duration.as_secs_f64() / gdal_duration.as_secs_f64()).abs() * 100.0
+            );
+        } else {
+            log::info!(
+                "[{name}] Geo warp was faster than GDAL warp: {:.2}% faster",
+                (1.0 - gdal_duration.as_secs_f64() / geo_duration.as_secs_f64()).abs() * 100.0
+            );
+        }
+
+        compare_raster_metadata(&geo_raster, &gdal_raster, bbox_tolerance);
+        compare_raster_contents(&geo_raster, &gdal_raster, raster_diff_tolerance)?;
+
+        store_test_output(geo_raster, gdal_raster, name)
     }
 
     #[test_log::test]
-    fn test_reproject_vs_gdalwarp_fixed_size() -> Result<()> {
+    fn integration_reproject_vs_gdalwarp_source_size() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
-
-        let target_size = RasterSize::with_rows_cols(Rows(500), Columns(800));
-        let warp_opts = WarpOptions {
-            error_threshold: 0.0,
-            target_size: WarpTargetSize::Sized(target_size),
-            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
-            ..Default::default()
-        };
-        let gdal_raster = warp_using_gdal(&input_path, &warp_opts)?;
-        let our_raster = reproject(&DenseRaster::<u8>::read(&input_path)?, &warp_opts)?;
-
-        compare_raster_metadata(&our_raster, &gdal_raster, 1.0);
-        compare_raster_contents(&our_raster, &gdal_raster, 0.5)?;
-
-        store_test_output(our_raster, gdal_raster, "fixed_size_et0")
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.0,
+                target_size: WarpTargetSize::Source,
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                ..Default::default()
+            },
+            "source_size_et_0",
+            1.0,
+            0.5,
+        )
     }
 
     #[test_log::test]
-    fn test_reproject_vs_gdalwarp_cell_size() -> Result<()> {
+    fn integration_reproject_vs_gdalwarp_source_size_error_threshold() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.125,
+                target_size: WarpTargetSize::Source,
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                ..Default::default()
+            },
+            "source_size_et_0.125",
+            1.0,
+            1.0,
+        )
+    }
 
-        let target_cell_size = CellSize::square(75.0);
-        let warp_opts = WarpOptions {
-            error_threshold: 0.0,
-            target_size: WarpTargetSize::CellSize(target_cell_size, TargetPixelAlignment::No),
-            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
-            ..Default::default()
-        };
-        let gdal_raster = warp_using_gdal(&input_path, &warp_opts)?;
-        let our_raster = reproject(&DenseRaster::<u8>::read(&input_path)?, &warp_opts)?;
+    #[test_log::test]
+    fn integration_reproject_vs_gdalwarp_fixed_size() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.0,
+                target_size: WarpTargetSize::Sized(RasterSize::with_rows_cols(Rows(500), Columns(800))),
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                ..Default::default()
+            },
+            "fixed_size_et0",
+            1.0,
+            0.5,
+        )
+    }
 
-        compare_raster_metadata(&our_raster, &gdal_raster, 5.0);
-        compare_raster_contents(&our_raster, &gdal_raster, 0.5)?;
-
-        store_test_output(our_raster, gdal_raster, "cell_size_et0")
+    #[test_log::test]
+    fn integration_reproject_vs_gdalwarp_cell_size() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.0,
+                target_size: WarpTargetSize::CellSize(CellSize::square(75.0), TargetPixelAlignment::No),
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                ..Default::default()
+            },
+            "cell_size_et0",
+            5.0,
+            0.5,
+        )
     }
 
     // #[test_log::test]

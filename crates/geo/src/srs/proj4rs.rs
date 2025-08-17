@@ -246,7 +246,6 @@ impl CoordinateTransformer {
     }
 
     pub fn transform_point(&self, point: Point) -> Result<Point> {
-        // proj4rs expects (longitude, latitude) order, which matches Point's (x, y)
         let mut p = point;
         transform(self.source.proj(), self.target.proj(), &mut p)?;
         if self.target.proj().projection_type() == ProjType::Latlong {

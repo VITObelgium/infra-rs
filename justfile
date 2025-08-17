@@ -108,6 +108,9 @@ test_release_simd target=default_target:
 test_release_slow target=default_target:
     cargo nextest run --profile slow --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector
 
+test_reproject target=default_target:
+    cargo nextest run  --profile ci --target {{target}} --workspace -p geo --release --features=serde,gdal,gdal-static,derive,vector,proj4rs --no-capture integration_reproject
+
 test_debug_py: pybootstrap
     pixi run test_debug
 
