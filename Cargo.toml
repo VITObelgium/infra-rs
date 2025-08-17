@@ -52,6 +52,7 @@ python = ["pyo3/auto-initialize"]
 serde = ["inf/serde"]
 sqlite = ["dep:sqlite"]
 tiler = ["dep:tiler"]
+simd = ["geo/simd"]
 
 [patch.crates-io]
 # more recent geozero to avoid multiple gdal copies

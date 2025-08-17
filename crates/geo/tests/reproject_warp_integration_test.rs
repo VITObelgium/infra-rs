@@ -1,3 +1,5 @@
+#![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
+
 #[cfg(all(test, any(feature = "proj", feature = "proj4rs")))]
 mod tests {
     use approx::assert_relative_eq;
@@ -12,6 +14,9 @@ mod tests {
     use path_macro::path;
     use std::{path::Path, process::Command};
     use tempfile::TempDir;
+
+    #[cfg(feature = "simd")]
+    const LANES: usize = inf::simd::LANES;
 
     fn workspace_test_data_dir() -> std::path::PathBuf {
         path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data")
@@ -137,6 +142,7 @@ mod tests {
         Ok(())
     }
 
+    #[geo::simd_bounds]
     #[cfg(feature = "gdal")]
     fn warp_using_linked_gdal<T: ArrayNum>(input: &Path, tmp_dir: &TempDir, opts: &WarpOptions) -> Result<DenseRaster<T>> {
         let output_path = tmp_dir.path().join("gdal_warped.tif");
@@ -147,6 +153,7 @@ mod tests {
         DenseRaster::<T>::read(&output_path)
     }
 
+    #[geo::simd_bounds]
     #[allow(dead_code)]
     /// This assumes the gdalwarp binary is available in the PATH.
     fn warp_using_gdal_binary<T: ArrayNum>(input: &Path, tmp_dir: &TempDir, opts: &WarpOptions) -> Result<DenseRaster<T>> {
@@ -159,6 +166,7 @@ mod tests {
         DenseRaster::<T>::read(&output_path)
     }
 
+    #[geo::simd_bounds]
     fn warp_using_gdal<T: ArrayNum>(input: &Path, opts: &WarpOptions) -> Result<DenseRaster<T>> {
         let tmp_dir = TempDir::new()?;
 
@@ -169,6 +177,7 @@ mod tests {
         return warp_using_gdal_binary(input, &tmp_dir, opts);
     }
 
+    #[geo::simd_bounds]
     fn store_test_output<T: ArrayNum>(geo: DenseRaster<T>, gdal: DenseRaster<T>, name: &str) -> Result<()> {
         let output_dir = test_results_output_dir();
         geo.into_write(output_dir.join(format!("{}_geo.tif", name)))?;
@@ -176,6 +185,7 @@ mod tests {
         Ok(())
     }
 
+    #[geo::simd_bounds]
     fn run_comparison<T: ArrayNum>(
         input: &Path,
         opts: &WarpOptions,

@@ -427,7 +427,7 @@ mod unspecialized_generictests {
         R: Array<Metadata = GeoReference> + ArrayInterop,
         R::Pixel: rand::distr::uniform::SampleUniform,
     {
-        let meta = GeoReference::with_origin(
+        let meta = GeoReference::with_bottom_left_origin(
             "",
             RasterSize::with_rows_cols(Rows(130), Columns(333)),
             Point::new(0.0, 0.0),
