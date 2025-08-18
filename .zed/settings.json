@@ -17,7 +17,7 @@
           "analyzerTargetDir": true
         },
         "cargo": {
-          "features": ["gdal", "proj4rs", "tui", "vector"]
+          "features": ["gdal", "proj4rs", "tui", "vector", "rayon"]
         },
         "check": {
           "features": ["gdal", "proj4rs", "tui", "vector"],

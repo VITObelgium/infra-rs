@@ -8,7 +8,7 @@ mod tests {
         crs::{self},
         raster::{
             self, DenseRaster, RasterIO,
-            algo::{self, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, reproject},
+            algo::{self, NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, reproject},
         },
     };
     use path_macro::path;
@@ -62,8 +62,10 @@ mod tests {
         args.extend(["-et".to_string(), opts.error_threshold.to_string()]);
 
         // Multi-threading
-        if opts.all_cpus {
-            args.extend(["-multi".to_string(), "-wo".to_string(), "NUM_THREADS=ALL_CPUS".to_string()]);
+        match opts.num_threads {
+            NumThreads::AllCpus => args.extend(["-multi".to_string(), "-wo".to_string(), "NUM_THREADS=ALL_CPUS".to_string()]),
+            NumThreads::Count(cpus) if cpus > 1 => args.extend(["-multi".to_string(), "-wo".to_string(), format!("NUM_THREADS={cpus}")]),
+            NumThreads::Count(_) => {}
         }
 
         // Output format
@@ -219,7 +221,6 @@ mod tests {
 
         compare_raster_metadata(&geo_raster, &gdal_raster, bbox_tolerance);
         compare_raster_contents(&geo_raster, &gdal_raster, raster_diff_tolerance)?;
-
         store_test_output(geo_raster, gdal_raster, name)
     }
 
@@ -241,6 +242,23 @@ mod tests {
     }
 
     #[test_log::test]
+    fn integration_reproject_vs_gdalwarp_source_size_mt() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.0,
+                target_size: WarpTargetSize::Source,
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                num_threads: NumThreads::AllCpus,
+            },
+            "source_size_et_0_mt",
+            1.0,
+            0.5,
+        )
+    }
+
+    #[test_log::test]
     fn integration_reproject_vs_gdalwarp_source_size_error_threshold() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
@@ -252,6 +270,23 @@ mod tests {
                 ..Default::default()
             },
             "source_size_et_0.125",
+            1.0,
+            5.0,
+        )
+    }
+
+    #[test_log::test]
+    fn integration_reproject_vs_gdalwarp_source_size_error_threshold_mt() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.125,
+                target_size: WarpTargetSize::Source,
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                num_threads: NumThreads::AllCpus,
+            },
+            "source_size_et_0.125_mt",
             1.0,
             5.0,
         )

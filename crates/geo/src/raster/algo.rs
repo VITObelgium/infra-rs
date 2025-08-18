@@ -33,10 +33,7 @@ pub use {translate::translate, translate::translate_file, warp::GdalWarpOptions,
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};
 
 #[cfg(any(feature = "proj", feature = "proj4rs"))]
-pub use {
-    reproject::TargetPixelAlignment, reproject::TargetSrs, reproject::WarpOptions, reproject::WarpTargetSize, reproject::reproject,
-    reproject::reproject_georeference,
-};
+pub use reproject::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, reproject, reproject_georeference};
 
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,

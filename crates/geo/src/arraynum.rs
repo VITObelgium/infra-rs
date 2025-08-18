@@ -25,6 +25,8 @@ pub trait ArrayNumScalar:
     + bytemuck::AnyBitPattern
     + bytemuck::NoUninit
     + GdalNum
+    + Send
+    + Sync
 {
     const TYPE: ArrayDataType;
     const IS_SIGNED: bool;

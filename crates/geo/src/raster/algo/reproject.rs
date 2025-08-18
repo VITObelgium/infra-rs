@@ -15,6 +15,12 @@ pub enum TargetPixelAlignment {
     Yes,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum NumThreads {
+    AllCpus,
+    Count(usize),
+}
+
 #[derive(Debug, Clone, Copy, Default)]
 pub enum WarpTargetSize {
     #[default]
@@ -47,8 +53,8 @@ pub struct WarpOptions {
     pub target_size: WarpTargetSize,
     /// Linear interpolation threshold in pixels, if the linear interpolation method for cells is bigger than this threshold exact calculations will be used (default = 0.125)
     pub error_threshold: f64,
-    /// Process chunks in parallel
-    pub all_cpus: bool,
+    /// Configure how many threads to use for the reprojection
+    pub num_threads: NumThreads,
     /// The target SRS to reproject to
     pub target_srs: TargetSrs,
 }
@@ -58,7 +64,7 @@ impl Default for WarpOptions {
         Self {
             target_size: Default::default(),
             error_threshold: 0.125,
-            all_cpus: Default::default(),
+            num_threads: NumThreads::Count(1),
             target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
         }
     }
@@ -241,70 +247,95 @@ fn calculate_target_aligned_bounds(bbox: &Rect<f64>, cell_size: CellSize) -> Rec
 }
 
 pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, opts: &WarpOptions) -> Result<DenseRaster<T>> {
-    let source_epsg = src
-        .metadata()
-        .projected_epsg()
-        .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
-
     let target_georef = reproject_georeference(&src.meta, opts)?;
     let mut dst = DenseRaster::<T>::filled_with_nodata(target_georef);
 
-    let coord_trans = CoordinateTransformer::new(&opts.target_srs.to_string(), &source_epsg.to_string())?;
+    let coord_trans = CoordinateTransformer::new(&opts.target_srs.to_string(), src.metadata().projection())?;
     if opts.error_threshold > 0.0 {
         reproject_with_interpolation(src, &mut dst, &coord_trans, opts)?;
     } else {
-        reproject_exact(src, &mut dst, &coord_trans)?;
+        reproject_exact(src, &mut dst, &coord_trans, opts)?;
     }
 
     Ok(dst)
 }
 
-fn reproject_exact<T: ArrayNum>(src: &DenseRaster<T>, dst: &mut DenseRaster<T>, coord_trans: &CoordinateTransformer) -> Result<()> {
-    let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
-    for row in 0..dst.size().rows.count() {
-        transform_row_exact(dst, row, coord_trans, src, &mut points)?;
+fn reproject_exact<T: ArrayNum>(
+    src: &DenseRaster<T>,
+    dst: &mut DenseRaster<T>,
+    coord_trans: &CoordinateTransformer,
+    opts: &WarpOptions,
+) -> Result<()> {
+    let cols = dst.size().cols.count() as usize;
+    let meta = dst.metadata().clone();
+
+    let thread_count = match opts.num_threads {
+        NumThreads::AllCpus => None,
+        NumThreads::Count(val) => Some(val),
+    };
+
+    if thread_count.is_some_and(|count| count <= 1) || !cfg!(feature = "rayon") {
+        // Working buffer for transformed points outside the loop to avoid allocation overhead
+        let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
+        for (row, row_slice) in dst.as_mut_slice().chunks_mut(cols).enumerate() {
+            transform_row_exact(row_slice, &meta, row as i32, coord_trans, src, &mut points)?;
+        }
+    }
+
+    #[cfg(feature = "rayon")]
+    {
+        use rayon::prelude::*;
+        let _pool = if let Some(thread_count) = thread_count {
+            rayon::ThreadPoolBuilder::new().num_threads(thread_count).build().unwrap()
+        } else {
+            rayon::ThreadPoolBuilder::new().build().unwrap()
+        };
+
+        dst.as_mut_slice().par_chunks_mut(cols).enumerate().for_each(|(r, row)| {
+            let mut points = Vec::with_capacity(cols);
+            transform_row_exact(row, &meta, r as i32, coord_trans, src, &mut points).unwrap();
+        });
     }
 
     Ok(())
 }
 
-/// Optimized reproject function using error threshold strategy for linear interpolation
+/// Optimized reproject function using error threshold strategy for row based linear interpolation
 fn reproject_with_interpolation<T: ArrayNum>(
     src: &DenseRaster<T>,
     dst: &mut DenseRaster<T>,
     coord_trans: &CoordinateTransformer,
     opts: &WarpOptions,
 ) -> Result<()> {
-    let source_georef = src.metadata();
-    let meta = dst.metadata();
+    let target_georef = dst.metadata().clone();
 
-    let mut points = Vec::with_capacity(dst.size().cols.count() as usize);
-
-    // First gather all the start middle end pixels for each row so we can transform them in a single batch
+    // First gather all the start middle and end pixels for each row so we can transform them in a single batch
     let row_width = dst.size().cols.count();
     let mut sample_points = Vec::with_capacity(dst.size().cols.count() as usize * 3);
     for row in 0..dst.size().rows.count() {
         // Transform first, middle, and last pixels
         sample_points.extend([
-            meta.cell_center(Cell::from_row_col(row, 0)),
-            meta.cell_center(Cell::from_row_col(row, row_width / 2)),
-            meta.cell_center(Cell::from_row_col(row, row_width - 1)),
+            target_georef.cell_center(Cell::from_row_col(row, 0)),
+            target_georef.cell_center(Cell::from_row_col(row, row_width / 2)),
+            target_georef.cell_center(Cell::from_row_col(row, row_width - 1)),
         ]);
     }
 
     coord_trans.transform_points_in_place(&mut sample_points)?;
 
+    // chunks of the first middle and last points of each row
     let (row_points_chunks, []) = sample_points.as_chunks::<3>() else {
-        panic!("slice didn't have even length")
+        panic!("row points size error")
     };
 
-    let error_threshold = opts.error_threshold * meta.cell_size().x();
-    for (row, row_points) in (0..dst.size().rows.count()).zip(row_points_chunks) {
-        let row_width = dst.size().cols.count();
+    let cols = dst.size().cols.count() as usize;
+    let error_threshold = opts.error_threshold * target_georef.cell_size().x();
 
-        if row_width <= 2 {
+    for (row, (row_slice, row_points)) in dst.as_mut_slice().chunks_mut(cols).zip(row_points_chunks).enumerate() {
+        if cols <= 2 {
             // For very narrow rows, fall back to exact transformation
-            transform_row_exact(dst, row, coord_trans, src, &mut points)?;
+            let mut points = Vec::with_capacity(cols);
+            transform_row_exact(row_slice, &target_georef, row as i32, coord_trans, src, &mut points)?;
             continue;
         }
 
@@ -318,10 +349,10 @@ fn reproject_with_interpolation<T: ArrayNum>(
 
         if error < error_threshold {
             // Use linear interpolation for the entire row
-            interpolate_row(dst, row, first_transformed, last_transformed, source_georef, src);
+            interpolate_row(row_slice, first_transformed, last_transformed, src);
         } else {
             // Use recursive subdivision or fall back to exact transformation
-            subdivide_and_transform_row(dst, row, coord_trans, source_georef, src, error_threshold)?;
+            subdivide_and_transform_row(row_slice, &target_georef, row as i32, coord_trans, src, error_threshold)?;
         }
     }
 
@@ -330,22 +361,24 @@ fn reproject_with_interpolation<T: ArrayNum>(
 
 /// Transform a row exactly by transforming each pixel
 fn transform_row_exact<T: ArrayNum>(
-    result: &mut DenseRaster<T>,
+    row_slice: &mut [T],
+    target_georef: &GeoReference,
     row: i32,
     coord_trans: &CoordinateTransformer,
     src: &DenseRaster<T>,
     points: &mut Vec<Point>,
 ) -> Result<()> {
-    let num_columns = result.size().cols.count();
+    let num_columns = row_slice.len() as i32;
+    let source_georef = src.metadata();
+
     points.clear();
-    points.extend((0..num_columns).map(|col| result.metadata().cell_center(Cell::from_row_col(row, col))));
+    points.extend((0..num_columns).map(|col| target_georef.cell_center(Cell::from_row_col(row, col))));
     coord_trans.transform_points_in_place(points)?;
 
-    let source_georef = src.metadata();
     for (col, point) in points.iter().enumerate() {
         let src_cell = source_georef.point_to_cell(*point);
         if source_georef.is_cell_on_map(src_cell) {
-            result.set_cell_value(Cell::from_row_col(row, col as i32), src.cell_value(src_cell));
+            row_slice[col] = src.cell_value(src_cell).unwrap_or(T::NODATA);
         }
     }
 
@@ -359,60 +392,59 @@ fn linear_interpolate(start: Point, end: Point, t: f64) -> Point {
 }
 
 /// Interpolate values across a row using linear interpolation between endpoints
-fn interpolate_row<T: ArrayNum>(
-    result: &mut DenseRaster<T>,
-    row: i32,
-    first_transformed: Point,
-    last_transformed: Point,
-    source_georef: &GeoReference,
-    src: &DenseRaster<T>,
-) {
-    let row_width = result.size().cols.count();
+fn interpolate_row<T: ArrayNum>(dest: &mut [T], first_transformed: Point, last_transformed: Point, src: &DenseRaster<T>) {
+    let row_width = dest.len();
+    let source_georef = src.metadata();
 
-    for col in 0..row_width {
+    for (col, dest_cell) in dest.iter_mut().enumerate() {
         let t = if row_width == 1 { 0.0 } else { col as f64 / (row_width - 1) as f64 };
         let interpolated_point = linear_interpolate(first_transformed, last_transformed, t);
 
         let src_cell = source_georef.point_to_cell(interpolated_point);
         if source_georef.is_cell_on_map(src_cell) {
-            result.set_cell_value(Cell::from_row_col(row, col), src.cell_value(src_cell));
+            *dest_cell = src.cell_value(src_cell).unwrap_or(T::NODATA);
         }
     }
 }
 
 /// Recursively subdivide a row and use interpolation where error threshold is met
 fn subdivide_and_transform_row<T: ArrayNum>(
-    result: &mut DenseRaster<T>,
+    result: &mut [T],
+    result_georef: &GeoReference,
     row: i32,
     coord_trans: &CoordinateTransformer,
-    source_georef: &GeoReference,
     src: &DenseRaster<T>,
     error_threshold: f64,
 ) -> Result<()> {
-    let row_width = result.size().cols.count();
-    subdivide_segment(result, row, 0, row_width - 1, coord_trans, source_georef, src, error_threshold)
+    let start_col = 0;
+    let end_col = result.len() as i32 - 1;
+
+    subdivide_segment(result, result_georef, row, start_col, end_col, coord_trans, src, error_threshold)
 }
 
 /// Recursively subdivide a segment of a row
 fn subdivide_segment<T: ArrayNum>(
-    result: &mut DenseRaster<T>,
+    result: &mut [T],
+    result_georef: &GeoReference,
     row: i32,
     start_col: i32,
     end_col: i32,
     coord_trans: &CoordinateTransformer,
-    source_georef: &GeoReference,
     src: &DenseRaster<T>,
     error_threshold: f64,
 ) -> Result<()> {
+    debug_assert!(result.len() == (end_col - start_col + 1) as usize);
+    let source_georef = src.metadata();
+
     if end_col - start_col <= 1 {
-        // Base case: transform remaining pixels exactly
-        for col in start_col..=end_col {
+        // Transform remaining pixels exactly
+        for (i, col) in (start_col..=end_col).enumerate() {
             let cell = Cell::from_row_col(row, col);
-            let pixel = result.metadata().cell_center(cell);
+            let pixel = result_georef.cell_center(cell);
             let transformed = coord_trans.transform_point(pixel)?;
             let src_cell = source_georef.point_to_cell(transformed);
             if source_georef.is_cell_on_map(src_cell) {
-                result.set_cell_value(cell, src.cell_value(src_cell));
+                result[i] = src.cell_value(src_cell).unwrap_or(T::NODATA);
             }
         }
         return Ok(());
@@ -421,43 +453,61 @@ fn subdivide_segment<T: ArrayNum>(
     let middle_col = (start_col + end_col) / 2;
 
     // Transform the three points
-    let start_cell = Cell::from_row_col(row, start_col);
-    let middle_cell = Cell::from_row_col(row, middle_col);
-    let end_cell = Cell::from_row_col(row, end_col);
+    let mut points = [
+        result_georef.cell_center(Cell::from_row_col(row, start_col)),
+        result_georef.cell_center(Cell::from_row_col(row, middle_col)),
+        result_georef.cell_center(Cell::from_row_col(row, end_col)),
+    ];
 
-    let start_pixel = result.metadata().cell_center(start_cell);
-    let middle_pixel = result.metadata().cell_center(middle_cell);
-    let end_pixel = result.metadata().cell_center(end_cell);
+    coord_trans.transform_points_in_place(&mut points)?;
 
-    let start_transformed = coord_trans.transform_point(start_pixel)?;
-    let middle_transformed = coord_trans.transform_point(middle_pixel)?;
-    let end_transformed = coord_trans.transform_point(end_pixel)?;
+    let start_pixel = points[0];
+    let middle_pixel = points[1];
+    let end_pixel = points[2];
 
     // Check interpolation error
     let t = (middle_col - start_col) as f64 / (end_col - start_col) as f64;
-    let interpolated_middle = linear_interpolate(start_transformed, end_transformed, t);
-    let error = point::euclidenan_distance(middle_transformed, interpolated_middle);
+    let interpolated_middle = linear_interpolate(start_pixel, end_pixel, t);
+    let error = point::euclidenan_distance(middle_pixel, interpolated_middle);
 
     if error < error_threshold {
         // Use linear interpolation for this segment
-        for col in start_col..=end_col {
+        for (i, col) in (start_col..=end_col).enumerate() {
             let t = if end_col == start_col {
                 0.0
             } else {
                 (col - start_col) as f64 / (end_col - start_col) as f64
             };
 
-            let interpolated_point = linear_interpolate(start_transformed, end_transformed, t);
-
+            let interpolated_point = linear_interpolate(start_pixel, end_pixel, t);
             let src_cell = source_georef.point_to_cell(interpolated_point);
             if source_georef.is_cell_on_map(src_cell) {
-                result.set_cell_value(Cell::from_row_col(row, col), src.cell_value(src_cell));
+                result[i] = src.cell_value(src_cell).unwrap_or(T::NODATA);
             }
         }
     } else {
         // Recursively subdivide
-        subdivide_segment(result, row, start_col, middle_col, coord_trans, source_georef, src, error_threshold)?;
-        subdivide_segment(result, row, middle_col, end_col, coord_trans, source_georef, src, error_threshold)?;
+        let first_half_split_pos = (middle_col - start_col) as usize;
+        subdivide_segment(
+            &mut result[0..=first_half_split_pos],
+            result_georef,
+            row,
+            start_col,
+            middle_col,
+            coord_trans,
+            src,
+            error_threshold,
+        )?;
+        subdivide_segment(
+            &mut result[first_half_split_pos + 1..],
+            result_georef,
+            row,
+            middle_col + 1,
+            end_col,
+            coord_trans,
+            src,
+            error_threshold,
+        )?;
     }
 
     Ok(())
