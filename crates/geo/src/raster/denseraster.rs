@@ -11,10 +11,10 @@ const LANES: usize = inf::simd::LANES;
 impl<T: crate::ArrayNum + gdal::raster::GdalType> DenseRaster<T> {
     pub fn warped_to_epsg(&self, epsg: crate::crs::Epsg) -> crate::Result<Self> {
         use super::algo;
-        Self::warped_to_epsg_with_opts(self, epsg, &algo::GdalWarpOptions::default())
+        Self::warped_to_epsg_with_opts(self, epsg, &algo::gdal::GdalWarpOptions::default())
     }
 
-    pub fn warped_to_epsg_with_opts(&self, epsg: crate::crs::Epsg, opts: &super::algo::GdalWarpOptions) -> crate::Result<Self> {
+    pub fn warped_to_epsg_with_opts(&self, epsg: crate::crs::Epsg, opts: &super::algo::gdal::GdalWarpOptions) -> crate::Result<Self> {
         use super::algo;
         use super::io;
         use crate::Array;
@@ -25,7 +25,7 @@ impl<T: crate::ArrayNum + gdal::raster::GdalType> DenseRaster<T> {
         let src_ds = io::dataset::create_in_memory_with_data(self.metadata(), self.data.as_slice())?;
         let dst_ds = io::dataset::create_in_memory_with_data(result.metadata(), result.data.as_slice())?;
 
-        algo::warp(&src_ds, &dst_ds, opts)?;
+        algo::gdal::warp(&src_ds, &dst_ds, opts)?;
 
         Ok(result)
     }

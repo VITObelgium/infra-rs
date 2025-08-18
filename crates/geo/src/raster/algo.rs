@@ -4,6 +4,10 @@ mod cast;
 mod conversion;
 mod distance;
 mod filter;
+#[cfg(feature = "gdal")]
+mod gdaltranslate;
+#[cfg(feature = "gdal")]
+mod gdalwarp;
 mod limits;
 mod nodata;
 #[cfg(all(feature = "gdal", feature = "vector"))]
@@ -13,10 +17,6 @@ mod rasterdiff;
 #[cfg(any(feature = "proj", feature = "proj4rs"))]
 mod reproject;
 mod statistics;
-#[cfg(feature = "gdal")]
-mod translate;
-#[cfg(feature = "gdal")]
-mod warp;
 
 mod clusterid;
 pub(crate) mod clusterutils;
@@ -27,7 +27,12 @@ pub use polygonize::polygonize;
 use crate::Array;
 
 #[cfg(feature = "gdal")]
-pub use {translate::translate, translate::translate_file, warp::GdalWarpOptions, warp::warp, warp::warp_cli, warp::warp_to_disk_cli};
+pub mod gdal {
+    pub use super::{
+        gdaltranslate::translate, gdaltranslate::translate_file, gdalwarp::GdalWarpOptions, gdalwarp::warp, gdalwarp::warp_cli,
+        gdalwarp::warp_to_disk_cli,
+    };
+}
 
 #[cfg(feature = "gdal")]
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};

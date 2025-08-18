@@ -58,7 +58,7 @@ pub fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: 
         timestamp
     ));
 
-    if let Ok(ds) = raster::algo::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options)
+    if let Ok(ds) = raster::algo::gdal::translate(&Dataset::open(raster_path)?, output_path.as_path(), &options)
         && let Ok(Some(stats)) = ds.rasterband(band_nr)?.get_statistics(true, true)
     {
         log::info!("Value range: [{:.2} <-> {:.2}]", stats.min, stats.max);
@@ -104,7 +104,7 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
     let meta = RasterMetadata::sized_for_type::<T>(RasterSize::square(scaled_size));
-    let ds = raster::algo::translate_file(raster_path, &output_path, &options)?;
+    let ds = raster::algo::gdal::translate_file(raster_path, &output_path, &options)?;
 
     let (_, data) = raster::io::dataset::read_band(&ds, 1)?;
     Ok(DenseArray::new(meta, data)?)
@@ -158,7 +158,7 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
         ("NUM_THREADS".to_string(), "ALL_CPUS".to_string()),
     ];
 
-    raster::algo::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
+    raster::algo::gdal::warp_cli(&src_ds, &mut dest_ds, &options, &key_value_options)?;
 
     // Avoid returning tiles containing only nodata values
     if !data.contains_data() {

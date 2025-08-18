@@ -574,7 +574,7 @@ mod tests {
 
         // Measure GDAL performance
         let start = std::time::Instant::now();
-        let opts = algo::GdalWarpOptions {
+        let opts = algo::gdal::GdalWarpOptions {
             all_cpus: false,
             ..Default::default()
         };

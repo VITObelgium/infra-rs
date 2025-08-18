@@ -289,7 +289,7 @@ mod tests {
             "NUM_THREADS=ALL_CPUS".to_string(),
         ];
 
-        geo::raster::algo::warp_to_disk_cli(&src_ds, output_tif, &options, &vec![]).expect("Failed to create test COG file");
+        geo::raster::algo::gdal::warp_to_disk_cli(&src_ds, output_tif, &options, &vec![]).expect("Failed to create test COG file");
 
         Ok(())
     }

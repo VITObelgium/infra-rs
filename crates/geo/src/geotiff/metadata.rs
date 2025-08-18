@@ -174,7 +174,7 @@ mod tests {
         let creation_options: Vec<(String, String)> = vec![];
 
         let src_ds = raster::io::dataset::open_read_only(input)?;
-        raster::algo::warp_to_disk_cli(&src_ds, &output, &options, &creation_options)?;
+        raster::algo::gdal::warp_to_disk_cli(&src_ds, &output, &options, &creation_options)?;
 
         let meta = GeoTiffMetadata::from_file(&output)?;
         assert_eq!(meta.data_layout, ChunkDataLayout::Striped(3));

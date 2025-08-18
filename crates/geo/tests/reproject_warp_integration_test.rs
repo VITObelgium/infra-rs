@@ -151,7 +151,7 @@ mod tests {
 
         let gdalwarp_args = warp_options_to_gdalwarp_args(opts);
         let src_ds = gdal::Dataset::open(input)?;
-        raster::algo::warp_to_disk_cli(&src_ds, &output_path, &gdalwarp_args, &Vec::default())?;
+        raster::algo::gdal::warp_to_disk_cli(&src_ds, &output_path, &gdalwarp_args, &Vec::default())?;
         DenseRaster::<T>::read(&output_path)
     }
 

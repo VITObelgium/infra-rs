@@ -1,6 +1,6 @@
-use std::ffi::{c_int, CString};
+use std::ffi::{CString, c_int};
 
-use crate::{gdalinterop, Error, Result};
+use crate::{Error, Result, gdalinterop};
 
 struct TranslateOptionsWrapper {
     options: *mut gdal_sys::GDALTranslateOptions,
@@ -26,11 +26,7 @@ impl Drop for TranslateOptionsWrapper {
     }
 }
 
-pub fn translate_file(
-    input_path: &std::path::Path,
-    output_path: &std::path::Path,
-    options: &[String],
-) -> Result<gdal::Dataset> {
+pub fn translate_file(input_path: &std::path::Path, output_path: &std::path::Path, options: &[String]) -> Result<gdal::Dataset> {
     let ds = gdal::Dataset::open(input_path)?;
     translate(&ds, output_path, options)
 }

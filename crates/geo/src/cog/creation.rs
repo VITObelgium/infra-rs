@@ -142,7 +142,7 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
         options.push(gdal_data_type_name(output_type).to_string());
     }
 
-    raster::algo::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
+    raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
 
     Ok(())
 }
