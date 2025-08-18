@@ -42,6 +42,7 @@ inf = { path = "./crates/inf" }
 pyo3 = { version = "*", optional = true }
 sqlite = { optional = true, path = "./crates/sqlite" }
 tiler = { optional = true, path = "./crates/tiler" }
+tileserver = { optional = true, path = "./tools/tileserver" }
 
 [features]
 arrow = ["geo/arrow"]
@@ -54,6 +55,7 @@ serde = ["inf/serde"]
 sqlite = ["dep:sqlite"]
 tiler = ["dep:tiler"]
 simd = ["geo/simd"]
+tui = ["tileserver/tui"]
 
 [patch.crates-io]
 # more recent geozero to avoid multiple gdal copies

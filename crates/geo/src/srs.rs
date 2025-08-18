@@ -1,11 +1,13 @@
+#[cfg(feature = "gdal")]
+mod gdal;
 #[cfg(feature = "proj")]
 mod proj;
+#[cfg(feature = "gdal")]
+pub use gdal::SpatialReference;
+#[cfg(feature = "gdal")]
+pub use gdal::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
 #[cfg(feature = "proj")]
 pub use proj::CoordinateTransformer as ProjCoordinateTransformer;
-#[cfg(feature = "proj")]
-pub use proj::SpatialReference;
-#[cfg(feature = "proj")]
-pub use proj::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
 
 #[cfg(feature = "proj4rs")]
 mod proj4rs;
