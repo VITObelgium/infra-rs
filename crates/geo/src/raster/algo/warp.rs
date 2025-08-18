@@ -1,8 +1,8 @@
 use std::ops::RangeInclusive;
 
 use crate::{
-    Array, ArrayNum, Cell, CellSize, Columns, CoordinateTransformer, Error, GeoReference, GeoTransform, Point, RasterSize, Rect, Result,
-    Rows, crs, point, raster::DenseRaster,
+    Array, ArrayNum, Cell, CellSize, Columns, Error, GeoReference, GeoTransform, Point, RasterSize, Rect, Result, Rows, crs, point,
+    raster::DenseRaster, srs::CoordinateTransformer,
 };
 
 const DEFAULT_EDGE_SAMPLE_COUNT: usize = 25;

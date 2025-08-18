@@ -10,6 +10,7 @@ use crate::Coordinate;
 use crate::Error;
 use crate::Point;
 use crate::Result;
+use crate::crs;
 use crate::crs::Epsg;
 use crate::crs::epsg;
 
@@ -140,7 +141,7 @@ fn is_wkt_string(s: &str) -> bool {
     WKT_ROOTS.iter().any(|&root| s.starts_with(root)) || WKT2_ROOTS.iter().any(|&root| s.starts_with(root))
 }
 
-fn parse_wkt_epsg(s: &str) -> (Option<Epsg>, Option<Epsg>) {
+fn parse_wkt_epsg(s: &str) -> (Option<Epsg>, Option<Epsg>, bool) {
     let builder = proj4wkt::Builder;
 
     if let Ok(node) = builder.parse(s) {
@@ -160,7 +161,7 @@ fn parse_wkt_epsg(s: &str) -> (Option<Epsg>, Option<Epsg>) {
                     .and_then(|auth| auth.code.parse::<u16>().ok())
                     .map(Epsg::from);
 
-                return (epsg, epsg_geo);
+                return (epsg, epsg_geo, false);
             }
             proj4wkt::builder::Node::GEOGCRS(crs) => {
                 let epsg = crs
@@ -169,13 +170,17 @@ fn parse_wkt_epsg(s: &str) -> (Option<Epsg>, Option<Epsg>) {
                     .and_then(|auth| auth.code.parse::<u16>().ok())
                     .map(Epsg::from);
 
-                return (None, epsg);
+                if epsg == Some(crs::epsg::WGS84) {
+                    return (Some(epsg::WGS84_WEB_MERCATOR), epsg, true);
+                } else {
+                    return (None, epsg, true);
+                }
             }
             _ => {}
         }
     }
 
-    (None, None)
+    (None, None, false)
 }
 
 fn proj_epsg_from_string(srs_str: &str) -> Result<(String, Option<Epsg>, Option<Epsg>)> {
@@ -193,26 +198,26 @@ fn proj_epsg_from_string(srs_str: &str) -> Result<(String, Option<Epsg>, Option<
         }
 
         if is_wkt_string(srs_str) {
-            let (epsg, epsg_geo) = parse_wkt_epsg(srs_str);
+            let (epsg, epsg_geo, is_geo) = parse_wkt_epsg(srs_str);
 
-            if let Some(epsg) = epsg {
+            let epsg_to_use = match (epsg, epsg_geo, is_geo) {
+                (Some(epsg), Some(epsg_geo), is_geo) => Some(if is_geo { epsg_geo } else { epsg }),
+                (Some(epsg), None, _) => Some(epsg),
+                (None, Some(epsg_geo), _) => Some(epsg_geo),
+                _ => None,
+            };
+
+            if let Some(epsg_to_use) = epsg_to_use {
                 // If we can obtain an EPSG code from the WKT string, use it as it gives more similar results to osgeo/proj
-                let proj_str = crs_definitions::from_code(epsg.code())
+                let proj_str = crs_definitions::from_code(epsg_to_use.code())
                     .map(|def| def.proj4.to_string())
                     .ok_or_else(|| Error::Runtime("".into()))?;
 
-                (proj_str, Some(epsg), epsg_geo)
-            } else if let Some(epsg_geo) = epsg_geo {
-                // If we can obtain an EPSG code from the WKT string, use it as it gives more similar results to osgeo/proj
-                let proj_str = crs_definitions::from_code(epsg_geo.code())
-                    .map(|def| def.proj4.to_string())
-                    .ok_or_else(|| Error::Runtime("".into()))?;
-
-                (proj_str, epsg, Some(epsg_geo))
+                (proj_str, epsg, epsg_geo)
             } else {
                 let proj_str =
                     wkt_to_projstring(srs_str).map_err(|e| Error::InvalidArgument(format!("Failed to parse WKT string ({e})")))?;
-                (proj_str, None, None)
+                (proj_str, epsg, epsg_geo)
             }
         } else {
             (srs_str.to_string(), None, None)

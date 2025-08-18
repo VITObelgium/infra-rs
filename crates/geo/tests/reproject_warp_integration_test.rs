@@ -34,7 +34,7 @@ mod tests {
 
     /// Execute gdalwarp as external process
     fn run_gdalwarp(args: &[String]) -> Result<()> {
-        println!("Gdal warp cmd: {}", args.join(" "));
+        log::info!("Gdal warp cmd: {}", args.join(" "));
         let output = Command::new("gdalwarp")
             .args(args)
             .output()

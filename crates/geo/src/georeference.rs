@@ -959,7 +959,8 @@ mod tests {
 
         let warped = meta.warped_to_epsg(crs::epsg::WGS84).unwrap();
 
-        assert_eq!(warped.projected_epsg(), Some(crs::epsg::WGS84));
+        assert_eq!(warped.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
+        assert_eq!(warped.geographic_epsg(), Some(crs::epsg::WGS84));
         assert_eq!(warped.raster_size(), RasterSize::with_rows_cols(Rows(89), Columns(176)),);
         assert_relative_eq!(warped.cell_size(), CellSize::square(0.062023851850733745), epsilon = 1e-10);
     }

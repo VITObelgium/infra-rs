@@ -4,9 +4,10 @@ use std::{
 };
 
 use crate::{
-    Columns, Error, GeoReference, RasterSize, Result, Rows, SpatialReference,
+    Columns, Error, GeoReference, RasterSize, Result, Rows,
     gdalinterop::{self, check_rc},
     raster::algo::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize},
+    srs::SpatialReference,
 };
 use gdal::cpl::CslStringList;
 

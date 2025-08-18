@@ -109,7 +109,7 @@ test_release_slow target=default_target:
     cargo nextest run --profile slow --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector
 
 test_warp target=default_target:
-    cargo nextest run  --profile ci --target {{target}} --workspace -p geo --release --features=serde,derive,vector,proj4rs,rayon --no-capture integration_warp
+    cargo nextest run  --profile ci --target {{target}} -p geo --release --no-default-features --features=gdal-static,proj4rs,rayon --no-capture integration_warp
 
 test_debug_py: pybootstrap
     pixi run test_debug

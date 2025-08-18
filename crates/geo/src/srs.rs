@@ -5,23 +5,28 @@ use crate::crs::Epsg;
 mod gdal;
 #[cfg(feature = "proj")]
 mod proj;
+#[cfg(feature = "proj4rs")]
+mod proj4rs;
+
 #[cfg(feature = "gdal")]
-pub use gdal::SpatialReference;
+pub use gdal::SpatialReference as GdalSpatialReference;
+
 #[cfg(feature = "proj")]
 pub use proj::CoordinateTransformer as ProjCoordinateTransformer;
 
 #[cfg(feature = "proj4rs")]
-mod proj4rs;
-#[cfg(feature = "proj4rs")]
-pub use proj4rs::CoordinateTransformer as Proj4rsCoordinateTransformer;
+pub use {
+    proj4rs::CoordinateTransformer as Proj4rsCoordinateTransformer, proj4rs::CoordinateTransformer, proj4rs::SpatialReference,
+    proj4rs::SpatialReference as Proj4rsSpatialReference,
+};
 
 #[cfg(all(feature = "proj", not(feature = "proj4rs")))]
 // proj4rs takes precedence over proj if both are enabled
 pub use proj::CoordinateTransformer;
 
-#[cfg(feature = "proj4rs")]
-// proj4rs takes precedence over proj if both are enabled
-pub use proj4rs::CoordinateTransformer;
+#[cfg(all(feature = "gdal", not(feature = "proj4rs")))]
+// proj4rs takes precedence over gdal if both are enabled
+pub use gdal::SpatialReference;
 
 /// Single shot version of `SpatialReference::to_wkt`
 #[allow(unreachable_code)]

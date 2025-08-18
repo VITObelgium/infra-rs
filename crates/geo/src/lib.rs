@@ -37,8 +37,7 @@ mod rastersize;
 pub mod rect;
 #[cfg(feature = "gdal")]
 mod runtimeconfiguration;
-#[cfg(any(feature = "proj", feature = "proj4rs"))]
-mod srs;
+pub mod srs;
 mod tile;
 pub mod tileutils;
 #[cfg(feature = "vector")]
@@ -50,13 +49,6 @@ mod arraytests;
 pub mod testutils;
 
 use thiserror::Error;
-
-#[cfg(any(feature = "proj", feature = "proj4rs"))]
-pub use srs::CoordinateTransformer;
-#[cfg(feature = "proj4rs")]
-pub use srs::Proj4rsCoordinateTransformer;
-#[cfg(feature = "proj")]
-pub use {srs::ProjCoordinateTransformer, srs::SpatialReference};
 
 #[cfg(feature = "gdal")]
 #[doc(inline)]

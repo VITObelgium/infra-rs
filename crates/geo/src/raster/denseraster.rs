@@ -10,7 +10,7 @@ pub type DenseRaster<T> = DenseArray<T, GeoReference>;
 const LANES: usize = inf::simd::LANES;
 
 #[simd_macro::simd_bounds]
-impl<T: crate::ArrayNum + gdal::raster::GdalType> DenseRaster<T> {
+impl<T: crate::ArrayNum> DenseRaster<T> {
     pub fn warped_to_epsg(&self, epsg: crs::Epsg) -> crate::Result<Self> {
         let opts = algo::WarpOptions {
             target_srs: TargetSrs::Epsg(epsg),

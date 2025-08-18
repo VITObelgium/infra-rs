@@ -4,8 +4,9 @@ mod tests {
     use approx::assert_relative_eq;
     use geo::{Cell, RasterSize};
     use geo::{
-        CellSize, Columns, GeoReference, Rows, SpatialReference,
+        CellSize, Columns, GeoReference, Rows,
         crs::Epsg,
+        srs::SpatialReference,
         vector::{self, BurnValue},
     };
     use inf::progressinfo::DummyProgress;

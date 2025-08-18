@@ -658,11 +658,10 @@ mod genericgeotests {
 
 #[cfg(test)]
 mod tests {
-    use crate::Result;
 
     #[cfg(feature = "gdal")]
     #[test]
-    fn test_cluster_id_with_obstacles() -> Result<()> {
+    fn test_cluster_id_with_obstacles() -> crate::Result<()> {
         use super::*;
         use crate::raster::DenseRaster;
         use crate::raster::RasterIO;

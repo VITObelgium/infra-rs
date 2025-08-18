@@ -1,29 +1,29 @@
 // For a full list of overridable settings, and general information on folder-specific settings,
 // see the documentation: https://zed.dev/docs/configuring-zed#settings-files
 {
-  "file_scan_exclusions": [
-    "**/.git",
-    "**/.pixi",
-    "**/.gitmodules",
-    "**/.DS_Store",
-    "**/Thumbs.db",
-    "**/.settings",
-    "**/.vscode"
-  ],
-  "lsp": {
-    "rust-analyzer": {
-      "initialization_options": {
-        "rust": {
-          "analyzerTargetDir": true
-        },
-        "cargo": {
-          "features": ["gdal", "proj4rs", "tui", "vector", "rayon"]
-        },
-        "check": {
-          "features": ["gdal", "proj4rs", "tui", "vector"],
-          "command": "clippy" // rust-analyzer.checkOnSave.command
+    "file_scan_exclusions": [
+        "**/.git",
+        "**/.pixi",
+        "**/.gitmodules",
+        "**/.DS_Store",
+        "**/Thumbs.db",
+        "**/.settings",
+        "**/.vscode"
+    ],
+    "lsp": {
+        "rust-analyzer": {
+            "initialization_options": {
+                "rust": {
+                    "analyzerTargetDir": true
+                },
+                "cargo": {
+                    "features": ["gdal", "proj4rs", "vector", "rayon"]
+                },
+                "check": {
+                    "features": ["gdal", "proj4rs", "vector", "rayon"],
+                    "command": "clippy" // rust-analyzer.checkOnSave.command
+                }
+            }
         }
-      }
     }
-  }
 }

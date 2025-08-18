@@ -5,14 +5,12 @@ use crate::Point;
 use crate::Result;
 use crate::crs::Epsg;
 
-#[allow(dead_code)]
 pub struct CoordinateTransformer {
     transformer: Proj,
     source_srs: String,
     target_srs: String,
 }
 
-#[allow(dead_code)]
 impl CoordinateTransformer {
     pub fn new(source_srs: &str, target_srs: &str) -> Result<Self> {
         let transformer = Proj::new_known_crs(source_srs, target_srs, None)?;
