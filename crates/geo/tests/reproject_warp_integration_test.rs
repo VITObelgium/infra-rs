@@ -207,6 +207,7 @@ mod tests {
         let gdal_duration = start.elapsed();
         log::info!("[{name}] Gdal warp duration {gdal_duration:?}");
 
+        #[cfg(not(debug_assertions))]
         if gdal_duration < geo_duration {
             log::warn!(
                 "[{name}] !!! GDAL warp was faster than Geo warp: {:.2}% faster !!!",
