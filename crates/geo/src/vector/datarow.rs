@@ -25,7 +25,7 @@ pub mod __private {
 
         match feature.field(index)? {
             Some(field) => {
-                if !T::empty_value_is_valid()
+                if !T::EMPTY_FIELD_IS_VALID
                     && let FieldValue::StringValue(val) = &field
                 {
                     // Don't try to parse empty strings (empty strings are not considered as null values by GDAL for csv files)

@@ -115,8 +115,14 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
             } else if let Some(inner_type) = is_option_type(tp) {
                 quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#inner_type>(&feature, #name_str)? }
             } else {
-                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#tp>(&feature, #name_str)?.ok_or(
-                    inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str)))?
+                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#tp>(&feature, #name_str)?.ok_or_else(|| {
+                        if let Ok(index) = feature.field_index(#name_str) {
+                            let field_val = feature.field_as_string(index).unwrap_or_default();
+                            inf::Error::InvalidArgument(format!("Invalid field value for {} ('{}')", #name_str, field_val.unwrap_or_default()))
+                        } else {
+                            inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str))
+                        }
+                    })?
                 }
             }
         })
