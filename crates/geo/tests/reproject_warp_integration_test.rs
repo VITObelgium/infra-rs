@@ -26,57 +26,9 @@ mod tests {
         path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "reproject_debug")
     }
 
-    fn warp_options_to_gdalwarp_args(opts: &WarpOptions) -> Vec<String> {
-        let mut args = Vec::default();
-
-        // Handle target size based on WarpTargetSize
-        match &opts.target_size {
-            WarpTargetSize::Source => {
-                // Default behavior - GDAL will try to preserve resolution
-            }
-            WarpTargetSize::Sized(raster_size) => {
-                args.extend([
-                    "-ts".to_string(),
-                    raster_size.cols.count().to_string(),
-                    raster_size.rows.count().to_string(),
-                ]);
-            }
-            WarpTargetSize::CellSize(cell_size, alignment) => {
-                args.extend(["-tr".to_string(), cell_size.x().to_string(), cell_size.y().abs().to_string()]);
-                if let TargetPixelAlignment::Yes = alignment {
-                    args.push("-tap".to_string()); // Target aligned pixels
-                }
-            }
-        }
-
-        match &opts.target_srs {
-            TargetSrs::Epsg(epsg) => {
-                args.extend(["-t_srs".to_string(), format!("{}", epsg)]);
-            }
-            TargetSrs::Proj4(proj4) => {
-                args.extend(["-t_srs".to_string(), proj4.clone()]);
-            }
-        }
-
-        // Error threshold (corresponds to -et option in gdalwarp)
-        args.extend(["-et".to_string(), opts.error_threshold.to_string()]);
-
-        // Multi-threading
-        match opts.num_threads {
-            NumThreads::AllCpus => args.extend(["-multi".to_string(), "-wo".to_string(), "NUM_THREADS=ALL_CPUS".to_string()]),
-            NumThreads::Count(cpus) if cpus > 1 => args.extend(["-multi".to_string(), "-wo".to_string(), format!("NUM_THREADS={cpus}")]),
-            NumThreads::Count(_) => {}
-        }
-
-        // Output format
-        args.extend(["-of".to_string(), "GTiff".to_string()]);
-
-        args
-    }
-
     fn create_gdalwarp_args(opts: &WarpOptions, src_path: &Path, dst_path: &Path) -> Vec<String> {
         let mut args = vec![src_path.to_string_lossy().to_string(), dst_path.to_string_lossy().to_string()];
-        args.extend(warp_options_to_gdalwarp_args(opts));
+        args.extend(raster::algo::gdal::warp_options_to_gdalwarp_cli_args(opts));
         args
     }
 
@@ -149,7 +101,7 @@ mod tests {
     fn warp_using_linked_gdal<T: ArrayNum>(input: &Path, tmp_dir: &TempDir, opts: &WarpOptions) -> Result<DenseRaster<T>> {
         let output_path = tmp_dir.path().join("gdal_warped.tif");
 
-        let gdalwarp_args = warp_options_to_gdalwarp_args(opts);
+        let gdalwarp_args = raster::algo::gdal::warp_options_to_gdalwarp_cli_args(opts);
         let src_ds = gdal::Dataset::open(input)?;
         raster::algo::gdal::warp_to_disk_cli(&src_ds, &output_path, &gdalwarp_args, &Vec::default())?;
         DenseRaster::<T>::read(&output_path)

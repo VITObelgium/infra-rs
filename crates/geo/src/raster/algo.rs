@@ -24,13 +24,13 @@ pub(crate) mod clusterutils;
 #[cfg(all(feature = "gdal", feature = "vector"))]
 pub use polygonize::polygonize;
 
-use crate::Array;
+use crate::{Array, GeoReference};
 
 #[cfg(feature = "gdal")]
 pub mod gdal {
     pub use super::{
         gdaltranslate::translate, gdaltranslate::translate_file, gdalwarp::GdalWarpOptions, gdalwarp::warp, gdalwarp::warp_cli,
-        gdalwarp::warp_to_disk_cli,
+        gdalwarp::warp_georeference, gdalwarp::warp_options_to_gdalwarp_cli_args, gdalwarp::warp_to_disk_cli,
     };
 }
 
@@ -43,6 +43,17 @@ pub use reproject::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, Wa
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
 };
+
+pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> crate::Result<GeoReference> {
+    #[cfg(feature = "gdal")]
+    return gdal::warp_georeference(georef, opts);
+
+    #[cfg(all(not(feature = "gdal"), feature = "proj4rs"))]
+    return reproject::reproject_georeference(georef, opts);
+
+    #[cfg(not(any(feature = "gdal", feature = "proj4rs")))]
+    panic!("No reprojection backend enabled. Enable either 'gdal' or 'proj4rs' feature.");
+}
 
 pub use conversion::replace_value;
 

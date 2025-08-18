@@ -1,11 +1,12 @@
+use crate::Result;
+use crate::crs::Epsg;
+
 #[cfg(feature = "gdal")]
 mod gdal;
 #[cfg(feature = "proj")]
 mod proj;
 #[cfg(feature = "gdal")]
 pub use gdal::SpatialReference;
-#[cfg(feature = "gdal")]
-pub use gdal::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
 #[cfg(feature = "proj")]
 pub use proj::CoordinateTransformer as ProjCoordinateTransformer;
 
@@ -21,6 +22,33 @@ pub use proj::CoordinateTransformer;
 #[cfg(feature = "proj4rs")]
 // proj4rs takes precedence over proj if both are enabled
 pub use proj4rs::CoordinateTransformer;
+
+/// Single shot version of `SpatialReference::to_wkt`
+#[allow(unreachable_code)]
+pub fn projection_from_epsg(epsg: Epsg) -> Result<String> {
+    #[cfg(any(feature = "proj4rs", feature = "gdal"))]
+    return SpatialReference::from_epsg(epsg)?.to_wkt();
+
+    panic!("No spatial reference backend enabled. Enable either 'proj4rs' or 'gdal' feature.");
+}
+
+/// Single shot version of `SpatialReference::epsg_geog_cs`
+#[allow(unreachable_code)]
+pub fn projection_to_geo_epsg(projection: &str) -> Option<Epsg> {
+    #[cfg(any(feature = "proj4rs", feature = "gdal"))]
+    return SpatialReference::from_definition(projection).ok()?.epsg_geog_cs();
+
+    panic!("No spatial reference backend enabled. Enable either 'proj4rs' or 'gdal' feature.");
+}
+
+/// Single shot version of `SpatialReference::epsg_cs`
+#[allow(unreachable_code)]
+pub fn projection_to_epsg(projection: &str) -> Option<Epsg> {
+    #[cfg(any(feature = "proj4rs", feature = "gdal"))]
+    return SpatialReference::from_definition(projection).ok()?.epsg_cs();
+
+    panic!("No spatial reference backend enabled. Enable either 'proj4rs' or 'gdal' feature.");
+}
 
 #[cfg(all(feature = "proj4rs", feature = "proj"))]
 #[cfg(test)]

@@ -4,8 +4,9 @@ use std::{
 };
 
 use crate::{
-    Error, Result,
+    Columns, Error, GeoReference, RasterSize, Result, Rows, SpatialReference,
     gdalinterop::{self, check_rc},
+    raster::algo::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize},
 };
 use gdal::cpl::CslStringList;
 
@@ -27,6 +28,74 @@ impl Default for GdalWarpOptions {
             all_cpus: true,
         }
     }
+}
+
+pub fn warp_options_to_gdalwarp_cli_args(opts: &WarpOptions) -> Vec<String> {
+    let mut args = Vec::default();
+
+    // Handle target size based on WarpTargetSize
+    match &opts.target_size {
+        WarpTargetSize::Source => {
+            // Default behavior - GDAL will try to preserve resolution
+        }
+        WarpTargetSize::Sized(raster_size) => {
+            args.extend([
+                "-ts".to_string(),
+                raster_size.cols.count().to_string(),
+                raster_size.rows.count().to_string(),
+            ]);
+        }
+        WarpTargetSize::CellSize(cell_size, alignment) => {
+            args.extend(["-tr".to_string(), cell_size.x().to_string(), cell_size.y().abs().to_string()]);
+            if let TargetPixelAlignment::Yes = alignment {
+                args.push("-tap".to_string()); // Target aligned pixels
+            }
+        }
+        WarpTargetSize::Exact(geo_transform, raster_size) => {
+            args.extend([
+                "-ts".to_string(),
+                raster_size.cols.count().to_string(),
+                raster_size.rows.count().to_string(),
+            ]);
+
+            let min_x = geo_transform.top_left().x();
+            let max_y = geo_transform.top_left().y();
+            let max_x = min_x + raster_size.cols.count() as f64 * geo_transform.cell_size_x();
+            let min_y = max_y + raster_size.rows.count() as f64 * geo_transform.cell_size_y();
+
+            args.extend([
+                "-te".to_string(),
+                min_x.to_string(),
+                min_y.to_string(),
+                max_x.to_string(),
+                max_y.to_string(),
+            ]);
+        }
+    }
+
+    match &opts.target_srs {
+        TargetSrs::Epsg(epsg) => {
+            args.extend(["-t_srs".to_string(), format!("{}", epsg)]);
+        }
+        TargetSrs::Proj4(proj4) => {
+            args.extend(["-t_srs".to_string(), proj4.clone()]);
+        }
+    }
+
+    // Error threshold (corresponds to -et option in gdalwarp)
+    args.extend(["-et".to_string(), opts.error_threshold.to_string()]);
+
+    // Multi-threading
+    match opts.num_threads {
+        NumThreads::AllCpus => args.extend(["-multi".to_string(), "-wo".to_string(), "NUM_THREADS=ALL_CPUS".to_string()]),
+        NumThreads::Count(cpus) if cpus > 1 => args.extend(["-multi".to_string(), "-wo".to_string(), format!("NUM_THREADS={cpus}")]),
+        NumThreads::Count(_) => {}
+    }
+
+    // Output format
+    args.extend(["-of".to_string(), "GTiff".to_string()]);
+
+    args
 }
 
 pub fn warp(src_ds: &gdal::Dataset, dst_ds: &gdal::Dataset, options: &GdalWarpOptions) -> Result<()> {
@@ -226,4 +295,72 @@ pub fn warp_cli(
     }
 
     Ok(())
+}
+
+pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<GeoReference> {
+    if georef.projection().is_empty() {
+        return Err(Error::InvalidArgument(
+            "Cannot warp metadata without projection information".to_string(),
+        ));
+    }
+
+    let target_projection = match &opts.target_srs {
+        TargetSrs::Epsg(epsg) => SpatialReference::from_epsg(*epsg)?.to_wkt()?,
+        TargetSrs::Proj4(proj4) => proj4.clone(),
+    };
+
+    let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
+    let mut src_ds = mem_driver.create("in-mem", georef.columns().count() as usize, georef.rows().count() as usize, 0)?;
+    src_ds.set_geo_transform(&georef.geo_transform().into())?;
+    src_ds.set_projection(georef.projection())?;
+
+    // Create a transformer that maps from source pixel/line coordinates
+    // to destination georeferenced coordinates (not destination pixel line).
+    // We do that by omitting the destination dataset handle (setting it to nullptr).
+    unsafe {
+        let target_srs = std::ffi::CString::new(target_projection.clone())?;
+        let transformer_arg = gdalinterop::check_pointer(
+            gdal_sys::GDALCreateGenImgProjTransformer(
+                src_ds.c_dataset(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                target_srs.as_ptr(),
+                gdalinterop::FALSE,
+                0.0,
+                0,
+            ),
+            "Failed to create projection transformer",
+        )?;
+
+        let mut target_transform: gdal::GeoTransform = [0.0; 6];
+        let mut rows: std::ffi::c_int = 0;
+        let mut cols: std::ffi::c_int = 0;
+
+        let warp_rc = gdal_sys::GDALSuggestedWarpOutput(
+            src_ds.c_dataset(),
+            Some(gdal_sys::GDALGenImgProjTransform),
+            transformer_arg,
+            target_transform.as_mut_ptr(),
+            &mut cols,
+            &mut rows,
+        );
+
+        gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
+
+        match crate::gdalinterop::check_rc(warp_rc) {
+            Ok(_) => Ok(GeoReference::new(
+                target_projection,
+                RasterSize {
+                    rows: Rows(rows),
+                    cols: Columns(cols),
+                },
+                target_transform.into(),
+                georef.nodata(),
+            )),
+            Err(e) => {
+                gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
+                Err(e.into())
+            }
+        }
+    }
 }

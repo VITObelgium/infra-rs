@@ -97,7 +97,7 @@ test_release target=default_target:
     cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_filter}}
 
 test_release_verbose target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector --no-capture {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,proj4rs --no-capture {{test_filter}}
 
 test_debug_simd target=default_target:
     cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector {{test_filter}}

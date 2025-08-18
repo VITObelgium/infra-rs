@@ -74,28 +74,6 @@ impl SpatialReference {
     }
 }
 
-/// Single shot version of `SpatialReference::to_wkt`
-pub fn projection_from_epsg(epsg: Epsg) -> Result<String> {
-    if let Err(e) = SpatialReference::from_epsg(epsg) {
-        log::error!("Error creating spatial reference: {e}");
-    }
-
-    let spatial_ref = SpatialReference::from_epsg(epsg)?;
-    spatial_ref.to_wkt()
-}
-
-/// Single shot version of `SpatialReference::epsg_geog_cs`
-pub fn projection_to_geo_epsg(projection: &str) -> Option<Epsg> {
-    let spatial_ref = SpatialReference::from_definition(projection).ok()?;
-    spatial_ref.epsg_geog_cs()
-}
-
-/// Single shot version of `SpatialReference::epsg_cs`
-pub fn projection_to_epsg(projection: &str) -> Option<Epsg> {
-    let mut spatial_ref = SpatialReference::from_definition(projection).ok()?;
-    spatial_ref.epsg_cs()
-}
-
 #[cfg(test)]
 mod tests {
     use super::SpatialReference;

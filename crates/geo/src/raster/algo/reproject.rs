@@ -1,8 +1,8 @@
 use std::ops::RangeInclusive;
 
 use crate::{
-    Array, ArrayNum, Cell, CellSize, Columns, CoordinateTransformer, Error, GeoReference, Point, RasterSize, Rect, Result, Rows, crs,
-    point, raster::DenseRaster,
+    Array, ArrayNum, Cell, CellSize, Columns, CoordinateTransformer, Error, GeoReference, GeoTransform, Point, RasterSize, Rect, Result,
+    Rows, crs, point, raster::DenseRaster,
 };
 
 const DEFAULT_EDGE_SAMPLE_COUNT: usize = 25;
@@ -32,6 +32,8 @@ pub enum WarpTargetSize {
     Sized(RasterSize),
     /// Uses the provided cell size for the reprojection target.
     CellSize(CellSize, TargetPixelAlignment),
+    /// Uses the provided geotransform and rastersize.
+    Exact(GeoTransform, RasterSize),
 }
 
 #[derive(Debug, Clone)]
@@ -181,6 +183,12 @@ pub fn reproject_georeference(georef: &GeoReference, opts: &WarpOptions) -> Resu
                 georef.nodata(),
             ))
         }
+        WarpTargetSize::Exact(geotrans, raster_size) => Ok(GeoReference::new(
+            opts.target_srs.to_string(),
+            raster_size,
+            geotrans,
+            georef.nodata(),
+        )),
     }
 }
 
@@ -532,8 +540,8 @@ mod tests {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
-        let georef_gdal = src.metadata().warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
         let opts = WarpOptions::default();
+        let georef_gdal = algo::gdal::warp_georeference(src.metadata(), &opts)?;
         let georef = super::reproject_georeference(src.metadata(), &opts)?;
 
         let gdal_bbox = georef_gdal.bounding_box();
@@ -566,52 +574,6 @@ mod tests {
     //     assert_eq!(target_size, result.metadata().raster_size());
     //     Ok(())
     // }
-
-    #[test_log::test]
-    fn reproject_performance_benchmark() -> Result<()> {
-        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let src = DenseRaster::<u8>::read(&input).unwrap();
-
-        // Measure GDAL performance
-        let start = std::time::Instant::now();
-        let opts = algo::gdal::GdalWarpOptions {
-            all_cpus: false,
-            ..Default::default()
-        };
-        let _gdal_result = src.warped_to_epsg_with_opts(crs::epsg::WGS84_WEB_MERCATOR, &opts)?;
-        let gdal_duration = start.elapsed();
-
-        let mut opts = super::WarpOptions {
-            target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
-            ..Default::default()
-        };
-
-        // Measure with interpolation performance
-        let start = std::time::Instant::now();
-        let _ = super::reproject(&src, &opts)?;
-        let optimized_duration = start.elapsed();
-
-        // Measure standard implementation performance
-        opts.error_threshold = 0.0;
-        let start = std::time::Instant::now();
-        let _ = super::reproject(&src, &opts)?;
-        let standard_duration = start.elapsed();
-
-        log::info!("Performance Benchmark Results:");
-        log::info!("GDAL:           {:?}", gdal_duration);
-        log::info!("Standard:       {:?}", standard_duration);
-        log::info!("Optimized:      {:?}", optimized_duration);
-        log::info!(
-            "Optimized vs Standard: {:.2}x faster",
-            standard_duration.as_secs_f64() / optimized_duration.as_secs_f64()
-        );
-        log::info!(
-            "Optimized vs GDAL:     {:.2}x faster",
-            gdal_duration.as_secs_f64() / optimized_duration.as_secs_f64()
-        );
-
-        Ok(())
-    }
 
     // #[test]
     // fn reproject_target_aligned_pixels() -> Result<()> {

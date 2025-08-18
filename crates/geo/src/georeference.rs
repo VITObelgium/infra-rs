@@ -1,17 +1,12 @@
 use crate::{
-    ArrayDataType, ArrayNum, Cell, GeoTransform, RasterSize,
+    ArrayDataType, ArrayNum, Cell, Error, GeoTransform, LatLonBounds, Point, RasterSize, Rect, Result, Tile,
     array::{ArrayMetadata, Columns, Rows},
+    crs::{self, Epsg},
+    raster::algo::{self, WarpOptions},
+    srs::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
-
-use crate::{
-    Error, LatLonBounds, Point, Rect, Result, Tile,
-    crs::{self, Epsg},
-};
-
-#[cfg(feature = "gdal")]
-use crate::srs::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg};
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct CellSize {
@@ -386,22 +381,16 @@ impl GeoReference {
     }
 
     pub fn geographic_epsg(&self) -> Option<Epsg> {
-        #[cfg(feature = "gdal")]
-        {
-            if !self.projection.is_empty() {
-                return projection_to_geo_epsg(self.projection.as_str());
-            }
+        if !self.projection.is_empty() {
+            return projection_to_geo_epsg(self.projection.as_str());
         }
 
         None
     }
 
     pub fn projected_epsg(&self) -> Option<Epsg> {
-        #[cfg(feature = "gdal")]
-        {
-            if !self.projection.is_empty() {
-                return projection_to_epsg(self.projection.as_str());
-            }
+        if !self.projection.is_empty() {
+            return projection_to_epsg(self.projection.as_str());
         }
 
         None
@@ -415,7 +404,6 @@ impl GeoReference {
         }
     }
 
-    #[cfg(feature = "gdal")]
     pub fn set_projection_from_epsg(&mut self, #[allow(unused)] epsg: Epsg) -> Result<()> {
         self.projection = projection_from_epsg(epsg)?;
         Ok(())
@@ -483,77 +471,16 @@ impl GeoReference {
         x_aligned && y_aligned
     }
 
-    #[cfg(feature = "gdal")]
-    pub fn warped(&self, target_srs: &crate::SpatialReference) -> Result<Self> {
-        use crate::gdalinterop;
-
-        if self.projection.is_empty() {
-            return Err(Error::InvalidArgument(
-                "Cannot warp metadata without projection information".to_string(),
-            ));
-        }
-
-        let target_projection = target_srs.to_wkt()?;
-
-        let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
-        let mut src_ds = mem_driver.create("in-mem", self.columns().count() as usize, self.rows().count() as usize, 0)?;
-        src_ds.set_geo_transform(&self.geo_transform.into())?;
-        src_ds.set_projection(&self.projection)?;
-
-        // Create a transformer that maps from source pixel/line coordinates
-        // to destination georeferenced coordinates (not destination pixel line).
-        // We do that by omitting the destination dataset handle (setting it to nullptr).
-        unsafe {
-            let target_srs = std::ffi::CString::new(target_projection.clone())?;
-            let transformer_arg = gdalinterop::check_pointer(
-                gdal_sys::GDALCreateGenImgProjTransformer(
-                    src_ds.c_dataset(),
-                    std::ptr::null_mut(),
-                    std::ptr::null_mut(),
-                    target_srs.as_ptr(),
-                    gdalinterop::FALSE,
-                    0.0,
-                    0,
-                ),
-                "Failed to create projection transformer",
-            )?;
-
-            let mut target_transform: gdal::GeoTransform = [0.0; 6];
-            let mut rows: std::ffi::c_int = 0;
-            let mut cols: std::ffi::c_int = 0;
-
-            let warp_rc = gdal_sys::GDALSuggestedWarpOutput(
-                src_ds.c_dataset(),
-                Some(gdal_sys::GDALGenImgProjTransform),
-                transformer_arg,
-                target_transform.as_mut_ptr(),
-                &mut cols,
-                &mut rows,
-            );
-
-            gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
-
-            match crate::gdalinterop::check_rc(warp_rc) {
-                Ok(_) => Ok(GeoReference::new(
-                    target_projection,
-                    RasterSize {
-                        rows: Rows(rows),
-                        cols: Columns(cols),
-                    },
-                    target_transform.into(),
-                    self.nodata,
-                )),
-                Err(e) => {
-                    gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);
-                    Err(e.into())
-                }
-            }
-        }
+    pub fn warped(&self, opts: &WarpOptions) -> Result<Self> {
+        algo::warp_georeference(self, opts)
     }
 
-    #[cfg(feature = "gdal")]
     pub fn warped_to_epsg(&self, epsg: Epsg) -> Result<Self> {
-        self.warped(&crate::SpatialReference::from_epsg(epsg)?)
+        let opts = WarpOptions {
+            target_srs: algo::TargetSrs::Epsg(epsg),
+            ..Default::default()
+        };
+        self.warped(&opts)
     }
 
     #[cfg(feature = "gdal")]
@@ -1018,7 +945,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "gdal")]
+    #[cfg(any(feature = "gdal", feature = "proj4rs"))]
     fn warp_metadata() {
         use approx::assert_relative_eq;
 
@@ -1030,43 +957,10 @@ mod tests {
             Option::<f64>::None,
         );
 
-        let warped = meta.warped_to_epsg(4326.into()).unwrap();
+        let warped = meta.warped_to_epsg(crs::epsg::WGS84).unwrap();
 
-        assert_eq!(warped.projected_epsg(), Some(4326.into()));
+        assert_eq!(warped.projected_epsg(), Some(crs::epsg::WGS84));
         assert_eq!(warped.raster_size(), RasterSize::with_rows_cols(Rows(89), Columns(176)),);
         assert_relative_eq!(warped.cell_size(), CellSize::square(0.062023851850733745), epsilon = 1e-10);
-    }
-
-    #[test]
-    #[cfg(feature = "gdal")]
-    fn test_tile_for_coordinate() {
-        use core::f32;
-
-        use crate::{Coordinate, SpatialReference, Tile, crs};
-
-        let coord = Coordinate::latlon(51.0, 4.0);
-        let tile = Tile::for_coordinate(coord, 9);
-
-        let raster_size = RasterSize::with_rows_cols(Rows(Tile::TILE_SIZE as i32), Columns(Tile::TILE_SIZE as i32));
-        let pixel_size = Tile::pixel_size_at_zoom_level(tile.z, Tile::TILE_SIZE);
-        let srs = SpatialReference::from_epsg(crs::epsg::WGS84_WEB_MERCATOR)
-            .unwrap()
-            .to_wkt()
-            .unwrap();
-
-        let mut tile_meta = GeoReference::with_bottom_left_origin(
-            srs,
-            raster_size,
-            tile.bounds().southwest().into(),
-            CellSize::square(pixel_size),
-            Some(f32::NAN),
-        );
-
-        println!("{tile_meta:?} {coord:?}");
-        let cell = tile_meta.point_to_cell(coord.into());
-        println!("{cell:?}");
-        let ll = tile_meta.cell_lower_left(cell);
-        println!("{ll:?}");
-        tile_meta.set_extent(ll, RasterSize::with_rows_cols(Rows(1), Columns(1)), tile_meta.cell_size());
     }
 }
