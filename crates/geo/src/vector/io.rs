@@ -275,7 +275,11 @@ impl<TRow: DataRow> Iterator for DataframeIterator<TRow> {
     type Item = Result<TRow>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.features.into_iter().next().map(TRow::from_feature)
+        self.features
+            .into_iter()
+            .next()
+            .filter(|f| !f.fields().all(|(_name, val)| val.is_none())) // Skip empty features
+            .map(TRow::from_feature)
     }
 }
 
