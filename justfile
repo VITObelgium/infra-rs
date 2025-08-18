@@ -94,10 +94,10 @@ test_debug target=default_target $RUST_LOG="debug":
     cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,proj4rs --no-capture {{test_filter}}
 
 test_release target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,rayon,proj4rs {{test_filter}}
 
 test_release_verbose target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,proj4rs --no-capture {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,rayon,proj4rs --no-capture {{test_filter}}
 
 test_debug_simd target=default_target:
     cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector {{test_filter}}
@@ -108,8 +108,8 @@ test_release_simd target=default_target:
 test_release_slow target=default_target:
     cargo nextest run --profile slow --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector
 
-test_reproject target=default_target:
-    cargo nextest run  --profile ci --target {{target}} --workspace -p geo --release --features=serde,gdal,gdal-static,derive,vector,proj4rs --no-capture integration_reproject
+test_warp target=default_target:
+    cargo nextest run  --profile ci --target {{target}} --workspace -p geo --release --features=serde,derive,vector,proj4rs,rayon --no-capture integration_warp
 
 test_debug_py: pybootstrap
     pixi run test_debug

@@ -8,7 +8,7 @@ mod tests {
         crs::{self},
         raster::{
             self, DenseRaster, RasterIO,
-            algo::{self, NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, reproject},
+            algo::{self, NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, warp},
         },
     };
     use path_macro::path;
@@ -150,7 +150,7 @@ mod tests {
         log::info!("[{name}] Running warp comparison");
 
         let start = std::time::Instant::now();
-        let geo_raster = reproject(&DenseRaster::<T>::read(input)?, opts)?;
+        let geo_raster = warp(&DenseRaster::<T>::read(input)?, opts)?;
         let geo_duration = start.elapsed();
         log::info!("[{name}] Geo warp duration: {geo_duration:?}");
 
@@ -178,7 +178,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_source_size() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -195,7 +195,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_source_size_mt() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size_mt() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -212,7 +212,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_source_size_error_threshold() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size_error_threshold() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -229,7 +229,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_source_size_error_threshold_mt() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size_error_threshold_mt() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -246,7 +246,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_fixed_size() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_fixed_size() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -263,7 +263,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_fixed_size_error_threshold() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_fixed_size_error_threshold() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -280,7 +280,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_cell_size() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_cell_size() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -297,7 +297,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_reproject_vs_gdalwarp_cell_size_error_threshold() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_cell_size_error_threshold() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,

@@ -28,9 +28,9 @@ pub enum WarpTargetSize {
     #[default]
     /// Tries to use the same amount of pixels for the target as for the source.
     Source,
-    /// Uses the exact raster size for the reprojection target.
+    /// Uses the exact raster size for the warr target.
     Sized(RasterSize),
-    /// Uses the provided cell size for the reprojection target.
+    /// Uses the provided cell size for the warp target.
     CellSize(CellSize, TargetPixelAlignment),
     /// Uses the provided geotransform and rastersize.
     Exact(GeoTransform, RasterSize),
@@ -57,9 +57,9 @@ pub struct WarpOptions {
     pub target_size: WarpTargetSize,
     /// Linear interpolation threshold in pixels, if the linear interpolation method for cells is bigger than this threshold exact calculations will be used (default = 0.125)
     pub error_threshold: f64,
-    /// Configure how many threads to use for the reprojection
+    /// Configure how many threads to use for the warp operation
     pub num_threads: NumThreads,
-    /// The target SRS to reproject to
+    /// The target SRS to warp to
     pub target_srs: TargetSrs,
 }
 
@@ -74,17 +74,13 @@ impl Default for WarpOptions {
     }
 }
 
-/// Reproject a bounding box to a different coordinate system with configurable edge sampling
+/// Warp a bounding box to a different coordinate system with configurable edge sampling
 ///
 /// This function transforms a bounding box from one coordinate system to another by sampling
 /// points along the edges and finding the bounding box of all transformed points. This is more
 /// accurate than just transforming the four corners, especially when the transformation involves
 /// significant curvature or distortion.
-fn reproject_bounding_box_with_edge_sampling(
-    bbox: &Rect<f64>,
-    coord_trans: &CoordinateTransformer,
-    edge_points: usize,
-) -> Result<Rect<f64>> {
+fn warp_bounding_box_with_edge_sampling(bbox: &Rect<f64>, coord_trans: &CoordinateTransformer, edge_points: usize) -> Result<Rect<f64>> {
     // Helper function to calculate normalized parameter with clamping
     let calculate_t = |i: usize, points_per_edge: usize| -> f64 {
         let t = i as f64 / (points_per_edge - 1) as f64;
@@ -139,12 +135,12 @@ fn reproject_bounding_box_with_edge_sampling(
     Ok(Rect::from_nw_se(top_left, bottom_right))
 }
 
-pub fn reproject_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<GeoReference> {
+pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<GeoReference> {
     let source_epsg = georef
         .projected_epsg()
         .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
     let coord_trans = CoordinateTransformer::new(&source_epsg.to_string(), &opts.target_srs.to_string())?;
-    let target_georef = reproject_georef_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
+    let target_georef = warp_georef_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
 
     match opts.target_size {
         WarpTargetSize::Source => Ok(target_georef),
@@ -192,19 +188,15 @@ pub fn reproject_georeference(georef: &GeoReference, opts: &WarpOptions) -> Resu
     }
 }
 
-/// Reproject a `GeoReference` to a different EPSG with configurable edge sampling
+/// Warp a `GeoReference` to a different EPSG with configurable edge sampling
 ///
 /// * `edge_points` - Number of points to sample along each edge of the bounding box for more accurate reprojection
-fn reproject_georef_with_edge_points(
-    georef: &GeoReference,
-    coord_trans: &CoordinateTransformer,
-    edge_points: usize,
-) -> Result<GeoReference> {
+fn warp_georef_with_edge_points(georef: &GeoReference, coord_trans: &CoordinateTransformer, edge_points: usize) -> Result<GeoReference> {
     let src_bbox = georef.bounding_box();
 
     // First reproject the source bounding box by sampling edge points
     // This is more accurate than just transforming the four corners, especially for complex projections
-    let bbox = reproject_bounding_box_with_edge_sampling(&src_bbox, coord_trans, edge_points)?;
+    let bbox = warp_bounding_box_with_edge_sampling(&src_bbox, coord_trans, edge_points)?;
 
     // Calculate optimal resolution by determining the diagonal distance in the source and destination coordinate systems
     let resolution = calculate_optimal_resolution(georef, coord_trans)?;
@@ -256,21 +248,21 @@ fn calculate_target_aligned_bounds(bbox: &Rect<f64>, cell_size: CellSize) -> Rec
     Rect::from_nw_se(Point::new(min_x, max_y), Point::new(max_x, min_y))
 }
 
-pub fn reproject<T: ArrayNum>(src: &DenseRaster<T>, opts: &WarpOptions) -> Result<DenseRaster<T>> {
-    let target_georef = reproject_georeference(&src.meta, opts)?;
+pub fn warp<T: ArrayNum>(src: &DenseRaster<T>, opts: &WarpOptions) -> Result<DenseRaster<T>> {
+    let target_georef = warp_georeference(&src.meta, opts)?;
     let mut dst = DenseRaster::<T>::filled_with_nodata(target_georef);
 
     let coord_trans = CoordinateTransformer::new(&opts.target_srs.to_string(), src.metadata().projection())?;
     if opts.error_threshold > 0.0 {
-        reproject_with_interpolation(src, &mut dst, &coord_trans, opts)?;
+        warp_with_interpolation(src, &mut dst, &coord_trans, opts)?;
     } else {
-        reproject_exact(src, &mut dst, &coord_trans, opts)?;
+        warp_exact(src, &mut dst, &coord_trans, opts)?;
     }
 
     Ok(dst)
 }
 
-fn reproject_exact<T: ArrayNum>(
+fn warp_exact<T: ArrayNum>(
     src: &DenseRaster<T>,
     dst: &mut DenseRaster<T>,
     coord_trans: &CoordinateTransformer,
@@ -310,8 +302,8 @@ fn reproject_exact<T: ArrayNum>(
     Ok(())
 }
 
-/// Optimized reproject function using error threshold strategy for row based linear interpolation
-fn reproject_with_interpolation<T: ArrayNum>(
+/// Optimized warp function using error threshold strategy for row based linear interpolation
+fn warp_with_interpolation<T: ArrayNum>(
     src: &DenseRaster<T>,
     dst: &mut DenseRaster<T>,
     coord_trans: &CoordinateTransformer,
@@ -536,13 +528,13 @@ mod tests {
     };
 
     #[test]
-    fn reproject_georef() -> Result<()> {
+    fn warp_georef() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
         let src = DenseRaster::<u8>::read(&input).unwrap();
 
         let opts = WarpOptions::default();
         let georef_gdal = algo::gdal::warp_georeference(src.metadata(), &opts)?;
-        let georef = super::reproject_georeference(src.metadata(), &opts)?;
+        let georef = super::warp_georeference(src.metadata(), &opts)?;
 
         let gdal_bbox = georef_gdal.bounding_box();
         let bbox = georef.bounding_box();

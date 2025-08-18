@@ -21,6 +21,6 @@ impl<T: crate::ArrayNum + gdal::raster::GdalType> DenseRaster<T> {
     }
 
     pub fn warped(&self, opts: &algo::WarpOptions) -> crate::Result<Self> {
-        algo::reproject(self, opts)
+        algo::warp(self, opts)
     }
 }

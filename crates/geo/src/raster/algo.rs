@@ -14,9 +14,9 @@ mod nodata;
 mod polygonize;
 mod quantile;
 mod rasterdiff;
-#[cfg(any(feature = "proj", feature = "proj4rs"))]
-mod reproject;
 mod statistics;
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
+mod warp;
 
 mod clusterid;
 pub(crate) mod clusterutils;
@@ -38,7 +38,7 @@ pub mod gdal {
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};
 
 #[cfg(any(feature = "proj", feature = "proj4rs"))]
-pub use reproject::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, reproject, reproject_georeference};
+pub use warp::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, warp};
 
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
@@ -49,7 +49,7 @@ pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> crate::Re
     return gdal::warp_georeference(georef, opts);
 
     #[cfg(all(not(feature = "gdal"), feature = "proj4rs"))]
-    return reproject::reproject_georeference(georef, opts);
+    return warp::warp_georeference(georef, opts);
 
     #[cfg(not(any(feature = "gdal", feature = "proj4rs")))]
     panic!("No reprojection backend enabled. Enable either 'gdal' or 'proj4rs' feature.");
