@@ -1,3 +1,5 @@
+use std::ops::RangeInclusive;
+
 use crate::{
     Array, ArrayNum, Cell, CellSize, Columns, CoordinateTransformer, Error, GeoReference, Point, RasterSize, Rect, Result, Rows, crs,
     point, raster::DenseRaster,
@@ -419,7 +421,7 @@ fn subdivide_and_transform_row<T: ArrayNum>(
     let start_col = 0;
     let end_col = result.len() as i32 - 1;
 
-    subdivide_segment(result, result_georef, row, start_col, end_col, coord_trans, src, error_threshold)
+    subdivide_segment(result, result_georef, row, start_col..=end_col, coord_trans, src, error_threshold)
 }
 
 /// Recursively subdivide a segment of a row
@@ -427,18 +429,23 @@ fn subdivide_segment<T: ArrayNum>(
     result: &mut [T],
     result_georef: &GeoReference,
     row: i32,
-    start_col: i32,
-    end_col: i32,
+    columns: RangeInclusive<i32>,
     coord_trans: &CoordinateTransformer,
     src: &DenseRaster<T>,
     error_threshold: f64,
 ) -> Result<()> {
-    debug_assert!(result.len() == (end_col - start_col + 1) as usize);
+    let start_col = *columns.start();
+    let middle_col = (columns.start() + columns.end()) / 2;
+    let end_col = *columns.end();
+    let column_count = (end_col - start_col + 1) as usize;
+
+    debug_assert!(result.len() == column_count);
+
     let source_georef = src.metadata();
 
-    if end_col - start_col <= 1 {
+    if column_count <= 2 {
         // Transform remaining pixels exactly
-        for (i, col) in (start_col..=end_col).enumerate() {
+        for (i, col) in columns.enumerate() {
             let cell = Cell::from_row_col(row, col);
             let pixel = result_georef.cell_center(cell);
             let transformed = coord_trans.transform_point(pixel)?;
@@ -449,8 +456,6 @@ fn subdivide_segment<T: ArrayNum>(
         }
         return Ok(());
     }
-
-    let middle_col = (start_col + end_col) / 2;
 
     // Transform the three points
     let mut points = [
@@ -472,7 +477,7 @@ fn subdivide_segment<T: ArrayNum>(
 
     if error < error_threshold {
         // Use linear interpolation for this segment
-        for (i, col) in (start_col..=end_col).enumerate() {
+        for (i, col) in columns.enumerate() {
             let t = if end_col == start_col {
                 0.0
             } else {
@@ -487,23 +492,21 @@ fn subdivide_segment<T: ArrayNum>(
         }
     } else {
         // Recursively subdivide
-        let first_half_split_pos = (middle_col - start_col) as usize;
+        let first_half_split_pos = (middle_col - start_col) as usize + 1;
         subdivide_segment(
-            &mut result[0..=first_half_split_pos],
+            &mut result[0..first_half_split_pos],
             result_georef,
             row,
-            start_col,
-            middle_col,
+            start_col..=middle_col,
             coord_trans,
             src,
             error_threshold,
         )?;
         subdivide_segment(
-            &mut result[first_half_split_pos + 1..],
+            &mut result[first_half_split_pos..],
             result_georef,
             row,
-            middle_col + 1,
-            end_col,
+            middle_col + 1..=end_col,
             coord_trans,
             src,
             error_threshold,
