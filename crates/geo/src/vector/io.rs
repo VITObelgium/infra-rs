@@ -16,6 +16,7 @@ use crate::{Error, Result, gdalinterop};
 use super::DataRow;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HeaderDetection {
     /// Automatically detect the presence of a header row
     #[default]
