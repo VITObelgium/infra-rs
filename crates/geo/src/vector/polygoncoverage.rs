@@ -105,12 +105,13 @@ fn create_geometry_extent(geom: &geos::Geometry, grid_extent: &GeoReference) -> 
     Ok(geometry_extent)
 }
 
+#[allow(unused_mut)]
 fn create_geometry_extent_for_srs(
     geom: &geos::Geometry,
     grid_extent: &GeoReference,
-    source_projection: SpatialReference,
+    mut source_projection: SpatialReference,
 ) -> Result<GeoReference> {
-    let dest_proj = SpatialReference::from_definition(grid_extent.projection())?;
+    let mut dest_proj = SpatialReference::from_definition(grid_extent.projection())?;
 
     if source_projection.epsg_cs() != dest_proj.epsg_cs() {
         let warped_geom = warp_geometry(geom, source_projection, dest_proj)?;
@@ -169,10 +170,11 @@ fn create_cell_coverages(extent: &GeoReference, polygon_extent: &GeoReference, g
     Ok(result)
 }
 
+#[allow(unused_mut)]
 fn create_polygon_coverage(
     polygon_id: u64,
     mut geometry: geos::Geometry,
-    geometry_projection: SpatialReference,
+    mut geometry_projection: SpatialReference,
     output_extent: &GeoReference,
 ) -> Result<PolygonCellCoverage> {
     let mut cov = PolygonCellCoverage::default();
@@ -352,7 +354,8 @@ pub fn create_geometries(
         assert!(!output_extent.projection().is_empty());
 
         if let Some(srs) = layer.spatial_ref() {
-            let layer_srs = SpatialReference::from_definition(&srs.to_wkt()?)?;
+            #[allow(unused_mut)]
+            let mut layer_srs = SpatialReference::from_definition(&srs.to_wkt()?)?;
             if output_extent.projected_epsg() != layer_srs.epsg_cs() {
                 return Err(Error::InvalidArgument(format!(
                     "Projection mismatch between input vector and metadata grid EPSG:{:?} <-> EPSG:{:?}",

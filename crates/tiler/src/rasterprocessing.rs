@@ -61,7 +61,8 @@ pub fn metadata_bounds_wgs84(meta: GeoReference) -> Result<LatLonBounds> {
             Err(Error::Runtime("Could not calculate bounds".to_string()))
         }
     } else {
-        let srs = SpatialReference::from_definition(meta.projection())?;
+        #[allow(unused_mut)]
+        let mut srs = SpatialReference::from_definition(meta.projection())?;
         let mut result = LatLonBounds::hull(meta.top_left().into(), meta.bottom_right().into());
 
         if srs.is_projected() {
