@@ -15,9 +15,8 @@ mod tests {
 
     #[cfg(feature = "derive")]
     mod derive {
-
         use super::*;
-        use geo::vector;
+        use geo::vector::{self, io::DataFrameOptions};
         use vector::{DataRow, io::DataframeIterator};
 
         #[derive(vector::DataRow)]
@@ -38,6 +37,23 @@ mod tests {
             #[vector(column = "Sector")]
             sector: String,
             value: Option<f64>,
+        }
+
+        #[allow(unused)]
+        #[derive(vector::DataRow, Debug)]
+        struct EmptySheetData {
+            #[vector(column = "VITO_installatieID")]
+            installtion_id: String,
+            #[vector(column = "Jaar")]
+            year: String,
+            #[vector(column = "Type")]
+            entry_type: String,
+            #[vector(column = "Substantie")]
+            pollutant: String,
+            #[vector(column = "EF")]
+            ef: f64,
+            #[vector(column = "TAG")]
+            tag: String,
         }
 
         #[test]
@@ -105,6 +121,26 @@ mod tests {
         #[test]
         fn test_iterate_features() {
             assert_eq!(PollutantData::field_names(), vec!["Pollutant", "Sector", "value"]);
+        }
+
+        #[test]
+        fn test_iterate_empty_sheet() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
+            let opts = DataFrameOptions {
+                header_detection: vector::io::HeaderDetection::Force,
+            };
+            let iter = DataframeIterator::<EmptySheetData>::new_with_options(&path, Some("VERBR_EF_ID"), &opts).unwrap();
+            assert_eq!(iter.count(), 0);
+        }
+
+        #[test]
+        fn test_read_dataframe_empty_sheet() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
+            let opts = DataFrameOptions {
+                header_detection: vector::io::HeaderDetection::Force,
+            };
+            let df: Vec<EmptySheetData> = vector::io::read_data_frame(&path, Some("VERBR_EF_ID"), &opts).unwrap();
+            assert_eq!(df.len(), 0);
         }
     }
 

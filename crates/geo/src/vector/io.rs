@@ -15,6 +15,22 @@ use crate::{Error, Result, gdalinterop};
 
 use super::DataRow;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub enum HeaderDetection {
+    /// Automatically detect the presence of a header row
+    #[default]
+    Auto,
+    /// Force the presence and parsing of a header row
+    Force,
+    /// Do not parse a header row
+    None,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct DataFrameOptions {
+    pub header_detection: HeaderDetection,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VectorFormat {
     Memory,
@@ -243,29 +259,59 @@ pub fn read_dataframe_rows_cb(
     Ok(())
 }
 
-pub fn read_data_frame<TRow: DataRow, P: AsRef<Path>>(path: &P, layer: Option<&str>) -> Result<Vec<TRow>> {
-    let rows: Result<Vec<_>> = DataframeIterator::<TRow>::new(path, layer)?.collect();
+pub fn read_data_frame<TRow: DataRow, P: AsRef<Path>>(path: &P, layer: Option<&str>, opts: &DataFrameOptions) -> Result<Vec<TRow>> {
+    let rows: Result<Vec<_>> = DataframeIterator::<TRow>::new_with_options(path, layer, opts)?.collect();
     rows.map_err(|e| Error::Runtime(format!("Failed to read data frame rows: {e}")))
+}
+
+fn create_open_options(input_path: &Path, opts: &DataFrameOptions) -> Option<&'static [&'static str]> {
+    const CSV_OPEN_OPTIONS: [&str; 1] = ["AUTODETECT_TYPE=YES"];
+
+    let open_options: Option<&[&str]> = {
+        match VectorFormat::guess_from_path(input_path) {
+            VectorFormat::Csv => Some(&CSV_OPEN_OPTIONS),
+            VectorFormat::Xlsx => match opts.header_detection {
+                HeaderDetection::Force => Some(&["HEADERS=FORCE"]),
+                HeaderDetection::None => Some(&["HEADERS=DISABLE"]),
+                HeaderDetection::Auto => Some(&["HEADERS=AUTO"]),
+            },
+            _ => None,
+        }
+    };
+
+    open_options
 }
 
 /// Iterator over the rows of a vector dataset that returns a an object
 /// that implements the [`DataRow`] trait
 pub struct DataframeIterator<TRow: DataRow> {
-    features: gdal::vector::OwnedFeatureIterator,
+    features: Option<gdal::vector::OwnedFeatureIterator>,
     phantom: std::marker::PhantomData<TRow>,
 }
 
 impl<TRow: DataRow> DataframeIterator<TRow> {
     pub fn new<P: AsRef<Path>>(path: &P, layer: Option<&str>) -> Result<Self> {
-        let ds = dataset::open_read_only(path.as_ref())?;
+        Self::new_with_options(path, layer, &DataFrameOptions::default())
+    }
+
+    pub fn new_with_options<P: AsRef<Path>>(path: &P, layer: Option<&str>, opts: &DataFrameOptions) -> Result<Self> {
+        let ds = dataset::open_read_only_with_options(path.as_ref(), create_open_options(path.as_ref(), opts))?;
         let ds_layer = if let Some(layer_name) = layer {
             ds.into_layer_by_name(layer_name)?
         } else {
             ds.into_layer(0)?
         };
 
+        let features = if opts.header_detection == HeaderDetection::Force && ds_layer.feature_count() == 1 {
+            // If the layer only contains the headers and no actual data, gdal fails to detect the header
+            // so don't store the iterator
+            None
+        } else {
+            Some(ds_layer.owned_features())
+        };
+
         Ok(Self {
-            features: ds_layer.owned_features(),
+            features,
             phantom: std::marker::PhantomData,
         })
     }
@@ -275,11 +321,12 @@ impl<TRow: DataRow> Iterator for DataframeIterator<TRow> {
     type Item = Result<TRow>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.features
-            .into_iter()
-            .next()
-            .filter(|f| !f.fields().all(|(_name, val)| val.is_none())) // Skip empty features
-            .map(TRow::from_feature)
+        self.features.as_mut().and_then(|f| {
+            f.into_iter()
+                .next()
+                .filter(|f| !f.fields().all(|(_name, val)| val.is_none())) // Skip empty features
+                .map(TRow::from_feature)
+        })
     }
 }
 

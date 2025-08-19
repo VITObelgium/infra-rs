@@ -5,7 +5,7 @@ edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
-  "gdal[core,netcdf,zstd]",
+  "gdal[core,netcdf,zstd,expat]",
   "hdf5[core,zlib]",
   "netcdf-c[core,netcdf-4,hdf5]",
   "tiff[core,lzma,zstd]",
