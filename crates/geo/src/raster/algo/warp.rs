@@ -262,6 +262,17 @@ pub fn warp<T: ArrayNum>(src: &DenseRaster<T>, opts: &WarpOptions) -> Result<Den
     Ok(dst)
 }
 
+#[cfg(all(feature = "rayon", feature = "proj4rs"))]
+fn create_scoped_thread_pool(thread_count: Option<usize>) -> Result<rayon::ThreadPool> {
+    let mut pool_builder = rayon::ThreadPoolBuilder::new();
+    if let Some(count) = thread_count {
+        pool_builder = pool_builder.num_threads(count);
+    }
+    pool_builder
+        .build()
+        .map_err(|e| Error::Runtime(format!("Failed to create threadpool: {e}")))
+}
+
 fn warp_exact<T: ArrayNum>(
     src: &DenseRaster<T>,
     dst: &mut DenseRaster<T>,
@@ -282,22 +293,17 @@ fn warp_exact<T: ArrayNum>(
         for (row, row_slice) in dst.as_mut_slice().chunks_mut(cols).enumerate() {
             transform_row_exact(row_slice, &meta, row as i32, coord_trans, src, &mut points)?;
         }
-    }
-
-    // proj is not threadsafe so only allow parallel warp with proj4rs
-    #[cfg(all(feature = "rayon", feature = "proj4rs"))]
-    {
-        use rayon::prelude::*;
-        let _pool = if let Some(thread_count) = thread_count {
-            rayon::ThreadPoolBuilder::new().num_threads(thread_count).build().unwrap()
-        } else {
-            rayon::ThreadPoolBuilder::new().build().unwrap()
-        };
-
-        dst.as_mut_slice().par_chunks_mut(cols).enumerate().for_each(|(r, row)| {
-            let mut points = Vec::with_capacity(cols);
-            transform_row_exact(row, &meta, r as i32, coord_trans, src, &mut points).unwrap();
-        });
+    } else {
+        // proj is not threadsafe so only allow parallel warp with proj4rs
+        #[cfg(all(feature = "rayon", feature = "proj4rs"))]
+        {
+            use rayon::prelude::*;
+            let _pool = create_scoped_thread_pool(thread_count)?;
+            dst.as_mut_slice().par_chunks_mut(cols).enumerate().try_for_each(|(r, row)| {
+                let mut points = Vec::with_capacity(cols);
+                transform_row_exact(row, &meta, r as i32, coord_trans, src, &mut points)
+            })?;
+        }
     }
 
     Ok(())
@@ -316,7 +322,7 @@ fn warp_with_interpolation<T: ArrayNum>(
     let row_width = dst.size().cols.count();
     let mut sample_points = Vec::with_capacity(dst.size().cols.count() as usize * 3);
     for row in 0..dst.size().rows.count() {
-        // Transform first, middle, and last pixels
+        // Collect first, middle, and last pixels
         sample_points.extend([
             target_georef.cell_center(Cell::from_row_col(row, 0)),
             target_georef.cell_center(Cell::from_row_col(row, row_width / 2)),
@@ -333,29 +339,28 @@ fn warp_with_interpolation<T: ArrayNum>(
 
     let cols = dst.size().cols.count() as usize;
     let error_threshold = opts.error_threshold * target_georef.cell_size().x();
+    let thread_count = match opts.num_threads {
+        NumThreads::AllCpus => None,
+        NumThreads::Count(val) => Some(val),
+    };
 
-    for (row, (row_slice, row_points)) in dst.as_mut_slice().chunks_mut(cols).zip(row_points_chunks).enumerate() {
-        if cols <= 2 {
-            // For very narrow rows, fall back to exact transformation
-            let mut points = Vec::with_capacity(cols);
-            transform_row_exact(row_slice, &target_georef, row as i32, coord_trans, src, &mut points)?;
-            continue;
+    if thread_count.is_some_and(|count| count <= 1) || !cfg!(feature = "rayon") {
+        for (row, (row_slice, row_points)) in dst.as_mut_slice().chunks_mut(cols).zip(row_points_chunks).enumerate() {
+            process_row_with_interpolation(row_slice, row_points, row, &target_georef, coord_trans, src, error_threshold, cols)?;
         }
+    } else {
+        #[cfg(all(feature = "rayon", feature = "proj4rs"))]
+        {
+            use rayon::prelude::*;
+            let _pool = create_scoped_thread_pool(thread_count)?;
 
-        let first_transformed = row_points[0];
-        let middle_transformed = row_points[1];
-        let last_transformed = row_points[2];
-
-        // Check if linear interpolation is accurate enough for middle pixel
-        let interpolated_middle = linear_interpolate(first_transformed, last_transformed, 0.5);
-        let error = point::euclidenan_distance(middle_transformed, interpolated_middle);
-
-        if error < error_threshold {
-            // Use linear interpolation for the entire row
-            interpolate_row(row_slice, first_transformed, last_transformed, src);
-        } else {
-            // Use recursive subdivision or fall back to exact transformation
-            subdivide_and_transform_row(row_slice, &target_georef, row as i32, coord_trans, src, error_threshold)?;
+            dst.as_mut_slice()
+                .par_chunks_mut(cols)
+                .zip(row_points_chunks)
+                .enumerate()
+                .try_for_each(|(row, (row_slice, row_points))| {
+                    process_row_with_interpolation(row_slice, row_points, row, &target_georef, coord_trans, src, error_threshold, cols)
+                })?;
         }
     }
 
@@ -392,6 +397,42 @@ fn transform_row_exact<T: ArrayNum>(
 #[inline]
 fn linear_interpolate(start: Point, end: Point, t: f64) -> Point {
     Point::new(start.x() + t * (end.x() - start.x()), start.y() + t * (end.y() - start.y()))
+}
+
+fn process_row_with_interpolation<T: ArrayNum>(
+    row_slice: &mut [T],
+    row_points: &[Point; 3],
+    row: usize,
+    target_georef: &GeoReference,
+    coord_trans: &CoordinateTransformer,
+    src: &DenseRaster<T>,
+    error_threshold: f64,
+    cols: usize,
+) -> Result<()> {
+    if cols <= 2 {
+        // For very narrow rows, fall back to exact transformation
+        let mut points = Vec::with_capacity(cols);
+        transform_row_exact(row_slice, target_georef, row as i32, coord_trans, src, &mut points)?;
+        return Ok(());
+    }
+
+    let first_transformed = row_points[0];
+    let middle_transformed = row_points[1];
+    let last_transformed = row_points[2];
+
+    // Check if linear interpolation is accurate enough for middle pixel
+    let interpolated_middle = linear_interpolate(first_transformed, last_transformed, 0.5);
+    let error = point::euclidenan_distance(middle_transformed, interpolated_middle);
+
+    if error < error_threshold {
+        // Use linear interpolation for the entire row
+        interpolate_row(row_slice, first_transformed, last_transformed, src);
+    } else {
+        // Use recursive subdivision or fall back to exact transformation
+        subdivide_and_transform_row(row_slice, target_georef, row as i32, coord_trans, src, error_threshold)?;
+    }
+
+    Ok(())
 }
 
 /// Interpolate values across a row using linear interpolation between endpoints
