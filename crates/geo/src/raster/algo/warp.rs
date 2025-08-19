@@ -162,7 +162,7 @@ pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<Ge
         }
         WarpTargetSize::CellSize(cell_size, alignment) => {
             let bbox = match alignment {
-                TargetPixelAlignment::Yes => calculate_target_aligned_bounds(&target_georef.bounding_box(), target_georef.cell_size()),
+                TargetPixelAlignment::Yes => calculate_target_aligned_bounds(&target_georef.bounding_box(), cell_size),
                 TargetPixelAlignment::No => target_georef.bounding_box(),
             };
 
@@ -241,8 +241,7 @@ fn calculate_target_aligned_bounds(bbox: &Rect<f64>, cell_size: CellSize) -> Rec
     let min_x = (bbox.top_left().x() / cell_size.x()).floor() * cell_size.x();
     let max_x = (bbox.bottom_right().x() / cell_size.x()).ceil() * cell_size.x();
 
-    // Note: cell_size.y() is negative for standard raster coordinates
-    let max_y = (bbox.top_left().y() / cell_size.y().abs()).ceil() * cell_size.y().abs();
+    let max_y = (bbox.top_left().y() / cell_size.y().abs()).floor() * cell_size.y().abs();
     let min_y = (bbox.bottom_right().y() / cell_size.y().abs()).floor() * cell_size.y().abs();
 
     Rect::from_nw_se(Point::new(min_x, max_y), Point::new(max_x, min_y))
@@ -564,19 +563,31 @@ mod tests {
     use approx::assert_relative_eq;
 
     use super::*;
-    use crate::{
-        raster::{DenseRaster, RasterIO, algo},
-        testutils,
-    };
+    use crate::testutils;
 
     #[test]
     fn warp_georef() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-        let src = DenseRaster::<u8>::read(&input).unwrap();
 
         let opts = WarpOptions::default();
-        let georef_gdal = algo::gdal::warp_georeference(src.metadata(), &opts)?;
-        let georef = super::warp_georeference(src.metadata(), &opts)?;
+        let georef = super::warp_georeference(&GeoReference::from_file(&input)?, &opts)?;
+
+        //let georef_gdal = algo::gdal::warp_georeference(src.metadata(), &opts)?;
+        // georef obtained by performing the same warp operation with GDAL
+        let georef_gdal = GeoReference::new(
+            r#"PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"],AUTHORITY["EPSG","3857"]]"#,
+            RasterSize::with_rows_cols(Rows(938), Columns(2390)),
+            [
+                281129.4506858873,
+                158.95752146313262,
+                0.0,
+                6712820.038056537,
+                0.0,
+                -158.95752146313262,
+            ]
+            .into(),
+            Some(255.0),
+        );
 
         let gdal_bbox = georef_gdal.bounding_box();
         let bbox = georef.bounding_box();
@@ -609,66 +620,37 @@ mod tests {
     //     Ok(())
     // }
 
-    // #[test]
-    // fn reproject_target_aligned_pixels() -> Result<()> {
-    //     let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-    //     let src = GeoReference::from_file(&input)?;
+    #[test]
+    fn reproject_target_aligned_pixels() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let src = GeoReference::from_file(&input)?;
 
-    //     // Test without target_aligned_pixels
-    //     let opts_no_tap = WarpOptions {
-    //         target_size: WarpTargetSize::CellSize(CellSize::square(100.0), TargetPixelAlignment::No),
-    //         target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
-    //         ..Default::default()
-    //     };
-    //     let result_no_tap = super::reproject_georeference(&src, &opts_no_tap)?;
+        let opts_tap = WarpOptions {
+            target_size: WarpTargetSize::CellSize(CellSize::square(100.0), TargetPixelAlignment::Yes),
+            ..Default::default()
+        };
 
-    //     // Test with target_aligned_pixels
-    //     let opts_tap = WarpOptions {
-    //         target_size: WarpTargetSize::CellSize(CellSize::square(100.0), TargetPixelAlignment::Yes),
-    //         ..Default::default()
-    //     };
-    //     let result_tap = super::reproject_georeference(&src, &opts_tap)?;
+        let georef = super::warp_georeference(&src, &opts_tap)?;
 
-    //     // The results should have the same cell size
-    //     assert_relative_eq!(result_no_tap.cell_size(), result_tap.cell_size(), epsilon = 1e-4);
+        // georef obtained by performing the same warp operation with GDAL
+        let georef_gdal = GeoReference::new(
+            r#"PROJCS["WGS 84 / Pseudo-Mercator",GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563,AUTHORITY["EPSG","7030"]],AUTHORITY["EPSG","6326"]],PRIMEM["Greenwich",0,AUTHORITY["EPSG","8901"]],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AUTHORITY["EPSG","4326"]],PROJECTION["Mercator_1SP"],PARAMETER["central_meridian",0],PARAMETER["scale_factor",1],PARAMETER["false_easting",0],PARAMETER["false_northing",0],UNIT["metre",1,AUTHORITY["EPSG","9001"]],AXIS["X",EAST],AXIS["Y",NORTH],EXTENSION["PROJ4","+proj=merc +a=6378137 +b=6378137 +lat_ts=0.0 +lon_0=0.0 +x_0=0.0 +y_0=0 +k=1.0 +units=m +nadgrids=@null +wktext  +no_defs"],AUTHORITY["EPSG","3857"]]"#,
+            RasterSize::with_rows_cols(Rows(1491), Columns(3800)),
+            [281100.0, 100.0, 0.0, 6712800.0, 0.0, -100.0].into(),
+            Some(255.0),
+        );
 
-    //     // But different bounds alignment - TAP version should have aligned bounds
-    //     let bbox_no_tap = result_no_tap.bounding_box();
-    //     let bbox_tap = result_tap.bounding_box();
+        let gdal_bbox = georef_gdal.bounding_box();
+        let bbox = georef.bounding_box();
 
-    //     let cell_size = result_tap.cell_size();
+        assert_eq!(georef_gdal.raster_size(), georef.raster_size());
+        assert_eq!(georef_gdal.projected_epsg(), georef.projected_epsg());
+        assert_relative_eq!(georef_gdal.cell_size(), georef.cell_size(), epsilon = 1e-4);
 
-    //     // With TAP, the bounds should be aligned to the pixel grid
-    //     // xmin / cell_size.x should be an integer (or very close to one)
-    //     let x_alignment_error = (bbox_tap.top_left().x() / cell_size.x()).fract().abs();
-    //     let y_alignment_error = (bbox_tap.top_left().y() / cell_size.y().abs()).fract().abs();
+        assert_relative_eq!(gdal_bbox.width(), bbox.width(), epsilon = 1e-4);
+        assert_relative_eq!(gdal_bbox.height(), bbox.height(), epsilon = 1e-4);
+        assert_relative_eq!(gdal_bbox, bbox, epsilon = 1e-4); // No shifts are allowed because of TAP
 
-    //     log::info!("X alignment error (TAP): {}", x_alignment_error);
-    //     log::info!("Y alignment error (TAP): {}", y_alignment_error);
-    //     log::info!("No-TAP bbox: {:?}", bbox_no_tap);
-    //     log::info!("TAP bbox: {:?}", bbox_tap);
-    //     log::info!("Cell size: {:?}", cell_size);
-
-    //     // Debug: show the exact alignment calculations
-    //     log::info!("TAP top_left.x / cell_size.x = {}", bbox_tap.top_left().x() / cell_size.x());
-    //     log::info!("TAP top_left.y / cell_size.y = {}", bbox_tap.top_left().y() / cell_size.y().abs());
-
-    //     assert!(
-    //         x_alignment_error < 1e-6,
-    //         "TAP bounds should be aligned to pixel grid in X, error: {}",
-    //         x_alignment_error
-    //     );
-    //     assert!(
-    //         y_alignment_error < 1e-6,
-    //         "TAP bounds should be aligned to pixel grid in Y, error: {}",
-    //         y_alignment_error
-    //     );
-
-    //     // The non-TAP version may or may not be aligned (typically not)
-    //     //
-
-    //     log::error!("Conoare results to gdal");
-
-    //     Ok(())
-    // }
+        Ok(())
+    }
 }

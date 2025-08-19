@@ -313,23 +313,37 @@ mod tests {
         )
     }
 
-    // #[test_log::test]
-    // fn test_reproject_vs_gdalwarp_cell_size_target_aligned_pixels() -> Result<()> {
-    //     let input_path = workspace_test_data_dir().join("landusebyte.tif");
+    #[test_log::test]
+    fn integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.125,
+                target_size: WarpTargetSize::CellSize(CellSize::square(100.0), TargetPixelAlignment::Yes),
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                ..Default::default()
+            },
+            "cell_size_tap_et_0.125",
+            1e-6,
+            0.5,
+        )
+    }
 
-    //     let target_cell_size = CellSize::square(75.0);
-    //     let warp_opts = WarpOptions {
-    //         error_threshold: 0.0,
-    //         target_size: WarpTargetSize::CellSize(target_cell_size, TargetPixelAlignment::Yes), // Use source size to match GDAL's default behavior
-    //         target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
-    //         ..Default::default()
-    //     };
-    //     let gdal_raster = warp_using_gdal(&input_path, &warp_opts)?;
-    //     let our_raster = reproject(&DenseRaster::<u8>::read(&input_path)?, &warp_opts)?;
-
-    //     compare_raster_metadata(&our_raster, &gdal_raster, 20.0);
-    //     compare_raster_contents(&our_raster, &gdal_raster, 7.5)?;
-
-    //     Ok(())
-    // }
+    #[test_log::test]
+    fn integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels_10m_mt() -> Result<()> {
+        let input_path = workspace_test_data_dir().join("landusebyte.tif");
+        run_comparison::<u8>(
+            &input_path,
+            &WarpOptions {
+                error_threshold: 0.125,
+                target_size: WarpTargetSize::CellSize(CellSize::square(10.0), TargetPixelAlignment::Yes),
+                target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
+                num_threads: NumThreads::AllCpus,
+            },
+            "cell_size_tap_10m_mt_et_0.125",
+            1e-6,
+            1.0,
+        )
+    }
 }
