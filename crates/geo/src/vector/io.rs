@@ -303,7 +303,10 @@ impl<TRow: DataRow> DataframeIterator<TRow> {
             ds.into_layer(0)?
         };
 
-        let features = if opts.header_detection == HeaderDetection::Force && ds_layer.feature_count() == 1 {
+        let header_detection_failed =
+            opts.header_detection == HeaderDetection::Force && ds_layer.defn().fields().all(|f| f.name().starts_with("Field"));
+
+        let features = if header_detection_failed && ds_layer.feature_count() == 1 {
             // If the layer only contains the headers and no actual data, gdal fails to detect the header
             // so don't store the iterator
             None
