@@ -1,4 +1,7 @@
-use crate::{Error, Result, crs::Epsg};
+use crate::{
+    Error, Result,
+    crs::{self, Epsg},
+};
 use gdal::spatial_ref::AxisMappingStrategy;
 
 #[derive(Debug, Clone, PartialEq)]
@@ -49,9 +52,12 @@ impl SpatialReference {
         self.srs.is_geographic()
     }
 
-    pub fn epsg_cs(&mut self) -> Option<Epsg> {
-        if self.srs.auto_identify_epsg().is_ok() {
+    pub fn epsg_cs(&self) -> Option<Epsg> {
+        if self.is_projected() {
             SpatialReference::epsg_conv(self.srs.auth_code().ok())
+        } else if SpatialReference::epsg_conv(self.srs.auth_code().ok()) == Some(crs::epsg::WGS84) {
+            // TODO: possibly add more complex logic to search for a projcs node and obtain the authority code from there
+            Some(crs::epsg::WGS84_WEB_MERCATOR)
         } else {
             None
         }
@@ -89,7 +95,7 @@ mod tests {
         // assert!(srs.is_projected());
         // assert_eq!(srs.epsg_cs(), Some(31370.into()));
 
-        let mut srs = SpatialReference::from_definition(&srs.to_wkt().unwrap()).unwrap();
+        let srs = SpatialReference::from_definition(&srs.to_wkt().unwrap()).unwrap();
         assert!(srs.is_projected());
         assert_eq!(srs.epsg_cs(), Some(31370.into()));
     }

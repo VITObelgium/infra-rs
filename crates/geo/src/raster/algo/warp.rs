@@ -284,7 +284,8 @@ fn warp_exact<T: ArrayNum>(
         }
     }
 
-    #[cfg(feature = "rayon")]
+    // proj is not threadsafe so only allow parallel warp with proj4rs
+    #[cfg(all(feature = "rayon", feature = "proj4rs"))]
     {
         use rayon::prelude::*;
         let _pool = if let Some(thread_count) = thread_count {
