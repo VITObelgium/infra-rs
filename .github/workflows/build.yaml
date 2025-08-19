@@ -53,7 +53,7 @@ jobs:
           path: |
             ~/.cache/vcpkg
             ~/AppData/Local/vcpkg/archives
-          key: ${{ matrix.cfg.os }}-${{ hashFiles('Cargo.toml') }}
+          key: ${{ matrix.cfg.os }}-${{ hashFiles('**/Cargo.toml') }}
       - name: Build the C++ dependencies using vcpkg
         run: just bootstrap ${{ matrix.cfg.triplet }} ${{ matrix.cfg.target }}
       - name: Install the python environment with pixi
