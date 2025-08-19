@@ -32,6 +32,26 @@ pub struct DataFrameOptions {
     pub header_detection: HeaderDetection,
 }
 
+impl DataFrameOptions {
+    pub fn create_open_options_for_path(&self, input_path: &Path) -> Option<&'static [&'static str]> {
+        const CSV_OPEN_OPTIONS: [&str; 1] = ["AUTODETECT_TYPE=YES"];
+
+        let open_options: Option<&[&str]> = {
+            match VectorFormat::guess_from_path(input_path) {
+                VectorFormat::Csv => Some(&CSV_OPEN_OPTIONS),
+                VectorFormat::Xlsx => match self.header_detection {
+                    HeaderDetection::Force => Some(&["HEADERS=FORCE"]),
+                    HeaderDetection::None => Some(&["HEADERS=DISABLE"]),
+                    HeaderDetection::Auto => Some(&["HEADERS=AUTO"]),
+                },
+                _ => None,
+            }
+        };
+
+        open_options
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum VectorFormat {
     Memory,
@@ -265,24 +285,6 @@ pub fn read_data_frame<TRow: DataRow, P: AsRef<Path>>(path: &P, layer: Option<&s
     rows.map_err(|e| Error::Runtime(format!("Failed to read data frame rows: {e}")))
 }
 
-fn create_open_options(input_path: &Path, opts: &DataFrameOptions) -> Option<&'static [&'static str]> {
-    const CSV_OPEN_OPTIONS: [&str; 1] = ["AUTODETECT_TYPE=YES"];
-
-    let open_options: Option<&[&str]> = {
-        match VectorFormat::guess_from_path(input_path) {
-            VectorFormat::Csv => Some(&CSV_OPEN_OPTIONS),
-            VectorFormat::Xlsx => match opts.header_detection {
-                HeaderDetection::Force => Some(&["HEADERS=FORCE"]),
-                HeaderDetection::None => Some(&["HEADERS=DISABLE"]),
-                HeaderDetection::Auto => Some(&["HEADERS=AUTO"]),
-            },
-            _ => None,
-        }
-    };
-
-    open_options
-}
-
 /// Iterator over the rows of a vector dataset that returns a an object
 /// that implements the [`DataRow`] trait
 pub struct DataframeIterator<TRow: DataRow> {
@@ -296,7 +298,7 @@ impl<TRow: DataRow> DataframeIterator<TRow> {
     }
 
     pub fn new_with_options<P: AsRef<Path>>(path: &P, layer: Option<&str>, opts: &DataFrameOptions) -> Result<Self> {
-        let ds = dataset::open_read_only_with_options(path.as_ref(), create_open_options(path.as_ref(), opts))?;
+        let ds = dataset::open_read_only_with_options(path.as_ref(), opts.create_open_options_for_path(path.as_ref()))?;
         let ds_layer = if let Some(layer_name) = layer {
             ds.into_layer_by_name(layer_name)?
         } else {
