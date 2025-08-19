@@ -331,7 +331,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels_10m_mt() -> Result<()> {
+    fn slow_test_integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels_10m_mt() -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,

@@ -57,7 +57,7 @@ mod tests {
         }
 
         #[test]
-        fn test_row_data_derive() {
+        fn integration_row_data_derive() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
             let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
 
@@ -89,7 +89,7 @@ mod tests {
         }
 
         #[test]
-        fn test_row_data_derive_missing() {
+        fn integration_row_data_derive_missing() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
             let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
             assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
@@ -99,7 +99,7 @@ mod tests {
         }
 
         #[test]
-        fn test_row_data_derive_missing_optionals() {
+        fn integration_row_data_derive_missing_optionals() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
             let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
 
@@ -119,12 +119,12 @@ mod tests {
         }
 
         #[test]
-        fn test_iterate_features() {
+        fn integration_iterate_features() {
             assert_eq!(PollutantData::field_names(), vec!["Pollutant", "Sector", "value"]);
         }
 
         #[test]
-        fn test_iterate_empty_sheet() {
+        fn integration_iterate_empty_sheet() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
             let opts = DataFrameOptions {
                 header_detection: vector::io::HeaderDetection::Force,
@@ -134,7 +134,7 @@ mod tests {
         }
 
         #[test]
-        fn test_read_dataframe_empty_sheet() {
+        fn integration_read_dataframe_empty_sheet() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
             let opts = DataFrameOptions {
                 header_detection: vector::io::HeaderDetection::Force,
@@ -145,7 +145,7 @@ mod tests {
     }
 
     #[test_log::test]
-    fn test_polygon_coverage() {
+    fn integration_polygon_coverage() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "boundaries.gpkg");
 
         let config = CoverageConfiguration {

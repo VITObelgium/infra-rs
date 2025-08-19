@@ -3,7 +3,10 @@ path        = "junit.xml"
 report-name = "infra-rs"
 
 [profile.default]
-default-filter = "all() - test(slow_test_)"
+default-filter = "all() - test(integration_) - test(slow_test_)"
+
+[profile.integration]
+default-filter = "test(integration_)"
 
 [profile.slow]
 default-filter = "all()"

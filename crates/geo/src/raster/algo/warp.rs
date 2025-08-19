@@ -603,23 +603,6 @@ mod tests {
         Ok(())
     }
 
-    // #[test_log::test]
-    // fn reproject_fixed_size_fg() -> Result<()> {
-    //     let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-    //     let target_size = RasterSize::with_rows_cols(Rows(1000), Columns(1800));
-    //     let opts = WarpOptions {
-    //         target_size: WarpTargetSize::Sized(target_size),
-    //         all_cpus: false,
-    //         error_threshold: 0.125,
-    //         target_srs: TargetSrs::Epsg(crs::epsg::WGS84_WEB_MERCATOR),
-    //     };
-
-    //     let src = DenseRaster::<u8>::read(&input)?;
-    //     let result = super::reproject(&src, &opts)?;
-    //     assert_eq!(target_size, result.metadata().raster_size());
-    //     Ok(())
-    // }
-
     #[test]
     fn reproject_target_aligned_pixels() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
