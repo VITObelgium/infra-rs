@@ -14,3 +14,10 @@ pub fn create_directory_for_file(p: &Path) -> Result {
 
     Ok(())
 }
+
+pub fn sanitize_filename(name: &str, replacement_char: char) -> String {
+    let forbidden = ['<', '>', ':', '"', '/', '\\', '|', '?', '*'];
+    name.chars()
+        .map(|c| if forbidden.contains(&c) { replacement_char } else { c })
+        .collect()
+}
