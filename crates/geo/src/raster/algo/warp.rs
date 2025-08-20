@@ -139,13 +139,16 @@ pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<Ge
     let source_epsg = georef
         .projected_epsg()
         .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
-    let coord_trans = CoordinateTransformer::new(&source_epsg.to_string(), &opts.target_srs.to_string())?;
-    let target_georef = warp_georef_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)?;
+
+    let target_georef = || -> Result<GeoReference> {
+        let coord_trans = CoordinateTransformer::new(&source_epsg.to_string(), &opts.target_srs.to_string())?;
+        warp_georef_with_edge_points(georef, &coord_trans, DEFAULT_EDGE_SAMPLE_COUNT)
+    };
 
     match opts.target_size {
-        WarpTargetSize::Source => Ok(target_georef),
+        WarpTargetSize::Source => target_georef(),
         WarpTargetSize::Sized(raster_size) => {
-            let bbox = target_georef.bounding_box();
+            let bbox = target_georef()?.bounding_box();
 
             // Calculate pixel size to fit exact requested dimensions
             let pixel_width = bbox.width() / raster_size.cols.count() as f64;
@@ -162,8 +165,8 @@ pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<Ge
         }
         WarpTargetSize::CellSize(cell_size, alignment) => {
             let bbox = match alignment {
-                TargetPixelAlignment::Yes => calculate_target_aligned_bounds(&target_georef.bounding_box(), cell_size),
-                TargetPixelAlignment::No => target_georef.bounding_box(),
+                TargetPixelAlignment::Yes => calculate_target_aligned_bounds(&target_georef()?.bounding_box(), cell_size),
+                TargetPixelAlignment::No => target_georef()?.bounding_box(),
             };
 
             let raster_size = RasterSize::with_rows_cols(
