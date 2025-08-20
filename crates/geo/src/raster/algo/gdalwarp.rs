@@ -32,7 +32,7 @@ impl Default for GdalWarpOptions {
 }
 
 pub fn warp_options_to_gdalwarp_cli_args(opts: &WarpOptions) -> Vec<String> {
-    let mut args = Vec::default();
+    let mut args = vec!["-r".to_string(), "near".to_string(), "-ovr".to_string(), "none".to_string()];
 
     // Handle target size based on WarpTargetSize
     match &opts.target_size {
