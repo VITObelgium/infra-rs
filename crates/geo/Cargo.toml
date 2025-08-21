@@ -32,10 +32,12 @@ name = "simd"
 
 [dependencies]
 approx = "0.5"
+calamine = { version = "0.30", features = ["dates"], optional = true }
 proj4rs = { version = "0.1", features = [
   "geo-types",
   "crs-definitions",
 ], optional = true }
+chrono = { version = "0.4", optional = true }
 proj4wkt = { version = "0.1", optional = true }
 crs-definitions = { version = "0.3.1", optional = true }
 proj = { version = "0.30.0", optional = true }
@@ -94,5 +96,6 @@ python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 serde = ["dep:serde"]
 simd = ["inf/simd", "simd_macro/simd"]
 specta = ["dep:specta"]
-vector = ["dep:geos", "dep:rayon", "geozero/with-geos"]
+vector = ["dep:geos", "dep:rayon", "geozero/with-geos", "dep:chrono"]
+vector-io-xlsx = ["dep:calamine"]
 rayon = ["dep:rayon"]

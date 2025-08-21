@@ -80,10 +80,10 @@ docdeps:
     cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features --open
 
 build_debug target=default_target:
-    cargo build --workspace --target {{target}}
+    cargo build --workspace --target {{target}} --features=proj4rs,rayon,vector,vector-io-xlsx
 
 build_release target=default_target:
-    cargo build --workspace  --target {{target}} --release --features=proj4rs,rayon
+    cargo build --workspace  --target {{target}} --release --features=proj4rs,rayon,vector,vector-io-xlsx
 
 build_nofeatures target=default_target:
         cargo build --workspace  --target {{target}} --release --no-default-features

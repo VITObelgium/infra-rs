@@ -3,6 +3,7 @@ pub mod algo;
 mod burnvalue;
 #[cfg(feature = "gdal")]
 mod coveragetools;
+pub mod dataframe;
 #[cfg(feature = "gdal")]
 pub mod datarow;
 #[cfg(feature = "gdal")]
@@ -12,6 +13,7 @@ pub mod geometrytype;
 pub mod io;
 #[cfg(feature = "gdal")]
 pub mod polygoncoverage;
+pub mod readers;
 
 #[doc(inline)]
 pub use burnvalue::BurnValue;

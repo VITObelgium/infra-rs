@@ -49,6 +49,9 @@ pub enum Error {
     #[cfg(feature = "cog")]
     #[error("Tiff error: {0}")]
     TiffError(#[from] tiff::TiffError),
+    #[cfg(feature = "vector-io-xlsx")]
+    #[error("Calamine error: {0}")]
+    CalamineError(#[from] calamine::Error),
 }
 
 #[cfg(feature = "python")]
