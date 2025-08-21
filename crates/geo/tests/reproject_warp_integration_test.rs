@@ -12,11 +12,82 @@ mod tests {
         },
     };
     use path_macro::path;
+    use std::collections::HashMap;
+    use std::time::Duration;
     use std::{path::Path, process::Command};
     use tempfile::TempDir;
 
     #[cfg(feature = "simd")]
     const LANES: usize = inf::simd::LANES;
+
+    /// Dumps comparison timings to stdout
+    fn dump_comparison_timings(timings: HashMap<String, (Duration, Duration)>) {
+        if timings.is_empty() {
+            return;
+        }
+
+        println!("\n=== Geo vs GDAL Performance Comparison ===");
+
+        // Sort by geo duration (longest first)
+        let mut sorted_timings: Vec<_> = timings.into_iter().collect();
+        sorted_timings.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+
+        let mut total_geo_duration = Duration::new(0, 0);
+        let mut total_gdal_duration = Duration::new(0, 0);
+
+        println!("{:<50} {:>10} {:>10} {:>14}", "Test Name", "Geo (s)", "GDAL (s)", "Speedup");
+        println!("{}", "=".repeat(87));
+
+        for (test_name, (geo_duration, gdal_duration)) in &sorted_timings {
+            total_geo_duration += *geo_duration;
+            total_gdal_duration += *gdal_duration;
+
+            let speedup = if gdal_duration.as_secs_f64() > 0.0 {
+                geo_duration.as_secs_f64() / gdal_duration.as_secs_f64()
+            } else {
+                f64::INFINITY
+            };
+
+            let speedup_str = if speedup < 1.0 {
+                format!("\x1b[32m{:>6.2}x faster\x1b[0m", 1.0 / speedup)
+            } else if speedup > 1.0 {
+                format!("\x1b[31m{:>6.2}x slower\x1b[0m", speedup)
+            } else {
+                "same".to_string()
+            };
+
+            println!(
+                "{:<50} {:>10.3} {:>10.3} {:>14}",
+                test_name,
+                geo_duration.as_secs_f64(),
+                gdal_duration.as_secs_f64(),
+                speedup_str
+            );
+
+            // use granite_rs::*;
+            // println!(
+            //     "{}",
+            //     bars(
+            //         "Warp comparison",
+            //         &[
+            //             ("geo".to_string(), geo_duration.as_secs_f64()),
+            //             ("gdal".to_string(), gdal_duration.as_secs_f64()),
+            //         ],
+            //         &def_plot()
+            //     )
+            // );
+        }
+
+        println!("{}", "=".repeat(87));
+        println!(
+            "{:<50} {:>10.3} {:>10.3}",
+            "TOTAL",
+            total_geo_duration.as_secs_f64(),
+            total_gdal_duration.as_secs_f64()
+        );
+
+        println!("{}", "=".repeat(87));
+    }
 
     fn workspace_test_data_dir() -> std::path::PathBuf {
         path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data")
@@ -146,18 +217,22 @@ mod tests {
         name: &str,
         bbox_tolerance: f64,
         raster_diff_tolerance: f64,
+        timings: &mut HashMap<String, (Duration, Duration)>,
     ) -> Result<()> {
-        log::info!("[{name}] Running warp comparison");
+        log::debug!("[{name}] Running warp comparison");
 
         let start = std::time::Instant::now();
         let geo_raster = warp(&DenseRaster::<T>::read(input)?, opts)?;
         let geo_duration = start.elapsed();
-        log::info!("[{name}] Geo warp duration: {geo_duration:?}");
+        log::debug!("[{name}] Geo warp duration: {geo_duration:?}");
 
         let start = std::time::Instant::now();
         let gdal_raster = warp_using_gdal(input, opts)?;
         let gdal_duration = start.elapsed();
-        log::info!("[{name}] Gdal warp duration {gdal_duration:?}");
+        log::debug!("[{name}] Gdal warp duration {gdal_duration:?}");
+
+        // Store the timing comparison
+        timings.insert(name.to_string(), (geo_duration, gdal_duration));
 
         #[cfg(not(debug_assertions))]
         if gdal_duration < geo_duration {
@@ -166,7 +241,7 @@ mod tests {
                 (1.0 - geo_duration.as_secs_f64() / gdal_duration.as_secs_f64()).abs() * 100.0
             );
         } else {
-            log::info!(
+            log::debug!(
                 "[{name}] Geo warp was faster than GDAL warp: {:.2}% faster",
                 (1.0 - gdal_duration.as_secs_f64() / geo_duration.as_secs_f64()).abs() * 100.0
             );
@@ -177,8 +252,7 @@ mod tests {
         store_test_output(geo_raster, gdal_raster, name)
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_source_size() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -191,11 +265,11 @@ mod tests {
             "source_size_et_0",
             1.0,
             0.5,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_source_size_mt() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size_mt(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -208,11 +282,11 @@ mod tests {
             "source_size_et_0_mt",
             1.0,
             0.5,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_source_size_error_threshold() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size_error_threshold(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -225,11 +299,11 @@ mod tests {
             "source_size_et_0.125",
             1.0,
             5.0,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_source_size_error_threshold_mt() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_source_size_error_threshold_mt(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -242,11 +316,11 @@ mod tests {
             "source_size_et_0.125_mt",
             1.0,
             5.0,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_fixed_size() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_fixed_size(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -259,11 +333,11 @@ mod tests {
             "fixed_size_et_0",
             1.0,
             0.5,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_fixed_size_error_threshold() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_fixed_size_error_threshold(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -276,11 +350,11 @@ mod tests {
             "fixed_size_et_0.125",
             1.0,
             5.0,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_cell_size() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_cell_size(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -293,11 +367,11 @@ mod tests {
             "cell_size_et_0",
             5.0,
             0.5,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_cell_size_error_threshold() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_cell_size_error_threshold(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -310,11 +384,11 @@ mod tests {
             "cell_size_et_0.125",
             5.0,
             5.0,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels() -> Result<()> {
+    fn integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels(timings: &mut HashMap<String, (Duration, Duration)>) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -327,11 +401,13 @@ mod tests {
             "cell_size_tap_et_0.125",
             1e-6,
             0.5,
+            timings,
         )
     }
 
-    #[test_log::test]
-    fn slow_test_integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels_10m_mt() -> Result<()> {
+    fn slow_test_integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels_10m_mt(
+        timings: &mut HashMap<String, (Duration, Duration)>,
+    ) -> Result<()> {
         let input_path = workspace_test_data_dir().join("landusebyte.tif");
         run_comparison::<u8>(
             &input_path,
@@ -344,6 +420,29 @@ mod tests {
             "cell_size_tap_10m_mt_et_0.125",
             1e-6,
             1.0,
+            timings,
         )
+    }
+
+    #[test_log::test]
+    fn run_all_warp_integration_tests() -> Result<()> {
+        println!("Running all warp integration tests sequentially...\n");
+
+        let mut timings = HashMap::new();
+
+        integration_warp_vs_gdalwarp_source_size(&mut timings)?;
+        integration_warp_vs_gdalwarp_source_size_mt(&mut timings)?;
+        integration_warp_vs_gdalwarp_source_size_error_threshold(&mut timings)?;
+        integration_warp_vs_gdalwarp_source_size_error_threshold_mt(&mut timings)?;
+        integration_warp_vs_gdalwarp_fixed_size(&mut timings)?;
+        integration_warp_vs_gdalwarp_fixed_size_error_threshold(&mut timings)?;
+        integration_warp_vs_gdalwarp_cell_size(&mut timings)?;
+        integration_warp_vs_gdalwarp_cell_size_error_threshold(&mut timings)?;
+        integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels(&mut timings)?;
+        slow_test_integration_warp_vs_gdalwarp_cell_size_target_aligned_pixels_10m_mt(&mut timings)?;
+
+        dump_comparison_timings(timings);
+
+        Ok(())
     }
 }
