@@ -91,19 +91,19 @@ build_nofeatures target=default_target:
 build target=default_target: (build_release target)
 
 test_debug target=default_target $RUST_LOG="debug":
-    cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,proj4rs --no-capture {{test_filter}}
+    cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,proj4rs --no-capture {{test_filter}}
 
 test_release target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,rayon,proj4rs {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,vector-io-xlsx,rayon,proj4rs {{test_filter}}
 
 test_release_verbose target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,rayon,proj4rs --no-capture {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,vector-io-xlsx,rayon,proj4rs --no-capture {{test_filter}}
 
 test_debug_simd target=default_target:
-    cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector {{test_filter}}
+    cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx {{test_filter}}
 
 test_release_simd target=default_target:
-    cargo +nightly nextest run --profile ci --target {{target}} --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector {{test_filter}}
+    cargo +nightly nextest run --profile ci --target {{target}} --workspace --release --features=simd,serde,gdal,gdal-static,derive,vector,vector-io-xlsx {{test_filter}}
 
 test_release_slow target=default_target:
     cargo nextest run --profile slow --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector
@@ -112,7 +112,7 @@ test_warp target=default_target:
     cargo nextest run  --profile integration --target {{target}} -p geo --release --no-default-features --features=gdal-static,proj4rs,rayon --no-capture run_all_warp_integration_tests
 
 test_integration target=default_target:
-    cargo nextest run  --profile integration --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector,rayon,proj4rs --no-capture
+    cargo nextest run  --profile integration --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,rayon,proj4rs --no-capture
 
 test_debug_py: pybootstrap
     pixi run test_debug

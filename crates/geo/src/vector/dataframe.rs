@@ -69,18 +69,19 @@ impl Schema {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct DataFrameOpenOptions {
+pub struct DataFrameOptions {
     /// The name of the layer to read from, if none is specified, the first available layer is used.
     pub layer: Option<String>,
     /// The row to use as a header row, if None is specified no header row is used and all rows are treated as data rows.
     pub header_row: Option<HeaderRow>,
-    /// If specified, this schema will override the detected data types from the data source.
-    pub schema_override: Option<Schema>,
-    /// The reader will attempt to detect data types from the first `n` rows of the data source. If none is specified, the reader will use a default value.
-    pub data_type_detection_rows: Option<usize>,
+}
+
+pub trait DataFrameRow {
+    fn field(&self, field: usize) -> Result<Option<Field>>;
 }
 
 pub trait DataFrameReader {
-    fn schema(&self) -> Result<Schema>;
-    //fn read_row(&self) -> Result<DataFrameRow>;
+    fn layer_names(&self) -> Result<Vec<String>>;
+    fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema>;
+    fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>>;
 }

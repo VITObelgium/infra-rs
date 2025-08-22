@@ -1,80 +1,34 @@
-use crate::Result;
-use crate::vector::dataframe::{DataFrameOpenOptions, DataFrameReader, FieldInfo, FieldType, HeaderRow, Schema};
+use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow, Field, FieldInfo, FieldType, HeaderRow, Schema};
+use crate::{Error, Result};
 use calamine::{Data, Reader, Xlsx, open_workbook};
+use std::io::BufReader;
 use std::path::Path;
 
 const DEFAULT_DATA_TYPE_DETECTION_ROWS: usize = 10;
 
 pub struct XlsxReader {
-    file_path: String,
-    options: DataFrameOpenOptions,
+    workbook: Xlsx<BufReader<std::fs::File>>,
 }
 
 impl XlsxReader {
-    pub fn new<P: AsRef<Path>>(file_path: P, options: DataFrameOpenOptions) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(file_path: P) -> Result<Self> {
         Ok(Self {
-            file_path: file_path.as_ref().to_string_lossy().to_string(),
-            options,
+            workbook: open_workbook(file_path).map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?,
         })
     }
-}
 
-impl DataFrameReader for XlsxReader {
-    fn schema(&self) -> Result<Schema> {
-        let mut workbook: Xlsx<_> = open_workbook(&self.file_path).map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
-        let sheet_name = if let Some(ref layer) = self.options.layer {
+    fn sheet_name(&self, options: &DataFrameOptions) -> Result<String> {
+        Ok(if let Some(layer) = &options.layer {
             layer.clone()
         } else {
-            workbook
+            self.workbook
                 .sheet_names()
                 .first()
                 .ok_or_else(|| crate::Error::Runtime("No sheets found in workbook".to_string()))?
                 .clone()
-        };
-
-        let range = workbook
-            .worksheet_range(&sheet_name)
-            .map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
-
-        let mut fields = Vec::new();
-
-        // Determine the header row
-        let header_row_idx = match self.options.header_row {
-            Some(HeaderRow::Row(idx)) => idx,
-            Some(HeaderRow::None) | None => 0, // Default to first row if not specified
-        };
-
-        // Get the header row
-        if let Some(header_row) = range.rows().nth(header_row_idx) {
-            for (col_idx, cell) in header_row.iter().enumerate() {
-                let field_name = match cell {
-                    Data::String(s) => s.clone(),
-                    Data::Int(i) => i.to_string(),
-                    Data::Float(f) => f.to_string(),
-                    Data::Bool(b) => b.to_string(),
-                    Data::Empty => format!("Column_{}", col_idx),
-                    Data::Error(_) | Data::DateTime(_) | Data::DateTimeIso(_) | Data::DurationIso(_) => {
-                        format!("Column_{}", col_idx)
-                    }
-                };
-
-                // Determine field type by examining the data in the column
-                let field_type = Self::infer_column_type(
-                    &range,
-                    col_idx,
-                    header_row_idx + 1,
-                    self.options.data_type_detection_rows.unwrap_or(DEFAULT_DATA_TYPE_DETECTION_ROWS),
-                );
-
-                fields.push(FieldInfo::new(field_name, field_type, col_idx));
-            }
-        }
-
-        Ok(Schema { fields })
+        })
     }
-}
 
-impl XlsxReader {
     fn infer_column_type(range: &calamine::Range<Data>, col_idx: usize, start_row: usize, num_rows: usize) -> FieldType {
         let mut has_int = false;
         let mut has_float = false;
@@ -126,26 +80,135 @@ impl XlsxReader {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use path_macro::path;
+pub struct XlsxRow {
+    cells: Vec<Data>,
+}
 
-    use super::*;
-    use crate::{testutils::workspace_test_data_dir, vector::dataframe::FieldInfo};
+impl DataFrameRow for XlsxRow {
+    fn field(&self, index: usize) -> Result<Option<Field>> {
+        match self.cells.get(index) {
+            Some(Data::String(s)) => Ok(Some(Field::String(s.clone()))),
+            Some(Data::Int(i)) => Ok(Some(Field::Integer(*i))),
+            Some(Data::Float(f)) => Ok(Some(Field::Float(*f))),
+            Some(Data::Bool(b)) => Ok(Some(Field::Boolean(*b))),
+            Some(Data::Empty) => Ok(None),
+            None => Err(Error::Runtime("Index out of bounds".to_string())),
+            Some(Data::Error(e)) => Err(Error::Runtime(format!("Cell contains error {e}"))),
+            Some(Data::DateTime(dt)) => {
+                // Convert ExcelDateTime to NaiveDateTime
+                let naive_dt = chrono::NaiveDate::from_ymd_opt(1900, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap()
+                    + chrono::Duration::days((dt.as_f64() - 2.0) as i64);
+                Ok(Some(Field::DateTime(naive_dt)))
+            }
+            Some(Data::DateTimeIso(_) | Data::DurationIso(_)) => {
+                // For now, convert to string representation
+                Ok(Some(Field::String(format!("{:?}", self.cells[index]))))
+            }
+        }
+    }
+}
 
-    #[test]
-    fn read_xlsx_empty_sheet() {
-        // Test reading schema from Excel file with specific worksheet and header row
-        let input_file = workspace_test_data_dir().join("empty_sheet.xlsx");
+pub struct XlsxRowIterator {
+    range: calamine::Range<Data>,
+    current: usize,
+}
 
-        let options = DataFrameOpenOptions {
-            layer: Some("VERBR_EF_ID".to_string()),
-            header_row: Some(HeaderRow::Row(0)),
-            ..Default::default()
+impl XlsxRowIterator {
+    fn new(range: calamine::Range<Data>) -> Self {
+        Self { range, current: 1 } // Start after header row
+    }
+}
+
+impl Iterator for XlsxRowIterator {
+    type Item = XlsxRow;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.current >= self.range.height() {
+            None
+        } else {
+            let row_data: Vec<Data> = (0..self.range.width())
+                .map(|col| self.range.get((self.current, col)).cloned().unwrap_or(Data::Empty))
+                .collect();
+            self.current += 1;
+            Some(XlsxRow { cells: row_data })
+        }
+    }
+}
+
+impl DataFrameReader for XlsxReader {
+    fn layer_names(&self) -> Result<Vec<String>> {
+        Ok(self.workbook.sheet_names())
+    }
+
+    fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema> {
+        let header_row = match options.header_row {
+            Some(HeaderRow::Row(idx)) => calamine::HeaderRow::Row(idx as u32),
+            Some(HeaderRow::None) | None => calamine::HeaderRow::FirstNonEmptyRow,
         };
 
-        let reader = XlsxReader::new(input_file, options).unwrap();
-        let schema = reader.schema().unwrap();
+        let sheet_name = self.sheet_name(options)?;
+
+        let range = self
+            .workbook
+            .with_header_row(header_row)
+            .worksheet_range(&sheet_name)
+            .map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
+
+        let mut fields = Vec::new();
+
+        if let Some(header_row) = range.headers() {
+            for (col_idx, field_name) in header_row.into_iter().enumerate() {
+                // Determine field type by examining the data in the column
+
+                let field_type = if let Some((row, _col)) = range.start() {
+                    Self::infer_column_type(&range, col_idx, row as usize + 1, DEFAULT_DATA_TYPE_DETECTION_ROWS)
+                } else {
+                    FieldType::String
+                };
+
+                fields.push(FieldInfo::new(field_name, field_type, col_idx));
+            }
+        }
+
+        Ok(Schema { fields })
+    }
+
+    fn rows(&mut self, options: &DataFrameOptions, _schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>> {
+        let header_row = match options.header_row {
+            Some(HeaderRow::Row(idx)) => calamine::HeaderRow::Row(idx as u32),
+            Some(HeaderRow::None) | None => calamine::HeaderRow::FirstNonEmptyRow,
+        };
+
+        let sheet_name = self.sheet_name(options)?;
+
+        let range = self
+            .workbook
+            .with_header_row(header_row)
+            .worksheet_range(&sheet_name)
+            .map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
+
+        Ok(XlsxRowIterator::new(range))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vector::dataframe::{Field, FieldInfo};
+    use path_macro::path;
+
+    #[test]
+    fn read_xlsx_empty_sheet() -> Result<()> {
+        // Test reading schema from Excel file with specific worksheet and header row
+        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
+
+        let options = DataFrameOptions {
+            layer: Some("VERBR_EF_ID".to_string()),
+            header_row: Some(HeaderRow::Row(0)),
+        };
+
+        let mut reader = XlsxReader::new(input_file)?;
+        let schema = reader.schema(&options)?;
 
         // Expected column names from the Excel file
         let expected_columns = vec![
@@ -161,24 +224,24 @@ mod tests {
         ];
 
         assert_eq!(schema.len(), expected_columns.len());
-        for (field_info, expected) in schema.fields.into_iter().zip(expected_columns) {
+        for (field_info, expected) in schema.fields.iter().zip(expected_columns.iter()) {
             assert_eq!(field_info, expected);
         }
+        Ok(())
     }
 
     #[test]
-    fn read_xlsx() {
+    fn read_xlsx() -> Result<()> {
         // Test reading schema from Excel file with specific worksheet and header row
         let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types.xlsx");
 
-        let options = DataFrameOpenOptions {
+        let options = DataFrameOptions {
             layer: None,
             header_row: Some(HeaderRow::Row(0)),
-            ..Default::default()
         };
 
-        let reader = XlsxReader::new(input_file, options).unwrap();
-        let schema = reader.schema().unwrap();
+        let mut reader = XlsxReader::new(input_file)?;
+        let schema = reader.schema(&options)?;
 
         // Expected column names from the Excel file
         let expected_columns = [
@@ -189,8 +252,53 @@ mod tests {
         ];
 
         assert_eq!(schema.len(), expected_columns.len());
-        for (field_info, expected) in schema.fields.into_iter().zip(expected_columns) {
+        for (field_info, expected) in schema.fields.iter().zip(expected_columns.iter()) {
             assert_eq!(field_info, expected);
         }
+
+        // Test reading rows - just check the first row
+        let mut rows_iter = reader.rows(&options, &schema)?;
+        if let Some(row) = rows_iter.next() {
+            assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
+            assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn read_xlsx_header_offset() -> Result<()> {
+        // Test reading schema from Excel file with specific worksheet and header row
+        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_header_offset.xlsx");
+
+        let options = DataFrameOptions {
+            layer: None,
+            header_row: Some(HeaderRow::Row(3)),
+        };
+
+        let mut reader = XlsxReader::new(input_file)?;
+        let schema = reader.schema(&options)?;
+
+        // Expected column names from the Excel file
+        let expected_columns = [
+            FieldInfo::new("String Column".into(), FieldType::String, 0),
+            FieldInfo::new("Double Column".into(), FieldType::Float, 1),
+            FieldInfo::new("Integer Column".into(), FieldType::Integer, 2),
+            FieldInfo::new("Date Column".into(), FieldType::DateTime, 3),
+        ];
+
+        assert_eq!(schema.len(), expected_columns.len());
+        for (field_info, expected) in schema.fields.iter().zip(expected_columns.iter()) {
+            assert_eq!(field_info, expected);
+        }
+
+        // Test reading rows - just check the first row
+        let mut rows_iter = reader.rows(&options, &schema)?;
+        if let Some(row) = rows_iter.next() {
+            assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
+            assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
+        }
+
+        Ok(())
     }
 }
