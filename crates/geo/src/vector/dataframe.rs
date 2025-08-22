@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use crate::Result;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -32,12 +34,11 @@ pub enum Field {
 pub struct FieldInfo {
     name: String,
     field_type: FieldType,
-    index: usize,
 }
 
 impl FieldInfo {
-    pub fn new(name: String, field_type: FieldType, index: usize) -> Self {
-        Self { name, field_type, index }
+    pub fn new(name: String, field_type: FieldType) -> Self {
+        Self { name, field_type }
     }
 
     pub fn name(&self) -> &str {
@@ -46,10 +47,6 @@ impl FieldInfo {
 
     pub fn field_type(&self) -> FieldType {
         self.field_type
-    }
-
-    pub fn index(&self) -> usize {
-        self.index
     }
 }
 
@@ -66,6 +63,12 @@ impl Schema {
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
+
+    pub fn subselection(&self, names: &[&str]) -> Schema {
+        Schema {
+            fields: self.fields.iter().filter(|f| names.contains(&f.name.as_str())).cloned().collect(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
@@ -81,7 +84,171 @@ pub trait DataFrameRow {
 }
 
 pub trait DataFrameReader {
+    fn from_file<P: AsRef<Path>>(file_path: P) -> Result<Self>
+    where
+        Self: Sized;
+
     fn layer_names(&self) -> Result<Vec<String>>;
     fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema>;
     fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>>;
+}
+
+#[cfg(feature = "polars")]
+pub mod polars {
+    use polars::prelude::*;
+
+    use crate::vector::dataframe::{DataFrameReader, DataFrameRow as _, Field, Schema};
+    use crate::vector::{self, dataframe::DataFrameOptions};
+    use crate::{Error, Result};
+    use std::path::Path;
+
+    pub fn read_dataframe(path: &Path, options: &DataFrameOptions, schema: Option<&Schema>) -> Result<polars::frame::DataFrame> {
+        match vector::VectorFormat::guess_from_path(path) {
+            #[cfg(feature = "vector-io-xlsx")]
+            vector::VectorFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options, schema),
+            _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
+        }
+    }
+
+    fn read_dataframe_with<R: DataFrameReader>(
+        path: &Path,
+        options: &DataFrameOptions,
+        override_schema: Option<&Schema>,
+    ) -> Result<polars::frame::DataFrame> {
+        let mut reader = R::from_file(path)?;
+        let schema = match override_schema {
+            Some(schema) => schema,
+            None => &reader.schema(options)?,
+        };
+
+        let mut columns = vec![Vec::new(); schema.len()];
+        for row in reader.rows(options, schema)? {
+            for (index, column) in &mut columns.iter_mut().enumerate() {
+                if let Some(field) = row.field(index)? {
+                    column.push(match field {
+                        Field::String(v) => AnyValue::StringOwned(v.into()),
+                        Field::Integer(v) => AnyValue::Int64(v),
+                        Field::Float(v) => AnyValue::Float64(v),
+                        Field::Boolean(v) => AnyValue::Boolean(v),
+                        Field::DateTime(v) => {
+                            AnyValue::Datetime(v.and_utc().timestamp_nanos_opt().unwrap_or(0), TimeUnit::Nanoseconds, None)
+                        }
+                    });
+                } else {
+                    column.push(AnyValue::Null);
+                }
+            }
+        }
+
+        let mut df = polars::frame::DataFrame::default();
+        for (column, field) in columns.into_iter().zip(&schema.fields) {
+            let series = Series::from_any_values(field.name().into(), &column, true)?;
+            df.with_column(Column::Series(series.into()))?;
+        }
+
+        Ok(df)
+    }
+}
+
+#[cfg(test)]
+#[cfg(all(feature = "vector-io-xlsx", feature = "polars"))]
+mod tests {
+    use super::*;
+    use crate::Result;
+    use path_macro::path;
+
+    #[test]
+    fn read_xlsx_dataframe() -> Result<()> {
+        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types.xlsx");
+
+        let options = DataFrameOptions::default();
+        let df = polars::read_dataframe(&input_file, &options, None)?;
+        assert_eq!(df.shape(), (5, 4));
+        //dbg!(df);
+
+        Ok(())
+    }
+
+    #[test]
+    fn read_xlsx_dataframe_offset() -> Result<()> {
+        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_header_offset.xlsx");
+        let options = DataFrameOptions {
+            header_row: Some(HeaderRow::Row(3)),
+            ..Default::default()
+        };
+
+        {
+            let schema = Schema {
+                fields: vec![
+                    FieldInfo::new("Double Column".to_string(), FieldType::Float),
+                    FieldInfo::new("Integer Column".to_string(), FieldType::Float),
+                ],
+            };
+
+            let df = polars::read_dataframe(&input_file, &options, Some(&schema))?;
+            assert_eq!(df.shape(), (5, 2));
+            assert_eq!(
+                df.schema().get_at_index(0),
+                Some((
+                    &::polars::prelude::PlSmallStr::from_static("Double Column"),
+                    &::polars::prelude::DataType::Float64
+                ))
+            );
+            assert_eq!(
+                df.schema().get_at_index(1),
+                Some((
+                    &::polars::prelude::PlSmallStr::from_static("Integer Column"),
+                    &::polars::prelude::DataType::Float64
+                ))
+            );
+        }
+
+        {
+            let schema = Schema {
+                fields: vec![
+                    FieldInfo::new("Integer Column".to_string(), FieldType::Float),
+                    FieldInfo::new("Double Column".to_string(), FieldType::Float),
+                ],
+            };
+
+            let df = polars::read_dataframe(&input_file, &options, Some(&schema))?;
+            assert_eq!(df.shape(), (5, 2));
+            assert_eq!(
+                df.schema().get_at_index(0),
+                Some((
+                    &::polars::prelude::PlSmallStr::from_static("Integer Column"),
+                    &::polars::prelude::DataType::Float64
+                ))
+            );
+            assert_eq!(
+                df.schema().get_at_index(1),
+                Some((
+                    &::polars::prelude::PlSmallStr::from_static("Double Column"),
+                    &::polars::prelude::DataType::Float64
+                ))
+            );
+        }
+
+        {
+            let schema = Schema {
+                fields: vec![FieldInfo::new("Double Column".to_string(), FieldType::Integer)],
+            };
+
+            let df = polars::read_dataframe(&input_file, &options, Some(&schema))?;
+            assert_eq!(df.shape(), (5, 1));
+            assert_eq!(
+                df.schema().get_at_index(0),
+                Some((
+                    &::polars::prelude::PlSmallStr::from_static("Double Column"),
+                    &::polars::prelude::DataType::Int64 // The datatype was overridden to be integer
+                ))
+            );
+            assert_eq!(
+                df.column("Double Column")?.i64()?.into_iter().collect::<Vec<_>>(),
+                vec![Some(12), None, Some(45), Some(89), Some(23)]
+            );
+        }
+
+        Ok(())
+    }
 }

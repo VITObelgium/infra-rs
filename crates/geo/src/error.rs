@@ -52,6 +52,9 @@ pub enum Error {
     #[cfg(feature = "vector-io-xlsx")]
     #[error("Calamine error: {0}")]
     CalamineError(#[from] calamine::Error),
+    #[cfg(feature = "polars")]
+    #[error("Polars error: {0}")]
+    PolarsError(#[from] polars::error::PolarsError),
 }
 
 #[cfg(feature = "python")]

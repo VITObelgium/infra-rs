@@ -17,10 +17,24 @@
           "analyzerTargetDir": true
         },
         "cargo": {
-          "features": ["gdal", "proj4rs", "vector", "vector-io-xlsx", "rayon"]
+          "features": [
+            "gdal",
+            "proj4rs",
+            "vector",
+            "vector-io-xlsx",
+            "rayon",
+            "polars"
+          ]
         },
         "check": {
-          "features": ["gdal", "proj4rs", "vector", "vector-io-xlsx", "rayon"],
+          "features": [
+            "gdal",
+            "proj4rs",
+            "vector",
+            "vector-io-xlsx",
+            "rayon",
+            "polars"
+          ],
           "command": "clippy" // rust-analyzer.checkOnSave.command
         }
       }

@@ -11,7 +11,7 @@ use gdal::{
 };
 use gdal_sys::OGRFieldType;
 
-use crate::{Error, Result, gdalinterop};
+use crate::{Error, Result, gdalinterop, vector::VectorFormat};
 
 use super::DataRow;
 
@@ -52,23 +52,6 @@ impl DataFrameOptions {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum VectorFormat {
-    Memory,
-    Csv,
-    Tab,
-    ShapeFile,
-    Xlsx,
-    GeoJson,
-    GeoPackage,
-    PostgreSQL,
-    Wfs,
-    Vrt,
-    Parquet,
-    Arrow,
-    Unknown,
-}
-
 impl VectorFormat {
     pub fn gdal_driver_name(&self) -> &str {
         match self {
@@ -84,35 +67,6 @@ impl VectorFormat {
             VectorFormat::Parquet => "Parquet",
             VectorFormat::Arrow => "Arrow",
             VectorFormat::Unknown => "Unknown",
-        }
-    }
-
-    /// Given a file path, guess the raster type based on the file extension
-    pub fn guess_from_path(file_path: &Path) -> VectorFormat {
-        let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
-
-        if let Some(ext) = ext {
-            match ext.as_ref() {
-                "csv" => return VectorFormat::Csv,
-                "tab" => return VectorFormat::Tab,
-                "shp" | "dbf" => return VectorFormat::ShapeFile,
-                "xlsx" => return VectorFormat::Xlsx,
-                "json" | "geojson" => return VectorFormat::GeoJson,
-                "gpkg" => return VectorFormat::GeoPackage,
-                "vrt" => return VectorFormat::Vrt,
-                "parquet" => return VectorFormat::Parquet,
-                "arrow" | "arrows" => return VectorFormat::Arrow,
-                _ => {}
-            }
-        }
-
-        let path = file_path.to_string_lossy();
-        if path.starts_with("postgresql://") || path.starts_with("pg:") {
-            VectorFormat::PostgreSQL
-        } else if path.starts_with("wfs:") {
-            VectorFormat::Wfs
-        } else {
-            VectorFormat::Unknown
         }
     }
 }

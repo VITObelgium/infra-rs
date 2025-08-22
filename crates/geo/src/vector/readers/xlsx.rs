@@ -11,12 +11,6 @@ pub struct XlsxReader {
 }
 
 impl XlsxReader {
-    pub fn new<P: AsRef<Path>>(file_path: P) -> Result<Self> {
-        Ok(Self {
-            workbook: open_workbook(file_path).map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?,
-        })
-    }
-
     fn sheet_name(&self, options: &DataFrameOptions) -> Result<String> {
         Ok(if let Some(layer) = &options.layer {
             layer.clone()
@@ -81,29 +75,14 @@ impl XlsxReader {
 }
 
 pub struct XlsxRow {
-    cells: Vec<Data>,
+    fields: Vec<Option<Field>>,
 }
 
 impl DataFrameRow for XlsxRow {
     fn field(&self, index: usize) -> Result<Option<Field>> {
-        match self.cells.get(index) {
-            Some(Data::String(s)) => Ok(Some(Field::String(s.clone()))),
-            Some(Data::Int(i)) => Ok(Some(Field::Integer(*i))),
-            Some(Data::Float(f)) => Ok(Some(Field::Float(*f))),
-            Some(Data::Bool(b)) => Ok(Some(Field::Boolean(*b))),
-            Some(Data::Empty) => Ok(None),
+        match self.fields.get(index) {
+            Some(field) => Ok(field.clone()),
             None => Err(Error::Runtime("Index out of bounds".to_string())),
-            Some(Data::Error(e)) => Err(Error::Runtime(format!("Cell contains error {e}"))),
-            Some(Data::DateTime(dt)) => {
-                // Convert ExcelDateTime to NaiveDateTime
-                let naive_dt = chrono::NaiveDate::from_ymd_opt(1900, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap()
-                    + chrono::Duration::days((dt.as_f64() - 2.0) as i64);
-                Ok(Some(Field::DateTime(naive_dt)))
-            }
-            Some(Data::DateTimeIso(_) | Data::DurationIso(_)) => {
-                // For now, convert to string representation
-                Ok(Some(Field::String(format!("{:?}", self.cells[index]))))
-            }
         }
     }
 }
@@ -111,11 +90,53 @@ impl DataFrameRow for XlsxRow {
 pub struct XlsxRowIterator {
     range: calamine::Range<Data>,
     current: usize,
+    column_indices: Vec<usize>,
+    field_types: Vec<FieldType>,
 }
 
 impl XlsxRowIterator {
-    fn new(range: calamine::Range<Data>) -> Self {
-        Self { range, current: 1 } // Start after header row
+    fn new(range: calamine::Range<Data>, schema: &Schema) -> Self {
+        let headers = range.headers().expect("Range should have headers");
+        let column_indices: Vec<usize> = schema
+            .fields
+            .iter()
+            .map(|f| headers.iter().position(|h| h == f.name()).unwrap_or(0))
+            .collect();
+        let field_types: Vec<FieldType> = schema.fields.iter().map(|f| f.field_type()).collect();
+        Self {
+            range,
+            current: 1, // Start after header row
+            column_indices,
+            field_types,
+        }
+    }
+
+    fn convert_data_to_field(data: &Data, expected_type: FieldType) -> Result<Option<Field>> {
+        match data {
+            Data::String(s) => Ok(Some(Field::String(s.clone()))),
+            Data::Int(i) => Ok(Some(Field::Integer(*i))),
+            Data::Float(f) => {
+                // Convert float to integer if schema expects integer and value is whole number
+                if expected_type == FieldType::Integer {
+                    Ok(Some(Field::Integer(*f as i64)))
+                } else {
+                    Ok(Some(Field::Float(*f)))
+                }
+            }
+            Data::Bool(b) => Ok(Some(Field::Boolean(*b))),
+            Data::Empty => Ok(None),
+            Data::Error(e) => Err(Error::Runtime(format!("Cell contains error {e}"))),
+            Data::DateTime(dt) => {
+                // Convert ExcelDateTime to NaiveDateTime
+                let naive_dt = chrono::NaiveDate::from_ymd_opt(1900, 1, 1).unwrap().and_hms_opt(0, 0, 0).unwrap()
+                    + chrono::Duration::days((dt.as_f64() - 2.0) as i64);
+                Ok(Some(Field::DateTime(naive_dt)))
+            }
+            Data::DateTimeIso(_) | Data::DurationIso(_) => {
+                // For now, convert to string representation
+                Ok(Some(Field::String(format!("{:?}", data))))
+            }
+        }
     }
 }
 
@@ -126,16 +147,28 @@ impl Iterator for XlsxRowIterator {
         if self.current >= self.range.height() {
             None
         } else {
-            let row_data: Vec<Data> = (0..self.range.width())
-                .map(|col| self.range.get((self.current, col)).cloned().unwrap_or(Data::Empty))
+            let fields: Vec<Option<Field>> = self
+                .column_indices
+                .iter()
+                .zip(self.field_types.iter())
+                .map(|(&col_idx, &field_type)| {
+                    let data = self.range.get((self.current, col_idx)).unwrap_or(&Data::Empty);
+                    Self::convert_data_to_field(data, field_type).unwrap_or(None)
+                })
                 .collect();
             self.current += 1;
-            Some(XlsxRow { cells: row_data })
+            Some(XlsxRow { fields })
         }
     }
 }
 
 impl DataFrameReader for XlsxReader {
+    fn from_file<P: AsRef<Path>>(file_path: P) -> Result<Self> {
+        Ok(Self {
+            workbook: open_workbook(file_path).map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?,
+        })
+    }
+
     fn layer_names(&self) -> Result<Vec<String>> {
         Ok(self.workbook.sheet_names())
     }
@@ -166,28 +199,27 @@ impl DataFrameReader for XlsxReader {
                     FieldType::String
                 };
 
-                fields.push(FieldInfo::new(field_name, field_type, col_idx));
+                fields.push(FieldInfo::new(field_name, field_type));
             }
         }
 
         Ok(Schema { fields })
     }
 
-    fn rows(&mut self, options: &DataFrameOptions, _schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>> {
+    fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>> {
         let header_row = match options.header_row {
             Some(HeaderRow::Row(idx)) => calamine::HeaderRow::Row(idx as u32),
             Some(HeaderRow::None) | None => calamine::HeaderRow::FirstNonEmptyRow,
         };
 
         let sheet_name = self.sheet_name(options)?;
-
         let range = self
             .workbook
             .with_header_row(header_row)
             .worksheet_range(&sheet_name)
             .map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
 
-        Ok(XlsxRowIterator::new(range))
+        Ok(XlsxRowIterator::new(range, schema))
     }
 }
 
@@ -207,20 +239,20 @@ mod tests {
             header_row: Some(HeaderRow::Row(0)),
         };
 
-        let mut reader = XlsxReader::new(input_file)?;
+        let mut reader = XlsxReader::from_file(input_file)?;
         let schema = reader.schema(&options)?;
 
         // Expected column names from the Excel file
         let expected_columns = vec![
-            FieldInfo::new("VITO_installatieID".into(), FieldType::String, 0),
-            FieldInfo::new("Jaar".into(), FieldType::String, 1),
-            FieldInfo::new("Type".into(), FieldType::String, 2),
-            FieldInfo::new("Substantie".into(), FieldType::String, 3),
-            FieldInfo::new("EF".into(), FieldType::String, 4),
-            FieldInfo::new("Eenheid (NG)".into(), FieldType::String, 5),
-            FieldInfo::new("Tag".into(), FieldType::String, 6),
-            FieldInfo::new("CRF/NFR-sector".into(), FieldType::String, 7),
-            FieldInfo::new("Categorie".into(), FieldType::String, 8),
+            FieldInfo::new("VITO_installatieID".into(), FieldType::String),
+            FieldInfo::new("Jaar".into(), FieldType::String),
+            FieldInfo::new("Type".into(), FieldType::String),
+            FieldInfo::new("Substantie".into(), FieldType::String),
+            FieldInfo::new("EF".into(), FieldType::String),
+            FieldInfo::new("Eenheid (NG)".into(), FieldType::String),
+            FieldInfo::new("Tag".into(), FieldType::String),
+            FieldInfo::new("CRF/NFR-sector".into(), FieldType::String),
+            FieldInfo::new("Categorie".into(), FieldType::String),
         ];
 
         assert_eq!(schema.len(), expected_columns.len());
@@ -240,15 +272,15 @@ mod tests {
             header_row: Some(HeaderRow::Row(0)),
         };
 
-        let mut reader = XlsxReader::new(input_file)?;
+        let mut reader = XlsxReader::from_file(input_file)?;
         let schema = reader.schema(&options)?;
 
         // Expected column names from the Excel file
         let expected_columns = [
-            FieldInfo::new("String Column".into(), FieldType::String, 0),
-            FieldInfo::new("Double Column".into(), FieldType::Float, 1),
-            FieldInfo::new("Integer Column".into(), FieldType::Integer, 2),
-            FieldInfo::new("Date Column".into(), FieldType::DateTime, 3),
+            FieldInfo::new("String Column".into(), FieldType::String),
+            FieldInfo::new("Double Column".into(), FieldType::Float),
+            FieldInfo::new("Integer Column".into(), FieldType::Integer),
+            FieldInfo::new("Date Column".into(), FieldType::DateTime),
         ];
 
         assert_eq!(schema.len(), expected_columns.len());
@@ -267,6 +299,27 @@ mod tests {
     }
 
     #[test]
+    fn read_xlsx_sub_schema() -> Result<()> {
+        // Test reading schema from Excel file with specific worksheet and header row
+        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types.xlsx");
+
+        let options = DataFrameOptions::default();
+        let mut reader = XlsxReader::from_file(input_file)?;
+        let schema = reader
+            .schema(&DataFrameOptions::default())?
+            .subselection(&["String Column", "Integer Column"]);
+
+        let mut rows_iter = reader.rows(&options, &schema)?;
+        let row = rows_iter.next().unwrap();
+
+        assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
+        assert_eq!(row.field(1)?, Some(Field::Integer(42)));
+        assert!(row.field(2).is_err());
+
+        Ok(())
+    }
+
+    #[test]
     fn read_xlsx_header_offset() -> Result<()> {
         // Test reading schema from Excel file with specific worksheet and header row
         let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_header_offset.xlsx");
@@ -276,15 +329,15 @@ mod tests {
             header_row: Some(HeaderRow::Row(3)),
         };
 
-        let mut reader = XlsxReader::new(input_file)?;
+        let mut reader = XlsxReader::from_file(input_file)?;
         let schema = reader.schema(&options)?;
 
         // Expected column names from the Excel file
         let expected_columns = [
-            FieldInfo::new("String Column".into(), FieldType::String, 0),
-            FieldInfo::new("Double Column".into(), FieldType::Float, 1),
-            FieldInfo::new("Integer Column".into(), FieldType::Integer, 2),
-            FieldInfo::new("Date Column".into(), FieldType::DateTime, 3),
+            FieldInfo::new("String Column".into(), FieldType::String),
+            FieldInfo::new("Double Column".into(), FieldType::Float),
+            FieldInfo::new("Integer Column".into(), FieldType::Integer),
+            FieldInfo::new("Date Column".into(), FieldType::DateTime),
         ];
 
         assert_eq!(schema.len(), expected_columns.len());
