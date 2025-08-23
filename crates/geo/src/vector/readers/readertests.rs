@@ -1,6 +1,5 @@
-
 use crate::Result;
-use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow as _, Field, FieldInfo, FieldType, HeaderRow, Schema};
+use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, Field, FieldInfo, FieldType, HeaderRow, Schema};
 use path_macro::path;
 
 pub fn read_xlsx_empty_sheet<R: DataFrameReader>() -> Result<()> {
@@ -61,7 +60,7 @@ pub fn read_xlsx<R: DataFrameReader>() -> Result<()> {
     }
 
     // Test reading rows - just check the first row
-    let mut rows_iter = reader.rows(&options, &schema)?;
+    let mut rows_iter = reader.iter_rows(&options, &schema)?;
     if let Some(row) = rows_iter.next() {
         assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
         assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
@@ -80,7 +79,7 @@ pub fn read_xlsx_sub_schema<R: DataFrameReader>() -> Result<()> {
         .schema(&DataFrameOptions::default())?
         .subselection(&["String Column", "Integer Column"]);
 
-    let mut rows_iter = reader.rows(&options, &schema)?;
+    let mut rows_iter = reader.iter_rows(&options, &schema)?;
     let row = rows_iter.next().unwrap();
 
     assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
@@ -116,7 +115,7 @@ pub fn read_xlsx_header_offset<R: DataFrameReader>() -> Result<()> {
     }
 
     // Test reading rows - just check the first row
-    if let Some(row) = reader.rows(&options, &schema)?.next() {
+    if let Some(row) = reader.iter_rows(&options, &schema)?.next() {
         assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
         assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
     }
@@ -126,7 +125,7 @@ pub fn read_xlsx_header_offset<R: DataFrameReader>() -> Result<()> {
         let schema = Schema {
             fields: vec![FieldInfo::new("Strang Column".into(), FieldType::String)],
         };
-        assert!(reader.rows(&options, &schema).is_err());
+        assert!(reader.iter_rows(&options, &schema).is_err());
     }
 
     Ok(())
@@ -157,7 +156,7 @@ pub fn read_xlsx_no_header<R: DataFrameReader>() -> Result<()> {
     }
 
     // Test reading rows - just check the first row
-    if let Some(row) = reader.rows(&options, &schema)?.next() {
+    if let Some(row) = reader.iter_rows(&options, &schema)?.next() {
         assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
         assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
         assert_eq!(row.field(2)?, Some(Field::Integer(42)));
@@ -165,7 +164,7 @@ pub fn read_xlsx_no_header<R: DataFrameReader>() -> Result<()> {
 
     // Test reading rows - just check the first row
     let schema = schema.subselection(&["Field2", "Field3"]);
-    if let Some(row) = reader.rows(&options, &schema)?.nth(2) {
+    if let Some(row) = reader.iter_rows(&options, &schema)?.nth(2) {
         assert_eq!(row.field(0)?, Some(Field::Float(45.67)));
         assert_eq!(row.field(1)?, Some(Field::Integer(7)));
         assert!(row.field(2).is_err());
@@ -176,7 +175,7 @@ pub fn read_xlsx_no_header<R: DataFrameReader>() -> Result<()> {
         let schema = Schema {
             fields: vec![FieldInfo::new("Field0".into(), FieldType::String)],
         };
-        assert!(reader.rows(&options, &schema).is_err());
+        assert!(reader.iter_rows(&options, &schema).is_err());
     }
 
     {
@@ -184,7 +183,7 @@ pub fn read_xlsx_no_header<R: DataFrameReader>() -> Result<()> {
         let schema = Schema {
             fields: vec![FieldInfo::new("Field5".into(), FieldType::String)],
         };
-        assert!(reader.rows(&options, &schema).is_err());
+        assert!(reader.iter_rows(&options, &schema).is_err());
     }
 
     Ok(())

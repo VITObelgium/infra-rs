@@ -88,24 +88,6 @@ fn convert_field_value_to_field(field_value: FieldValue) -> Field {
     }
 }
 
-pub struct GdalRow {
-    fields: Vec<Option<Field>>,
-}
-
-impl DataFrameRow for GdalRow {
-    fn field(&self, field: usize) -> Result<Option<Field>> {
-        if field < self.fields.len() {
-            Ok(self.fields[field].clone())
-        } else {
-            Err(Error::InvalidArgument(format!(
-                "Field index {} is out of bounds (schema has {} fields)",
-                field,
-                self.fields.len()
-            )))
-        }
-    }
-}
-
 pub struct GdalRowIterator {
     schema: Schema,
     field_indices: Vec<usize>,
@@ -148,7 +130,7 @@ impl GdalRowIterator {
 }
 
 impl Iterator for GdalRowIterator {
-    type Item = GdalRow;
+    type Item = DataFrameRow;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.feature_iter
@@ -161,7 +143,7 @@ impl Iterator for GdalRowIterator {
                     fields.push(feature.field(*field).ok().flatten().map(convert_field_value_to_field));
                 }
 
-                GdalRow { fields }
+                DataFrameRow { fields }
             })
     }
 }
@@ -214,8 +196,8 @@ impl DataFrameReader for GdalReader {
         Ok(Schema { fields })
     }
 
-    fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>> {
-        GdalRowIterator::new(&self.path, options, schema)
+    fn iter_rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
+        Ok(Box::new(GdalRowIterator::new(&self.path, options, schema)?))
     }
 }
 

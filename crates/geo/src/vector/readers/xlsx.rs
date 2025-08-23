@@ -75,19 +75,6 @@ impl XlsxReader {
     }
 }
 
-pub struct XlsxRow {
-    fields: Vec<Option<Field>>,
-}
-
-impl DataFrameRow for XlsxRow {
-    fn field(&self, index: usize) -> Result<Option<Field>> {
-        match self.fields.get(index) {
-            Some(field) => Ok(field.clone()),
-            None => Err(Error::Runtime("Index out of bounds".to_string())),
-        }
-    }
-}
-
 pub struct XlsxRowIterator {
     range: calamine::Range<Data>,
     current: usize,
@@ -166,7 +153,7 @@ impl XlsxRowIterator {
 }
 
 impl Iterator for XlsxRowIterator {
-    type Item = XlsxRow;
+    type Item = DataFrameRow;
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.current >= self.range.height() {
@@ -182,7 +169,7 @@ impl Iterator for XlsxRowIterator {
                 })
                 .collect();
             self.current += 1;
-            Some(XlsxRow { fields })
+            Some(DataFrameRow { fields })
         }
     }
 }
@@ -243,7 +230,7 @@ impl DataFrameReader for XlsxReader {
         Ok(Schema { fields })
     }
 
-    fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>> {
+    fn iter_rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
         let header_row = match options.header_row {
             HeaderRow::Row(idx) => calamine::HeaderRow::Row(idx as u32),
             HeaderRow::None | HeaderRow::Auto => calamine::HeaderRow::FirstNonEmptyRow,
@@ -256,7 +243,11 @@ impl DataFrameReader for XlsxReader {
             .worksheet_range(&sheet_name)
             .map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
 
-        XlsxRowIterator::new(range, schema, options.header_row != HeaderRow::None)
+        Ok(Box::new(XlsxRowIterator::new(
+            range,
+            schema,
+            options.header_row != HeaderRow::None,
+        )?))
     }
 }
 

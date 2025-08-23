@@ -1,9 +1,13 @@
 use std::path::Path;
 
-use crate::Result;
+use crate::{
+    Error, Result,
+    vector::{self},
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+/// Specifies how to handle the header row in a tabular data source
 pub enum HeaderRow {
     /// Automatically detect the presence of a header row
     #[default]
@@ -74,6 +78,7 @@ impl Schema {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Default)]
+/// Options for reading a `DataFrame` from a data source
 pub struct DataFrameOptions {
     /// The name of the layer to read from, if none is specified, the first available layer is used.
     pub layer: Option<String>,
@@ -81,10 +86,20 @@ pub struct DataFrameOptions {
     pub header_row: HeaderRow,
 }
 
-pub trait DataFrameRow {
-    fn field(&self, field: usize) -> Result<Option<Field>>;
+pub struct DataFrameRow {
+    pub fields: Vec<Option<Field>>,
 }
 
+impl DataFrameRow {
+    pub fn field(&self, index: usize) -> Result<Option<Field>> {
+        match self.fields.get(index) {
+            Some(field) => Ok(field.clone()),
+            None => Err(Error::InvalidArgument("Index out of bounds".to_string())),
+        }
+    }
+}
+
+/// Trait for reading tabular data from various data sources into a `DataFrame`
 pub trait DataFrameReader {
     fn from_file<P: AsRef<Path>>(file_path: P) -> Result<Self>
     where
@@ -92,18 +107,55 @@ pub trait DataFrameReader {
 
     fn layer_names(&self) -> Result<Vec<String>>;
     fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema>;
-    fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>>;
+    //fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>>;
+    fn iter_rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>>;
+    fn into_iter_rows(self: Box<Self>, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
+        let mut reader = self;
+        reader.iter_rows(options, schema)
+    }
+}
+
+impl IntoIterator for Box<dyn DataFrameReader> {
+    type Item = DataFrameRow;
+    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+
+    fn into_iter(mut self) -> Self::IntoIter {
+        let options = DataFrameOptions::default();
+        let schema = self.schema(&options).unwrap_or_default();
+        self.iter_rows(&options, &schema).unwrap_or_else(|_| Box::new(std::iter::empty()))
+    }
+}
+
+/// Creates a `DataFrameReader` for the specified path based on the file extension.
+pub fn create_dataframe_reader(path: &Path) -> Result<Box<dyn DataFrameReader>> {
+    match vector::VectorFormat::guess_from_path(path) {
+        #[cfg(feature = "vector-io-xlsx")]
+        vector::VectorFormat::Xlsx => Ok(Box::new(vector::readers::XlsxReader::from_file(path)?)),
+
+        #[cfg(feature = "gdal")]
+        vector::VectorFormat::ShapeFile
+        | vector::VectorFormat::GeoJson
+        | vector::VectorFormat::GeoPackage
+        | vector::VectorFormat::Csv
+        | vector::VectorFormat::Tab
+        | vector::VectorFormat::Parquet
+        | vector::VectorFormat::Arrow => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
+        _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
+    }
 }
 
 #[cfg(feature = "polars")]
 pub mod polars {
     use polars::prelude::*;
 
-    use crate::vector::dataframe::{DataFrameReader, DataFrameRow as _, Field, Schema};
+    use crate::vector::dataframe::{DataFrameReader, Field, Schema};
     use crate::vector::{self, dataframe::DataFrameOptions};
     use crate::{Error, Result};
     use std::path::Path;
 
+    /// Reads a `polars::frame::DataFrame` from the specified path using the provided options and optional schema.
+    /// The schema can be provided to override the detected schema from the data source and only read the required columns.
+    /// If no schema is provided, the schema will be inferred from the data source and all the columns will be read.
     pub fn read_dataframe(path: &Path, options: &DataFrameOptions, schema: Option<&Schema>) -> Result<polars::frame::DataFrame> {
         match vector::VectorFormat::guess_from_path(path) {
             #[cfg(feature = "vector-io-xlsx")]
@@ -133,7 +185,7 @@ pub mod polars {
         };
 
         let mut columns = vec![Vec::new(); schema.len()];
-        for row in reader.rows(options, schema)? {
+        for row in reader.iter_rows(options, schema)? {
             for (index, column) in &mut columns.iter_mut().enumerate() {
                 if let Some(field) = row.field(index)? {
                     column.push(match field {

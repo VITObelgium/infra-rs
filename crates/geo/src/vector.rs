@@ -4,9 +4,7 @@ mod burnvalue;
 #[cfg(feature = "gdal")]
 mod coveragetools;
 pub mod dataframe;
-#[cfg(feature = "gdal")]
 pub mod datarow;
-#[cfg(feature = "gdal")]
 pub mod fieldtype;
 pub mod geometrytype;
 #[cfg(feature = "gdal")]

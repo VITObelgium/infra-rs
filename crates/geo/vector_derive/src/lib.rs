@@ -104,7 +104,8 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
     let struct_attrs: Vec<_> = fields
         .named
         .iter()
-        .map(|item| {
+        .enumerate()
+        .map(|(i, item)| {
             let attr_name = check_col_attr(item);
             let name = item.ident.as_ref().unwrap();
             let name_str = attr_name.unwrap_or(name.to_string());
@@ -113,17 +114,11 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
             if needs_to_be_skipped(item) {
                 quote! { #name: Default::default() }
             } else if let Some(inner_type) = is_option_type(tp) {
-                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#inner_type>(&feature, #name_str)? }
+                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#inner_type>(row.fields[#i].clone())? }
             } else {
-                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#tp>(&feature, #name_str)?.ok_or_else(|| {
-                        if let Ok(index) = feature.field_index(#name_str) {
-                            let field_val = feature.field_as_string(index).unwrap_or_default();
-                            inf::Error::InvalidArgument(format!("Invalid field value for {} ('{}')", #name_str, field_val.unwrap_or_default()))
-                        } else {
-                            inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str))
-                        }
-                    })?
-                }
+                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#tp>(row.fields[#i].clone())?.ok_or_else(|| {
+                    inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str))
+                })? }
             }
         })
         .collect();
@@ -143,7 +138,7 @@ fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
                 vec![#(#field_names),*]
             }
 
-            fn from_feature(feature: gdal::vector::Feature) -> ::geo::Result<Self> {
+            fn from_dataframe_row(row: ::geo::vector::dataframe::DataFrameRow) -> ::geo::Result<Self> {
                 Ok(#name {
                     #(#field_initializers),*
                 })

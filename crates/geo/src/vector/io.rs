@@ -13,8 +13,6 @@ use gdal_sys::OGRFieldType;
 
 use crate::{Error, Result, gdalinterop, vector::VectorFormat};
 
-use super::DataRow;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum HeaderDetection {
@@ -161,10 +159,6 @@ pub fn read_dataframe_schema(
     Ok(ds_layer.defn().fields().map(|f| (f.name(), f.field_type())).collect())
 }
 
-pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<&str>) -> Result<Vec<T>> {
-    DataframeIterator::<T>::new(&path, layer)?.collect()
-}
-
 /// Read rows from a vector dataset and invokes the provided callback function for each row
 pub fn read_dataframe_rows_cb(
     path: &Path,
@@ -232,62 +226,6 @@ pub fn read_dataframe_rows_cb(
     }
 
     Ok(())
-}
-
-pub fn read_data_frame<TRow: DataRow, P: AsRef<Path>>(path: &P, layer: Option<&str>, opts: &DataFrameOptions) -> Result<Vec<TRow>> {
-    let rows: Result<Vec<_>> = DataframeIterator::<TRow>::new_with_options(path, layer, opts)?.collect();
-    rows.map_err(|e| Error::Runtime(format!("Failed to read data frame rows: {e}")))
-}
-
-/// Iterator over the rows of a vector dataset that returns a an object
-/// that implements the [`DataRow`] trait
-pub struct DataframeIterator<TRow: DataRow> {
-    features: Option<gdal::vector::OwnedFeatureIterator>,
-    phantom: std::marker::PhantomData<TRow>,
-}
-
-impl<TRow: DataRow> DataframeIterator<TRow> {
-    pub fn new<P: AsRef<Path>>(path: &P, layer: Option<&str>) -> Result<Self> {
-        Self::new_with_options(path, layer, &DataFrameOptions::default())
-    }
-
-    pub fn new_with_options<P: AsRef<Path>>(path: &P, layer: Option<&str>, opts: &DataFrameOptions) -> Result<Self> {
-        let ds = dataset::open_read_only_with_options(path.as_ref(), opts.create_open_options_for_path(path.as_ref()))?;
-        let ds_layer = if let Some(layer_name) = layer {
-            ds.into_layer_by_name(layer_name)?
-        } else {
-            ds.into_layer(0)?
-        };
-
-        let header_detection_failed =
-            opts.header_detection == HeaderDetection::Force && ds_layer.defn().fields().all(|f| f.name().starts_with("Field"));
-
-        let features = if header_detection_failed && ds_layer.feature_count() == 1 {
-            // If the layer only contains the headers and no actual data, gdal fails to detect the header
-            // so don't store the iterator
-            None
-        } else {
-            Some(ds_layer.owned_features())
-        };
-
-        Ok(Self {
-            features,
-            phantom: std::marker::PhantomData,
-        })
-    }
-}
-
-impl<TRow: DataRow> Iterator for DataframeIterator<TRow> {
-    type Item = Result<TRow>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.features.as_mut().and_then(|f| {
-            f.into_iter()
-                .next()
-                .filter(|f| !f.fields().all(|(_name, val)| val.is_none())) // Skip empty features
-                .map(TRow::from_feature)
-        })
-    }
 }
 
 /// [`gdal::vector::LayerAccess`] extenstion trait that implements missing functionality
