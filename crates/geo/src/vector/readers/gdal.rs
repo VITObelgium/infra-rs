@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use gdal::vector::{FieldValue, LayerAccess};
+use gdal::vector::{FieldValue, LayerAccess, OwnedLayer};
 use gdal_sys::OGRFieldType;
 
 use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow, Field, FieldInfo, FieldType, HeaderRow, Schema};
@@ -13,44 +13,77 @@ pub struct GdalReader {
     path: std::path::PathBuf,
 }
 
-impl GdalReader {
-    fn map_ogr_field_type_to_field_type(ogr_type: OGRFieldType::Type) -> FieldType {
-        match ogr_type {
-            OGRFieldType::OFTInteger | OGRFieldType::OFTInteger64 => FieldType::Integer,
-            OGRFieldType::OFTReal => FieldType::Float,
-            OGRFieldType::OFTDateTime | OGRFieldType::OFTDate | OGRFieldType::OFTTime => FieldType::DateTime,
-            _ => FieldType::String, // Default to string for unsupported types
+fn create_open_options_for_file(path: &Path, options: &DataFrameOptions) -> Vec<String> {
+    let mut open_options = Vec::new();
+    match VectorFormat::guess_from_path(path) {
+        VectorFormat::Xlsx => {
+            let header_detection = match options.header_row {
+                crate::vector::dataframe::HeaderRow::None => "DISABLE",
+                crate::vector::dataframe::HeaderRow::Row(0) => "FORCE",
+                crate::vector::dataframe::HeaderRow::Auto => "AUTO",
+                crate::vector::dataframe::HeaderRow::Row(_) => {
+                    // GDAL reader only supports header row at index 0 or no header
+                    return vec![];
+                }
+            };
+            open_options.push(format!("HEADERS={header_detection}"));
         }
+        VectorFormat::Csv => {
+            open_options.push("AUTODETECT_TYPE=YES".into());
+        }
+        _ => {}
     }
+    open_options
+}
 
-    fn convert_field_value_to_field(field_value: FieldValue) -> Field {
-        match field_value {
-            FieldValue::StringValue(val) => Field::String(val),
-            FieldValue::IntegerValue(val) => Field::Integer(val as i64),
-            FieldValue::Integer64Value(val) => Field::Integer(val),
-            FieldValue::RealValue(val) => Field::Float(val),
-            FieldValue::DateTimeValue(val) => Field::DateTime(val.naive_local()),
-            FieldValue::DateValue(val) => Field::DateTime(val.and_hms_opt(0, 0, 0).unwrap_or_default()),
-            FieldValue::IntegerListValue(vals) => {
-                // Convert list to string representation
-                let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
-                Field::String(list_str)
-            }
-            FieldValue::Integer64ListValue(vals) => {
-                // Convert list to string representation
-                let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
-                Field::String(list_str)
-            }
-            FieldValue::StringListValue(vals) => {
-                // Convert list to string representation
-                let list_str = vals.join(",");
-                Field::String(list_str)
-            }
-            FieldValue::RealListValue(vals) => {
-                // Convert list to string representation
-                let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
-                Field::String(list_str)
-            }
+fn create_layer_for_file(path: &Path, options: &DataFrameOptions) -> Result<OwnedLayer> {
+    let open_options = create_open_options_for_file(path, options);
+    let open_options_refs: Vec<&str> = open_options.iter().map(|s| s.as_str()).collect();
+    let dataset = io::dataset::open_read_only_with_options(path, Some(&open_options_refs))?;
+
+    // Get layer - use the specified layer or default to first layer
+    Ok(match &options.layer {
+        Some(layer_name) => dataset.into_layer_by_name(layer_name)?,
+        None => dataset.into_layer(0)?,
+    })
+}
+
+fn map_ogr_field_type_to_field_type(ogr_type: OGRFieldType::Type) -> FieldType {
+    match ogr_type {
+        OGRFieldType::OFTInteger | OGRFieldType::OFTInteger64 => FieldType::Integer,
+        OGRFieldType::OFTReal => FieldType::Float,
+        OGRFieldType::OFTDateTime | OGRFieldType::OFTDate | OGRFieldType::OFTTime => FieldType::DateTime,
+        _ => FieldType::String, // Default to string for unsupported types
+    }
+}
+
+fn convert_field_value_to_field(field_value: FieldValue) -> Field {
+    match field_value {
+        FieldValue::StringValue(val) => Field::String(val),
+        FieldValue::IntegerValue(val) => Field::Integer(val as i64),
+        FieldValue::Integer64Value(val) => Field::Integer(val),
+        FieldValue::RealValue(val) => Field::Float(val),
+        FieldValue::DateTimeValue(val) => Field::DateTime(val.naive_local()),
+        FieldValue::DateValue(val) => Field::DateTime(val.and_hms_opt(0, 0, 0).unwrap_or_default()),
+        FieldValue::IntegerListValue(vals) => {
+            // Convert list to string representation
+            let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
+            Field::String(list_str)
+        }
+        FieldValue::Integer64ListValue(vals) => {
+            // Convert list to string representation
+            let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
+            Field::String(list_str)
+        }
+        FieldValue::StringListValue(vals) => {
+            // Convert list to string representation
+            let list_str = vals.join(",");
+            Field::String(list_str)
+        }
+        FieldValue::RealListValue(vals) => {
+            // Convert list to string representation
+            let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
+            Field::String(list_str)
         }
     }
 }
@@ -81,23 +114,11 @@ pub struct GdalRowIterator {
 
 impl GdalRowIterator {
     fn new(path: &Path, options: &DataFrameOptions, schema: &Schema) -> Result<Self> {
-        let open_options = create_open_options_for_file(path, options);
-        let open_options_refs: Vec<&str> = open_options.iter().map(|s| s.as_str()).collect();
-        let dataset = io::dataset::open_read_only_with_options(path, Some(&open_options_refs))?;
-
-        // Get layer - use the specified layer or default to first layer
-        let layer = if let Some(ref layer_name) = options.layer {
-            dataset.into_layer_by_name(layer_name)?
-        } else {
-            dataset.into_layer(0)?
-        };
+        let layer = create_layer_for_file(path, options)?;
 
         // Header detection logic for edge cases
         let header_detection_failed =
             options.header_row == HeaderRow::Row(0) && layer.defn().fields().all(|f| f.name().starts_with(GDAL_UNNAMED_COL_PREFIX));
-
-        // Check if we should skip all data due to header detection failure
-        let skip_all = header_detection_failed && layer.feature_count() == 1;
 
         // Get the field indices for the requested schema columns
         let field_indices = schema
@@ -111,7 +132,12 @@ impl GdalRowIterator {
             })
             .collect::<Result<Vec<usize>>>()?;
 
-        let feature_iter = if skip_all { None } else { Some(layer.owned_features()) };
+        // Check if we should skip all data due to header detection failure
+        let feature_iter = if header_detection_failed && layer.feature_count() == 1 {
+            None
+        } else {
+            Some(layer.owned_features())
+        };
 
         Ok(Self {
             schema: schema.clone(),
@@ -132,35 +158,12 @@ impl Iterator for GdalRowIterator {
             .map(|feature| {
                 let mut fields = Vec::with_capacity(self.schema.fields.len());
                 for field in &self.field_indices {
-                    fields.push(feature.field(*field).ok().flatten().map(GdalReader::convert_field_value_to_field));
+                    fields.push(feature.field(*field).ok().flatten().map(convert_field_value_to_field));
                 }
 
                 GdalRow { fields }
             })
     }
-}
-
-fn create_open_options_for_file(path: &Path, options: &DataFrameOptions) -> Vec<String> {
-    let mut open_options = Vec::new();
-    match VectorFormat::guess_from_path(path) {
-        VectorFormat::Xlsx => {
-            let header_detection = match options.header_row {
-                crate::vector::dataframe::HeaderRow::None => "DISABLE",
-                crate::vector::dataframe::HeaderRow::Row(0) => "FORCE",
-                crate::vector::dataframe::HeaderRow::Auto => "AUTO",
-                crate::vector::dataframe::HeaderRow::Row(_) => {
-                    // GDAL reader only supports header row at index 0 or no header
-                    return vec![];
-                }
-            };
-            open_options.push(format!("HEADERS={header_detection}"));
-        }
-        VectorFormat::Csv => {
-            open_options.push("AUTODETECT_TYPE=YES".into());
-        }
-        _ => {}
-    }
-    open_options
 }
 
 impl DataFrameReader for GdalReader {
@@ -187,16 +190,7 @@ impl DataFrameReader for GdalReader {
     }
 
     fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema> {
-        let open_options = create_open_options_for_file(&self.path, options);
-        let open_options_refs: Vec<&str> = open_options.iter().map(|s| s.as_str()).collect();
-        let dataset = io::dataset::open_read_only_with_options(&self.path, Some(&open_options_refs))?;
-
-        // Get layer - use the specified layer or default to first layer
-        let mut layer = if let Some(ref layer_name) = options.layer {
-            dataset.into_layer_by_name(layer_name)?
-        } else {
-            dataset.into_layer(0)?
-        };
+        let mut layer = create_layer_for_file(&self.path, options)?;
 
         let header_detection_failed =
             options.header_row == HeaderRow::Row(0) && layer.defn().fields().all(|f| f.name().starts_with(GDAL_UNNAMED_COL_PREFIX));
@@ -213,7 +207,7 @@ impl DataFrameReader for GdalReader {
             }
         } else {
             layer.defn().fields().for_each(|f| {
-                fields.push(FieldInfo::new(f.name(), Self::map_ogr_field_type_to_field_type(f.field_type())));
+                fields.push(FieldInfo::new(f.name(), map_ogr_field_type_to_field_type(f.field_type())));
             });
         }
 
@@ -228,59 +222,25 @@ impl DataFrameReader for GdalReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vector::dataframe::HeaderRow;
-    use path_macro::path;
+    use crate::vector::readers::readertests;
 
     #[test]
     fn read_xlsx_empty_sheet() -> Result<()> {
-        // Test reading schema from Excel file with specific worksheet and header row
-        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
+        readertests::read_xlsx_empty_sheet::<GdalReader>()
+    }
 
-        let options = DataFrameOptions {
-            layer: Some("VERBR_EF_ID".to_string()),
-            header_row: HeaderRow::Row(0),
-        };
-
-        let mut reader = GdalReader::from_file(input_file)?;
-        let schema = reader.schema(&options)?;
-
-        // Expected column names from the Excel file
-        let expected_columns = vec![
-            FieldInfo::new("VITO_installatieID".into(), FieldType::String),
-            FieldInfo::new("Jaar".into(), FieldType::String),
-            FieldInfo::new("Type".into(), FieldType::String),
-            FieldInfo::new("Substantie".into(), FieldType::String),
-            FieldInfo::new("EF".into(), FieldType::String),
-            FieldInfo::new("Eenheid (NG)".into(), FieldType::String),
-            FieldInfo::new("Tag".into(), FieldType::String),
-            FieldInfo::new("CRF/NFR-sector".into(), FieldType::String),
-            FieldInfo::new("Categorie".into(), FieldType::String),
-        ];
-
-        assert_eq!(schema.len(), expected_columns.len());
-        for (field_info, expected) in schema.fields.iter().zip(expected_columns.iter()) {
-            assert_eq!(field_info, expected);
-        }
-        Ok(())
+    #[test]
+    fn read_xlsx() -> Result<()> {
+        readertests::read_xlsx::<GdalReader>()
     }
 
     #[test]
     fn read_xlsx_sub_schema() -> Result<()> {
-        // Test reading schema from Excel file with specific worksheet and header row
-        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types.xlsx");
+        readertests::read_xlsx_sub_schema::<GdalReader>()
+    }
 
-        let options = DataFrameOptions::default();
-        let mut reader = GdalReader::from_file(input_file)?;
-        let schema = reader
-            .schema(&DataFrameOptions::default())?
-            .subselection(&["String Column", "Integer Column"]);
-
-        let row = reader.rows(&options, &schema)?.next().unwrap();
-
-        assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
-        assert_eq!(row.field(1)?, Some(Field::Integer(42)));
-        assert!(row.field(2).is_err());
-
-        Ok(())
+    #[test]
+    fn read_xlsx_no_header() -> Result<()> {
+        readertests::read_xlsx_no_header::<GdalReader>()
     }
 }
