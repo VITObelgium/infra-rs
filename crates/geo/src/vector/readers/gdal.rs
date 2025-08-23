@@ -4,6 +4,7 @@ use gdal::vector::{FieldValue, LayerAccess, OwnedLayer};
 use gdal_sys::OGRFieldType;
 
 use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow, Field, FieldInfo, FieldType, HeaderRow, Schema};
+use crate::vector::io::FeatureExtension;
 use crate::vector::{VectorFormat, io};
 use crate::{Error, Result};
 
@@ -168,7 +169,11 @@ impl Iterator for GdalRowIterator {
             .map(|feature| {
                 let mut fields = Vec::with_capacity(self.schema.fields.len());
                 for field in &self.field_indices {
-                    fields.push(feature.field(*field).ok().flatten().map(convert_field_value_to_field));
+                    if feature.field_is_valid(*field) {
+                        fields.push(feature.field(*field).ok().flatten().map(convert_field_value_to_field));
+                    } else {
+                        fields.push(None);
+                    }
                 }
 
                 DataFrameRow { fields }

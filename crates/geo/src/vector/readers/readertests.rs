@@ -95,6 +95,7 @@ pub fn read_xlsx_sub_schema<R: DataFrameReader>() -> Result<()> {
     Ok(())
 }
 
+#[allow(dead_code)] // Depening on the feature flags, this function may be unused
 pub fn read_xlsx_header_offset<R: DataFrameReader>() -> Result<()> {
     // Test reading schema from Excel file with specific worksheet and header row
     let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_header_offset.xlsx");

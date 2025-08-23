@@ -8,7 +8,7 @@ version     = "0.1.0"
 
 [tasks]
 test_debug   = "cargo +nightly nextest run --profile ci  --workspace --all-features"
-test_release = { cmd = "cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,derive,vector,python --release", env = { DYLD_FALLBACK_LIBRARY_PATH = "$DYLDFALLBACKLIBRARYPATH" } }
+test_release = { cmd = "cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,rayon,python --release", env = { DYLD_FALLBACK_LIBRARY_PATH = "$DYLDFALLBACKLIBRARYPATH" } }
 
 [dependencies]
 pyarrow = ">=19.0.0,<20"

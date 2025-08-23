@@ -94,10 +94,10 @@ test_debug target=default_target $RUST_LOG="debug":
     cargo nextest run -v --profile ci --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,polars,proj4rs --no-capture {{test_filter}}
 
 test_release target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,vector-io-xlsx,polars,rayon,proj4rs {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=gdal,gdal-static,serde,derive,vector,vector-io-xlsx,polars,rayon,proj4rs {{test_filter}}
 
 test_release_verbose target=default_target:
-    cargo nextest run --profile ci --target {{target}} --workspace --release --features=serde,derive,vector,vector-io-xlsx,polars,rayon,proj4rs --no-capture {{test_filter}}
+    cargo nextest run --profile ci --target {{target}} --workspace --release --features=gdal,gdal-static,serde,derive,vector,vector-io-xlsx,polars,rayon,proj4rs --no-capture {{test_filter}}
 
 test_debug_simd target=default_target:
     cargo +nightly nextest run --profile ci --target {{target}} --workspace --features=simd,serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,polars {{test_filter}}
@@ -113,6 +113,8 @@ test_warp target=default_target:
 
 test_integration target=default_target:
     cargo nextest run  --profile integration --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,polars,rayon,proj4rs --no-capture
+
+test_all: test_release test_integration
 
 test_debug_py: pybootstrap
     pixi run test_debug

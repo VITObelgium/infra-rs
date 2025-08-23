@@ -38,7 +38,7 @@ impl VectorFieldType for f64 {
         match field {
             Field::Float(val) => Ok(Some(val)),
             Field::Integer(val) => Ok(NumCast::from(val)),
-            Field::String(val) => Ok(val.parse().ok()),
+            Field::String(val) => Ok(Some(val.parse()?)),
             _ => Ok(None),
         }
     }
