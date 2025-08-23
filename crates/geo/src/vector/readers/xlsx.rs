@@ -5,6 +5,7 @@ use std::io::BufReader;
 use std::path::Path;
 
 const DEFAULT_DATA_TYPE_DETECTION_ROWS: usize = 10;
+const COLUMN_NAME_PREFIX: &str = "Column";
 
 pub struct XlsxReader {
     workbook: Xlsx<BufReader<std::fs::File>>,
@@ -94,21 +95,45 @@ pub struct XlsxRowIterator {
     field_types: Vec<FieldType>,
 }
 
+fn get_column_index_from_name(name: &str, max_columns: usize) -> Option<usize> {
+    name.strip_prefix(COLUMN_NAME_PREFIX)
+        .and_then(|s| s.parse::<usize>().ok())
+        .and_then(|idx| if idx > 0 && idx <= max_columns { Some(idx - 1) } else { None }) // Convert to 0-based index
+}
+
+fn parse_column_indexes_from_names(fields: &[FieldInfo], max_columns: usize) -> Result<Vec<usize>> {
+    fields
+        .iter()
+        .map(|f| f.name())
+        .map(|name| get_column_index_from_name(name, max_columns).ok_or_else(|| Error::Runtime(format!("Invalid column name '{}'", name))))
+        .collect()
+}
+
 impl XlsxRowIterator {
-    fn new(range: calamine::Range<Data>, schema: &Schema) -> Self {
-        let headers = range.headers().expect("Range should have headers");
-        let column_indices: Vec<usize> = schema
-            .fields
-            .iter()
-            .map(|f| headers.iter().position(|h| h == f.name()).unwrap_or(0))
-            .collect();
+    fn new(range: calamine::Range<Data>, schema: &Schema, skip_header: bool) -> Result<Self> {
+        let column_indices = if skip_header {
+            let headers = range.headers().expect("Range should have headers");
+            schema
+                .fields
+                .iter()
+                .map(|f| {
+                    headers
+                        .iter()
+                        .position(|h| h == f.name())
+                        .ok_or_else(|| Error::Runtime(format!("Column '{}' not found in headers", f.name())))
+                })
+                .collect::<Result<Vec<_>>>()?
+        } else {
+            parse_column_indexes_from_names(&schema.fields, range.width())?
+        };
+
         let field_types: Vec<FieldType> = schema.fields.iter().map(|f| f.field_type()).collect();
-        Self {
+        Ok(Self {
             range,
-            current: 1, // Start after header row
+            current: if skip_header { 1 } else { 0 },
             column_indices,
             field_types,
-        }
+        })
     }
 
     fn convert_data_to_field(data: &Data, expected_type: FieldType) -> Result<Option<Field>> {
@@ -175,8 +200,8 @@ impl DataFrameReader for XlsxReader {
 
     fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema> {
         let header_row = match options.header_row {
-            Some(HeaderRow::Row(idx)) => calamine::HeaderRow::Row(idx as u32),
-            Some(HeaderRow::None) | None => calamine::HeaderRow::FirstNonEmptyRow,
+            HeaderRow::Row(idx) => calamine::HeaderRow::Row(idx as u32),
+            HeaderRow::None | HeaderRow::Auto => calamine::HeaderRow::FirstNonEmptyRow,
         };
 
         let sheet_name = self.sheet_name(options)?;
@@ -189,7 +214,19 @@ impl DataFrameReader for XlsxReader {
 
         let mut fields = Vec::new();
 
-        if let Some(header_row) = range.headers() {
+        if options.header_row == HeaderRow::None {
+            // No header row, use generic column names
+            if let Some((start_row, _col)) = range.start()
+                && range.height() > start_row as usize
+            {
+                let num_columns = range.width();
+                for col_idx in 0..num_columns {
+                    let field_type = Self::infer_column_type(&range, col_idx, start_row as usize, DEFAULT_DATA_TYPE_DETECTION_ROWS);
+                    fields.push(FieldInfo::new(format!("{COLUMN_NAME_PREFIX}{}", col_idx + 1), field_type));
+                }
+            }
+            return Ok(Schema { fields });
+        } else if let Some(header_row) = range.headers() {
             for (col_idx, field_name) in header_row.into_iter().enumerate() {
                 // Determine field type by examining the data in the column
 
@@ -208,8 +245,8 @@ impl DataFrameReader for XlsxReader {
 
     fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>> {
         let header_row = match options.header_row {
-            Some(HeaderRow::Row(idx)) => calamine::HeaderRow::Row(idx as u32),
-            Some(HeaderRow::None) | None => calamine::HeaderRow::FirstNonEmptyRow,
+            HeaderRow::Row(idx) => calamine::HeaderRow::Row(idx as u32),
+            HeaderRow::None | HeaderRow::Auto => calamine::HeaderRow::FirstNonEmptyRow,
         };
 
         let sheet_name = self.sheet_name(options)?;
@@ -219,7 +256,7 @@ impl DataFrameReader for XlsxReader {
             .worksheet_range(&sheet_name)
             .map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
 
-        Ok(XlsxRowIterator::new(range, schema))
+        XlsxRowIterator::new(range, schema, options.header_row != HeaderRow::None)
     }
 }
 
@@ -236,7 +273,7 @@ mod tests {
 
         let options = DataFrameOptions {
             layer: Some("VERBR_EF_ID".to_string()),
-            header_row: Some(HeaderRow::Row(0)),
+            header_row: HeaderRow::Row(0),
         };
 
         let mut reader = XlsxReader::from_file(input_file)?;
@@ -269,7 +306,7 @@ mod tests {
 
         let options = DataFrameOptions {
             layer: None,
-            header_row: Some(HeaderRow::Row(0)),
+            header_row: HeaderRow::Row(0),
         };
 
         let mut reader = XlsxReader::from_file(input_file)?;
@@ -326,7 +363,7 @@ mod tests {
 
         let options = DataFrameOptions {
             layer: None,
-            header_row: Some(HeaderRow::Row(3)),
+            header_row: HeaderRow::Row(3),
         };
 
         let mut reader = XlsxReader::from_file(input_file)?;
@@ -346,10 +383,76 @@ mod tests {
         }
 
         // Test reading rows - just check the first row
-        let mut rows_iter = reader.rows(&options, &schema)?;
-        if let Some(row) = rows_iter.next() {
+        if let Some(row) = reader.rows(&options, &schema)?.next() {
             assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
             assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
+        }
+
+        {
+            // Invalid column name
+            let schema = Schema {
+                fields: vec![FieldInfo::new("Strang Column".into(), FieldType::String)],
+            };
+            assert!(reader.rows(&options, &schema).is_err());
+        }
+
+        Ok(())
+    }
+
+    #[test]
+    fn read_xlsx_no_header() -> Result<()> {
+        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_no_header.xlsx");
+
+        let options = DataFrameOptions {
+            layer: None,
+            header_row: HeaderRow::None,
+        };
+
+        let mut reader = XlsxReader::from_file(input_file)?;
+        let schema = reader.schema(&options)?;
+
+        // Expected column names from the Excel file
+        let expected_columns = [
+            FieldInfo::new("Column1".into(), FieldType::String),
+            FieldInfo::new("Column2".into(), FieldType::Float),
+            FieldInfo::new("Column3".into(), FieldType::Integer),
+            FieldInfo::new("Column4".into(), FieldType::DateTime),
+        ];
+
+        assert_eq!(schema.len(), expected_columns.len());
+        for (field_info, expected) in schema.fields.iter().zip(expected_columns.iter()) {
+            assert_eq!(field_info, expected);
+        }
+
+        // Test reading rows - just check the first row
+        if let Some(row) = reader.rows(&options, &schema)?.next() {
+            assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
+            assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
+            assert_eq!(row.field(2)?, Some(Field::Integer(42)));
+        }
+
+        // Test reading rows - just check the first row
+        let schema = schema.subselection(&["Column2", "Column3"]);
+        if let Some(row) = reader.rows(&options, &schema)?.nth(2) {
+            assert_eq!(row.field(0)?, Some(Field::Float(45.67)));
+            assert_eq!(row.field(1)?, Some(Field::Integer(7)));
+            assert!(row.field(2).is_err());
+        }
+
+        {
+            // Auto generated column indexes start a 1
+            let schema = Schema {
+                fields: vec![FieldInfo::new("Column0".into(), FieldType::String)],
+            };
+            assert!(reader.rows(&options, &schema).is_err());
+        }
+
+        {
+            // Column index too big
+            let schema = Schema {
+                fields: vec![FieldInfo::new("Column5".into(), FieldType::String)],
+            };
+            assert!(reader.rows(&options, &schema).is_err());
         }
 
         Ok(())

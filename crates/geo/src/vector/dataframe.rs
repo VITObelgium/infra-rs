@@ -7,6 +7,8 @@ use crate::Result;
 pub enum HeaderRow {
     /// Automatically detect the presence of a header row
     #[default]
+    Auto,
+    /// No header row is present, all rows are treated as data rows
     None,
     /// The row to use as a header row, 0-indexed, all preceding rows are ignored
     Row(usize),
@@ -76,7 +78,7 @@ pub struct DataFrameOptions {
     /// The name of the layer to read from, if none is specified, the first available layer is used.
     pub layer: Option<String>,
     /// The row to use as a header row, if None is specified no header row is used and all rows are treated as data rows.
-    pub header_row: Option<HeaderRow>,
+    pub header_row: HeaderRow,
 }
 
 pub trait DataFrameRow {
@@ -173,7 +175,7 @@ mod tests {
     fn read_xlsx_dataframe_offset() -> Result<()> {
         let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_header_offset.xlsx");
         let options = DataFrameOptions {
-            header_row: Some(HeaderRow::Row(3)),
+            header_row: HeaderRow::Row(3),
             ..Default::default()
         };
 
