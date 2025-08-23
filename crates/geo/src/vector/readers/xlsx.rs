@@ -5,7 +5,7 @@ use std::io::BufReader;
 use std::path::Path;
 
 const DEFAULT_DATA_TYPE_DETECTION_ROWS: usize = 10;
-const COLUMN_NAME_PREFIX: &str = "Column";
+const COLUMN_NAME_PREFIX: &str = "Field";
 
 pub struct XlsxReader {
     workbook: Xlsx<BufReader<std::fs::File>>,
@@ -413,10 +413,10 @@ mod tests {
 
         // Expected column names from the Excel file
         let expected_columns = [
-            FieldInfo::new("Column1".into(), FieldType::String),
-            FieldInfo::new("Column2".into(), FieldType::Float),
-            FieldInfo::new("Column3".into(), FieldType::Integer),
-            FieldInfo::new("Column4".into(), FieldType::DateTime),
+            FieldInfo::new("Field1".into(), FieldType::String),
+            FieldInfo::new("Field2".into(), FieldType::Float),
+            FieldInfo::new("Field3".into(), FieldType::Integer),
+            FieldInfo::new("Field4".into(), FieldType::DateTime),
         ];
 
         assert_eq!(schema.len(), expected_columns.len());
@@ -432,7 +432,7 @@ mod tests {
         }
 
         // Test reading rows - just check the first row
-        let schema = schema.subselection(&["Column2", "Column3"]);
+        let schema = schema.subselection(&["Field2", "Field3"]);
         if let Some(row) = reader.rows(&options, &schema)?.nth(2) {
             assert_eq!(row.field(0)?, Some(Field::Float(45.67)));
             assert_eq!(row.field(1)?, Some(Field::Integer(7)));
@@ -442,7 +442,7 @@ mod tests {
         {
             // Auto generated column indexes start a 1
             let schema = Schema {
-                fields: vec![FieldInfo::new("Column0".into(), FieldType::String)],
+                fields: vec![FieldInfo::new("Field0".into(), FieldType::String)],
             };
             assert!(reader.rows(&options, &schema).is_err());
         }
@@ -450,7 +450,7 @@ mod tests {
         {
             // Column index too big
             let schema = Schema {
-                fields: vec![FieldInfo::new("Column5".into(), FieldType::String)],
+                fields: vec![FieldInfo::new("Field5".into(), FieldType::String)],
             };
             assert!(reader.rows(&options, &schema).is_err());
         }

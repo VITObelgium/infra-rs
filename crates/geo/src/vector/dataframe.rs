@@ -108,6 +108,15 @@ pub mod polars {
         match vector::VectorFormat::guess_from_path(path) {
             #[cfg(feature = "vector-io-xlsx")]
             vector::VectorFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options, schema),
+
+            #[cfg(feature = "gdal")]
+            vector::VectorFormat::ShapeFile
+            | vector::VectorFormat::GeoJson
+            | vector::VectorFormat::GeoPackage
+            | vector::VectorFormat::Csv
+            | vector::VectorFormat::Tab
+            | vector::VectorFormat::Parquet
+            | vector::VectorFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, options, schema),
             _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
         }
     }
@@ -250,6 +259,36 @@ mod tests {
                 vec![Some(12), None, Some(45), Some(89), Some(23)]
             );
         }
+
+        Ok(())
+    }
+
+    #[test]
+    #[cfg(feature = "gdal")]
+    fn read_gdal_dataframe() -> Result<()> {
+        use path_macro::path;
+
+        // This test requires a CSV file or other GDAL-supported format
+        // For now, we'll test the compilation and basic functionality
+        let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
+
+        let options = DataFrameOptions::default();
+        let df = polars::read_dataframe(&input_file, &options, None)?;
+        assert_eq!(df.shape(), (3, 3)); // Should have some rows or zero rows
+        assert_eq!(
+            df.schema().get_at_index(0),
+            Some((
+                &::polars::prelude::PlSmallStr::from_static("Pollutant"),
+                &::polars::prelude::DataType::String
+            ))
+        );
+        assert_eq!(
+            df.schema().get_at_index(2),
+            Some((
+                &::polars::prelude::PlSmallStr::from_static("value"),
+                &::polars::prelude::DataType::Float64
+            ))
+        );
 
         Ok(())
     }
