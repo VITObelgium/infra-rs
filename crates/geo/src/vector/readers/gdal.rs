@@ -88,6 +88,29 @@ fn convert_field_value_to_field(field_value: FieldValue) -> Field {
     }
 }
 
+fn read_schema_from_layer(layer: &mut OwnedLayer, options: &DataFrameOptions) -> Result<Schema> {
+    let header_detection_failed =
+        options.header_row == HeaderRow::Row(0) && layer.defn().fields().all(|f| f.name().starts_with(GDAL_UNNAMED_COL_PREFIX));
+
+    let mut fields = Vec::new();
+    if header_detection_failed && layer.feature_count() == 1 {
+        // Header detection failed but there is one row, use that row as header since row 0 was explicitly requested as header
+        let first_row = layer.features().next().unwrap(); // we know there is one row
+        for (_field_name, val) in first_row.fields() {
+            fields.push(FieldInfo::new(
+                val.and_then(|v| v.into_string()).unwrap_or_default(),
+                FieldType::String,
+            )); // Use string as it the table contains only a header row
+        }
+    } else {
+        layer.defn().fields().for_each(|f| {
+            fields.push(FieldInfo::new(f.name(), map_ogr_field_type_to_field_type(f.field_type())));
+        });
+    }
+
+    Ok(Schema { fields })
+}
+
 pub struct GdalRowIterator {
     schema: Schema,
     field_indices: Vec<usize>,
@@ -95,12 +118,17 @@ pub struct GdalRowIterator {
 }
 
 impl GdalRowIterator {
-    fn new(path: &Path, options: &DataFrameOptions, schema: &Schema) -> Result<Self> {
-        let layer = create_layer_for_file(path, options)?;
+    fn new(path: &Path, options: &DataFrameOptions) -> Result<Self> {
+        let mut layer = create_layer_for_file(path, options)?;
 
         // Header detection logic for edge cases
         let header_detection_failed =
             options.header_row == HeaderRow::Row(0) && layer.defn().fields().all(|f| f.name().starts_with(GDAL_UNNAMED_COL_PREFIX));
+
+        let schema = match &options.schema_override {
+            Some(schema) => schema.clone(),
+            None => read_schema_from_layer(&mut layer, options)?,
+        };
 
         // Get the field indices for the requested schema columns
         let field_indices = schema
@@ -173,31 +201,11 @@ impl DataFrameReader for GdalReader {
 
     fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema> {
         let mut layer = create_layer_for_file(&self.path, options)?;
-
-        let header_detection_failed =
-            options.header_row == HeaderRow::Row(0) && layer.defn().fields().all(|f| f.name().starts_with(GDAL_UNNAMED_COL_PREFIX));
-
-        let mut fields = Vec::new();
-        if header_detection_failed && layer.feature_count() == 1 {
-            // Header detection failed but there is one row, use that row as header since row 0 was explicitly requested as header
-            let first_row = layer.features().next().unwrap(); // we know there is one row
-            for (_field_name, val) in first_row.fields() {
-                fields.push(FieldInfo::new(
-                    val.and_then(|v| v.into_string()).unwrap_or_default(),
-                    FieldType::String,
-                )); // Use string as it the table contains only a header row
-            }
-        } else {
-            layer.defn().fields().for_each(|f| {
-                fields.push(FieldInfo::new(f.name(), map_ogr_field_type_to_field_type(f.field_type())));
-            });
-        }
-
-        Ok(Schema { fields })
+        read_schema_from_layer(&mut layer, options)
     }
 
-    fn iter_rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
-        Ok(Box::new(GdalRowIterator::new(&self.path, options, schema)?))
+    fn iter_rows(&mut self, options: &DataFrameOptions) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
+        Ok(Box::new(GdalRowIterator::new(&self.path, options)?))
     }
 }
 

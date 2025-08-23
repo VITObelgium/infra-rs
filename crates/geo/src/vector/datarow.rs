@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::{
     Error, Result,
-    vector::dataframe::{DataFrameOptions, DataFrameRow, Schema, create_dataframe_reader},
+    vector::dataframe::{DataFrameOptions, DataFrameRow, create_dataframe_reader},
 };
 
 pub trait DataRow {
@@ -14,9 +14,8 @@ pub trait DataRow {
 
 #[doc(hidden)]
 pub mod __private {
-    use crate::vector::{dataframe::Field, fieldtype::VectorFieldType};
-
     use super::*;
+    use crate::vector::{dataframe::Field, fieldtype::VectorFieldType};
 
     // Helper function for the DataRow derive macro
     pub fn read_feature_val<T: VectorFieldType>(field: Option<Field>) -> Result<Option<T>> {
@@ -38,13 +37,11 @@ pub mod __private {
     }
 }
 
-pub fn read_dataframe_rows<TRow: DataRow, P: AsRef<Path>>(path: &P, schema: Option<Schema>, opts: DataFrameOptions) -> Result<Vec<TRow>> {
-    let rows: Result<Vec<_>> = DataframeIterator::<TRow>::new_with_options(path, schema, opts)?.collect();
+/// Reads all rows from a table based data source located at `path` and returns them as a vector of `TRow` objects
+/// `TRow` must implement the [`DataRow`] trait
+pub fn read_dataframe_rows<TRow: DataRow, P: AsRef<Path>>(path: &P, opts: DataFrameOptions) -> Result<Vec<TRow>> {
+    let rows: Result<Vec<_>> = DataframeIterator::<TRow>::new_with_options(path, opts)?.collect();
     rows.map_err(|e| Error::Runtime(format!("Failed to read data frame rows: {e}")))
-}
-
-pub fn read_dataframe_as<T: DataRow>(path: &Path, layer: Option<String>, schema: Option<Schema>) -> Result<Vec<T>> {
-    DataframeIterator::<T>::new(&path, layer, schema)?.collect()
 }
 
 /// Iterator over the rows of a vector dataset that returns a an object
@@ -55,18 +52,17 @@ pub struct DataframeIterator<TRow: DataRow> {
 }
 
 impl<TRow: DataRow> DataframeIterator<TRow> {
-    pub fn new<P: AsRef<Path>>(path: &P, layer: Option<String>, schema: Option<Schema>) -> Result<Self> {
+    pub fn new<P: AsRef<Path>>(path: &P, layer: Option<String>) -> Result<Self> {
         let options = DataFrameOptions {
             layer,
             ..Default::default()
         };
-        Self::new_with_options(path, schema, options)
+        Self::new_with_options(path, options)
     }
 
-    pub fn new_with_options<P: AsRef<Path>>(path: &P, schema: Option<Schema>, options: DataFrameOptions) -> Result<Self> {
+    pub fn new_with_options<P: AsRef<Path>>(path: &P, options: DataFrameOptions) -> Result<Self> {
         let mut reader = create_dataframe_reader(path.as_ref())?;
-        let schema = &schema.unwrap_or_else(|| reader.schema(&options).unwrap());
-        let iterator = reader.into_iter_rows(&options, schema)?;
+        let iterator = reader.iter_rows(&options)?;
 
         Ok(Self {
             iterator,

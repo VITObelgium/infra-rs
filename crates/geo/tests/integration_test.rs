@@ -63,7 +63,7 @@ mod tests {
         #[test]
         fn integration_row_data_derive() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
-            let mut iter = DataframeIterator::<PollutantData>::new(&path, None, None).unwrap();
+            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
 
             {
                 let row = iter.next().unwrap().unwrap();
@@ -95,7 +95,7 @@ mod tests {
         #[test]
         fn integration_row_data_derive_missing() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
-            let mut iter = DataframeIterator::<PollutantData>::new(&path, None, None).unwrap();
+            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
             assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
             assert!(iter.next().unwrap().is_ok());
             assert!(iter.next().unwrap().is_ok());
@@ -105,7 +105,7 @@ mod tests {
         #[test]
         fn integration_row_data_derive_missing_optionals() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
-            let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None, None).unwrap();
+            let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
 
             {
                 let row = iter.next().unwrap().unwrap();
@@ -133,8 +133,9 @@ mod tests {
             let opts = DataFrameOptions {
                 layer: Some("VERBR_EF_ID".to_string()),
                 header_row: HeaderRow::Row(0),
+                ..Default::default()
             };
-            let iter = DataframeIterator::<EmptySheetData>::new_with_options(&path, None, opts).unwrap();
+            let iter = DataframeIterator::<EmptySheetData>::new_with_options(&path, opts).unwrap();
             assert_eq!(iter.count(), 0);
         }
 
@@ -144,8 +145,9 @@ mod tests {
             let opts = DataFrameOptions {
                 layer: Some("VERBR_EF_ID".to_string()),
                 header_row: HeaderRow::Row(0),
+                ..Default::default()
             };
-            let df: Vec<EmptySheetData> = vector::datarow::read_dataframe_rows(&path, None, opts).unwrap();
+            let df: Vec<EmptySheetData> = vector::datarow::read_dataframe_rows(&path, opts).unwrap();
             assert_eq!(df.len(), 0);
         }
     }

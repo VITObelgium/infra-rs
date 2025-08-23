@@ -84,6 +84,8 @@ pub struct DataFrameOptions {
     pub layer: Option<String>,
     /// The row to use as a header row, if None is specified no header row is used and all rows are treated as data rows.
     pub header_row: HeaderRow,
+    /// Optional schema to override the detected schema from the data source, only the specified columns will be read using the provided datatype.
+    pub schema_override: Option<Schema>,
 }
 
 pub struct DataFrameRow {
@@ -108,23 +110,18 @@ pub trait DataFrameReader {
     fn layer_names(&self) -> Result<Vec<String>>;
     fn schema(&mut self, options: &DataFrameOptions) -> Result<Schema>;
     //fn rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<impl Iterator<Item = impl DataFrameRow>>;
-    fn iter_rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>>;
-    fn into_iter_rows(self: Box<Self>, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
-        let mut reader = self;
-        reader.iter_rows(options, schema)
-    }
+    fn iter_rows(&mut self, options: &DataFrameOptions) -> Result<Box<dyn Iterator<Item = DataFrameRow>>>;
 }
 
-impl IntoIterator for Box<dyn DataFrameReader> {
-    type Item = DataFrameRow;
-    type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
+// impl IntoIterator for Box<dyn DataFrameReader> {
+//     type Item = DataFrameRow;
+//     type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
 
-    fn into_iter(mut self) -> Self::IntoIter {
-        let options = DataFrameOptions::default();
-        let schema = self.schema(&options).unwrap_or_default();
-        self.iter_rows(&options, &schema).unwrap_or_else(|_| Box::new(std::iter::empty()))
-    }
-}
+//     fn into_iter(mut self) -> Self::IntoIter {
+//         self.iter_rows(&DataFrameOptions::default())
+//             .unwrap_or_else(|_| Box::new(std::iter::empty()))
+//     }
+// }
 
 /// Creates a `DataFrameReader` for the specified path based on the file extension.
 pub fn create_dataframe_reader(path: &Path) -> Result<Box<dyn DataFrameReader>> {
@@ -148,18 +145,16 @@ pub fn create_dataframe_reader(path: &Path) -> Result<Box<dyn DataFrameReader>> 
 pub mod polars {
     use polars::prelude::*;
 
-    use crate::vector::dataframe::{DataFrameReader, Field, Schema};
+    use crate::vector::dataframe::{DataFrameReader, Field};
     use crate::vector::{self, dataframe::DataFrameOptions};
     use crate::{Error, Result};
     use std::path::Path;
 
-    /// Reads a `polars::frame::DataFrame` from the specified path using the provided options and optional schema.
-    /// The schema can be provided to override the detected schema from the data source and only read the required columns.
-    /// If no schema is provided, the schema will be inferred from the data source and all the columns will be read.
-    pub fn read_dataframe(path: &Path, options: &DataFrameOptions, schema: Option<&Schema>) -> Result<polars::frame::DataFrame> {
+    /// Reads a `polars::frame::DataFrame` from the specified path using the provided options.
+    pub fn read_dataframe(path: &Path, options: &DataFrameOptions) -> Result<polars::frame::DataFrame> {
         match vector::VectorFormat::guess_from_path(path) {
             #[cfg(feature = "vector-io-xlsx")]
-            vector::VectorFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options, schema),
+            vector::VectorFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options),
 
             #[cfg(feature = "gdal")]
             vector::VectorFormat::ShapeFile
@@ -168,24 +163,20 @@ pub mod polars {
             | vector::VectorFormat::Csv
             | vector::VectorFormat::Tab
             | vector::VectorFormat::Parquet
-            | vector::VectorFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, options, schema),
+            | vector::VectorFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, options),
             _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
         }
     }
 
-    fn read_dataframe_with<R: DataFrameReader>(
-        path: &Path,
-        options: &DataFrameOptions,
-        override_schema: Option<&Schema>,
-    ) -> Result<polars::frame::DataFrame> {
+    fn read_dataframe_with<R: DataFrameReader>(path: &Path, options: &DataFrameOptions) -> Result<polars::frame::DataFrame> {
         let mut reader = R::from_file(path)?;
-        let schema = match override_schema {
+        let schema = match &options.schema_override {
             Some(schema) => schema,
             None => &reader.schema(options)?,
         };
 
         let mut columns = vec![Vec::new(); schema.len()];
-        for row in reader.iter_rows(options, schema)? {
+        for row in reader.iter_rows(options)? {
             for (index, column) in &mut columns.iter_mut().enumerate() {
                 if let Some(field) = row.field(index)? {
                     column.push(match field {
@@ -225,7 +216,7 @@ mod tests {
         let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types.xlsx");
 
         let options = DataFrameOptions::default();
-        let df = polars::read_dataframe(&input_file, &options, None)?;
+        let df = polars::read_dataframe(&input_file, &options)?;
         assert_eq!(df.shape(), (5, 4));
         //dbg!(df);
 
@@ -235,20 +226,20 @@ mod tests {
     #[test]
     fn read_xlsx_dataframe_offset() -> Result<()> {
         let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_header_offset.xlsx");
-        let options = DataFrameOptions {
+        let mut options = DataFrameOptions {
             header_row: HeaderRow::Row(3),
             ..Default::default()
         };
 
         {
-            let schema = Schema {
+            options.schema_override = Some(Schema {
                 fields: vec![
                     FieldInfo::new("Double Column".to_string(), FieldType::Float),
                     FieldInfo::new("Integer Column".to_string(), FieldType::Float),
                 ],
-            };
+            });
 
-            let df = polars::read_dataframe(&input_file, &options, Some(&schema))?;
+            let df = polars::read_dataframe(&input_file, &options)?;
             assert_eq!(df.shape(), (5, 2));
             assert_eq!(
                 df.schema().get_at_index(0),
@@ -267,14 +258,14 @@ mod tests {
         }
 
         {
-            let schema = Schema {
+            options.schema_override = Some(Schema {
                 fields: vec![
                     FieldInfo::new("Integer Column".to_string(), FieldType::Float),
                     FieldInfo::new("Double Column".to_string(), FieldType::Float),
                 ],
-            };
+            });
 
-            let df = polars::read_dataframe(&input_file, &options, Some(&schema))?;
+            let df = polars::read_dataframe(&input_file, &options)?;
             assert_eq!(df.shape(), (5, 2));
             assert_eq!(
                 df.schema().get_at_index(0),
@@ -293,11 +284,11 @@ mod tests {
         }
 
         {
-            let schema = Schema {
+            options.schema_override = Some(Schema {
                 fields: vec![FieldInfo::new("Double Column".to_string(), FieldType::Integer)],
-            };
+            });
 
-            let df = polars::read_dataframe(&input_file, &options, Some(&schema))?;
+            let df = polars::read_dataframe(&input_file, &options)?;
             assert_eq!(df.shape(), (5, 1));
             assert_eq!(
                 df.schema().get_at_index(0),
@@ -325,7 +316,7 @@ mod tests {
         let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
 
         let options = DataFrameOptions::default();
-        let df = polars::read_dataframe(&input_file, &options, None)?;
+        let df = polars::read_dataframe(&input_file, &options)?;
         assert_eq!(df.shape(), (3, 3)); // Should have some rows or zero rows
         assert_eq!(
             df.schema().get_at_index(0),

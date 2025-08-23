@@ -13,43 +13,6 @@ use gdal_sys::OGRFieldType;
 
 use crate::{Error, Result, gdalinterop, vector::VectorFormat};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
-pub enum HeaderDetection {
-    /// Automatically detect the presence of a header row
-    #[default]
-    Auto,
-    /// Force the presence and parsing of a header row
-    Force,
-    /// Do not parse a header row
-    None,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Default)]
-pub struct DataFrameOptions {
-    pub header_detection: HeaderDetection,
-}
-
-impl DataFrameOptions {
-    pub fn create_open_options_for_path(&self, input_path: &Path) -> Option<&'static [&'static str]> {
-        const CSV_OPEN_OPTIONS: [&str; 1] = ["AUTODETECT_TYPE=YES"];
-
-        let open_options: Option<&[&str]> = {
-            match VectorFormat::guess_from_path(input_path) {
-                VectorFormat::Csv => Some(&CSV_OPEN_OPTIONS),
-                VectorFormat::Xlsx => match self.header_detection {
-                    HeaderDetection::Force => Some(&["HEADERS=FORCE"]),
-                    HeaderDetection::None => Some(&["HEADERS=DISABLE"]),
-                    HeaderDetection::Auto => Some(&["HEADERS=AUTO"]),
-                },
-                _ => None,
-            }
-        };
-
-        open_options
-    }
-}
-
 impl VectorFormat {
     pub fn gdal_driver_name(&self) -> &str {
         match self {

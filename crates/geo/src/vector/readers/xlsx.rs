@@ -230,7 +230,7 @@ impl DataFrameReader for XlsxReader {
         Ok(Schema { fields })
     }
 
-    fn iter_rows(&mut self, options: &DataFrameOptions, schema: &Schema) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
+    fn iter_rows(&mut self, options: &DataFrameOptions) -> Result<Box<dyn Iterator<Item = DataFrameRow>>> {
         let header_row = match options.header_row {
             HeaderRow::Row(idx) => calamine::HeaderRow::Row(idx as u32),
             HeaderRow::None | HeaderRow::Auto => calamine::HeaderRow::FirstNonEmptyRow,
@@ -243,9 +243,14 @@ impl DataFrameReader for XlsxReader {
             .worksheet_range(&sheet_name)
             .map_err(|e| crate::Error::CalamineError(calamine::Error::Xlsx(e)))?;
 
+        let schema = match &options.schema_override {
+            Some(schema) => schema.clone(),
+            None => self.schema(options)?,
+        };
+
         Ok(Box::new(XlsxRowIterator::new(
             range,
-            schema,
+            &schema,
             options.header_row != HeaderRow::None,
         )?))
     }
