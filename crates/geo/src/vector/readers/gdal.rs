@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use gdal::vector::{FieldValue, LayerAccess, OwnedLayer};
+use gdal::vector::{Feature, FieldValue, LayerAccess, OwnedLayer};
 use gdal_sys::OGRFieldType;
 
 use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow, Field, FieldInfo, FieldType, HeaderRow, Schema};
@@ -146,6 +146,13 @@ impl GdalRowIterator {
             feature_iter,
         })
     }
+
+    fn read_feature_field_as(feature: &Feature, index: usize, field_type: FieldType) -> Result<Option<Field>> {
+        match feature.field(index)? {
+            Some(f) => convert_field_value_to_field(f, field_type),
+            None => Ok(None),
+        }
+    }
 }
 
 impl Iterator for GdalRowIterator {
@@ -157,18 +164,12 @@ impl Iterator for GdalRowIterator {
             .next()
             .filter(|f| !f.fields().all(|(_name, val)| val.is_none())) // Skip empty features
             .map(|feature| {
-                let mut fields = Vec::with_capacity(self.schema.fields.len());
+                let mut fields: Vec<Result<Option<Field>>> = Vec::with_capacity(self.schema.fields.len());
                 for (field_type, field_index) in &self.field_type_indices {
                     if feature.field_is_valid(*field_index) {
-                        fields.push(
-                            feature
-                                .field(*field_index)
-                                .ok()
-                                .flatten()
-                                .and_then(|field| convert_field_value_to_field(field, *field_type).unwrap_or_default()),
-                        );
+                        fields.push(Self::read_feature_field_as(&feature, *field_index, *field_type));
                     } else {
-                        fields.push(None);
+                        fields.push(Ok(None));
                     }
                 }
 
@@ -223,6 +224,11 @@ mod tests {
     #[test]
     fn read_xlsx() -> Result<()> {
         readertests::read_table::<GdalReader>("xlsx")
+    }
+
+    #[test]
+    fn read_xlsx_override_schema() -> Result<()> {
+        readertests::read_table_override_schema::<GdalReader>("xlsx")
     }
 
     #[test]

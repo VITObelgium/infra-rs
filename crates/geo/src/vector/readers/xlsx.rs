@@ -152,13 +152,13 @@ impl Iterator for XlsxRowIterator {
         if self.current >= self.range.height() {
             None
         } else {
-            let fields: Vec<Option<Field>> = self
+            let fields: Vec<Result<Option<Field>>> = self
                 .column_indices
                 .iter()
                 .zip(self.field_types.iter())
                 .map(|(&col_idx, &field_type)| {
                     let data = self.range.get((self.current, col_idx)).unwrap_or(&Data::Empty);
-                    Self::convert_data_to_field(data, field_type).unwrap_or(None)
+                    Self::convert_data_to_field(data, field_type)
                 })
                 .collect();
             self.current += 1;
@@ -262,6 +262,11 @@ mod tests {
     #[test]
     fn read_xlsx() -> Result<()> {
         readertests::read_table::<XlsxReader>("xlsx")
+    }
+
+    #[test]
+    fn read_xlsx_override_schema() -> Result<()> {
+        readertests::read_table_override_schema::<XlsxReader>("xlsx")
     }
 
     #[test]

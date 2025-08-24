@@ -1,5 +1,6 @@
 use crate::Result;
 use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, Field, FieldInfo, FieldType, HeaderRow, Schema};
+use chrono::NaiveDateTime;
 use path_macro::path;
 
 pub fn read_table_empty_sheet<R: DataFrameReader>(ext: &str) -> Result<()> {
@@ -46,7 +47,7 @@ pub fn read_table<R: DataFrameReader>(ext: &str) -> Result<()> {
     };
 
     let mut reader = R::from_file(input_file)?;
-    let schema = options.schema_override.clone().unwrap_or_else(|| reader.schema(&options).unwrap());
+    let schema = reader.schema(&options)?;
 
     // Only the csv reader can detect boolean types
     let has_bool_type = ext == "csv";
@@ -74,11 +75,46 @@ pub fn read_table<R: DataFrameReader>(ext: &str) -> Result<()> {
         assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
         assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
         assert_eq!(row.field(2)?, Some(Field::Integer(42)));
+        assert_eq!(
+            row.field(3)?,
+            Some(Field::DateTime(
+                NaiveDateTime::parse_from_str("2023-05-17 0:00:00", "%Y-%m-%d %H:%M:%S").unwrap()
+            ))
+        );
+
         if has_bool_type {
             assert_eq!(row.field(4)?, Some(Field::Boolean(true)));
         } else {
             assert_eq!(row.field(4)?, Some(Field::Integer(1)));
         }
+    }
+
+    Ok(())
+}
+
+pub fn read_table_override_schema<R: DataFrameReader>(ext: &str) -> Result<()> {
+    // Test reading schema from input file with specific worksheet and header row
+    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / format!("data_types.{ext}"));
+
+    let schema = Schema {
+        fields: vec![
+            FieldInfo::new("String Column".into(), FieldType::Integer), // Read the strings as integer (will fail for non-integer strings)
+            FieldInfo::new("Double Column".into(), FieldType::String),  // Read the doubles as string
+        ],
+    };
+
+    let options = DataFrameOptions {
+        layer: None,
+        header_row: HeaderRow::Row(0),
+        schema_override: Some(schema.clone()),
+    };
+
+    let mut reader = R::from_file(input_file)?;
+
+    let mut rows_iter = reader.iter_rows(&options)?;
+    if let Some(row) = rows_iter.next() {
+        assert!(row.field(0).is_err());
+        assert_eq!(row.field(1)?, Some(Field::String("12.34".into())));
     }
 
     Ok(())

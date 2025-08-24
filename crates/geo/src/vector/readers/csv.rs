@@ -147,21 +147,21 @@ impl Iterator for CsvRowIterator {
         let mut record = StringRecord::new();
         match self.reader.read_record(&mut record) {
             Ok(true) => {
-                let fields: Vec<Option<Field>> = self
+                let fields: Vec<Result<Option<Field>>> = self
                     .column_indices
                     .iter()
                     .zip(self.field_types.iter())
                     .map(|(&col_idx, &field_type)| {
                         let value = record.get(col_idx).unwrap_or("");
-                        Field::from_str(value, field_type).unwrap_or(None)
+                        Field::from_str(value, field_type)
                     })
                     .collect();
 
                 Some(DataFrameRow { fields })
             }
             Ok(false) => None, // End of file
-            Err(_) => {
-                // Error reading record - could log error in the future
+            Err(e) => {
+                log::error!("Error reading CSV record: {e}");
                 None
             }
         }
@@ -259,6 +259,11 @@ mod tests {
     #[test]
     fn read_csv() -> Result<()> {
         readertests::read_table::<CsvReader>("csv")
+    }
+
+    #[test]
+    fn read_csv_override_schema() -> Result<()> {
+        readertests::read_table_override_schema::<CsvReader>("csv")
     }
 
     #[test]

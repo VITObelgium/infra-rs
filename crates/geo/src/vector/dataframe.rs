@@ -162,13 +162,16 @@ pub struct DataFrameOptions {
 }
 
 pub struct DataFrameRow {
-    pub fields: Vec<Option<Field>>,
+    pub fields: Vec<Result<Option<Field>>>,
 }
 
 impl DataFrameRow {
     pub fn field(&self, index: usize) -> Result<Option<Field>> {
         match self.fields.get(index) {
-            Some(field) => Ok(field.clone()),
+            Some(field) => match field {
+                Ok(field_opt) => Ok(field_opt.clone()),
+                Err(e) => Err(Error::Runtime(e.to_string())),
+            },
             None => Err(Error::InvalidArgument("Index out of bounds".to_string())),
         }
     }

@@ -104,8 +104,7 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
     let struct_attrs: Vec<_> = fields
         .named
         .iter()
-        .enumerate()
-        .map(|(i, item)| {
+        .map(|item| {
             let attr_name = check_col_attr(item);
             let name = item.ident.as_ref().unwrap();
             let name_str = attr_name.unwrap_or(name.to_string());
@@ -114,9 +113,9 @@ fn field_initializers(ast: &syn::DeriveInput) -> Result<Vec<proc_macro2::TokenSt
             if needs_to_be_skipped(item) {
                 quote! { #name: Default::default() }
             } else if let Some(inner_type) = is_option_type(tp) {
-                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#inner_type>(row.fields[#i].clone())? }
+                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#inner_type>(row_iter.next().unwrap()?)? }
             } else {
-                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#tp>(row.fields[#i].clone())?.ok_or_else(|| {
+                quote! { #name: ::geo::vector::datarow::__private::read_feature_val::<#tp>(row_iter.next().unwrap()?)?.ok_or_else(|| {
                     inf::Error::InvalidArgument(format!("Invalid field value for {}", #name_str))
                 })? }
             }
@@ -139,9 +138,12 @@ fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
             }
 
             fn from_dataframe_row(row: ::geo::vector::dataframe::DataFrameRow) -> ::geo::Result<Self> {
-                Ok(#name {
+                let mut row_iter = row.fields.into_iter();
+                let data_row = #name {
                     #(#field_initializers),*
-                })
+                };
+                assert!(row_iter.next().is_none(), "Row has more fields than struct");
+                Ok(data_row)
             }
         }
     };
