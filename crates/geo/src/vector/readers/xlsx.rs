@@ -125,17 +125,10 @@ impl XlsxRowIterator {
 
     fn convert_data_to_field(data: &Data, expected_type: FieldType) -> Result<Option<Field>> {
         match data {
-            Data::String(s) => Ok(Some(Field::String(s.clone()))),
-            Data::Int(i) => Ok(Some(Field::Integer(*i))),
-            Data::Float(f) => {
-                // Convert float to integer if schema expects integer and value is whole number
-                if expected_type == FieldType::Integer {
-                    Ok(Some(Field::Integer(*f as i64)))
-                } else {
-                    Ok(Some(Field::Float(*f)))
-                }
-            }
-            Data::Bool(b) => Ok(Some(Field::Boolean(*b))),
+            Data::String(s) => Field::from_str(s, expected_type),
+            Data::Int(i) => Field::from_integer(*i, expected_type),
+            Data::Float(f) => Field::from_float(*f, expected_type),
+            Data::Bool(b) => Field::from_bool(*b, expected_type),
             Data::Empty => Ok(None),
             Data::Error(e) => Err(Error::Runtime(format!("Cell contains error {e}"))),
             Data::DateTime(dt) => {

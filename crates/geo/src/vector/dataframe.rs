@@ -1,8 +1,13 @@
 use std::path::Path;
 
+use num::NumCast;
+
 use crate::{
     Error, Result,
-    vector::{self},
+    vector::{
+        self,
+        fieldtype::{self, parse_bool_str, parse_date_str},
+    },
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
@@ -34,6 +39,74 @@ pub enum Field {
     Float(f64),
     Boolean(bool),
     DateTime(chrono::NaiveDateTime),
+}
+
+impl Field {
+    pub fn from_str(val: &str, requested_type: FieldType) -> Result<Option<Field>> {
+        let val = val.trim();
+        if val.is_empty() {
+            return Ok(None);
+        }
+
+        match requested_type {
+            FieldType::String => Ok(Some(Field::String(val.to_string()))),
+            FieldType::Integer => Ok(Some(Field::Integer(val.parse()?))),
+            FieldType::Float => Ok(Some(Field::Float(val.parse()?))),
+            FieldType::Boolean => Ok(Some(Field::Boolean(
+                parse_bool_str(val).ok_or_else(|| Error::Runtime(format!("Not a valid boolean value: '{}'", val)))?,
+            ))),
+            FieldType::DateTime => Ok(Some(Field::DateTime(
+                parse_date_str(val).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
+            ))),
+        }
+    }
+
+    pub fn from_string(val: String, requested_type: FieldType) -> Result<Option<Field>> {
+        match requested_type {
+            FieldType::String => Ok(Some(Field::String(val))),
+            _ => Field::from_str(&val, requested_type),
+        }
+    }
+
+    pub fn from_integer(val: i64, requested_type: FieldType) -> Result<Option<Field>> {
+        match requested_type {
+            FieldType::String => Ok(Some(Field::String(val.to_string()))),
+            FieldType::Integer => Ok(Some(Field::Integer(val))),
+            FieldType::Float => Ok(Some(Field::Float(
+                NumCast::from(val).ok_or_else(|| Error::Runtime(format!("Not a valid float value: '{}'", val)))?,
+            ))),
+            FieldType::Boolean => Ok(Some(Field::Boolean(val != 0))),
+            FieldType::DateTime => Ok(Some(Field::DateTime(
+                fieldtype::date_from_integer(val).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
+            ))),
+        }
+    }
+
+    pub fn from_float(val: f64, requested_type: FieldType) -> Result<Option<Field>> {
+        match requested_type {
+            FieldType::String => Ok(Some(Field::String(val.to_string()))),
+            FieldType::Integer => Ok(Some(Field::Integer(
+                NumCast::from(val).ok_or_else(|| Error::Runtime(format!("Not a valid integer value: '{}'", val)))?,
+            ))),
+            FieldType::Float => Ok(Some(Field::Float(val))),
+            FieldType::Boolean => Ok(Some(Field::Boolean(val != 0.0))),
+            FieldType::DateTime => Ok(Some(Field::DateTime(
+                fieldtype::date_from_integer(val as i64).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
+            ))),
+        }
+    }
+
+    pub fn from_bool(val: bool, requested_type: FieldType) -> Result<Option<Field>> {
+        match requested_type {
+            FieldType::String => Ok(Some(Field::String(val.to_string()))),
+            FieldType::Integer => Ok(Some(Field::Integer(if val { 1 } else { 0 }))),
+            FieldType::Float => Ok(Some(Field::Float(if val { 1.0 } else { 0.0 }))),
+            FieldType::Boolean => Ok(Some(Field::Boolean(val))),
+            FieldType::DateTime => Ok(Some(Field::DateTime(
+                fieldtype::date_from_integer(val as i64).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
+            ))),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -220,8 +293,7 @@ mod tests {
 
         let options = DataFrameOptions::default();
         let df = polars::read_dataframe(&input_file, &options)?;
-        assert_eq!(df.shape(), (5, 4));
-        //dbg!(df);
+        assert_eq!(df.shape(), (5, 5));
 
         Ok(())
     }
@@ -335,6 +407,53 @@ mod tests {
                 &::polars::prelude::DataType::Float64
             ))
         );
+
+        Ok(())
+    }
+
+    #[test]
+    fn test_boolean_parsing() -> Result<()> {
+        // Test that CSV reader uses the same boolean parsing as other readers
+        // This ensures consistent behavior across all readers
+
+        // Test various boolean representations that parse_bool_str should handle
+        let test_cases = vec![
+            ("true", true),
+            ("TRUE", true),
+            ("True", true),
+            ("yes", true),
+            ("YES", true),
+            ("ja", true),
+            ("oui", true),
+            ("1", true),
+            ("false", false),
+            ("FALSE", false),
+            ("False", false),
+            ("no", false),
+            ("NO", false),
+            ("nee", false),
+            ("non", false),
+            ("0", false),
+        ];
+
+        for (input, expected) in test_cases {
+            let result = Field::from_str(input, FieldType::Boolean)?;
+            match result {
+                Some(Field::Boolean(value)) => assert_eq!(value, expected, "Failed for input: '{}'", input),
+                _ => panic!("Expected boolean value for input: '{}'", input),
+            }
+        }
+
+        // Test invalid boolean values
+        let invalid_cases = vec!["maybe", "2", "invalid"];
+        for input in invalid_cases {
+            let result = Field::from_str(input, FieldType::Boolean);
+            assert!(result.is_err(), "Expected error for input: '{}'", input);
+        }
+
+        // Test empty string returns None (missing value)
+        let result = Field::from_str("", FieldType::Boolean)?;
+        assert_eq!(result, None, "Empty string should return None");
 
         Ok(())
     }

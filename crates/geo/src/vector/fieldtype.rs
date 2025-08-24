@@ -1,6 +1,7 @@
 use std::ops::RangeInclusive;
 
 use crate::{Error, Result, vector::dataframe::Field};
+use chrono::DateTime;
 use num::NumCast;
 
 fn parse_value_range(year_range: &str) -> Result<RangeInclusive<i32>> {
@@ -17,12 +18,49 @@ fn parse_value_range(year_range: &str) -> Result<RangeInclusive<i32>> {
     }
 }
 
-fn parse_bool_str(val: &str) -> Option<bool> {
+pub(crate) fn parse_bool_str(val: &str) -> Option<bool> {
     match val.to_lowercase().trim() {
         "true" | "yes" | "ja" | "oui" | "1" => Some(true),
         "false" | "no" | "nee" | "non" | "0" => Some(false),
         _ => None,
     }
+}
+
+pub(crate) fn parse_date_str(val: &str) -> Option<chrono::NaiveDateTime> {
+    // Strip quotes if present
+    let value = val.trim_matches('"').trim();
+
+    // Try various datetime formats
+    const DATETIME_FORMATS: [&str; 8] = [
+        "%Y-%m-%d %H:%M:%S",
+        "%Y-%m-%d",
+        "%m/%d/%Y",
+        "%d/%m/%Y",
+        "%B %d, %Y",
+        "%A, %B %d, %Y",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%dT%H:%M:%SZ",
+    ];
+    for format in &DATETIME_FORMATS {
+        if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(value, format) {
+            return Some(dt);
+        }
+    }
+
+    // Try parsing as date only and convert to datetime
+    const DATE_FORMATS: [&str; 5] = ["%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y", "%B %d, %Y", "%A, %B %d, %Y"];
+    for format in &DATE_FORMATS {
+        if let Ok(date) = chrono::NaiveDate::parse_from_str(value, format) {
+            return Some(date.and_hms_opt(0, 0, 0).unwrap());
+        }
+    }
+
+    None
+}
+
+pub(crate) fn date_from_integer(val: i64) -> Option<chrono::NaiveDateTime> {
+    let dt = DateTime::from_timestamp_millis(val);
+    dt.map(|d| d.naive_local())
 }
 
 pub trait VectorFieldType: Sized {

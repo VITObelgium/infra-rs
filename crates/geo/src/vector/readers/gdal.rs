@@ -58,34 +58,22 @@ fn map_ogr_field_type_to_field_type(ogr_type: OGRFieldType::Type) -> FieldType {
     }
 }
 
-fn convert_field_value_to_field(field_value: FieldValue) -> Field {
+fn convert_field_value_to_field(field_value: FieldValue, schema_type: FieldType) -> Result<Option<Field>> {
     match field_value {
-        FieldValue::StringValue(val) => Field::String(val),
-        FieldValue::IntegerValue(val) => Field::Integer(val as i64),
-        FieldValue::Integer64Value(val) => Field::Integer(val),
-        FieldValue::RealValue(val) => Field::Float(val),
-        FieldValue::DateTimeValue(val) => Field::DateTime(val.naive_local()),
-        FieldValue::DateValue(val) => Field::DateTime(val.and_hms_opt(0, 0, 0).unwrap_or_default()),
-        FieldValue::IntegerListValue(vals) => {
-            // Convert list to string representation
-            let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
-            Field::String(list_str)
+        FieldValue::StringValue(val) => Field::from_string(val, schema_type),
+        FieldValue::IntegerValue(val) => Field::from_integer(val as i64, schema_type),
+        FieldValue::Integer64Value(val) => Field::from_integer(val, schema_type),
+        FieldValue::RealValue(val) => Field::from_float(val, schema_type),
+        FieldValue::DateTimeValue(val) => Ok(Some(Field::DateTime(val.naive_local()))),
+        FieldValue::DateValue(val) => {
+            Ok(Some(Field::DateTime(val.and_hms_opt(0, 0, 0).ok_or_else(|| {
+                Error::Runtime(format!("Failed to create datetime from {:?}", val))
+            })?)))
         }
-        FieldValue::Integer64ListValue(vals) => {
-            // Convert list to string representation
-            let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
-            Field::String(list_str)
-        }
-        FieldValue::StringListValue(vals) => {
-            // Convert list to string representation
-            let list_str = vals.join(",");
-            Field::String(list_str)
-        }
-        FieldValue::RealListValue(vals) => {
-            // Convert list to string representation
-            let list_str = vals.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",");
-            Field::String(list_str)
-        }
+        FieldValue::IntegerListValue(_)
+        | FieldValue::Integer64ListValue(_)
+        | FieldValue::StringListValue(_)
+        | FieldValue::RealListValue(_) => Err(Error::Runtime("List values are not supported".into())),
     }
 }
 
@@ -114,7 +102,7 @@ fn read_schema_from_layer(layer: &mut OwnedLayer, options: &DataFrameOptions) ->
 
 pub struct GdalRowIterator {
     schema: Schema,
-    field_indices: Vec<usize>,
+    field_type_indices: Vec<(FieldType, usize)>,
     feature_iter: Option<gdal::vector::OwnedFeatureIterator>,
 }
 
@@ -132,16 +120,18 @@ impl GdalRowIterator {
         };
 
         // Get the field indices for the requested schema columns
-        let field_indices = schema
+        let field_type_indices = schema
             .fields
             .iter()
             .map(|schema_field| {
-                layer
-                    .defn()
-                    .field_index(schema_field.name())
-                    .map_err(|_| Error::InvalidArgument(format!("Field '{}' not found in layer '{}'", schema_field.name(), layer.name())))
+                Ok((
+                    schema_field.field_type(),
+                    layer.defn().field_index(schema_field.name()).map_err(|_| {
+                        Error::InvalidArgument(format!("Field '{}' not found in layer '{}'", schema_field.name(), layer.name()))
+                    })?,
+                ))
             })
-            .collect::<Result<Vec<usize>>>()?;
+            .collect::<Result<Vec<(FieldType, usize)>>>()?;
 
         // Check if we should skip all data due to header detection failure
         let feature_iter = if header_detection_failed && layer.feature_count() == 1 {
@@ -152,7 +142,7 @@ impl GdalRowIterator {
 
         Ok(Self {
             schema: schema.clone(),
-            field_indices,
+            field_type_indices,
             feature_iter,
         })
     }
@@ -168,9 +158,15 @@ impl Iterator for GdalRowIterator {
             .filter(|f| !f.fields().all(|(_name, val)| val.is_none())) // Skip empty features
             .map(|feature| {
                 let mut fields = Vec::with_capacity(self.schema.fields.len());
-                for field in &self.field_indices {
-                    if feature.field_is_valid(*field) {
-                        fields.push(feature.field(*field).ok().flatten().map(convert_field_value_to_field));
+                for (field_type, field_index) in &self.field_type_indices {
+                    if feature.field_is_valid(*field_index) {
+                        fields.push(
+                            feature
+                                .field(*field_index)
+                                .ok()
+                                .flatten()
+                                .and_then(|field| convert_field_value_to_field(field, *field_type).unwrap_or_default()),
+                        );
                     } else {
                         fields.push(None);
                     }

@@ -36,7 +36,7 @@ pub fn read_table_empty_sheet<R: DataFrameReader>(ext: &str) -> Result<()> {
 }
 
 pub fn read_table<R: DataFrameReader>(ext: &str) -> Result<()> {
-    // Test reading schema from Excel file with specific worksheet and header row
+    // Test reading schema from input file with specific worksheet and header row
     let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / format!("data_types.{ext}"));
 
     let options = DataFrameOptions {
@@ -46,14 +46,21 @@ pub fn read_table<R: DataFrameReader>(ext: &str) -> Result<()> {
     };
 
     let mut reader = R::from_file(input_file)?;
-    let schema = reader.schema(&options)?;
+    let schema = options.schema_override.clone().unwrap_or_else(|| reader.schema(&options).unwrap());
 
-    // Expected column names from the Excel file
+    // Only the csv reader can detect boolean types
+    let has_bool_type = ext == "csv";
+
+    // Expected column names from the input file
     let expected_columns = [
         FieldInfo::new("String Column".into(), FieldType::String),
         FieldInfo::new("Double Column".into(), FieldType::Float),
         FieldInfo::new("Integer Column".into(), FieldType::Integer),
         FieldInfo::new("Date Column".into(), FieldType::DateTime),
+        FieldInfo::new(
+            "Bool Column".into(),
+            if has_bool_type { FieldType::Boolean } else { FieldType::Integer },
+        ),
     ];
 
     assert_eq!(schema.len(), expected_columns.len());
@@ -66,6 +73,12 @@ pub fn read_table<R: DataFrameReader>(ext: &str) -> Result<()> {
     if let Some(row) = rows_iter.next() {
         assert_eq!(row.field(0)?, Some(Field::String("Alice".into())));
         assert_eq!(row.field(1)?, Some(Field::Float(12.34)));
+        assert_eq!(row.field(2)?, Some(Field::Integer(42)));
+        if has_bool_type {
+            assert_eq!(row.field(4)?, Some(Field::Boolean(true)));
+        } else {
+            assert_eq!(row.field(4)?, Some(Field::Integer(1)));
+        }
     }
 
     Ok(())
