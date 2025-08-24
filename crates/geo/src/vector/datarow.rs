@@ -32,7 +32,7 @@ pub mod __private {
 
                 T::read_from_field(field)
             }
-            None => Ok(None),
+            None => Ok(T::empty_field_value()),
         }
     }
 }

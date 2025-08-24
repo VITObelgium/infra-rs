@@ -66,11 +66,16 @@ pub(crate) fn date_from_integer(val: i64) -> Option<chrono::NaiveDateTime> {
 pub trait VectorFieldType: Sized {
     const EMPTY_FIELD_IS_VALID: bool;
 
+    fn empty_field_value() -> Option<Self>;
     fn read_from_field(field: Field) -> Result<Option<Self>>;
 }
 
 impl VectorFieldType for f64 {
     const EMPTY_FIELD_IS_VALID: bool = false;
+
+    fn empty_field_value() -> Option<Self> {
+        None
+    }
 
     fn read_from_field(field: Field) -> Result<Option<Self>> {
         match field {
@@ -85,6 +90,10 @@ impl VectorFieldType for f64 {
 impl VectorFieldType for i32 {
     const EMPTY_FIELD_IS_VALID: bool = false;
 
+    fn empty_field_value() -> Option<Self> {
+        None
+    }
+
     fn read_from_field(field: Field) -> Result<Option<Self>> {
         match field {
             Field::Float(val) => Ok(NumCast::from(val)),
@@ -97,6 +106,10 @@ impl VectorFieldType for i32 {
 
 impl VectorFieldType for i64 {
     const EMPTY_FIELD_IS_VALID: bool = false;
+
+    fn empty_field_value() -> Option<Self> {
+        None
+    }
 
     fn read_from_field(field: Field) -> Result<Option<Self>> {
         match field {
@@ -111,6 +124,10 @@ impl VectorFieldType for i64 {
 impl VectorFieldType for bool {
     const EMPTY_FIELD_IS_VALID: bool = false;
 
+    fn empty_field_value() -> Option<Self> {
+        None
+    }
+
     fn read_from_field(field: Field) -> Result<Option<Self>> {
         match field {
             Field::Integer(val) => Ok(Some(val != 0)),
@@ -122,6 +139,10 @@ impl VectorFieldType for bool {
 
 impl VectorFieldType for String {
     const EMPTY_FIELD_IS_VALID: bool = true;
+
+    fn empty_field_value() -> Option<Self> {
+        Some(String::default())
+    }
 
     fn read_from_field(field: Field) -> Result<Option<Self>> {
         match field {
@@ -136,6 +157,10 @@ impl VectorFieldType for String {
 
 impl VectorFieldType for RangeInclusive<i32> {
     const EMPTY_FIELD_IS_VALID: bool = false;
+
+    fn empty_field_value() -> Option<Self> {
+        None
+    }
 
     fn read_from_field(field: Field) -> Result<Option<Self>> {
         match field {

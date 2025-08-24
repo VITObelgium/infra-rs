@@ -1,3 +1,4 @@
+/// Module for reading tabular data from various data sources into a `DataFrame`
 use std::path::Path;
 
 use num::NumCast;
@@ -256,8 +257,8 @@ pub mod polars {
 
         let mut columns = vec![Vec::new(); schema.len()];
         for row in reader.iter_rows(options)? {
-            for (index, column) in &mut columns.iter_mut().enumerate() {
-                if let Some(field) = row.field(index)? {
+            for (column, field) in &mut columns.iter_mut().zip(row.fields.into_iter()) {
+                if let Some(field) = field? {
                     column.push(match field {
                         Field::String(v) => AnyValue::StringOwned(v.into()),
                         Field::Integer(v) => AnyValue::Int64(v),
