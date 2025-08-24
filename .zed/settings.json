@@ -22,6 +22,7 @@
             "proj4rs",
             "vector",
             "vector-io-xlsx",
+            "vector-io-csv",
             "rayon",
             "polars"
           ]
@@ -32,6 +33,7 @@
             "proj4rs",
             "vector",
             "vector-io-xlsx",
+            "vector-io-csv",
             "rayon",
             "polars"
           ],

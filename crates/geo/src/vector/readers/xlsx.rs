@@ -263,26 +263,26 @@ mod tests {
 
     #[test]
     fn read_xlsx_empty_sheet() -> Result<()> {
-        readertests::read_xlsx_empty_sheet::<XlsxReader>()
+        readertests::read_table_empty_sheet::<XlsxReader>("xlsx")
     }
 
     #[test]
     fn read_xlsx() -> Result<()> {
-        readertests::read_xlsx::<XlsxReader>()
+        readertests::read_table::<XlsxReader>("xlsx")
     }
 
     #[test]
     fn read_xlsx_sub_schema() -> Result<()> {
-        readertests::read_xlsx_sub_schema::<XlsxReader>()
+        readertests::read_table_sub_schema::<XlsxReader>("xlsx")
     }
 
     #[test]
     fn read_xlsx_header_offset() -> Result<()> {
-        readertests::read_xlsx_header_offset::<XlsxReader>()
+        readertests::read_table_header_offset::<XlsxReader>("xlsx")
     }
 
     #[test]
     fn read_xlsx_no_header() -> Result<()> {
-        readertests::read_xlsx_no_header::<XlsxReader>()
+        readertests::read_table_no_header::<XlsxReader>("xlsx")
     }
 }

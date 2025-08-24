@@ -113,30 +113,28 @@ pub trait DataFrameReader {
     fn iter_rows(&mut self, options: &DataFrameOptions) -> Result<Box<dyn Iterator<Item = DataFrameRow>>>;
 }
 
-// impl IntoIterator for Box<dyn DataFrameReader> {
-//     type Item = DataFrameRow;
-//     type IntoIter = Box<dyn Iterator<Item = Self::Item>>;
-
-//     fn into_iter(mut self) -> Self::IntoIter {
-//         self.iter_rows(&DataFrameOptions::default())
-//             .unwrap_or_else(|_| Box::new(std::iter::empty()))
-//     }
-// }
-
 /// Creates a `DataFrameReader` for the specified path based on the file extension.
 pub fn create_dataframe_reader(path: &Path) -> Result<Box<dyn DataFrameReader>> {
     match vector::VectorFormat::guess_from_path(path) {
         #[cfg(feature = "vector-io-xlsx")]
         vector::VectorFormat::Xlsx => Ok(Box::new(vector::readers::XlsxReader::from_file(path)?)),
 
+        #[cfg(feature = "vector-io-csv")]
+        vector::VectorFormat::Csv => Ok(Box::new(vector::readers::CsvReader::from_file(path)?)),
+
         #[cfg(feature = "gdal")]
         vector::VectorFormat::ShapeFile
         | vector::VectorFormat::GeoJson
         | vector::VectorFormat::GeoPackage
-        | vector::VectorFormat::Csv
         | vector::VectorFormat::Tab
         | vector::VectorFormat::Parquet
         | vector::VectorFormat::Arrow => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
+
+        #[cfg(all(feature = "gdal", not(feature = "vector-io-xlsx")))]
+        vector::VectorFormat::Xlsx => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
+
+        #[cfg(all(feature = "gdal", not(feature = "vector-io-csv")))]
+        vector::VectorFormat::Csv => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
         _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
     }
 }
@@ -156,14 +154,19 @@ pub mod polars {
             #[cfg(feature = "vector-io-xlsx")]
             vector::VectorFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options),
 
+            #[cfg(feature = "vector-io-csv")]
+            vector::VectorFormat::Csv => read_dataframe_with::<vector::readers::CsvReader>(path, options),
+
             #[cfg(feature = "gdal")]
             vector::VectorFormat::ShapeFile
             | vector::VectorFormat::GeoJson
             | vector::VectorFormat::GeoPackage
-            | vector::VectorFormat::Csv
             | vector::VectorFormat::Tab
             | vector::VectorFormat::Parquet
             | vector::VectorFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, options),
+
+            #[cfg(all(feature = "gdal", not(feature = "vector-io-csv")))]
+            vector::VectorFormat::Csv => read_dataframe_with::<vector::readers::GdalReader>(path, options),
             _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
         }
     }

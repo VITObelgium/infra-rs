@@ -1748,6 +1748,7 @@ dependencies = [
  "chrono",
  "criterion",
  "crs-definitions",
+ "csv",
  "ctor",
  "env_logger",
  "gdal",

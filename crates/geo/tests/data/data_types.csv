@@ -1,0 +1,6 @@
+﻿String Column,Double Column,Integer Column,Date Column
+Alice,12.34,42,2023-05-17 0:00:00
+Bob,,100,2022-12-25 0:00:00
+,45.67,7,2024-01-01 0:00:00
+Charlie,89.01,,2021-07-04 0:00:00
+Dana,23.45,56,

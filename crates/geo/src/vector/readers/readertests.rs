@@ -2,9 +2,9 @@ use crate::Result;
 use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, Field, FieldInfo, FieldType, HeaderRow, Schema};
 use path_macro::path;
 
-pub fn read_xlsx_empty_sheet<R: DataFrameReader>() -> Result<()> {
+pub fn read_table_empty_sheet<R: DataFrameReader>(ext: &str) -> Result<()> {
     // Test reading schema from Excel file with specific worksheet and header row
-    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
+    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / format!("empty_sheet.{ext}"));
 
     let options = DataFrameOptions {
         layer: Some("VERBR_EF_ID".to_string()),
@@ -35,9 +35,9 @@ pub fn read_xlsx_empty_sheet<R: DataFrameReader>() -> Result<()> {
     Ok(())
 }
 
-pub fn read_xlsx<R: DataFrameReader>() -> Result<()> {
+pub fn read_table<R: DataFrameReader>(ext: &str) -> Result<()> {
     // Test reading schema from Excel file with specific worksheet and header row
-    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types.xlsx");
+    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / format!("data_types.{ext}"));
 
     let options = DataFrameOptions {
         layer: None,
@@ -71,9 +71,9 @@ pub fn read_xlsx<R: DataFrameReader>() -> Result<()> {
     Ok(())
 }
 
-pub fn read_xlsx_sub_schema<R: DataFrameReader>() -> Result<()> {
+pub fn read_table_sub_schema<R: DataFrameReader>(ext: &str) -> Result<()> {
     // Test reading schema from Excel file with specific worksheet and header row
-    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types.xlsx");
+    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / format!("data_types.{ext}"));
 
     let mut reader = R::from_file(input_file)?;
     let options = DataFrameOptions {
@@ -96,9 +96,9 @@ pub fn read_xlsx_sub_schema<R: DataFrameReader>() -> Result<()> {
 }
 
 #[allow(dead_code)] // Depening on the feature flags, this function may be unused
-pub fn read_xlsx_header_offset<R: DataFrameReader>() -> Result<()> {
+pub fn read_table_header_offset<R: DataFrameReader>(ext: &str) -> Result<()> {
     // Test reading schema from Excel file with specific worksheet and header row
-    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_header_offset.xlsx");
+    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / format!("data_types_header_offset.{ext}"));
 
     let mut options = DataFrameOptions {
         layer: None,
@@ -139,8 +139,8 @@ pub fn read_xlsx_header_offset<R: DataFrameReader>() -> Result<()> {
     Ok(())
 }
 
-pub fn read_xlsx_no_header<R: DataFrameReader>() -> Result<()> {
-    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "data_types_no_header.xlsx");
+pub fn read_table_no_header<R: DataFrameReader>(ext: &str) -> Result<()> {
+    let input_file = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / format!("data_types_no_header.{ext}"));
 
     let mut options = DataFrameOptions {
         layer: None,

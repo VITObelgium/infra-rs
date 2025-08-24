@@ -221,21 +221,21 @@ mod tests {
 
     #[test]
     fn read_xlsx_empty_sheet() -> Result<()> {
-        readertests::read_xlsx_empty_sheet::<GdalReader>()
+        readertests::read_table_empty_sheet::<GdalReader>("xlsx")
     }
 
     #[test]
     fn read_xlsx() -> Result<()> {
-        readertests::read_xlsx::<GdalReader>()
+        readertests::read_table::<GdalReader>("xlsx")
     }
 
     #[test]
     fn read_xlsx_sub_schema() -> Result<()> {
-        readertests::read_xlsx_sub_schema::<GdalReader>()
+        readertests::read_table_sub_schema::<GdalReader>("xlsx")
     }
 
     #[test]
     fn read_xlsx_no_header() -> Result<()> {
-        readertests::read_xlsx_no_header::<GdalReader>()
+        readertests::read_table_no_header::<GdalReader>("xlsx")
     }
 }
