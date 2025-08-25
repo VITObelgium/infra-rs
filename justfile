@@ -73,7 +73,7 @@ serve_tiles dir:
 serve_tiles_tui dir:
     cargo run -p tileserver --features=tui --release -- --tui --gis-dir {{dir}}
 
-doc RUSTDOCFLAGS="-D warnings":
+doc RUSTDOCFLAGS="-D warnings --cfg docsrs":
     cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --no-deps --all-features
 
 docdeps:

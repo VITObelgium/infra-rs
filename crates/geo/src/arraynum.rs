@@ -9,6 +9,7 @@ const LANES: usize = inf::simd::LANES;
 pub trait GdalNum {}
 
 #[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub trait GdalNum: gdal::raster::GdalType {}
 
 pub trait ArrayNumScalar:
@@ -73,6 +74,7 @@ pub trait ArrayNumScalar:
 }
 
 #[cfg(feature = "simd")]
+#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub trait ArrayNumSimd: std::simd::SimdElement + std::simd::SimdCast {
     type Simd: NodataSimd;
 }
@@ -89,6 +91,7 @@ where
 pub trait ArrayNum: ArrayNumScalar {}
 
 #[cfg(feature = "simd")]
+#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub trait ArrayNum: ArrayNumScalar + ArrayNumSimd {}
 
 macro_rules! add_nodata_impl {

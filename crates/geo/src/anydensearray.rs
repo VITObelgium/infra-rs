@@ -299,6 +299,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 
     #[cfg(feature = "gdal")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
     pub fn write(&mut self, path: &std::path::Path) -> Result<()> {
         use crate::raster::RasterIO;
 
@@ -355,6 +356,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
 }
 
 #[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     pub fn read(path: &std::path::Path) -> Result<Self> {
         let data_type = crate::raster::io::dataset::detect_data_type(path, 1)?;

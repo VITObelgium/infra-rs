@@ -5,6 +5,7 @@ mod denseraster;
 mod denserasterconversions;
 pub mod intersection;
 #[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub mod io;
 
 use std::path::Path;
@@ -15,6 +16,7 @@ use crate::GeoReference;
 use super::Result;
 
 #[cfg(all(feature = "python", feature = "arrow"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "python", feature = "arrow"))))]
 pub mod arrow {
     // pub(super) mod arrowraster;
     // #[cfg(feature = "gdal")]
@@ -31,9 +33,11 @@ pub mod arrow {
 pub use denseraster::DenseRaster;
 
 #[cfg(all(feature = "python", feature = "arrow"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "python", feature = "arrow"))))]
 mod python;
 
 #[cfg(all(feature = "python", feature = "arrow"))]
+#[cfg_attr(docsrs, doc(cfg(all(feature = "python", feature = "arrow"))))]
 pub use python::pyraster::PyRaster;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

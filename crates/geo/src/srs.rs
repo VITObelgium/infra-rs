@@ -11,16 +11,19 @@ mod proj;
 mod proj4rs;
 
 #[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub use gdal::SpatialReference as GdalSpatialReference;
 
 #[cfg(feature = "proj")]
+#[cfg_attr(docsrs, doc(cfg(feature = "proj")))]
 pub use proj::CoordinateTransformer as ProjCoordinateTransformer;
 
 #[cfg(feature = "proj4rs")]
-pub use {
-    proj4rs::CoordinateTransformer as Proj4rsCoordinateTransformer, proj4rs::CoordinateTransformer, proj4rs::SpatialReference,
-    proj4rs::SpatialReference as Proj4rsSpatialReference,
-};
+#[cfg_attr(docsrs, doc(cfg(feature = "proj4rs")))]
+pub use {proj4rs::CoordinateTransformer as Proj4rsCoordinateTransformer, proj4rs::SpatialReference as Proj4rsSpatialReference};
+
+#[cfg(feature = "proj4rs")]
+pub use {proj4rs::CoordinateTransformer, proj4rs::SpatialReference};
 
 #[cfg(all(feature = "proj", not(feature = "proj4rs")))]
 // proj4rs takes precedence over proj if both are enabled

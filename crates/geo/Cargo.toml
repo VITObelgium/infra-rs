@@ -3,6 +3,10 @@ name = "geo"
 version = "0.1.0"
 edition = "2024"
 
+[package.metadata.docs.rs]
+all-features = true
+rustdoc-args = ["--cfg", "docsrs"]
+
 # PROJECTION FEATURES:
 # - proj4rs: Pure Rust projection library (default, lightweight)
 # - proj: PROJ library binding (more comprehensive, requires system dependencies)

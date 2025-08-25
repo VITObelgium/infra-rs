@@ -37,6 +37,7 @@ impl<T: ArrayNum> RasterDiffResult<T> {
 const LANES: usize = inf::simd::LANES;
 
 #[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 /// Compare two raster files and return a list of cell mismatches
 /// The two rasters must have the same cell size and be aligned
 /// Only the intersection of the two rasters will be compared
@@ -62,6 +63,7 @@ pub fn raster_files_intersection_diff<T: ArrayNum + gdal::raster::GdalType>(
 }
 
 #[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 /// Compare two raster files and return a list of cell mismatches
 /// The two rasters must have the same extent, size, cell size and be aligned
 #[simd_macro::simd_bounds]

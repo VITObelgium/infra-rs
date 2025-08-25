@@ -1,4 +1,5 @@
 #![cfg_attr(feature = "simd", feature(portable_simd, vec_into_raw_parts, allocator_api))]
+#![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate approx;
 
@@ -7,6 +8,7 @@ pub type Result<T = ()> = std::result::Result<T, Error>;
 
 pub mod allocate;
 #[cfg(feature = "serde")]
+#[cfg_attr(docsrs, doc(cfg(feature = "serde")))]
 mod bigarray;
 pub mod cast;
 pub mod color;
@@ -20,6 +22,7 @@ pub mod legend;
 pub mod legendscaletype;
 pub mod progressinfo;
 #[cfg(feature = "simd")]
+#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub mod simd;
 
 #[doc(inline)]

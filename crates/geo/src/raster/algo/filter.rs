@@ -29,6 +29,7 @@ where
 }
 
 #[cfg(feature = "simd")]
+#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub mod simd {
     use simd_macro::simd_bounds;
 
