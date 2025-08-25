@@ -1,3 +1,5 @@
+//! GeoTIFF format reading, writing, and processing capabilities.
+
 mod decoder;
 mod gdalghostdata;
 pub mod io;

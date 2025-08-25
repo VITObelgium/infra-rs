@@ -1,3 +1,5 @@
+//! Array operations with nodata handling.
+
 pub trait AddInclusive<Rhs = Self> {
     /// The resulting type after applying the `+` operator.
     type Output;

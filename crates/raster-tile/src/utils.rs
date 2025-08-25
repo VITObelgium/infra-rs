@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 use futures::{StreamExt as _, stream::FuturesUnordered};
 use geo::{
-    Array as _, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, LatLonBounds, RasterSize, Rows, Tile, Window, crs,
+    Array as _, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, LatLonBounds, RasterSize, Rows, Tile, RasterWindow, crs,
     raster::DenseRaster, tileutils,
 };
 use inf::progressinfo::ProgressNotification;
@@ -68,7 +68,7 @@ impl<T: ArrayNum> RasterBuilder<T> {
 
         // Overwrite the corresponding cells in the raster with the tile data
         self.raster
-            .iter_window_mut(Window::new(cell, self.raster_tile_size))
+            .iter_window_mut(RasterWindow::new(cell, self.raster_tile_size))
             .zip(tile_data.iter_opt())
             .for_each(|(cell, value)| {
                 if let Some(value) = value {

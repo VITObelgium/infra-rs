@@ -1,3 +1,5 @@
+//! Coordinate reference system definitions and transformations.
+
 use core::fmt;
 use std::f64::consts::PI;
 

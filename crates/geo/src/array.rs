@@ -85,18 +85,18 @@ impl std::ops::Mul<Rows> for Columns {
 
 /// A struct representing a rectangular window in a raster.
 /// Used for operations on a subregion of the raster data.
-pub struct Window {
+pub struct RasterWindow {
     top_left: Cell,
     bottom_right: Cell,
 }
 
-impl Window {
+impl RasterWindow {
     pub fn new(top_left: Cell, size: RasterSize) -> Self {
         let bottom_right = Cell {
             row: top_left.row + size.rows.count() - 1,
             col: top_left.col + size.cols.count() - 1,
         };
-        Window { top_left, bottom_right }
+        RasterWindow { top_left, bottom_right }
     }
 
     pub fn top_left(&self) -> Cell {
@@ -264,10 +264,10 @@ pub trait Array:
     fn iter_mut(&mut self) -> std::slice::IterMut<'_, Self::Pixel>;
 
     /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::NODATA`
-    fn iter_window(&self, window: Window) -> impl Iterator<Item = Self::Pixel>;
+    fn iter_window(&self, window: RasterWindow) -> impl Iterator<Item = Self::Pixel>;
 
     /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::NODATA`
-    fn iter_window_mut(&mut self, window: Window) -> impl Iterator<Item = &mut Self::Pixel>;
+    fn iter_window_mut(&mut self, window: RasterWindow) -> impl Iterator<Item = &mut Self::Pixel>;
 
     /// Return the value at the given cell or None if the cell contains nodata
     /// Use this for cases where a single cell value is needed not in a loop to

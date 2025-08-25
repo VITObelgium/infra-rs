@@ -1,3 +1,5 @@
+//! Cloud Optimized GeoTIFF (COG) support and web tile utilities.
+
 #[cfg(feature = "gdal")]
 pub mod debug;
 

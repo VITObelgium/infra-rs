@@ -1,3 +1,5 @@
+/// Tools for reading rows from table based data sources into Rust structs
+/// that implement the [`DataRow`] trait
 use std::path::Path;
 
 use crate::{
@@ -13,11 +15,13 @@ pub trait DataRow {
 }
 
 #[doc(hidden)]
+#[cfg(feature = "derive")]
 pub mod __private {
     use super::*;
     use crate::vector::{dataframe::Field, fieldtype::VectorFieldType};
 
     // Helper function for the DataRow derive macro
+    #[allow(dead_code)]
     pub fn read_feature_val<T: VectorFieldType>(field: Option<Field>) -> Result<Option<T>> {
         match field {
             Some(field) => {
@@ -40,18 +44,18 @@ pub mod __private {
 /// Reads all rows from a table based data source located at `path` and returns them as a vector of `TRow` objects
 /// `TRow` must implement the [`DataRow`] trait
 pub fn read_dataframe_rows<TRow: DataRow, P: AsRef<Path>>(path: &P, opts: DataFrameOptions) -> Result<Vec<TRow>> {
-    let rows: Result<Vec<_>> = DataframeIterator::<TRow>::new_with_options(path, opts)?.collect();
+    let rows: Result<Vec<_>> = DataRowsIterator::<TRow>::new_with_options(path, opts)?.collect();
     rows.map_err(|e| Error::Runtime(format!("Failed to read data frame rows: {e}")))
 }
 
 /// Iterator over the rows of a vector dataset that returns a an object
 /// that implements the [`DataRow`] trait
-pub struct DataframeIterator<TRow: DataRow> {
+pub struct DataRowsIterator<TRow: DataRow> {
     iterator: Box<dyn Iterator<Item = DataFrameRow>>,
     phantom: std::marker::PhantomData<TRow>,
 }
 
-impl<TRow: DataRow> DataframeIterator<TRow> {
+impl<TRow: DataRow> DataRowsIterator<TRow> {
     pub fn new<P: AsRef<Path>>(path: &P, layer: Option<String>) -> Result<Self> {
         let options = DataFrameOptions {
             layer,
@@ -71,7 +75,7 @@ impl<TRow: DataRow> DataframeIterator<TRow> {
     }
 }
 
-impl<TRow: DataRow> Iterator for DataframeIterator<TRow> {
+impl<TRow: DataRow> Iterator for DataRowsIterator<TRow> {
     type Item = Result<TRow>;
 
     fn next(&mut self) -> Option<Self::Item> {

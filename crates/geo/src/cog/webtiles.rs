@@ -1,6 +1,6 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
-    GeoTransform, RasterMetadata, Result, Rows, Window, ZoomLevelStrategy,
+    GeoTransform, RasterMetadata, Result, Rows, RasterWindow, ZoomLevelStrategy,
     geotiff::{GeoTiffMetadata, HorizontalUnpredictable, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
@@ -518,12 +518,12 @@ impl WebTilesReader {
             }
 
             let tile_cutout = self.parse_tile_data_as::<T>(cog_chunck)?;
-            let dest_window = Window::new(
+            let dest_window = RasterWindow::new(
                 Cell::from_row_col(cutout.dst_row_offset, cutout.dst_col_offset),
                 RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
             );
 
-            let src_window = Window::new(
+            let src_window = RasterWindow::new(
                 Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset),
                 RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
             );

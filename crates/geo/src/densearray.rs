@@ -1,6 +1,6 @@
 use crate::{
     Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, Error, RasterSize, Result,
-    array::{ArrayInterop, Columns, Rows, Window},
+    array::{ArrayInterop, Columns, Rows, RasterWindow},
     densearrayiterators, densearrayutil,
     raster::{self},
     rastermetadata::RasterMetadata,
@@ -282,11 +282,11 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         self.data.iter_mut()
     }
 
-    fn iter_window(&self, window: Window) -> impl Iterator<Item = T> {
+    fn iter_window(&self, window: RasterWindow) -> impl Iterator<Item = T> {
         densearrayiterators::DenserRasterWindowIterator::new(self, window)
     }
 
-    fn iter_window_mut(&mut self, window: Window) -> impl Iterator<Item = &mut T> {
+    fn iter_window_mut(&mut self, window: RasterWindow) -> impl Iterator<Item = &mut T> {
         densearrayiterators::DenserRasterWindowIteratorMut::new(self, window)
     }
 

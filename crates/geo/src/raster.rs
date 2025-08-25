@@ -1,3 +1,5 @@
+//! Raster data structures, algorithms, and I/O operations.
+
 pub mod algo;
 mod denseraster;
 mod denserasterconversions;

@@ -1,3 +1,5 @@
+//! Rectangle geometry utilities for spatial operations.
+
 use std::fmt::Debug;
 
 pub type Point<T = f64> = geo_types::Point<T>;

@@ -1,3 +1,5 @@
+//! GDAL library integration and configuration utilities.
+
 use std::{
     ffi::CString,
     path::{Path, PathBuf},

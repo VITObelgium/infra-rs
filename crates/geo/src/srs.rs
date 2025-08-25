@@ -1,3 +1,5 @@
+//! Spatial reference system handling and coordinate transformations.
+
 use crate::Result;
 use crate::crs::Epsg;
 

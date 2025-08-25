@@ -17,9 +17,8 @@ mod tests {
     mod derive {
         use super::*;
         use geo::vector::{
-            self,
+            self, DataRowsIterator,
             dataframe::{DataFrameOptions, HeaderRow},
-            datarow::DataframeIterator,
         };
         use vector::DataRow;
 
@@ -63,7 +62,7 @@ mod tests {
         #[test]
         fn integration_row_data_derive() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
-            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
+            let mut iter = DataRowsIterator::<PollutantData>::new(&path, None).unwrap();
 
             {
                 let row = iter.next().unwrap().unwrap();
@@ -95,7 +94,7 @@ mod tests {
         #[test]
         fn integration_row_data_derive_missing() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
-            let mut iter = DataframeIterator::<PollutantData>::new(&path, None).unwrap();
+            let mut iter = DataRowsIterator::<PollutantData>::new(&path, None).unwrap();
             assert!(iter.nth(1).unwrap().is_err()); // The second line is incomplete (missing value)
             assert!(iter.next().unwrap().is_ok());
             assert!(iter.next().unwrap().is_ok());
@@ -105,7 +104,7 @@ mod tests {
         #[test]
         fn integration_row_data_derive_missing_optionals() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
-            let mut iter = DataframeIterator::<PollutantOptionalData>::new(&path, None).unwrap();
+            let mut iter = DataRowsIterator::<PollutantOptionalData>::new(&path, None).unwrap();
 
             {
                 let row = iter.next().unwrap().unwrap();
@@ -135,7 +134,7 @@ mod tests {
                 header_row: HeaderRow::Row(0),
                 ..Default::default()
             };
-            let iter = DataframeIterator::<EmptySheetData>::new_with_options(&path, opts).unwrap();
+            let iter = DataRowsIterator::<EmptySheetData>::new_with_options(&path, opts).unwrap();
             assert_eq!(iter.count(), 0);
         }
 

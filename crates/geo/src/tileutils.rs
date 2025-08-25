@@ -1,3 +1,5 @@
+//! Tile-based operations and utilities for web mapping.
+
 use crate::latlonbounds::LatLonBounds;
 use crate::tile::Tile;
 use crate::{Columns, Error, RasterSize, Result, Rows};

@@ -34,7 +34,7 @@ pub mod raster;
 mod rasteriotests;
 mod rastermetadata;
 mod rastersize;
-pub mod rect;
+mod rect;
 #[cfg(feature = "gdal")]
 mod runtimeconfiguration;
 pub mod srs;
@@ -56,9 +56,9 @@ pub use runtimeconfiguration::RuntimeConfiguration;
 
 #[doc(inline)]
 pub use {
-    anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayInterop, array::ArrayMetadata, array::Columns, array::Rows,
-    array::Window, arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell, cell::CellIterator,
-    coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference,
+    anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayInterop, array::ArrayMetadata, array::Columns,
+    array::RasterWindow, array::Rows, arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell,
+    cell::CellIterator, coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference,
     geotransform::GeoTransform, latlonbounds::LatLonBounds, nodata::Nodata, raster::RasterNodataCompatibility,
     rastermetadata::RasterMetadata, rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };

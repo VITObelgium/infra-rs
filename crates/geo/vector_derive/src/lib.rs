@@ -152,6 +152,28 @@ fn impl_data_row(ast: &syn::DeriveInput) -> Result<TokenStream> {
 }
 
 #[proc_macro_derive(DataRow, attributes(vector))]
+/// The `DataRow` trait is implemented using the `DataRow` derive macro
+/// This allows to read vector data in a more type-safe way directly into a struct
+/// # `DataframeIterator` iterator example using the `DataRow` derive macro
+/// ```
+/// # use geo::vector::io::DataframeIterator;
+/// # use geo::vector::DataRow;
+/// # use std::path::PathBuf;
+/// // Read a csv or xlsx file with the following header:
+/// // Pollutant,Sector,value
+/// // If the struct field names do not match the column names, use the column attribute
+/// #[derive(DataRow)]
+/// struct PollutantData {
+///     #[vector(column = "Pollutant")]
+///     pollutant: String,
+///     #[vector(column = "Sector")]
+///     sector: String,
+///     value: f64,
+///     #[vector(skip)]
+///     not_in_data: String,
+/// }
+/// let iter = DataframeIterator::<PollutantData>::new(&PathBuf::from("pol.csv"), None);
+/// ```
 pub fn data_row_derive(input: proc_macro::TokenStream) -> TokenStream {
     // Construct a representation of Rust code as a syntax tree
     // that we can manipulate

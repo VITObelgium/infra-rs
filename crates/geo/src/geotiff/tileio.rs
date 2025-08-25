@@ -8,7 +8,7 @@ use simd_macro::simd_bounds;
 
 use crate::{
     Array as _, ArrayInterop as _, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Result, Rows,
-    Window,
+    RasterWindow,
     geotiff::{
         HorizontalUnpredictable, TiffChunkLocation,
         io::{parse_chunk_data_into_buffer, read_chunk},
@@ -58,7 +58,7 @@ pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 
     if let Some(cutout) = cutout {
         let size = RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols));
-        let window = Window::new(Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset), size);
+        let window = RasterWindow::new(Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset), size);
         let cutout_data = allocate::aligned_vec_from_iter(arr.iter_window(window));
 
         meta = RasterMetadata::sized_with_nodata(size, nodata);

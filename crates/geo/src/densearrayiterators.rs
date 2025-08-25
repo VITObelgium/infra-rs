@@ -1,4 +1,4 @@
-use crate::{Array as _, ArrayMetadata, ArrayNum, Cell, DenseArray, Window};
+use crate::{Array as _, ArrayMetadata, ArrayNum, Cell, DenseArray, RasterWindow};
 
 /// Iterator over the values of a dense raster array.
 /// All the values will be visited, nodata values will be returned as `None`.
@@ -79,11 +79,11 @@ where
 pub struct DenserRasterWindowIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
     cell: Cell,
     raster: &'a DenseArray<T, Metadata>,
-    window: Window,
+    window: RasterWindow,
 }
 
 impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterWindowIterator<'a, T, Metadata> {
-    pub fn new(raster: &'a DenseArray<T, Metadata>, window: Window) -> Self {
+    pub fn new(raster: &'a DenseArray<T, Metadata>, window: RasterWindow) -> Self {
         let cell = window.top_left();
         DenserRasterWindowIterator { cell, raster, window }
     }
@@ -126,11 +126,11 @@ where
 pub struct DenserRasterWindowIteratorMut<'a, T: ArrayNum, Metadata: ArrayMetadata> {
     cell: Cell,
     raster: &'a mut DenseArray<T, Metadata>,
-    window: Window,
+    window: RasterWindow,
 }
 
 impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterWindowIteratorMut<'a, T, Metadata> {
-    pub fn new(raster: &'a mut DenseArray<T, Metadata>, window: Window) -> Self {
+    pub fn new(raster: &'a mut DenseArray<T, Metadata>, window: RasterWindow) -> Self {
         let cell = window.top_left();
         DenserRasterWindowIteratorMut { cell, raster, window }
     }

@@ -74,10 +74,10 @@ serve_tiles_tui dir:
     cargo run -p tileserver --features=tui --release -- --tui --gis-dir {{dir}}
 
 doc RUSTDOCFLAGS="-D warnings":
-    cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --no-deps --all-features
+    cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --no-deps --all-features
 
 docdeps:
-    cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features --open
+    cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features
 
 build_debug target=default_target:
     cargo build --workspace --target {{target}} --features=proj4rs,rayon,vector,vector-io-xlsx,polars
@@ -86,7 +86,7 @@ build_release target=default_target:
     cargo build --workspace  --target {{target}} --release --features=proj4rs,rayon,vector,vector-io-xlsx,vector-io-csv,polars
 
 build_nofeatures target=default_target:
-        cargo build --workspace  --target {{target}} --release --no-default-features
+    cargo build --workspace  --target {{target}} --release --no-default-features
 
 build target=default_target: (build_release target)
 
