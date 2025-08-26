@@ -1,8 +1,11 @@
 use geo::{
     Columns, RasterSize, Rows,
-    raster::{self, io::RasterFormat},
+    raster::{
+        io::RasterFormat,
+        reader::{RasterAccess, RasterOpenOptions},
+    },
 };
-use std::{mem::MaybeUninit, path::Path};
+use std::path::Path;
 
 use geo::{
     Coordinate, GeoReference, LatLonBounds, Point,
@@ -12,9 +15,8 @@ use geo::{
 
 use crate::{Error, Result, layermetadata::LayerSourceType};
 
-fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -> Result<Option<f32>> {
-    let ds = raster::io::dataset::open_read_only(raster_path)?;
-    let mut meta = raster::io::dataset::read_band_metadata(&ds, band_nr)?;
+fn read_pixel_from_file(raster: &mut RasterAccess, band_nr: usize, coord: Point<f64>) -> Result<Option<f32>> {
+    let mut meta = raster.georeference(band_nr)?;
     let cell = meta.point_to_cell(coord);
     if !meta.is_cell_on_map(cell) {
         return Ok(None);
@@ -23,11 +25,9 @@ fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -
     // Modify the metadata to only contain the pixel at the given coordinate
     let ll = meta.cell_lower_left(cell);
     meta.set_extent(ll, RasterSize::with_rows_cols(Rows(1), Columns(1)), meta.cell_size());
-    let mut data = [MaybeUninit::zeroed()];
 
-    raster::io::dataset::read_band_region(&ds, band_nr, &meta, &mut data)?;
-    let pixel = unsafe { data[0].assume_init() };
-    // SAFETY: We have just read a single pixel into the data array, so it is safe to assume it is initialized
+    let (_meta, data) = raster.read_raster_band_region::<f32>(band_nr, &meta)?;
+    let pixel = data[0];
     if Some(f64::from(pixel)) == meta.nodata() {
         return Ok(None);
     }
@@ -36,19 +36,20 @@ fn read_pixel_from_file(raster_path: &Path, band_nr: usize, coord: Point<f64>) -
 }
 
 pub fn raster_pixel(raster_path: &Path, band_nr: usize, mut coord: Coordinate, layer_name: Option<&str>) -> Result<Option<f32>> {
-    let mut open_opt: Vec<String> = Vec::new();
-    if let Some(layer_name) = layer_name {
-        open_opt.push(format!("TABLE={layer_name}"));
-    }
+    let open_options = RasterOpenOptions {
+        layer_name: layer_name.map(|s| s.to_string()),
+        ..Default::default()
+    };
 
-    let meta = raster::io::dataset::read_file_metadata_with_options(raster_path, &open_opt)?;
+    let mut raster = RasterAccess::open_read_only_with_options(raster_path, &open_options)?;
+    let meta = raster.georeference(band_nr)?;
     let srs = SpatialReference::from_definition(meta.projection())?;
     if !srs.is_geographic() || srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {
         let transformer = CoordinateTransformer::new(&crs::epsg::WGS84.to_string(), meta.projection())?;
         transformer.transform_coordinate_in_place(&mut coord)?;
     }
 
-    read_pixel_from_file(raster_path, band_nr, coord.into())
+    read_pixel_from_file(&mut raster, band_nr, coord.into())
 }
 
 pub fn metadata_bounds_wgs84(meta: GeoReference) -> Result<LatLonBounds> {

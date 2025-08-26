@@ -76,7 +76,9 @@ mod tests {
     use crate::{
         Tile, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles},
-        crs, raster, testutils,
+        crs,
+        raster::{self, reader},
+        testutils,
     };
 
     use super::*;
@@ -173,7 +175,7 @@ mod tests {
 
         let creation_options: Vec<(String, String)> = vec![];
 
-        let src_ds = raster::io::dataset::open_read_only(input)?;
+        let src_ds = reader::gdal::open_dataset_read_only(input)?;
         raster::algo::gdal::warp_to_disk_cli(&src_ds, &output, &options, &creation_options)?;
 
         let meta = GeoTiffMetadata::from_file(&output)?;

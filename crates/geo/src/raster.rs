@@ -4,9 +4,8 @@ pub mod algo;
 mod denseraster;
 mod denserasterconversions;
 pub mod intersection;
-#[cfg(feature = "gdal")]
-#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub mod io;
+pub mod reader;
 
 use std::path::Path;
 

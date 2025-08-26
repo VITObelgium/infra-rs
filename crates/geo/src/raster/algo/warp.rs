@@ -191,9 +191,6 @@ pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<Ge
     }
 }
 
-/// Warp a `GeoReference` to a different EPSG with configurable edge sampling
-///
-/// * `edge_points` - Number of points to sample along each edge of the bounding box for more accurate reprojection
 fn warp_georef_with_edge_points(georef: &GeoReference, coord_trans: &CoordinateTransformer, edge_points: usize) -> Result<GeoReference> {
     let src_bbox = georef.bounding_box();
 
@@ -396,7 +393,6 @@ fn transform_row_exact<T: ArrayNum>(
 }
 
 /// Linear interpolation between two points
-#[inline]
 fn linear_interpolate(start: Point, end: Point, t: f64) -> Point {
     Point::new(start.x() + t * (end.x() - start.x()), start.y() + t * (end.y() - start.y()))
 }
@@ -560,7 +556,6 @@ fn subdivide_segment<T: ArrayNum>(
     Ok(())
 }
 
-#[cfg(feature = "gdal")]
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;

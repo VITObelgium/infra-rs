@@ -5,12 +5,48 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{Error, Result};
-use gdal::{cpl::CslStringList, errors::GdalError};
+use crate::{ArrayDataType, Error, Result};
+use gdal::{
+    cpl::CslStringList,
+    errors::GdalError,
+    raster::{GdalDataType, GdalType},
+};
 use inf::fs;
 
 pub const FALSE: std::ffi::c_int = 0;
 pub const TRUE: std::ffi::c_int = 1;
+
+impl From<ArrayDataType> for GdalDataType {
+    fn from(value: ArrayDataType) -> Self {
+        match value {
+            ArrayDataType::Int8 => GdalDataType::Int8,
+            ArrayDataType::Int16 => GdalDataType::Int16,
+            ArrayDataType::Int32 => GdalDataType::Int32,
+            ArrayDataType::Int64 => GdalDataType::Int64,
+            ArrayDataType::Uint16 => GdalDataType::UInt16,
+            ArrayDataType::Uint8 => GdalDataType::UInt8,
+            ArrayDataType::Uint32 => GdalDataType::UInt32,
+            ArrayDataType::Uint64 => GdalDataType::UInt64,
+            ArrayDataType::Float32 => GdalDataType::Float32,
+            ArrayDataType::Float64 => GdalDataType::Float64,
+        }
+    }
+}
+
+pub fn gdal_ordinal_for_data_type(data_type: ArrayDataType) -> u32 {
+    match data_type {
+        ArrayDataType::Int8 => <i8 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Int16 => <i16 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Int32 => <i32 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Int64 => <i64 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Uint8 => <u8 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Uint16 => <u16 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Uint32 => <u32 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Uint64 => <u64 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Float32 => <f32 as GdalType>::gdal_ordinal(),
+        ArrayDataType::Float64 => <f64 as GdalType>::gdal_ordinal(),
+    }
+}
 
 pub struct Config {
     pub debug_logging: bool,

@@ -54,6 +54,17 @@ impl<T: bytemuck::AnyBitPattern> AlignedVecUnderConstruction<T> {
         &mut self.vec
     }
 
+    /// Obtain the underlying buffer as a mutable slice of `MaybeUninit<u8>`.
+    /// This allows the caller to initialize the elements of the vec.
+    pub fn as_uninit_byte_slice_mut(&mut self) -> &mut [MaybeUninit<u8>] {
+        unsafe {
+            std::slice::from_raw_parts_mut(
+                self.vec.as_mut_ptr().cast::<MaybeUninit<u8>>(),
+                self.vec.capacity() * std::mem::size_of::<T>(),
+            )
+        }
+    }
+
     /// Convert the aligned vec under construction to an aligned vec of initialized elements.
     /// # Safety
     /// The caller must ensure that all elements of the `AlignedVec<MaybeUninit<T>>` are initialized before calling this function.

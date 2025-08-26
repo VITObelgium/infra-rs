@@ -3,18 +3,35 @@
 //! For general use, the [`crate::Array`] and [`crate::raster::RasterIO`] traits should be used.
 
 use std::{
-    ffi::{CString, c_void},
+    ffi::CString,
     path::{Path, PathBuf},
 };
 
-use crate::{Error, Result};
-use crate::{GeoReference, gdalinterop::*};
-use gdal::{
-    cpl::CslStringList,
-    errors::GdalError::{self},
-    raster::{GdalDataType, GdalType},
-};
+use crate::GeoReference;
+use crate::{ArrayDataType, ArrayNum, Error, Result, raster::reader::RasterAccess};
+use inf::allocate::AlignedVec;
 use num::NumCast;
+
+pub fn read_raster_georeference(path: impl AsRef<Path>, band_nr: usize) -> Result<GeoReference> {
+    RasterAccess::open_read_only(path)?.georeference(band_nr)
+}
+
+pub fn read_raster_band<T: ArrayNum>(path: impl AsRef<Path>, band_nr: usize) -> Result<(GeoReference, AlignedVec<T>)> {
+    RasterAccess::open_read_only(path)?.read_raster_band(band_nr)
+}
+
+pub fn read_raster_band_region<T: ArrayNum>(
+    path: impl AsRef<Path>,
+    band_nr: usize,
+    bounds: &GeoReference,
+) -> Result<(GeoReference, AlignedVec<T>)> {
+    RasterAccess::open_read_only(path)?.read_raster_band_region(band_nr, bounds)
+}
+
+/// Detect the data type of the raster band at the provided path
+pub fn detect_data_type(path: impl AsRef<Path>, band_index: usize) -> Result<ArrayDataType> {
+    RasterAccess::open_read_only(path)?.data_type(band_index)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RasterFormat {
@@ -34,24 +51,6 @@ pub enum RasterFormat {
 }
 
 impl RasterFormat {
-    pub fn gdal_driver_name(&self) -> &str {
-        match self {
-            RasterFormat::Memory => "MEM",
-            RasterFormat::ArcAscii => "AAIGrid",
-            RasterFormat::GeoTiff => "GTiff",
-            RasterFormat::Gif => "GIF",
-            RasterFormat::Png => "PNG",
-            RasterFormat::PcRaster => "PCRaster",
-            RasterFormat::Netcdf => "netCDF",
-            RasterFormat::MBTiles => "MBTiles",
-            RasterFormat::GeoPackage => "GPKG",
-            RasterFormat::Grib => "GRIB",
-            RasterFormat::Postgis => "PostGISRaster",
-            RasterFormat::Vrt => "VRT",
-            RasterFormat::Unknown => "Unknown",
-        }
-    }
-
     /// Given a file path, guess the raster type based on the file extension
     pub fn guess_from_path(file_path: impl AsRef<Path>) -> RasterFormat {
         let file_path = file_path.as_ref();
@@ -81,217 +80,14 @@ impl RasterFormat {
     }
 }
 
+#[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub mod dataset {
-    use std::mem::MaybeUninit;
 
-    use gdal::Metadata;
-    use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
-
-    use crate::{
-        ArrayNum, Nodata, RasterSize,
-        array::{Columns, Rows},
-        raster::intersection::{CutOut, intersect_georeference},
-    };
+    use crate::{Nodata, RasterSize, gdalinterop::*};
+    use gdal::{Metadata, cpl::CslStringList, raster::GdalType};
 
     use super::*;
-
-    fn str_vec<T: AsRef<str>>(options: &[T]) -> Vec<&str> {
-        options.iter().map(|s| s.as_ref()).collect()
-    }
-
-    fn open_with_options(path: impl AsRef<Path>, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
-        let path = path.as_ref();
-        gdal::Dataset::open_ex(path, options).map_err(|err| match err {
-            // Match on the error to give a cleaner error message when the file does not exist
-            GdalError::NullPointer { method_name: _, msg: _ } => {
-                if !path.exists() {
-                    Error::InvalidPath(PathBuf::from(path))
-                } else {
-                    let ras_type = RasterFormat::guess_from_path(path);
-                    if ras_type != RasterFormat::Unknown && gdal::DriverManager::get_driver_by_name(ras_type.gdal_driver_name()).is_err() {
-                        return Error::Runtime(format!("Gdal driver not supported: {}", ras_type.gdal_driver_name()));
-                    }
-
-                    Error::Runtime(format!(
-                        "Failed to open raster dataset ({}), check file correctness or driver configuration ({})",
-                        path.to_string_lossy(),
-                        err
-                    ))
-                }
-            }
-            _ => Error::Runtime(format!("Failed to open raster dataset: {} ({})", path.to_string_lossy(), err)),
-        })
-    }
-
-    /// Open a GDAL raster dataset for reading
-    pub fn open_read_only(path: impl AsRef<Path>) -> Result<gdal::Dataset> {
-        let options = gdal::DatasetOptions {
-            open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
-            ..Default::default()
-        };
-
-        open_with_options(path, options)
-    }
-
-    /// Open a GDAL raster dataset for reading with driver open options
-    pub fn open_read_only_with_options(path: impl AsRef<Path>, open_options: &[&str]) -> Result<gdal::Dataset> {
-        let options = gdal::DatasetOptions {
-            open_flags: gdal::GdalOpenFlags::GDAL_OF_READONLY | gdal::GdalOpenFlags::GDAL_OF_RASTER,
-            open_options: Some(open_options),
-            ..Default::default()
-        };
-
-        open_with_options(path, options)
-    }
-
-    /// Detect the data type of the raster band at the provided path
-    pub fn detect_data_type(path: impl AsRef<Path>, band_index: usize) -> Result<gdal::raster::GdalDataType> {
-        Ok(open_read_only(path)?.rasterband(band_index)?.band_type())
-    }
-
-    /// Reads the [`crate::GeoReference`] from the first band of a raster file
-    pub fn read_file_metadata(path: impl AsRef<Path>) -> Result<GeoReference> {
-        read_band_metadata(&open_read_only(path)?, 1)
-    }
-
-    /// Opens the raster dataset to read the spatial metadata with driver open options
-    pub fn read_file_metadata_with_options<T: AsRef<str>>(path: impl AsRef<Path>, open_options: &[T]) -> Result<GeoReference> {
-        read_band_metadata(&open_read_only_with_options(path, str_vec(open_options).as_slice())?, 1)
-    }
-
-    /// Reads the [`crate::GeoReference`] from the provided band of a raster file
-    /// The band index is 1-based
-    pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoReference> {
-        let rasterband = ds.rasterband(band_index)?;
-
-        let (width, height) = ds.raster_size();
-        Ok(GeoReference::new(
-            ds.projection(),
-            RasterSize {
-                rows: Rows(height as i32),
-                cols: Columns(width as i32),
-            },
-            ds.geo_transform()?.into(),
-            rasterband.no_data_value(),
-        ))
-    }
-
-    /// The provided extent will be the extent of the resulting raster.
-    /// Areas outside the extent of the raster on disk will be filled with nodata.
-    pub fn read_band_region<T: ArrayNum>(
-        dataset: &gdal::Dataset,
-        band_nr: usize,
-        extent: &GeoReference,
-        dst_data: &mut [MaybeUninit<T>],
-    ) -> Result<GeoReference> {
-        let meta = read_band_metadata(dataset, band_nr)?;
-        let cut_out = intersect_georeference(&meta, extent)?;
-
-        // Error if the requeated data type can not hold the nodata value of the raster
-        check_if_metadata_fits::<T>(meta.nodata(), dataset.rasterband(band_nr)?.band_type())?;
-
-        let cut_out_smaller_than_extent = (extent.rows() * extent.columns()) != (cut_out.rows * cut_out.cols) as usize;
-        let mut dst_meta = extent.clone();
-        if let Some(nodata) = meta.nodata() {
-            dst_meta.set_nodata(Some(nodata));
-        }
-
-        if cut_out_smaller_than_extent && dst_meta.nodata().is_none() {
-            dst_meta.set_nodata(Some(NumCast::from(T::max_value()).unwrap_or(-9999.0)));
-        }
-
-        if dst_data.len() != dst_meta.rows() * dst_meta.columns() {
-            return Err(Error::InvalidArgument("Invalid data buffer provided: incorrect size".to_string()));
-        }
-
-        if cut_out_smaller_than_extent && let Some(nodata) = dst_meta.nodata() {
-            let nodata = NumCast::from(nodata).unwrap_or(T::zero());
-            for dst_data in dst_data.iter_mut() {
-                let _ = *dst_data.write(nodata);
-            }
-        }
-
-        if cut_out.cols * cut_out.rows > 0 {
-            read_region_from_dataset(band_nr, &cut_out, dataset, dst_data, dst_meta.columns().count())?;
-        }
-
-        Ok(dst_meta)
-    }
-
-    /// Read the full band from the dataset into the provided Vec.
-    /// The vec will be resized to the correct lenght so it can be empty.
-    /// The band index is 1-based.
-    pub fn read_band<T: GdalType + num::NumCast + bytemuck::AnyBitPattern>(
-        dataset: &gdal::Dataset,
-        band_index: usize,
-    ) -> Result<(GeoReference, AlignedVec<T>)> {
-        let raster_band = dataset.rasterband(band_index)?;
-        let meta = read_band_metadata(dataset, band_index)?;
-
-        check_if_metadata_fits::<T>(meta.nodata(), raster_band.band_type())?;
-        let mut dst_data = AlignedVecUnderConstruction::new(meta.raster_size().cell_count());
-
-        let cut_out = CutOut {
-            rows: meta.rows().count(),
-            cols: meta.columns().count(),
-            ..Default::default()
-        };
-
-        read_region_from_dataset(
-            band_index,
-            &cut_out,
-            dataset,
-            dst_data.as_uninit_slice_mut(),
-            meta.columns().count(),
-        )?;
-        let dst_data = unsafe { dst_data.assume_init() };
-        Ok((meta, dst_data))
-    }
-
-    /// Read a subregion into the provided data buffer.
-    /// The buffer should be allocated and have the correct size.
-    /// The band index is 1-based.
-    fn read_region_from_dataset<T: GdalType>(
-        band_nr: usize,
-        cut: &CutOut,
-        ds: &gdal::Dataset,
-        data: &mut [MaybeUninit<T>],
-        data_cols: i32,
-    ) -> Result<()> {
-        let mut data_ptr = data.as_mut_ptr();
-        if cut.dst_row_offset > 0 {
-            data_ptr = unsafe { data_ptr.add((cut.dst_row_offset * data_cols) as usize) };
-        }
-
-        if cut.dst_col_offset > 0 {
-            data_ptr = unsafe { data_ptr.add(cut.dst_col_offset as usize) };
-        }
-
-        let raster_band = ds.rasterband(band_nr)?;
-        let window = (cut.src_col_offset, cut.src_row_offset);
-        let window_size = (cut.cols, cut.rows);
-        let size = window_size;
-
-        unsafe {
-            check_rc(gdal_sys::GDALRasterIOEx(
-                raster_band.c_rasterband(),
-                gdal_sys::GDALRWFlag::GF_Read,
-                window.0,
-                window.1,
-                window_size.0,
-                window_size.1,
-                data_ptr.cast::<c_void>(),
-                size.0,
-                size.1,
-                T::gdal_ordinal(),
-                0,
-                data_cols as gdal_sys::GSpacing * std::mem::size_of::<T>() as gdal_sys::GSpacing,
-                core::ptr::null_mut(),
-            ))?;
-        }
-
-        Ok(())
-    }
 
     /// Write raster to disk using a different data type then present in the data buffer
     /// Driver options (as documented in the GDAL drivers) can be provided
@@ -433,18 +229,6 @@ pub mod dataset {
         Ok(gdal::DriverManager::get_driver_by_name(raster_format.gdal_driver_name())?)
     }
 
-    fn check_if_metadata_fits<T: num::NumCast + GdalType>(nodata: Option<f64>, source_type: GdalDataType) -> Result {
-        if nodata.is_some_and(|nod| !inf::cast::fits_in_type::<T>(nod)) {
-            return Err(Error::InvalidArgument(format!(
-                "Trying to read a raster with data type {} into a buffer with data type {}, but the rasters nodata value {} does not fit",
-                source_type,
-                T::datatype(),
-                nodata.unwrap_or_default()
-            )));
-        }
-        Ok(())
-    }
-
     fn add_band_from_data_ptr<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Result<()> {
         // convert the data pointer to a string
         let data_ptr = format!("DATAPOINTER={:p}", data.as_ptr());
@@ -456,43 +240,35 @@ pub mod dataset {
 
         Ok(())
     }
+}
 
-    #[cfg(test)]
-    mod tests {
-        use crate::crs;
+#[cfg(test)]
+mod tests {
+    use crate::crs;
 
-        use super::*;
+    use super::*;
 
-        use path_macro::path;
+    use path_macro::path;
 
-        #[test]
-        fn projection_info_projected_31370() {
-            let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg31370.tif");
-            let meta = read_file_metadata(path.as_path()).unwrap();
-            assert!(!meta.projection().is_empty());
-            assert!(meta.projected_epsg().is_some());
-            assert_eq!(meta.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
-            assert_eq!(meta.geographic_epsg(), Some(crs::epsg::BELGE72_GEO));
-            assert_eq!(meta.projection_frienly_name(), "EPSG:31370");
-        }
+    #[test]
+    fn projection_info_projected_31370() {
+        let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg31370.tif");
+        let meta = read_raster_georeference(path, 1).unwrap();
+        assert!(!meta.projection().is_empty());
+        assert!(meta.projected_epsg().is_some());
+        assert_eq!(meta.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
+        assert_eq!(meta.geographic_epsg(), Some(crs::epsg::BELGE72_GEO));
+        assert_eq!(meta.projection_frienly_name(), "EPSG:31370");
+    }
 
-        #[test]
-        fn projection_info_projected_3857() {
-            let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg3857.tif");
-            let meta = read_file_metadata(path.as_path()).unwrap();
-            assert!(!meta.projection().is_empty());
-            assert!(meta.projected_epsg().is_some());
-            assert_eq!(meta.projected_epsg().unwrap(), crs::epsg::WGS84_WEB_MERCATOR);
-            assert_eq!(meta.geographic_epsg().unwrap(), crs::epsg::WGS84);
-            assert_eq!(meta.projection_frienly_name(), "EPSG:3857");
-        }
-
-        #[test]
-        fn open_read_only_invalid_path() {
-            let path = PathBuf::from("/this/does/not/exist.tif");
-            let res = open_read_only(path.as_path());
-            assert!(res.is_err());
-            assert!(matches!(res.err().unwrap(), Error::InvalidPath(p) if p == path));
-        }
+    #[test]
+    fn projection_info_projected_3857() {
+        let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg3857.tif");
+        let meta = read_raster_georeference(path, 1).unwrap();
+        assert!(!meta.projection().is_empty());
+        assert!(meta.projected_epsg().is_some());
+        assert_eq!(meta.projected_epsg().unwrap(), crs::epsg::WGS84_WEB_MERCATOR);
+        assert_eq!(meta.geographic_epsg().unwrap(), crs::epsg::WGS84);
+        assert_eq!(meta.projection_frienly_name(), "EPSG:3857");
     }
 }

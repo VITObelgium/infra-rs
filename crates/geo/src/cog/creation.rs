@@ -1,6 +1,9 @@
 use std::path::Path;
 
-use crate::{ArrayDataType, GeoReference, Result, Tile, ZoomLevelStrategy, crs, raster, raster::Compression};
+use crate::{
+    ArrayDataType, GeoReference, Result, Tile, ZoomLevelStrategy, crs,
+    raster::{self, Compression, reader},
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum PredictorSelection {
@@ -61,7 +64,7 @@ fn gdal_predictor_name(predictor: Option<PredictorSelection>) -> &'static str {
 }
 
 pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -> Result<()> {
-    let src_ds = raster::io::dataset::open_read_only(input)?;
+    let src_ds = reader::gdal::open_dataset_read_only(input)?;
     let mut overview_option = "IGNORE_EXISTING";
 
     let mut options = vec![

@@ -50,6 +50,15 @@ impl ArrayDataType {
             Self::Float64 => NumCast::from(f64::NODATA).unwrap_or(f64::NAN),
         }
     }
+
+    pub fn bytes(&self) -> u8 {
+        match self {
+            Self::Int8 | Self::Uint8 => 1,
+            Self::Int16 | Self::Uint16 => 2,
+            Self::Int32 | Self::Uint32 | Self::Float32 => 4,
+            Self::Int64 | Self::Uint64 | Self::Float64 => 8,
+        }
+    }
 }
 
 impl std::fmt::Display for ArrayDataType {

@@ -4,7 +4,6 @@ use crate::array::ArrayInterop as _;
 use crate::raster::{self, Compression, Predictor, RasterIO, TiffChunkType, WriteRasterOptions};
 use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, GeoReference, Result};
 use gdal::raster::GdalType;
-use inf::allocate::AlignedVecUnderConstruction;
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
@@ -60,8 +59,7 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
     }
 
     fn read_band(path: impl AsRef<Path>, band_index: usize) -> Result<Self> {
-        let ds = raster::io::dataset::open_read_only(&path)?;
-        let (metadata, data) = raster::io::dataset::read_band(&ds, band_index)?;
+        let (metadata, data) = raster::io::read_raster_band(path, band_index)?;
         Self::new_init_nodata(Metadata::with_geo_reference(metadata), data)
     }
 
@@ -69,13 +67,8 @@ impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T,
     /// The provided extent does not have to be contained within the raster
     /// Areas outside of the original raster will be filled with the nodata value
     fn read_bounds(path: impl AsRef<Path>, bounds: &GeoReference, band_index: usize) -> Result<Self> {
-        let ds = gdal::Dataset::open(path)?;
-        let (cols, rows) = ds.raster_size();
-        let mut data = AlignedVecUnderConstruction::new(rows * cols);
-        let dst_meta = raster::io::dataset::read_band_region(&ds, band_index, bounds, data.as_uninit_slice_mut())?;
-        let data = unsafe { data.assume_init() };
-
-        Self::new_init_nodata(Metadata::with_geo_reference(dst_meta), data)
+        let (dst_meta, raster_data) = raster::io::read_raster_band_region(path, band_index, bounds)?;
+        Self::new_init_nodata(Metadata::with_geo_reference(dst_meta), raster_data)
     }
 
     fn write(&mut self, path: impl AsRef<Path>) -> Result {

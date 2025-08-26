@@ -355,28 +355,11 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 }
 
-#[cfg(feature = "gdal")]
-#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     pub fn read(path: &std::path::Path) -> Result<Self> {
-        let data_type = crate::raster::io::dataset::detect_data_type(path, 1)?;
-        let data_type = match data_type {
-            gdal::raster::GdalDataType::Unknown => {
-                return Err(Error::Runtime(format!("Failed to detect data type from: {}", path.display())));
-            }
-            gdal::raster::GdalDataType::UInt8 => ArrayDataType::Uint8,
-            gdal::raster::GdalDataType::Int8 => ArrayDataType::Int8,
-            gdal::raster::GdalDataType::UInt16 => ArrayDataType::Uint16,
-            gdal::raster::GdalDataType::Int16 => ArrayDataType::Int16,
-            gdal::raster::GdalDataType::UInt32 => ArrayDataType::Uint32,
-            gdal::raster::GdalDataType::Int32 => ArrayDataType::Int32,
-            gdal::raster::GdalDataType::UInt64 => ArrayDataType::Uint64,
-            gdal::raster::GdalDataType::Int64 => ArrayDataType::Int64,
-            gdal::raster::GdalDataType::Float32 => ArrayDataType::Float32,
-            gdal::raster::GdalDataType::Float64 => ArrayDataType::Float64,
-        };
+        use crate::raster;
 
-        Self::read_as(data_type, path)
+        Self::read_as(raster::io::detect_data_type(path, 1)?, path)
     }
 
     pub fn read_as(data_type: ArrayDataType, path: &std::path::Path) -> Result<Self> {

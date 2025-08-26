@@ -2,7 +2,10 @@ use crate::{
     ArrayDataType, ArrayNum, Cell, Error, GeoTransform, LatLonBounds, Point, RasterSize, Rect, Result, Tile,
     array::{ArrayMetadata, Columns, Rows},
     crs::{self, Epsg},
-    raster::algo::{self, WarpOptions},
+    raster::{
+        self,
+        algo::{self, WarpOptions},
+    },
     srs::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg},
 };
 use approx::{AbsDiffEq, RelativeEq};
@@ -91,9 +94,8 @@ impl GeoReference {
         }
     }
 
-    #[cfg(feature = "gdal")]
     pub fn from_file(path: &std::path::Path) -> Result<Self> {
-        crate::raster::io::dataset::read_file_metadata(path)
+        raster::io::read_raster_georeference(path, 1)
     }
 
     pub fn raster_size(&self) -> RasterSize {

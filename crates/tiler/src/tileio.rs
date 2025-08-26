@@ -11,8 +11,12 @@ use gdal::{
     Dataset,
     raster::{GdalDataType, GdalType},
 };
-use geo::{Array, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize};
+use geo::{
+    Array, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize,
+    raster::reader::{self, RasterOpenOptions, RasterReader as _},
+};
 use geo::{CellSize, Columns, GeoReference, LatLonBounds, Rows, Tile, constants, crs, raster, srs::SpatialReference};
+use inf::allocate::AlignedVecUnderConstruction;
 use num::Num;
 
 fn type_string<T: GdalType>() -> &'static str {
@@ -106,8 +110,11 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
     let meta = RasterMetadata::sized_for_type::<T>(RasterSize::square(scaled_size));
     let ds = raster::algo::gdal::translate_file(raster_path, &output_path, &options)?;
 
-    let (_, data) = raster::io::dataset::read_band(&ds, 1)?;
-    Ok(DenseArray::new(meta, data)?)
+    let mut data = AlignedVecUnderConstruction::new(meta.raster_size.cell_count());
+    let meta = reader::gdal::GdalRasterIO::from_dataset(ds).read_raster_band(1, ArrayDataType::Float32, data.as_uninit_byte_slice_mut())?;
+    Ok(DenseArray::new(RasterMetadata::with_geo_reference(meta), unsafe {
+        data.assume_init()
+    })?)
 }
 
 pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
@@ -133,10 +140,14 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
     );
 
     let src_ds = if raster_path.extension().is_some_and(|ext| ext == "nc") {
-        let opts = vec!["PRESERVE_AXIS_UNIT_IN_CRS=YES"];
-        geo::raster::io::dataset::open_read_only_with_options(raster_path, &opts)?
+        let options = RasterOpenOptions {
+            driver_specific_options: Some(vec!["PRESERVE_AXIS_UNIT_IN_CRS=YES".to_string()]),
+            ..Default::default()
+        };
+
+        reader::gdal::open_dataset_read_only_with_options(raster_path, &options)?
     } else {
-        geo::raster::io::dataset::open_read_only(raster_path)?
+        reader::gdal::open_dataset_read_only(raster_path)?
     };
 
     let meta = RasterMetadata::sized_for_type::<T>(RasterSize::square(scaled_size));
@@ -223,13 +234,13 @@ where
 }
 
 pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<Vec<LayerMetadata>> {
-    let ds = raster::io::dataset::open_read_only(path)?;
+    let ds = reader::gdal::open_dataset_read_only(path)?;
 
     let raster_count = ds.raster_count();
     let mut result = Vec::with_capacity(raster_count);
 
     for band_nr in 1..=raster_count {
-        let meta = raster::io::dataset::read_band_metadata(&ds, band_nr)?;
+        let meta = reader::gdal::read_band_metadata(&ds, band_nr)?;
         let raster_band = ds.rasterband(band_nr)?;
         let over_view_count = raster_band.overview_count()?;
 
