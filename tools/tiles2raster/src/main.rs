@@ -6,7 +6,7 @@ use env_logger::{Env, TimestampPrecision};
 use geo::{
     Array as _, ArrayMetadata, ArrayNum, Columns, Coordinate, DenseArray, RasterMetadata, RasterSize, Rows, Tile,
     raster::{
-        RasterIO,
+        RasterReadWrite,
         algo::{self, RasterStats},
     },
 };
@@ -146,9 +146,9 @@ async fn main() -> Result<()> {
                         .map_err(|err| Error::Runtime(format!("Failed to read tile data: {err}")))?;
 
                     if bytes.is_empty() {
-                        Ok(DenseArray::<f32>::filled_with_nodata(
-                            RasterMetadata::sized_for_type::<f32>(raster_size),
-                        ))
+                        Ok(DenseArray::<f32>::filled_with_nodata(RasterMetadata::sized_for_type::<f32>(
+                            raster_size,
+                        )))
                     } else {
                         Ok(DenseArray::<f32>::from_tile_bytes_autodetect_format_with_cast(bytes.as_ref())?)
                     }

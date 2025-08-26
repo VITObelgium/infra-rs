@@ -1,8 +1,8 @@
 use geo::{
     Columns, RasterSize, Rows,
     raster::{
-        io::RasterFormat,
-        reader::{RasterAccess, RasterOpenOptions},
+        io::{RasterFormat, RasterIO},
+        reader::RasterOpenOptions,
     },
 };
 use std::path::Path;
@@ -15,7 +15,7 @@ use geo::{
 
 use crate::{Error, Result, layermetadata::LayerSourceType};
 
-fn read_pixel_from_file(raster: &mut RasterAccess, band_nr: usize, coord: Point<f64>) -> Result<Option<f32>> {
+fn read_pixel_from_file(raster: &mut RasterIO, band_nr: usize, coord: Point<f64>) -> Result<Option<f32>> {
     let mut meta = raster.georeference(band_nr)?;
     let cell = meta.point_to_cell(coord);
     if !meta.is_cell_on_map(cell) {
@@ -41,7 +41,7 @@ pub fn raster_pixel(raster_path: &Path, band_nr: usize, mut coord: Coordinate, l
         ..Default::default()
     };
 
-    let mut raster = RasterAccess::open_read_only_with_options(raster_path, &open_options)?;
+    let mut raster = RasterIO::open_read_only_with_options(raster_path, &open_options)?;
     let meta = raster.georeference(band_nr)?;
     let srs = SpatialReference::from_definition(meta.projection())?;
     if !srs.is_geographic() || srs.epsg_geog_cs() != Some(crs::epsg::WGS84) {

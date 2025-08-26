@@ -183,7 +183,7 @@ mod tests {
     #[cfg(feature = "gdal")]
     #[test]
     fn quantiles_on_byte_raster() -> Result<()> {
-        use crate::{raster::RasterIO, testutils::workspace_test_data_dir};
+        use crate::{raster::RasterReadWrite, testutils::workspace_test_data_dir};
 
         let raster = DenseRaster::<f32>::read(workspace_test_data_dir().join("landusebyte.tif"))?;
         let quants = algo::quantiles(&raster, &[0.0, 0.25, 0.5, 0.75, 1.0])?.expect("Quantiles should have a value");

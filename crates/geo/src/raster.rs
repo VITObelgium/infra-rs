@@ -77,8 +77,8 @@ pub enum WriteRasterOptions {
     GeoTiff(GeoTiffWriteOptions),
 }
 
-/// Raster IO operations trait
-pub trait RasterIO
+/// Raster read/write operations trait
+pub trait RasterReadWrite
 where
     Self: Sized,
 {

@@ -664,7 +664,7 @@ mod tests {
     fn test_cluster_id_with_obstacles() -> crate::Result<()> {
         use super::*;
         use crate::raster::DenseRaster;
-        use crate::raster::RasterIO;
+        use crate::raster::RasterReadWrite;
         use path_macro::path;
 
         let test_data_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data");

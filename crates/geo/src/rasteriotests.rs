@@ -9,12 +9,12 @@ mod generictests {
     use crate::{
         Array, ArrayNum, Cell, GeoReference, Point, Result,
         array::{Columns, Rows},
-        raster::{DenseRaster, RasterIO},
+        raster::{DenseRaster, RasterReadWrite},
         testutils::{NOD, workspace_test_data_dir},
     };
 
     #[test]
-    fn test_read_dense_raster<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() -> Result<()> {
+    fn test_read_dense_raster<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterReadWrite>() -> Result<()> {
         let path = workspace_test_data_dir().join("landusebyte.tif");
 
         let ras = R::read(path.as_path())?;
@@ -46,7 +46,7 @@ mod generictests {
     }
 
     #[test]
-    fn read_write_raster_nodata_handling<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterIO>() -> Result<()>
+    fn read_write_raster_nodata_handling<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterReadWrite>() -> Result<()>
     {
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let raster_path = tmp_dir.path().join("test.asc");
@@ -107,7 +107,7 @@ mod tests {
 
     use crate::{
         Array, ArrayInterop as _, ArrayMetadata, Cell, Columns, DenseArray, GeoReference, Nodata, RasterMetadata, RasterSize, Result, Rows,
-        raster::{DenseRaster, RasterIO},
+        raster::{DenseRaster, RasterReadWrite},
     };
 
     #[test]

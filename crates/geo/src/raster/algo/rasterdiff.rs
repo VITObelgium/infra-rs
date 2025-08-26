@@ -46,7 +46,7 @@ pub fn raster_files_intersection_diff<T: ArrayNum + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,
 ) -> Result<RasterDiffResult<T>> {
-    use crate::raster::{DenseRaster, RasterIO};
+    use crate::raster::{DenseRaster, RasterReadWrite};
 
     let lhs_ras = DenseRaster::<T>::read(lhs)?;
     let rhs_ras = DenseRaster::<T>::read(rhs)?;
@@ -71,7 +71,7 @@ pub fn raster_files_diff<T: ArrayNum + gdal::raster::GdalType>(
     lhs: &std::path::Path,
     rhs: &std::path::Path,
 ) -> Result<RasterDiffResult<T>> {
-    use crate::raster::{DenseRaster, RasterIO};
+    use crate::raster::{DenseRaster, RasterReadWrite};
 
     let lhs_ras = DenseRaster::<T>::read(lhs)?;
     let rhs_ras = DenseRaster::<T>::read(rhs)?;

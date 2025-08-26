@@ -1,7 +1,7 @@
 use crate::{Error, Result};
 use futures::{StreamExt as _, stream::FuturesUnordered};
 use geo::{
-    Array as _, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, LatLonBounds, RasterSize, Rows, Tile, RasterWindow, crs,
+    Array as _, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, LatLonBounds, RasterSize, RasterWindow, Rows, Tile, crs,
     raster::DenseRaster, tileutils,
 };
 use inf::progressinfo::ProgressNotification;
@@ -128,7 +128,7 @@ mod tests {
 
     use geo::{
         Coordinate,
-        raster::{DenseRaster, RasterIO},
+        raster::{DenseRaster, RasterReadWrite},
     };
     use inf::progressinfo::DummyProgress;
     use path_macro::path;

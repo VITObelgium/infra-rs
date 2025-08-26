@@ -301,7 +301,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     #[cfg(feature = "gdal")]
     #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
     pub fn write(&mut self, path: &std::path::Path) -> Result<()> {
-        use crate::raster::RasterIO;
+        use crate::raster::RasterReadWrite;
 
         match self {
             AnyDenseArray::U8(raster) => raster.write(path),
@@ -363,7 +363,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 
     pub fn read_as(data_type: ArrayDataType, path: &std::path::Path) -> Result<Self> {
-        use crate::raster::RasterIO;
+        use crate::raster::RasterReadWrite;
 
         Ok(match data_type {
             ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::<i8, _>::read(path)?),

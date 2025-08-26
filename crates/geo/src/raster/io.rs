@@ -4,20 +4,24 @@
 
 use std::{
     ffi::CString,
+    mem::MaybeUninit,
     path::{Path, PathBuf},
 };
 
-use crate::GeoReference;
-use crate::{ArrayDataType, ArrayNum, Error, Result, raster::reader::RasterAccess};
-use inf::allocate::AlignedVec;
+use crate::{
+    ArrayDataType, ArrayNum, Error, Result,
+    raster::reader::{self, RasterOpenOptions, RasterReader},
+};
+use crate::{GeoReference, RasterSize};
+use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
 use num::NumCast;
 
 pub fn read_raster_georeference(path: impl AsRef<Path>, band_nr: usize) -> Result<GeoReference> {
-    RasterAccess::open_read_only(path)?.georeference(band_nr)
+    RasterIO::open_read_only(path)?.georeference(band_nr)
 }
 
 pub fn read_raster_band<T: ArrayNum>(path: impl AsRef<Path>, band_nr: usize) -> Result<(GeoReference, AlignedVec<T>)> {
-    RasterAccess::open_read_only(path)?.read_raster_band(band_nr)
+    RasterIO::open_read_only(path)?.read_raster_band(band_nr)
 }
 
 pub fn read_raster_band_region<T: ArrayNum>(
@@ -25,12 +29,101 @@ pub fn read_raster_band_region<T: ArrayNum>(
     band_nr: usize,
     bounds: &GeoReference,
 ) -> Result<(GeoReference, AlignedVec<T>)> {
-    RasterAccess::open_read_only(path)?.read_raster_band_region(band_nr, bounds)
+    RasterIO::open_read_only(path)?.read_raster_band_region(band_nr, bounds)
 }
 
 /// Detect the data type of the raster band at the provided path
 pub fn detect_data_type(path: impl AsRef<Path>, band_index: usize) -> Result<ArrayDataType> {
-    RasterAccess::open_read_only(path)?.data_type(band_index)
+    RasterIO::open_read_only(path)?.data_type(band_index)
+}
+
+/// Main struct to read raster data from various formats
+pub struct RasterIO {
+    reader: Box<dyn RasterReader>,
+}
+
+impl RasterIO {
+    pub fn open_read_only(path: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self {
+            reader: reader::create_raster_reader(path)?,
+        })
+    }
+
+    pub fn open_read_only_with_options(path: impl AsRef<Path>, open_options: &RasterOpenOptions) -> Result<Self> {
+        Ok(Self {
+            reader: reader::create_raster_reader_with_options(path, open_options)?,
+        })
+    }
+
+    pub fn band_count(&self) -> Result<usize> {
+        self.reader.band_count()
+    }
+
+    pub fn raster_size(&self) -> Result<RasterSize> {
+        self.reader.raster_size()
+    }
+
+    pub fn georeference(&mut self, band_index: usize) -> Result<GeoReference> {
+        self.reader.georeference(band_index)
+    }
+
+    pub fn data_type(&self, band_index: usize) -> Result<ArrayDataType> {
+        self.reader.data_type(band_index)
+    }
+
+    pub fn overview_count(&self, band_index: usize) -> Result<usize> {
+        self.reader.overview_count(band_index)
+    }
+
+    pub fn read_raster_band<T: ArrayNum>(&mut self, band_index: usize) -> Result<(GeoReference, AlignedVec<T>)> {
+        let raster_size = self.reader.raster_size()?;
+        let mut dst_data = AlignedVecUnderConstruction::<T>::new(raster_size.cell_count());
+        let georef = self
+            .reader
+            .read_raster_band(band_index, T::TYPE, dst_data.as_uninit_byte_slice_mut())?;
+        Ok((georef, unsafe { dst_data.assume_init() }))
+    }
+
+    pub fn read_raster_band_region<T: ArrayNum>(
+        &mut self,
+        band_index: usize,
+        bounds: &GeoReference,
+    ) -> Result<(GeoReference, AlignedVec<T>)> {
+        let mut dst_data = AlignedVecUnderConstruction::<T>::new(bounds.raster_size().cell_count());
+        let georef = self
+            .reader
+            .read_raster_band_region(band_index, bounds, T::TYPE, dst_data.as_uninit_byte_slice_mut())?;
+        Ok((georef, unsafe { dst_data.assume_init() }))
+    }
+
+    /// Read the raster band into an already allocated buffer.
+    /// The buffer must have the exact size to hold all the data.
+    /// To know the required size, first call `raster_size()` and allocate a buffer of that size.
+    pub fn read_raster_band_into_buffer<T: ArrayNum>(&mut self, band_index: usize, buffer: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
+        self.reader.read_raster_band(band_index, T::TYPE, unsafe {
+            std::slice::from_raw_parts_mut(
+                buffer.as_mut_ptr().cast::<MaybeUninit<u8>>(),
+                buffer.len() * std::mem::size_of::<T>(),
+            )
+        })
+    }
+
+    /// Read the raster band into an already allocated buffer.
+    /// The buffer must have the exact size to hold all the data.
+    /// The data size is determined by the provided bounds.
+    pub fn read_raster_band_region_into_buffer<T: ArrayNum>(
+        &mut self,
+        band_index: usize,
+        bounds: &GeoReference,
+        buffer: &mut [MaybeUninit<T>],
+    ) -> Result<GeoReference> {
+        self.reader.read_raster_band_region(band_index, bounds, T::TYPE, unsafe {
+            std::slice::from_raw_parts_mut(
+                buffer.as_mut_ptr().cast::<MaybeUninit<u8>>(),
+                buffer.len() * std::mem::size_of::<T>(),
+            )
+        })
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]

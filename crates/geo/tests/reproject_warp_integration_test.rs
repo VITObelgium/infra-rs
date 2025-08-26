@@ -7,7 +7,7 @@ mod tests {
         Array, ArrayNum, CellSize, Columns, Error, RasterSize, Result, Rows,
         crs::{self},
         raster::{
-            self, DenseRaster, RasterIO,
+            self, DenseRaster, RasterReadWrite,
             algo::{self, NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, warp},
         },
     };

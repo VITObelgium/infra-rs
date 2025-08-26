@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use crate::array::ArrayInterop as _;
-use crate::raster::{self, Compression, Predictor, RasterIO, TiffChunkType, WriteRasterOptions};
+use crate::raster::{self, Compression, Predictor, RasterReadWrite, TiffChunkType, WriteRasterOptions};
 use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, GeoReference, Result};
 use gdal::raster::GdalType;
 
@@ -53,7 +53,7 @@ fn write_raster_options_to_gdal(options: WriteRasterOptions) -> Vec<String> {
 }
 
 #[simd_macro::simd_bounds]
-impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterIO for DenseArray<T, Metadata> {
+impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterReadWrite for DenseArray<T, Metadata> {
     fn read(path: impl AsRef<Path>) -> Result<Self> {
         Self::read_band(path, 1)
     }
