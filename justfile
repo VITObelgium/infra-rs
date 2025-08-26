@@ -114,7 +114,7 @@ test_warp target=default_target:
 test_integration target=default_target:
     cargo nextest run  --profile integration --target {{target}} --workspace --release --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs --no-capture
 
-test_all: test_release test_integration
+test_all: test_release test_release_py test_integration
 
 test_debug_py: pybootstrap
     pixi run test_debug

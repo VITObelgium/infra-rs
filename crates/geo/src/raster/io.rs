@@ -1,6 +1,6 @@
 //! Contains low-level functions to read and write raster data using the GDAL library.
 //! These functions should only be used for specific use-cases.
-//! For general use, the [`crate::Array`] and [`crate::raster::RasterIO`] traits should be used.
+//! For general use, the [`crate::Array`] and [`crate::raster::RasterReadWrite`] traits should be used.
 
 use std::{
     ffi::CString,
