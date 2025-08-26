@@ -77,3 +77,47 @@ pub fn create_raster_reader_with_options(path: impl AsRef<Path>, options: &Raste
         _ => Err(Error::Runtime(format!("Unsupported raster file type: {}", path.as_ref().display()))),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(all(feature = "cog", feature = "gdal"))]
+    fn compare_geotiff_gdal_read() -> Result<()> {
+        use inf::allocate::AlignedVecUnderConstruction;
+
+        use crate::testutils;
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let mut gdal_reader = gdal::GdalRasterIO::open_read_only(&input)?;
+        let mut gtif_reader = geotiff::GeotiffRasterIO::open_read_only(&input)?;
+
+        let band_index = 1;
+
+        assert_eq!(gdal_reader.band_count()?, gtif_reader.band_count()?);
+        assert_eq!(gdal_reader.raster_size()?, gtif_reader.raster_size()?);
+        assert_eq!(gdal_reader.data_type(band_index)?, gtif_reader.data_type(band_index)?);
+        assert_eq!(gdal_reader.overview_count(band_index)?, gtif_reader.overview_count(band_index)?);
+        assert_eq!(
+            gdal_reader.georeference(band_index)?.geo_transform(),
+            gtif_reader.georeference(band_index)?.geo_transform()
+        );
+
+        {
+            // Read the full raster band
+            let mut gdal_data = AlignedVecUnderConstruction::<u8>::new(gdal_reader.georeference(band_index)?.raster_size().cell_count());
+            let mut gtif_data = AlignedVecUnderConstruction::<u8>::new(gtif_reader.georeference(band_index)?.raster_size().cell_count());
+
+            let gdal_georef = gdal_reader.read_raster_band(band_index, ArrayDataType::Uint8, gdal_data.as_uninit_byte_slice_mut())?;
+            let gtif_georef = gtif_reader.read_raster_band(band_index, ArrayDataType::Uint8, gtif_data.as_uninit_byte_slice_mut())?;
+
+            assert_eq!(unsafe { gdal_data.assume_init() }, unsafe { gtif_data.assume_init() });
+            assert_eq!(gdal_georef.geo_transform(), gtif_georef.geo_transform());
+            assert_eq!(gdal_georef.projected_epsg(), gtif_georef.projected_epsg());
+            // assert_eq!(gdal_georef.geographic_epsg(), gtif_georef.geographic_epsg()); TODO try to obtain the full wkt so this can be filled in
+        }
+
+        Ok(())
+    }
+}
