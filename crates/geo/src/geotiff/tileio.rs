@@ -7,10 +7,10 @@ use inf::allocate::{self, AlignedVecUnderConstruction};
 use simd_macro::simd_bounds;
 
 use crate::{
-    Array as _, ArrayInterop as _, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, Result, Rows,
-    RasterWindow,
+    Array as _, ArrayInterop as _, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, RasterWindow,
+    Result, Rows,
     geotiff::{
-        HorizontalUnpredictable, TiffChunkLocation,
+        TiffChunkLocation,
         io::{parse_chunk_data_into_buffer, read_chunk},
     },
     raster::{Compression, Predictor, intersection::CutOut},
@@ -20,7 +20,7 @@ use crate::{
 const LANES: usize = inf::simd::LANES;
 
 #[simd_bounds]
-pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
+pub fn read_tile_data<T: ArrayNum>(
     cog_location: &TiffChunkLocation,
     tile_size: u32,
     nodata: Option<f64>,
@@ -38,7 +38,7 @@ pub fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
 }
 
 #[simd_bounds]
-pub fn parse_tile_data<T: ArrayNum + HorizontalUnpredictable>(
+pub fn parse_tile_data<T: ArrayNum>(
     tile_size: u32,
     nodata: Option<f64>,
     compression: Option<Compression>,

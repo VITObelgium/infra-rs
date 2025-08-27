@@ -6,7 +6,7 @@ use std::{mem::MaybeUninit, path::Path};
 
 use crate::{
     ArrayDataType, ArrayNum, Result,
-    raster::reader::{self, RasterOpenOptions, RasterReader},
+    raster::reader::{self, RasterOpenOptions, RasterReaderDyn, RasterReaderGeneric as _},
 };
 use crate::{GeoReference, RasterSize};
 use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
@@ -34,7 +34,7 @@ pub fn detect_data_type(path: impl AsRef<Path>, band_index: usize) -> Result<Arr
 
 /// Main struct to read raster data from various formats
 pub struct RasterIO {
-    reader: Box<dyn RasterReader>,
+    reader: Box<dyn RasterReaderDyn>,
 }
 
 impl RasterIO {
@@ -73,9 +73,7 @@ impl RasterIO {
     pub fn read_raster_band<T: ArrayNum>(&mut self, band_index: usize) -> Result<(GeoReference, AlignedVec<T>)> {
         let raster_size = self.reader.raster_size()?;
         let mut dst_data = AlignedVecUnderConstruction::<T>::new(raster_size.cell_count());
-        let georef = self
-            .reader
-            .read_raster_band(band_index, T::TYPE, dst_data.as_uninit_byte_slice_mut())?;
+        let georef = self.reader.read_band(band_index, dst_data.as_uninit_slice_mut())?;
         Ok((georef, unsafe { dst_data.assume_init() }))
     }
 
@@ -95,12 +93,7 @@ impl RasterIO {
     /// The buffer must have the exact size to hold all the data.
     /// To know the required size, first call `raster_size()` and allocate a buffer of that size.
     pub fn read_raster_band_into_buffer<T: ArrayNum>(&mut self, band_index: usize, buffer: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
-        self.reader.read_raster_band(band_index, T::TYPE, unsafe {
-            std::slice::from_raw_parts_mut(
-                buffer.as_mut_ptr().cast::<MaybeUninit<u8>>(),
-                buffer.len() * std::mem::size_of::<T>(),
-            )
-        })
+        self.reader.read_band(band_index, buffer)
     }
 
     /// Read the raster band into an already allocated buffer.

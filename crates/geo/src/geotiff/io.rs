@@ -6,7 +6,7 @@ use crate::{
     geotiff::{
         TiffChunkLocation,
         gdalghostdata::GdalGhostData,
-        utils::{self, HorizontalUnpredictable},
+        utils::{self},
     },
     raster::{Compression, Predictor},
 };
@@ -168,7 +168,7 @@ pub fn read_chunk(cog_location: &TiffChunkLocation, reader: &mut (impl Read + Se
 }
 
 #[simd_bounds]
-pub fn read_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
+pub fn read_chunk_data_into_buffer<T: ArrayNum>(
     chunk: &TiffChunkLocation,
     row_length: u32,
     nodata: Option<f64>,
@@ -190,7 +190,7 @@ pub fn read_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
 }
 
 #[simd_bounds]
-pub fn parse_chunk_data_into_buffer<T: ArrayNum + HorizontalUnpredictable>(
+pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
     row_length: u32,
     compression: Option<Compression>,
     predictor: Option<Predictor>,

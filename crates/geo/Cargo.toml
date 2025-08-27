@@ -35,6 +35,7 @@ harness = false
 name = "simd"
 
 [dependencies]
+paste = "1.0"
 approx = "0.5"
 calamine = { version = "0.30", features = ["dates"], optional = true }
 proj4rs = { version = "0.1", features = [
@@ -96,13 +97,14 @@ derive = ["dep:vector_derive"]
 proj = ["dep:proj"]
 proj4rs = ["dep:proj4rs", "dep:proj4wkt", "dep:crs-definitions"]
 gdal = ["proj", "dep:gdal", "dep:gdal-sys", "dep:bon", "geozero/with-gdal"]
-cog = ["dep:weezl", "dep:tiff", "dep:xml-rs", "dep:ruzstd"]
+cog = ["raster-io-geotiff"]
 gdal-static = ["gdal"]
 python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 serde = ["dep:serde"]
 simd = ["inf/simd", "simd_macro/simd"]
 specta = ["dep:specta"]
 vector = ["dep:geos", "dep:rayon", "geozero/with-geos", "dep:chrono"]
+raster-io-geotiff = ["dep:tiff", "dep:weezl", "dep:xml-rs", "dep:ruzstd"]
 vector-io-xlsx = ["dep:calamine"]
 vector-io-csv = ["dep:csv"]
 rayon = ["dep:rayon"]

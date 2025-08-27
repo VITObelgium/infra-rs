@@ -8,12 +8,12 @@ use std::{
 };
 
 use crate::{
-    ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows,
+    ArrayDataType, ArrayNum, Columns, Error, GeoReference, RasterSize, Result, Rows,
     gdalinterop::check_rc,
     raster::{
         intersection::{CutOut, intersect_georeference},
         io::RasterFormat,
-        reader::{RasterOpenOptions, RasterReader},
+        reader::{RasterOpenOptions, RasterReader, RasterReaderDyn},
     },
 };
 
@@ -91,21 +91,7 @@ impl GdalRasterIO {
     }
 }
 
-impl RasterReader for GdalRasterIO {
-    /// Open a GDAL raster dataset for reading
-    fn open_read_only(path: impl AsRef<Path>) -> Result<Self> {
-        Ok(Self {
-            ds: open_dataset_read_only(path)?,
-        })
-    }
-
-    /// Open a GDAL raster dataset for reading with driver open options
-    fn open_read_only_with_options(path: impl AsRef<Path>, options: &RasterOpenOptions) -> Result<Self> {
-        Ok(Self {
-            ds: open_dataset_read_only_with_options(path, options)?,
-        })
-    }
-
+impl RasterReaderDyn for GdalRasterIO {
     fn band_count(&self) -> Result<usize> {
         Ok(self.ds.raster_count())
     }
@@ -130,21 +116,44 @@ impl RasterReader for GdalRasterIO {
         Ok(self.ds.rasterband(band_index)?.overview_count()? as usize)
     }
 
-    fn read_raster_band(&mut self, band_index: usize, data_type: ArrayDataType, dst_data: &mut [MaybeUninit<u8>]) -> Result<GeoReference> {
-        let meta = self.georeference(band_index)?;
+    fn read_raster_band_u8(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u8>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Uint8, dst_data)
+    }
 
-        debug_assert_eq!(dst_data.len(), meta.raster_size().cell_count() * data_type.bytes() as usize);
-        check_if_metadata_fits(meta.nodata(), self.data_type(band_index)?, data_type)?;
+    fn read_raster_band_u16(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u16>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Uint16, dst_data)
+    }
 
-        let cut_out = CutOut {
-            rows: meta.rows().count(),
-            cols: meta.columns().count(),
-            ..Default::default()
-        };
+    fn read_raster_band_u32(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u32>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Uint32, dst_data)
+    }
 
-        read_region_from_dataset(band_index, &cut_out, &self.ds, dst_data, meta.columns().count(), data_type)?;
+    fn read_raster_band_u64(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u64>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Uint64, dst_data)
+    }
 
-        Ok(meta)
+    fn read_raster_band_i8(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i8>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Int8, dst_data)
+    }
+
+    fn read_raster_band_i16(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i16>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Int16, dst_data)
+    }
+
+    fn read_raster_band_i32(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i32>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Int32, dst_data)
+    }
+
+    fn read_raster_band_i64(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i64>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Int64, dst_data)
+    }
+
+    fn read_raster_band_f32(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<f32>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Float32, dst_data)
+    }
+
+    fn read_raster_band_f64(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<f64>]) -> Result<GeoReference> {
+        self.read_raster_band(band_index, ArrayDataType::Float64, dst_data)
     }
 
     fn read_raster_band_region(
@@ -190,6 +199,50 @@ impl RasterReader for GdalRasterIO {
         }
 
         Ok(dst_meta)
+    }
+}
+
+impl RasterReader for GdalRasterIO {
+    /// Open a GDAL raster dataset for reading
+    fn open_read_only(path: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self {
+            ds: open_dataset_read_only(path)?,
+        })
+    }
+
+    /// Open a GDAL raster dataset for reading with driver open options
+    fn open_read_only_with_options(path: impl AsRef<Path>, options: &RasterOpenOptions) -> Result<Self> {
+        Ok(Self {
+            ds: open_dataset_read_only_with_options(path, options)?,
+        })
+    }
+
+    fn read_raster_band<T: ArrayNum>(
+        &mut self,
+        band_index: usize,
+        data_type: ArrayDataType,
+        dst_data: &mut [MaybeUninit<T>],
+    ) -> Result<GeoReference> {
+        let meta = self.georeference(band_index)?;
+
+        debug_assert_eq!(dst_data.len(), meta.raster_size().cell_count() * data_type.bytes() as usize);
+        check_if_metadata_fits(meta.nodata(), self.data_type(band_index)?, data_type)?;
+
+        let cut_out = CutOut {
+            rows: meta.rows().count(),
+            cols: meta.columns().count(),
+            ..Default::default()
+        };
+
+        let dst_data = unsafe {
+            std::slice::from_raw_parts_mut(
+                dst_data.as_mut_ptr().cast::<MaybeUninit<u8>>(),
+                dst_data.len() * std::mem::size_of::<T>(),
+            )
+        };
+        read_region_from_dataset(band_index, &cut_out, &self.ds, dst_data, meta.columns().count(), data_type)?;
+
+        Ok(meta)
     }
 }
 

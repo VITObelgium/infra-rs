@@ -472,7 +472,7 @@ impl GeoReference {
 
     #[cfg(any(feature = "proj", feature = "proj4rs"))]
     pub fn warped(&self, opts: &crate::raster::algo::WarpOptions) -> Result<Self> {
-        algo::warp_georeference(self, opts)
+        crate::raster::algo::warp_georeference(self, opts)
     }
 
     #[cfg(any(feature = "proj", feature = "proj4rs"))]
@@ -480,7 +480,7 @@ impl GeoReference {
         use crate::raster::algo::WarpOptions;
 
         let opts = WarpOptions {
-            target_srs: algo::TargetSrs::Epsg(epsg),
+            target_srs: crate::raster::algo::TargetSrs::Epsg(epsg),
             ..Default::default()
         };
         self.warped(&opts)

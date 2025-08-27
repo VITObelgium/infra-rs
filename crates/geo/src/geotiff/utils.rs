@@ -1,13 +1,15 @@
-pub trait HorizontalUnpredictable {
-    fn unpredict_horizontal(&self, v2: Self) -> Self;
-}
+use crate::ArrayNum;
 
 macro_rules! impl_horizontal_unpredictable_for_int {
     ($($t:ty),*) => {
         $(
-            impl HorizontalUnpredictable for $t {
-                fn unpredict_horizontal(&self, prev: Self) -> Self {
-                    self.wrapping_add(prev)
+            paste::paste! {
+                fn [<unpredict_horizontal_ $t>](data: &mut [$t], row_size: u32) {
+                    for row in data.chunks_mut(row_size as usize) {
+                        for i in 1..row.len() {
+                            row[i] = row[i].wrapping_add(row[i - 1]);
+                        }
+                    }
                 }
             }
         )*
@@ -17,9 +19,13 @@ macro_rules! impl_horizontal_unpredictable_for_int {
 macro_rules! impl_horizontal_unpredictable_for_fp {
     ($($t:ty),*) => {
         $(
-            impl HorizontalUnpredictable for $t {
-                fn unpredict_horizontal(&self, prev: Self) -> Self {
-                    self + prev
+            paste::paste! {
+                fn [<unpredict_horizontal_ $t>](data: &mut [$t], row_size: u32) {
+                    for row in data.chunks_mut(row_size as usize) {
+                        for i in 1..row.len() {
+                            row[i] += row[i - 1];
+                        }
+                    }
                 }
             }
         )*
@@ -29,20 +35,24 @@ macro_rules! impl_horizontal_unpredictable_for_fp {
 impl_horizontal_unpredictable_for_int!(u8, u16, u32, u64, i8, i16, i32, i64);
 impl_horizontal_unpredictable_for_fp!(f32, f64);
 
-pub fn unpredict_horizontal<T: HorizontalUnpredictable + Copy>(data: &mut [T], row_size: u32) {
-    for row in data.chunks_mut(row_size as usize) {
-        for i in 1..row.len() {
-            row[i] = row[i].unpredict_horizontal(row[i - 1]);
-        }
+pub fn unpredict_horizontal<T: ArrayNum + Copy>(data: &mut [T], row_size: u32) {
+    // Macro based dispatch to avoid an extra trait bound on T which pollutes the entire call stack.
+    match T::TYPE {
+        crate::ArrayDataType::Uint8 => unpredict_horizontal_u8(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Uint16 => unpredict_horizontal_u16(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Uint32 => unpredict_horizontal_u32(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Uint64 => unpredict_horizontal_u64(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Int8 => unpredict_horizontal_i8(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Int16 => unpredict_horizontal_i16(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Int32 => unpredict_horizontal_i32(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Int64 => unpredict_horizontal_i64(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Float32 => unpredict_horizontal_f32(bytemuck::cast_slice_mut(data), row_size),
+        crate::ArrayDataType::Float64 => unpredict_horizontal_f64(bytemuck::cast_slice_mut(data), row_size),
     }
 }
 
 fn decode_delta_bytes(data: &mut [u8], bytes_per_pixel: usize, row_size: u32) {
-    for row in data.chunks_mut(bytes_per_pixel * row_size as usize) {
-        for i in 1..row.len() {
-            row[i] = row[i].unpredict_horizontal(row[i - 1]);
-        }
-    }
+    unpredict_horizontal_u8(data, bytes_per_pixel as u32 * row_size);
 }
 
 pub fn unpredict_fp32(data: &mut [f32], row_size: u32) {

@@ -11,3 +11,5 @@ crates/geo/tests/data/cog_debug/cog.tif
 crates/geo/tests/data/cog_debug/cog_512px.tif
 crates/geo/tests/data/cog_debug/cog_256px.tif
 crates/geo/tests/data/reproject_debug
+crates/geo/tests/data/cog_debug/lower_cog_tile
+crates/geo/tests/data/cog_debug/lower_web_tile

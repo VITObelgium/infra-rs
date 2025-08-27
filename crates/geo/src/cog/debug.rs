@@ -5,7 +5,7 @@ use crate::{
     AnyDenseArray, ArrayDataType, ArrayNum, CellSize, DenseArray, Error, GeoReference, Point, RasterSize, Result, Tile,
     cog::WebTilesReader,
     crs,
-    geotiff::{GeoTiffMetadata, HorizontalUnpredictable, TiffChunkLocation, tileio},
+    geotiff::{GeoTiffMetadata, TiffChunkLocation, tileio},
     nodata::Nodata as _,
 };
 use std::{
@@ -17,7 +17,7 @@ use std::{
 const LANES: usize = inf::simd::LANES;
 
 #[simd_bounds]
-fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(
+fn read_tile_data<T: ArrayNum>(
     cog_tile: &TiffChunkLocation,
     meta: &GeoTiffMetadata,
     reader: &mut (impl Read + Seek),

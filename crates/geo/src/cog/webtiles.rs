@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, Coordinate, DenseArray, Error,
     GeoReference, GeoTransform, RasterMetadata, RasterWindow, Result, Rows, ZoomLevelStrategy,
-    geotiff::{GeoTiffMetadata, HorizontalUnpredictable, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
+    geotiff::{GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -430,11 +430,7 @@ impl WebTilesReader {
     }
 
     #[simd_bounds]
-    pub fn read_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(
-        &self,
-        tile: &Tile,
-        reader: &mut (impl Read + Seek),
-    ) -> Result<Option<DenseArray<T>>> {
+    pub fn read_tile_data_as<T: ArrayNum>(&self, tile: &Tile, reader: &mut (impl Read + Seek)) -> Result<Option<DenseArray<T>>> {
         if T::TYPE != self.cog_meta.data_type {
             return Err(Error::InvalidArgument(format!(
                 "Tile data type mismatch: expected {:?}, got {:?}",
@@ -475,7 +471,7 @@ impl WebTilesReader {
     #[simd_bounds]
     /// Parses the tile data from a byte slice into a `DenseArray<T>`.
     /// Only call this for parsing tiled data layout.
-    fn parse_tile_data_as<T: ArrayNum + HorizontalUnpredictable>(&self, tile_data: &[u8]) -> Result<DenseArray<T>> {
+    fn parse_tile_data_as<T: ArrayNum>(&self, tile_data: &[u8]) -> Result<DenseArray<T>> {
         assert!(self.cog_meta.is_tiled(), "expected tiled data layout");
         let tile_size = self.cog_meta.chunk_row_length();
 
@@ -508,11 +504,7 @@ impl WebTilesReader {
     }
 
     #[simd_bounds]
-    fn merge_tile_sources<T: ArrayNum + HorizontalUnpredictable>(
-        &self,
-        tile_sources: &[(TiffChunkLocation, CutOut)],
-        cog_chunks: &[&[u8]],
-    ) -> Result<DenseArray<T>> {
+    fn merge_tile_sources<T: ArrayNum>(&self, tile_sources: &[(TiffChunkLocation, CutOut)], cog_chunks: &[&[u8]]) -> Result<DenseArray<T>> {
         let tile_size = self.cog_metadata().chunk_row_length() as usize;
 
         let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(
@@ -556,7 +548,7 @@ mod tests {
     use path_macro::path;
 
     use crate::{
-        Nodata as _, Point, ZoomLevelStrategy,
+        Array, Nodata as _, Point, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles, debug},
         raster::{Compression, Predictor},
         testutils,
@@ -1132,6 +1124,45 @@ mod tests {
             for zoom_level in 7..=8 {
                 debug::dump_tiff_tiles(&cog_path, zoom_level, &output_dir.join("cog_tile").join(format!("{tile_size}px")))?;
                 debug::dump_web_tiles(&cog_path, zoom_level, &output_dir.join("web_tile").join(format!("{tile_size}px")))?;
+            }
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn create_cog_tiles_prefer_lower_for_debugging() -> Result<()> {
+        // This test generates COG tiles from a test TIFF file and dumps the web tiles and COG tiles for zoom levels 7 and 8.
+        // The qgis project in tests/data/cog_debug can be used to visually inspect the generated web tiles with resprect to the cog tiles.
+
+        let output_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "cog_debug");
+        for tile_size in [256, 512] {
+            let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+            let cog_path = output_dir.join(format!("cog_{tile_size}px.tif"));
+
+            let opts = CogCreationOptions {
+                min_zoom: Some(6),
+                zoom_level_strategy: ZoomLevelStrategy::PreferLower,
+                tile_size,
+                allow_sparse: true,
+                compression: None,
+                predictor: None,
+                output_data_type: Some(ArrayDataType::Float32),
+                aligned_levels: Some(2),
+            };
+            create_cog_tiles(&input, &cog_path, opts)?;
+
+            for zoom_level in 6..=8 {
+                debug::dump_tiff_tiles(
+                    &cog_path,
+                    zoom_level,
+                    &output_dir.join("lower_cog_tile").join(format!("{tile_size}px")),
+                )?;
+                debug::dump_web_tiles(
+                    &cog_path,
+                    zoom_level,
+                    &output_dir.join("lower_web_tile").join(format!("{tile_size}px")),
+                )?;
             }
         }
 

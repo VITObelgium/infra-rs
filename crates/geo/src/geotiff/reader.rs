@@ -1,6 +1,6 @@
 use crate::{
     ArrayDataType, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, GeoReference, RasterSize,
-    geotiff::{GeoTiffMetadata, io, utils::HorizontalUnpredictable},
+    geotiff::{GeoTiffMetadata, io},
 };
 
 use inf::{allocate, cast};
@@ -75,7 +75,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_tiled_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+    fn read_tiled_raster_as<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         chunks: &[TiffChunkLocation],
         tile_size: u32,
@@ -127,7 +127,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_tiled_raster_into_buffer<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+    fn read_tiled_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         chunks: &[TiffChunkLocation],
         tile_size: u32,
@@ -163,7 +163,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_striped_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+    fn read_striped_raster_as<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         chunks: &[TiffChunkLocation],
         rows_per_strip: u32,
@@ -220,7 +220,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_striped_raster_into_buffer<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
+    fn read_striped_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         chunks: &[TiffChunkLocation],
         rows_per_strip: u32,
@@ -236,8 +236,13 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    pub fn read_raster_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(&mut self) -> Result<DenseArray<T, M>> {
+    pub fn read_raster_as<T: ArrayNum, M: ArrayMetadata>(&mut self) -> Result<DenseArray<T, M>> {
         self.read_overview_as(0)
+    }
+
+    #[simd_bounds]
+    pub fn read_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(&mut self, dst_data: &mut [std::mem::MaybeUninit<T>]) -> Result<M> {
+        self.read_overview_into_buffer::<T, M>(0, dst_data)
     }
 
     pub fn read_raster<M: ArrayMetadata>(&mut self, dst_data: &mut [std::mem::MaybeUninit<u8>]) -> Result<M> {
@@ -247,10 +252,7 @@ impl GeoTiffReader {
     #[simd_bounds]
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
-    pub fn read_overview_as<T: ArrayNum + HorizontalUnpredictable, M: ArrayMetadata>(
-        &mut self,
-        overview_index: usize,
-    ) -> Result<DenseArray<T, M>> {
+    pub fn read_overview_as<T: ArrayNum, M: ArrayMetadata>(&mut self, overview_index: usize) -> Result<DenseArray<T, M>> {
         if let Some(overview) = self.meta.overviews.get(overview_index).cloned() {
             if overview.chunk_locations.is_empty() {
                 return Err(Error::Runtime("No tiles available in the geotiff".into()));
@@ -262,6 +264,34 @@ impl GeoTiffReader {
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
                     return self.read_striped_raster_as::<T, M>(&overview.chunk_locations, rows_per_strip);
+                }
+            }
+        }
+
+        Err(Error::Runtime(format!("No overview available with index {overview_index}")))
+    }
+
+    /// Reads an overview raster at the specified index
+    /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
+    pub fn read_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+        &mut self,
+        overview_index: usize,
+        buffer: &mut [MaybeUninit<T>],
+    ) -> Result<M> {
+        if let Some(overview) = self.meta.overviews.get(overview_index).cloned() {
+            if overview.chunk_locations.is_empty() {
+                return Err(Error::Runtime("No tiles available in the geotiff".into()));
+            }
+
+            // Cast away the maybe uninit - we will fill the entire buffer
+            let buffer = unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<T>(), buffer.len()) };
+
+            match self.meta.data_layout {
+                ChunkDataLayout::Tiled(tile_size) => {
+                    return self.read_tiled_raster_into_buffer(&overview.chunk_locations, tile_size, buffer);
+                }
+                ChunkDataLayout::Striped(rows_per_strip) => {
+                    return self.read_striped_raster_into_buffer(&overview.chunk_locations, rows_per_strip, buffer);
                 }
             }
         }
@@ -291,11 +321,7 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_chunk_data_into_buffer_as<T: ArrayNum + HorizontalUnpredictable>(
-        &mut self,
-        chunk: &TiffChunkLocation,
-        chunk_data: &mut [T],
-    ) -> Result<()> {
+    fn read_chunk_data_into_buffer_as<T: ArrayNum>(&mut self, chunk: &TiffChunkLocation, chunk_data: &mut [T]) -> Result<()> {
         let row_length = self.meta.chunk_row_length();
 
         if T::TYPE != self.meta.data_type {

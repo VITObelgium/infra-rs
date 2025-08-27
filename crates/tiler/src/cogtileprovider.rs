@@ -7,10 +7,7 @@ use std::{
 };
 
 use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs, geotiff};
-use geo::{
-    cog::WebTilesReader,
-    geotiff::{GeoTiffMetadata, HorizontalUnpredictable},
-};
+use geo::{cog::WebTilesReader, geotiff::GeoTiffMetadata};
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 #[cfg(feature = "simd")]
@@ -79,7 +76,7 @@ impl CogTileProvider {
     }
 
     #[geo::simd_bounds]
-    fn read_tile_data<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<DenseArray<T>> {
+    fn read_tile_data<T: ArrayNum>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<DenseArray<T>> {
         if Some(tile_size) != meta.tile_size {
             return Err(Error::InvalidArgument("Invalid COG tile size requested".to_string()));
         }
@@ -98,7 +95,7 @@ impl CogTileProvider {
     }
 
     #[geo::simd_bounds]
-    fn read_vrt_tile<T: ArrayNum + HorizontalUnpredictable>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<TileData> {
+    fn read_vrt_tile<T: ArrayNum>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<TileData> {
         let tile_data = Self::read_tile_data::<T>(meta, tile, tile_size)?;
         if tile_data.is_empty() {
             return Ok(TileData::default());
@@ -109,10 +106,7 @@ impl CogTileProvider {
     }
 
     #[geo::simd_bounds]
-    fn read_tile_data_color_mappped<T: ArrayNum + HorizontalUnpredictable>(
-        meta: &LayerMetadata,
-        tile_req: &ColorMappedTileRequest,
-    ) -> Result<TileData> {
+    fn read_tile_data_color_mappped<T: ArrayNum>(meta: &LayerMetadata, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
         log::debug!(
             "COG color map tile: {}@{}x {}px {}",
             tile_req.tile,

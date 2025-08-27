@@ -15,4 +15,3 @@ use projectioninfo::ProjectionInfo;
 pub use metadata::GeoTiffMetadata;
 pub use reader::{ChunkDataLayout, GeoTiffReader, TiffChunkLocation, TiffOverview};
 pub use stats::TiffStats;
-pub use utils::HorizontalUnpredictable;
