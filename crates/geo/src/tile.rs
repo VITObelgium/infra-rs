@@ -64,11 +64,15 @@ impl Tile {
         let zoom_level_tiles = f64::powi(2.0, self.z);
         let top_left = self.upper_left();
 
-        let pixels_per_lat = 180.0 / zoom_level_tiles / tile_size as f64;
-        let pixels_per_lon = 360.0 / zoom_level_tiles / tile_size as f64;
+        // Longitude is linear in Web Mercator
+        let degrees_per_pixel_lon = 360.0 / zoom_level_tiles / tile_size as f64;
+        let x_offset = (coord.longitude - top_left.longitude) / degrees_per_pixel_lon;
 
-        let x_offset = (coord.longitude - top_left.longitude) / pixels_per_lon;
-        let y_offset = (top_left.latitude - coord.latitude) / pixels_per_lat;
+        // For latitude, we need to work in the Web Mercator Y space
+        let bottom_right = self.lower_right();
+        let tile_height_degrees = top_left.latitude - bottom_right.latitude;
+        let degrees_per_pixel_lat = tile_height_degrees / tile_size as f64;
+        let y_offset = (top_left.latitude - coord.latitude) / degrees_per_pixel_lat;
 
         if x_offset < -1e-6 || y_offset < -1e-6 || x_offset >= tile_size as f64 || y_offset >= tile_size as f64 {
             return None;
