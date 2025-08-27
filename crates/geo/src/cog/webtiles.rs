@@ -1,6 +1,6 @@
 use crate::{
-    AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
-    GeoTransform, RasterMetadata, Result, Rows, RasterWindow, ZoomLevelStrategy,
+    AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, Coordinate, DenseArray, Error,
+    GeoReference, GeoTransform, RasterMetadata, RasterWindow, Result, Rows, ZoomLevelStrategy,
     geotiff::{GeoTiffMetadata, HorizontalUnpredictable, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };

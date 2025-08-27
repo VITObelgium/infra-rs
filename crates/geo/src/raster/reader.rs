@@ -2,7 +2,7 @@ use std::{mem::MaybeUninit, path::Path};
 
 #[cfg(feature = "gdal")]
 use crate::Error;
-use crate::{ArrayDataType, GeoReference, RasterSize, Result, raster::io::RasterFormat};
+use crate::{ArrayDataType, Error, GeoReference, RasterSize, Result, raster::io::RasterFormat};
 
 #[cfg(feature = "gdal")]
 pub mod gdal;

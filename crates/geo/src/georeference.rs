@@ -2,10 +2,7 @@ use crate::{
     ArrayDataType, ArrayNum, Cell, Error, GeoTransform, LatLonBounds, Point, RasterSize, Rect, Result, Tile,
     array::{ArrayMetadata, Columns, Rows},
     crs::{self, Epsg},
-    raster::{
-        self,
-        algo::{self, WarpOptions},
-    },
+    raster::{self},
     srs::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg},
 };
 use approx::{AbsDiffEq, RelativeEq};
@@ -473,11 +470,15 @@ impl GeoReference {
         x_aligned && y_aligned
     }
 
-    pub fn warped(&self, opts: &WarpOptions) -> Result<Self> {
+    #[cfg(any(feature = "proj", feature = "proj4rs"))]
+    pub fn warped(&self, opts: &crate::raster::algo::WarpOptions) -> Result<Self> {
         algo::warp_georeference(self, opts)
     }
 
+    #[cfg(any(feature = "proj", feature = "proj4rs"))]
     pub fn warped_to_epsg(&self, epsg: Epsg) -> Result<Self> {
+        use crate::raster::algo::WarpOptions;
+
         let opts = WarpOptions {
             target_srs: algo::TargetSrs::Epsg(epsg),
             ..Default::default()

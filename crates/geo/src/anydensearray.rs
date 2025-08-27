@@ -356,12 +356,16 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
 }
 
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
+    #[cfg(feature = "gdal")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
     pub fn read(path: &std::path::Path) -> Result<Self> {
         use crate::raster;
 
         Self::read_as(raster::io::detect_data_type(path, 1)?, path)
     }
 
+    #[cfg(feature = "gdal")]
+    #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
     pub fn read_as(data_type: ArrayDataType, path: &std::path::Path) -> Result<Self> {
         use crate::raster::RasterReadWrite;
 

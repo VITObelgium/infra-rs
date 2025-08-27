@@ -34,7 +34,7 @@ pub use proj::CoordinateTransformer;
 pub use gdal::SpatialReference;
 
 /// Single shot version of `SpatialReference::to_wkt`
-#[allow(unreachable_code)]
+#[allow(unreachable_code, unused)]
 pub fn projection_from_epsg(epsg: Epsg) -> Result<String> {
     #[cfg(any(feature = "proj4rs", feature = "gdal"))]
     return SpatialReference::from_epsg(epsg)?.to_wkt();
@@ -43,7 +43,7 @@ pub fn projection_from_epsg(epsg: Epsg) -> Result<String> {
 }
 
 /// Single shot version of `SpatialReference::epsg_geog_cs`
-#[allow(unreachable_code)]
+#[allow(unreachable_code, unused)]
 pub fn projection_to_geo_epsg(projection: &str) -> Option<Epsg> {
     #[cfg(any(feature = "proj4rs", feature = "gdal"))]
     return SpatialReference::from_definition(projection).ok()?.epsg_geog_cs();
@@ -52,7 +52,7 @@ pub fn projection_to_geo_epsg(projection: &str) -> Option<Epsg> {
 }
 
 /// Single shot version of `SpatialReference::epsg_cs`
-#[allow(unreachable_code)]
+#[allow(unreachable_code, unused)]
 pub fn projection_to_epsg(projection: &str) -> Option<Epsg> {
     #[cfg(any(feature = "proj4rs", feature = "gdal"))]
     return SpatialReference::from_definition(projection).ok()?.epsg_cs();

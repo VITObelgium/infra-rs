@@ -24,7 +24,7 @@ pub(crate) mod clusterutils;
 #[cfg(all(feature = "gdal", feature = "vector"))]
 pub use polygonize::polygonize;
 
-use crate::{Array, GeoReference};
+use crate::Array;
 
 #[cfg(feature = "gdal")]
 pub mod gdal {
@@ -44,7 +44,8 @@ pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
 };
 
-pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> crate::Result<GeoReference> {
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
+pub fn warp_georeference(georef: &crate::GeoReference, opts: &WarpOptions) -> crate::Result<crate::GeoReference> {
     #[cfg(feature = "gdal")]
     return gdal::warp_georeference(georef, opts);
 

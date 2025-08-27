@@ -2,19 +2,14 @@
 //! These functions should only be used for specific use-cases.
 //! For general use, the [`crate::Array`] and [`crate::raster::RasterReadWrite`] traits should be used.
 
-use std::{
-    ffi::CString,
-    mem::MaybeUninit,
-    path::{Path, PathBuf},
-};
+use std::{mem::MaybeUninit, path::Path};
 
 use crate::{
-    ArrayDataType, ArrayNum, Error, Result,
+    ArrayDataType, ArrayNum, Result,
     raster::reader::{self, RasterOpenOptions, RasterReader},
 };
 use crate::{GeoReference, RasterSize};
 use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
-use num::NumCast;
 
 pub fn read_raster_georeference(path: impl AsRef<Path>, band_nr: usize) -> Result<GeoReference> {
     RasterIO::open_read_only(path)?.georeference(band_nr)
@@ -177,8 +172,10 @@ impl RasterFormat {
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub mod dataset {
 
-    use crate::{Nodata, RasterSize, gdalinterop::*};
+    use crate::{Error, Nodata, RasterSize, gdalinterop::*};
     use gdal::{Metadata, cpl::CslStringList, raster::GdalType};
+    use num::NumCast;
+    use std::{ffi::CString, path::PathBuf};
 
     use super::*;
 

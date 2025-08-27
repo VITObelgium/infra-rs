@@ -1,8 +1,11 @@
 use crate::DenseArray;
 use crate::GeoReference;
-use crate::crs;
-use crate::raster::algo;
-use crate::raster::algo::TargetSrs;
+
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
+use crate::{
+    crs,
+    raster::algo::{self, TargetSrs},
+};
 
 pub type DenseRaster<T> = DenseArray<T, GeoReference>;
 
@@ -10,6 +13,7 @@ pub type DenseRaster<T> = DenseArray<T, GeoReference>;
 const LANES: usize = inf::simd::LANES;
 
 #[simd_macro::simd_bounds]
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
 impl<T: crate::ArrayNum> DenseRaster<T> {
     pub fn warped_to_epsg(&self, epsg: crs::Epsg) -> crate::Result<Self> {
         let opts = algo::WarpOptions {
