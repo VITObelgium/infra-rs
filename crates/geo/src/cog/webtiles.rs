@@ -47,8 +47,16 @@ impl WebTiles {
 
         for overview in &meta.overviews {
             let top_left_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.top_left());
+            let bottom_right_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.bottom_right());
             let top_left_tile = Tile::for_coordinate(top_left_coordinate, zoom_level);
-            let tile_aligned = top_left_tile.coordinate_pixel_offset(top_left_coordinate, tile_size) == Some((0, 0));
+            let bottom_right_tile = Tile::for_coordinate(bottom_right_coordinate - Coordinate::latlon(-0.1, 0.1), zoom_level);
+
+            let tl_diff = top_left_coordinate - top_left_tile.upper_left();
+            let br_diff = bottom_right_coordinate - bottom_right_tile.lower_right();
+
+            let top_left_aligned = tl_diff.longitude.abs() < 1e-6 && tl_diff.latitude.abs() < 1e-6;
+            let bottom_right_aligned = br_diff.longitude.abs() < 1e-6 && br_diff.latitude.abs() < 1e-6;
+            let tile_aligned = top_left_aligned && bottom_right_aligned;
 
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
@@ -1073,6 +1081,41 @@ mod tests {
                 assert_eq!(cutout.dst_row_offset, 256);
             }
         }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn prefer_lower_zoom_level_outside_of_raster_range_data_handling() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        let tile_size = COG_TILE_SIZE * 2;
+
+        let opts = CogCreationOptions {
+            min_zoom: Some(6),
+            zoom_level_strategy: ZoomLevelStrategy::PreferLower,
+            tile_size,
+            allow_sparse: true,
+            compression: None,
+            predictor: None,
+            output_data_type: None,
+            aligned_levels: Some(2),
+        };
+        create_cog_tiles(&input, &output, opts)?;
+
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+        assert_eq!(cog.tile_info().min_zoom, 6);
+        assert_eq!(cog.tile_info().max_zoom, 8);
+        //assert_eq!(cog.cog_metadata().overviews[2]., 8);
+
+        let mut reader = File::open(&output)?;
+        let tile = cog.read_tile_data_as::<u8>(&Tile { z: 6, x: 33, y: 21 }, &mut reader)?.unwrap();
+
+        // The upper right corner of this tile is padding outside of the geotiff raster bounds, should be nodata
+        assert!(tile.cell_is_nodata(Cell::from_row_col(0, tile_size as i32 - 1)));
 
         Ok(())
     }
