@@ -1079,6 +1079,12 @@ mod tests {
 
     #[test_log::test]
     fn prefer_lower_zoom_level_outside_of_raster_range_data_handling() -> Result<()> {
+        // Test case create because of issue where the prefer lower zoom level strategy would cause zoom level 6
+        // to be detected as aligned. Because of this no cutouts would be created and the tiles at zoom level 6 would show
+        // 0 values outside of the raster bounds instead of nodata.
+        // This was caused by the fact the alignment check only looked at the top left corner of the raster and not the full extent.
+        // So if the top left corner was aligned it was assumed that no tile processing was needed.
+
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
@@ -1124,45 +1130,6 @@ mod tests {
             for zoom_level in 7..=8 {
                 debug::dump_tiff_tiles(&cog_path, zoom_level, &output_dir.join("cog_tile").join(format!("{tile_size}px")))?;
                 debug::dump_web_tiles(&cog_path, zoom_level, &output_dir.join("web_tile").join(format!("{tile_size}px")))?;
-            }
-        }
-
-        Ok(())
-    }
-
-    #[test_log::test]
-    fn create_cog_tiles_prefer_lower_for_debugging() -> Result<()> {
-        // This test generates COG tiles from a test TIFF file and dumps the web tiles and COG tiles for zoom levels 7 and 8.
-        // The qgis project in tests/data/cog_debug can be used to visually inspect the generated web tiles with resprect to the cog tiles.
-
-        let output_dir = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "cog_debug");
-        for tile_size in [256, 512] {
-            let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
-            let cog_path = output_dir.join(format!("cog_{tile_size}px.tif"));
-
-            let opts = CogCreationOptions {
-                min_zoom: Some(6),
-                zoom_level_strategy: ZoomLevelStrategy::PreferLower,
-                tile_size,
-                allow_sparse: true,
-                compression: None,
-                predictor: None,
-                output_data_type: Some(ArrayDataType::Float32),
-                aligned_levels: Some(2),
-            };
-            create_cog_tiles(&input, &cog_path, opts)?;
-
-            for zoom_level in 6..=8 {
-                debug::dump_tiff_tiles(
-                    &cog_path,
-                    zoom_level,
-                    &output_dir.join("lower_cog_tile").join(format!("{tile_size}px")),
-                )?;
-                debug::dump_web_tiles(
-                    &cog_path,
-                    zoom_level,
-                    &output_dir.join("lower_web_tile").join(format!("{tile_size}px")),
-                )?;
             }
         }
 

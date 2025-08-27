@@ -249,9 +249,9 @@ impl GeoTiffReader {
         self.read_overview_into_byte_buffer::<M>(0, dst_data)
     }
 
-    #[simd_bounds]
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
+    #[simd_bounds]
     pub fn read_overview_as<T: ArrayNum, M: ArrayMetadata>(&mut self, overview_index: usize) -> Result<DenseArray<T, M>> {
         if let Some(overview) = self.meta.overviews.get(overview_index).cloned() {
             if overview.chunk_locations.is_empty() {
@@ -273,6 +273,7 @@ impl GeoTiffReader {
 
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
+    #[simd_bounds]
     pub fn read_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview_index: usize,

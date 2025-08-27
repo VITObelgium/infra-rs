@@ -1,11 +1,15 @@
 use std::{mem::MaybeUninit, path::Path};
 
+use simd_macro::simd_bounds;
+
 use crate::{ArrayDataType, ArrayNum, Error, GeoReference, RasterSize, Result, raster::io::RasterFormat};
 
 #[cfg(feature = "gdal")]
 pub mod gdal;
 #[cfg(feature = "raster-io-geotiff")]
 pub mod geotiff;
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
 
 // Dyn compatible methods for raster reading
 pub trait RasterReaderDyn {
@@ -43,6 +47,7 @@ pub trait RasterReader: RasterReaderDyn + Sized {
     fn open_read_only(path: impl AsRef<Path>) -> Result<Self>;
     fn open_read_only_with_options(path: impl AsRef<Path>, open_options: &RasterOpenOptions) -> Result<Self>;
 
+    #[simd_bounds]
     fn read_raster_band<T: ArrayNum>(
         &mut self,
         band_index: usize,
