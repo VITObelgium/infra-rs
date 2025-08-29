@@ -22,7 +22,7 @@ pub struct TileCreationOptions {
     pub tile_size: u32,
 }
 
-pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions) -> Result<()> {
+fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions> {
     let zoom_level_strategy = match (opts.zoom_level_selection, opts.max_zoom) {
         (Some(_), Some(_)) => bail!("Cannot specify both zoom level selection and max zoom"),
         (None, Some(max_zoom)) => ZoomLevelStrategy::Manual(max_zoom),
@@ -31,7 +31,7 @@ pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions
         (Some(ZoomLevelSelection::PreferLower), None) => ZoomLevelStrategy::PreferLower,
     };
 
-    let cog_opts = geo::cog::CogCreationOptions {
+    Ok(geo::cog::CogCreationOptions {
         min_zoom: opts.min_zoom,
         zoom_level_strategy,
         tile_size: opts.tile_size,
@@ -40,9 +40,15 @@ pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions
         allow_sparse: true,
         output_data_type: None,
         aligned_levels: Some(2),
-    };
+    })
+}
 
-    geo::cog::create_cog_tiles(input, &output, cog_opts)?;
-
+pub fn print_gdal_translate_command(input: &Path, opts: TileCreationOptions) -> Result<()> {
+    let args = geo::cog::create_gdal_args(&input, create_opts(opts)?)?;
+    println!("Gdal cmd:\n {}", args.join(" "));
     Ok(())
+}
+
+pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions) -> Result<()> {
+    Ok(geo::cog::create_cog_tiles(input, &output, create_opts(opts)?)?)
 }

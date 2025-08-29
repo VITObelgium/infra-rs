@@ -1,6 +1,6 @@
 use crate::{
-    AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, Coordinate, DenseArray, Error,
-    GeoReference, GeoTransform, RasterMetadata, RasterWindow, Result, Rows, ZoomLevelStrategy,
+    AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
+    GeoTransform, Point, RasterMetadata, RasterWindow, Result, Rows, ZoomLevelStrategy,
     geotiff::{GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
@@ -45,17 +45,23 @@ impl WebTiles {
             )));
         }
 
+        let cell_size = meta.geo_reference.cell_size();
+
+        // Offset to get the center of the bottom right pixel
+        // Otherwise the bottom right coordinate is exactly at the edge of the tile and the next one will be taken
+        let offset = Point::new(cell_size.x() / 2.0, cell_size.y() / 2.0);
+
         for overview in &meta.overviews {
             let top_left_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.top_left());
-            let bottom_right_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.bottom_right());
+            let bottom_right_center_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.bottom_right() - offset);
             let top_left_tile = Tile::for_coordinate(top_left_coordinate, zoom_level);
-            let bottom_right_tile = Tile::for_coordinate(bottom_right_coordinate - Coordinate::latlon(-0.1, 0.1), zoom_level);
+            let bottom_right_tile = Tile::for_coordinate(bottom_right_center_coordinate, zoom_level);
 
-            let tl_diff = top_left_coordinate - top_left_tile.upper_left();
-            let br_diff = bottom_right_coordinate - bottom_right_tile.lower_right();
+            let tl_diff = meta.geo_reference.top_left() - crs::lat_lon_to_web_mercator(top_left_tile.upper_left());
+            let br_diff = meta.geo_reference.bottom_right() - crs::lat_lon_to_web_mercator(bottom_right_tile.lower_right());
 
-            let top_left_aligned = tl_diff.longitude.abs() < 1e-6 && tl_diff.latitude.abs() < 1e-6;
-            let bottom_right_aligned = br_diff.longitude.abs() < 1e-6 && br_diff.latitude.abs() < 1e-6;
+            let top_left_aligned = tl_diff.x().abs() < 1e-6 && tl_diff.y().abs() < 1e-6;
+            let bottom_right_aligned = br_diff.x().abs() < 1e-6 && br_diff.y().abs() < 1e-6;
             let tile_aligned = top_left_aligned && bottom_right_aligned;
 
             if tile_aligned {
@@ -321,6 +327,7 @@ fn create_cog_tile_web_mercator_bounds(
     Ok(web_tiles)
 }
 
+#[derive(Debug, Clone)]
 pub struct WebTileInfo {
     pub min_zoom: i32,
     pub max_zoom: i32,

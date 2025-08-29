@@ -6,7 +6,7 @@ use env_logger::{Env, TimestampPrecision};
 use indicatif::{MultiProgress, ProgressBar};
 use indicatif_log_bridge::LogWrapper;
 
-use crate::createtiles::{ZoomLevelSelection, create_cog_tiles};
+use crate::createtiles::{ZoomLevelSelection, create_cog_tiles, print_gdal_translate_command};
 
 pub type Result<T> = anyhow::Result<T>;
 
@@ -35,6 +35,9 @@ pub struct Opt {
 
     #[arg(long = "noprogress")]
     pub no_progress: bool,
+
+    #[arg(long = "gdal-cmd")]
+    pub print_command: bool,
 }
 
 fn main() -> Result<()> {
@@ -67,8 +70,12 @@ fn main() -> Result<()> {
     let progress = multi.add(ProgressBar::new(100));
     let p = progress.clone();
 
-    create_cog_tiles(&opt.input, opt.output, tile_opts)?;
-    p.finish_with_message("COG creation done");
+    if opt.print_command {
+        print_gdal_translate_command(&opt.input, tile_opts)?;
+    } else {
+        create_cog_tiles(&opt.input, opt.output, tile_opts)?;
+        p.finish_with_message("COG creation done");
+    }
 
     Ok(())
 }

@@ -12,4 +12,4 @@ pub use webtiles::{TileSource, WebTileInfo, WebTilesReader};
 
 #[cfg(feature = "gdal")]
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
-pub use creation::{CogCreationOptions, PredictorSelection, create_cog_tiles};
+pub use creation::{CogCreationOptions, PredictorSelection, create_cog_tiles, create_gdal_args};
