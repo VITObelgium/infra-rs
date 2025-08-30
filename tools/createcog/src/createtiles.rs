@@ -44,7 +44,7 @@ fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions
 }
 
 pub fn print_gdal_translate_command(input: &Path, opts: TileCreationOptions) -> Result<()> {
-    let args = geo::cog::create_gdal_args(&input, create_opts(opts)?)?;
+    let args = geo::cog::create_gdal_args(input, create_opts(opts)?)?;
     println!("Gdal cmd:\n {}", args.join(" "));
     Ok(())
 }
