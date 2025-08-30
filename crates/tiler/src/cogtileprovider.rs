@@ -8,6 +8,7 @@ use std::{
 
 use geo::{Array as _, ArrayNum, Coordinate, DenseArray, LatLonBounds, Tile, crs, geotiff};
 use geo::{cog::WebTilesReader, geotiff::GeoTiffMetadata};
+use inf::Legend;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 #[cfg(feature = "simd")]
@@ -106,6 +107,23 @@ impl CogTileProvider {
     }
 
     #[geo::simd_bounds]
+    fn read_png_tile<T: ArrayNum>(meta: &LayerMetadata, tile: &Tile, tile_size: u32, dpi_ratio: u8) -> Result<TileData> {
+        let raw_tile_data = Self::read_tile_data::<T>(meta, tile, tile_size)?;
+        if raw_tile_data.is_empty() {
+            return Ok(TileData::default());
+        }
+
+        // The default legend is with grayscale colors in range 0-255
+        imageprocessing::raw_tile_to_png_color_mapped::<T>(
+            raw_tile_data.as_ref(),
+            (tile_size * dpi_ratio as u32) as usize,
+            (tile_size * dpi_ratio as u32) as usize,
+            Some(T::NODATA),
+            &Legend::default(),
+        )
+    }
+
+    #[geo::simd_bounds]
     fn read_tile_data_color_mappped<T: ArrayNum>(meta: &LayerMetadata, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
         log::debug!(
             "COG color map tile: {}@{}x {}px {}",
@@ -137,30 +155,41 @@ impl CogTileProvider {
         )
     }
 
-    pub fn tile(meta: &LayerMetadata, tile_req: &TileRequest) -> Result<TileData> {
-        if tile_req.tile_format != TileFormat::RasterTile {
-            return Err(Error::Runtime("Only raster tile format is supported for COG".to_string()));
-        }
-
-        if Some(tile_req.tile_size) != meta.tile_size {
+    pub fn tile(meta: &LayerMetadata, req: &TileRequest) -> Result<TileData> {
+        if Some(req.tile_size) != meta.tile_size {
             return Err(Error::InvalidArgument("Invalid COG tile size requested".to_string()));
         }
 
-        if tile_req.dpi_ratio != 1 {
+        if req.dpi_ratio != 1 {
             return Err(Error::InvalidArgument("DPI ratio is not supported for COG tiles".to_string()));
         }
 
-        match meta.data_type {
-            geo::ArrayDataType::Int8 => Self::read_vrt_tile::<i8>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Uint8 => Self::read_vrt_tile::<u8>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Int16 => Self::read_vrt_tile::<i16>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Uint16 => Self::read_vrt_tile::<u16>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Int32 => Self::read_vrt_tile::<i32>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Uint32 => Self::read_vrt_tile::<u32>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Int64 => Self::read_vrt_tile::<i64>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Uint64 => Self::read_vrt_tile::<u64>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Float32 => Self::read_vrt_tile::<f32>(meta, &tile_req.tile, tile_req.tile_size),
-            geo::ArrayDataType::Float64 => Self::read_vrt_tile::<f64>(meta, &tile_req.tile, tile_req.tile_size),
+        match req.tile_format {
+            TileFormat::Png => match meta.data_type {
+                geo::ArrayDataType::Int8 => Self::read_png_tile::<i8>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Uint8 => Self::read_png_tile::<u8>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Int16 => Self::read_png_tile::<i16>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Uint16 => Self::read_png_tile::<u16>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Int32 => Self::read_png_tile::<i32>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Uint32 => Self::read_png_tile::<u32>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Int64 => Self::read_png_tile::<i64>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Uint64 => Self::read_png_tile::<u64>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Float32 => Self::read_png_tile::<f32>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+                geo::ArrayDataType::Float64 => Self::read_png_tile::<f64>(meta, &req.tile, req.tile_size, req.dpi_ratio),
+            },
+            TileFormat::RasterTile => match meta.data_type {
+                geo::ArrayDataType::Int8 => Self::read_vrt_tile::<i8>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Uint8 => Self::read_vrt_tile::<u8>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Int16 => Self::read_vrt_tile::<i16>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Uint16 => Self::read_vrt_tile::<u16>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Int32 => Self::read_vrt_tile::<i32>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Uint32 => Self::read_vrt_tile::<u32>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Int64 => Self::read_vrt_tile::<i64>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Uint64 => Self::read_vrt_tile::<u64>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Float32 => Self::read_vrt_tile::<f32>(meta, &req.tile, req.tile_size),
+                geo::ArrayDataType::Float64 => Self::read_vrt_tile::<f64>(meta, &req.tile, req.tile_size),
+            },
+            _ => Err(Error::InvalidArgument("Invalid pixel format".to_string())),
         }
     }
 
