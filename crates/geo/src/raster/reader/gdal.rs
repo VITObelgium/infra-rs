@@ -225,7 +225,7 @@ impl RasterReader for GdalRasterIO {
     ) -> Result<GeoReference> {
         let meta = self.georeference(band_index)?;
 
-        debug_assert_eq!(dst_data.len(), meta.raster_size().cell_count() * data_type.bytes() as usize);
+        debug_assert_eq!(dst_data.len(), meta.raster_size().cell_count());
         check_if_metadata_fits(meta.nodata(), self.data_type(band_index)?, data_type)?;
 
         let cut_out = CutOut {
