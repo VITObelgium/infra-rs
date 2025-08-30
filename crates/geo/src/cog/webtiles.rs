@@ -460,6 +460,10 @@ impl WebTilesReader {
                     let cog_chunks: Vec<Vec<u8>> = tile_sources
                         .iter()
                         .flat_map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
+                            if cog_tile_offset.is_sparse() {
+                                return Ok(vec![]);
+                            }
+
                             let mut chunk = vec![0; cog_tile_offset.size as usize];
                             io::read_chunk(cog_tile_offset, reader, &mut chunk)?;
                             Ok(chunk)

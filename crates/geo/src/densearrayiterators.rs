@@ -84,7 +84,7 @@ pub struct DenserRasterWindowIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> 
 
 impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterWindowIterator<'a, T, Metadata> {
     pub fn new(raster: &'a DenseArray<T, Metadata>, window: RasterWindow) -> Self {
-        let cell = window.top_left();
+        let cell = if window.is_empty() { Cell::invalid() } else { window.top_left() };
         DenserRasterWindowIterator { cell, raster, window }
     }
 

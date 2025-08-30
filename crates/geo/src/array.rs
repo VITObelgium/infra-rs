@@ -99,6 +99,10 @@ impl RasterWindow {
         RasterWindow { top_left, bottom_right }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.top_left.row > self.bottom_right.row || self.top_left.col > self.bottom_right.col
+    }
+
     pub fn top_left(&self) -> Cell {
         self.top_left
     }
