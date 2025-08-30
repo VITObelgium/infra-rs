@@ -1,7 +1,7 @@
 use geo::{Columns, RasterSize, Rows};
 use inf::allocate::{self, AlignedVec};
 
-use crate::Result;
+use crate::{Error, Result};
 
 use std::io::Cursor;
 
@@ -21,20 +21,24 @@ pub fn decode_png(data: &[u8]) -> Result<(AlignedVec<f32>, RasterSize, png::Colo
 
     let cursor = Cursor::new(data);
     let decoder = png::Decoder::new_with_options(cursor, decoder_options);
-
     let mut reader = decoder.read_info()?;
-    let mut buf = allocate::aligned_vec_with_capacity::<f32>(reader.output_buffer_size() / std::mem::size_of::<f32>());
-    // SAFETY: Convert the uninitialized buffer into a mutable slice for writing
-    let buf_slice: &mut [u8] = unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), reader.output_buffer_size()) };
-    let frame_info = reader.next_frame(buf_slice)?;
-    unsafe {
-        buf.set_len(frame_info.buffer_size() / std::mem::size_of::<f32>());
-    }
 
-    let info = reader.info();
-    Ok((
-        buf,
-        RasterSize::with_rows_cols(Rows(info.height as i32), Columns(info.width as i32)),
-        info.color_type,
-    ))
+    if let Some(output_buffer_size) = reader.output_buffer_size() {
+        let mut buf = allocate::aligned_vec_with_capacity::<f32>(output_buffer_size / std::mem::size_of::<f32>());
+        // SAFETY: Convert the uninitialized buffer into a mutable slice for writing
+        let buf_slice: &mut [u8] = unsafe { std::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), output_buffer_size) };
+        let frame_info = reader.next_frame(buf_slice)?;
+        unsafe {
+            buf.set_len(frame_info.buffer_size() / std::mem::size_of::<f32>());
+        }
+
+        let info = reader.info();
+        Ok((
+            buf,
+            RasterSize::with_rows_cols(Rows(info.height as i32), Columns(info.width as i32)),
+            info.color_type,
+        ))
+    } else {
+        Err(Error::Runtime("PNG output buffer size does not fit in memory".to_string()))
+    }
 }

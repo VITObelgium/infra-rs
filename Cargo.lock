@@ -3942,7 +3942,7 @@ dependencies = [
  "lz4_flex",
  "num",
  "path_macro",
- "png 0.17.16",
+ "png 0.18.0",
  "simd_macro",
  "thiserror 2.0.16",
  "tokio",

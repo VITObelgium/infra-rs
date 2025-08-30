@@ -126,6 +126,9 @@ test: (test_debug default_target)
 test_ci target=default_target: (test_release target)
 test_simd target=default_target: (test_release_simd target)
 
+miri target=default_target:
+    cargo +nightly miri test --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs
+
 rasterbench:
     cargo bench --bench rasterops --package=geo
 
