@@ -1,5 +1,8 @@
 use std::{ops::Range, path::PathBuf};
 
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
+
 use crate::{
     ColorMappedTileRequest, Error, LayerMetadata, Result, TileData, TileFormat, imageprocessing,
     layermetadata::to_raster_data_type,
@@ -14,6 +17,7 @@ use gdal::{
 use geo::{
     Array, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize,
     raster::reader::{self, RasterOpenOptions, RasterReader as _},
+    simd_bounds,
 };
 use geo::{CellSize, Columns, GeoReference, LatLonBounds, Rows, Tile, constants, crs, raster, srs::SpatialReference};
 use inf::allocate::AlignedVecUnderConstruction;
@@ -79,6 +83,7 @@ pub fn detect_raster_range(raster_path: &std::path::Path, band_nr: usize, bbox: 
     )))
 }
 
+#[simd_bounds]
 pub fn read_raster_tile<T: ArrayNum + GdalType>(
     raster_path: &std::path::Path,
     band_nr: usize,
@@ -180,6 +185,7 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
 }
 
 /// Read the raw tile data, result is a tuple with the raw data and the nodata value
+#[simd_bounds]
 pub fn read_tile_data<T: ArrayNum + Num + GdalType>(
     meta: &LayerMetadata,
     band_nr: usize,
@@ -215,6 +221,7 @@ pub fn read_tile_data<T: ArrayNum + Num + GdalType>(
     Ok(raw_tile_data)
 }
 
+#[simd_bounds]
 pub fn read_color_mapped_tile_as_png<T>(meta: &LayerMetadata, band_nr: usize, req: &ColorMappedTileRequest) -> Result<TileData>
 where
     T: ArrayNum + Num + GdalType,

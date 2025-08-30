@@ -6,10 +6,13 @@ use inf::allocate::AlignedVec;
 use inf::legend::Legend;
 
 use geo::raster::io::RasterFormat;
-use geo::{Array, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize};
+use geo::{Array, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize, simd_bounds};
 use geo::{Columns, Coordinate, GeoReference, LatLonBounds, Rows, Tile, crs};
 use num::Num;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
+
+#[cfg(feature = "simd")]
+const LANES: usize = inf::simd::LANES;
 
 use crate::{
     Error, PixelFormat, Result,
@@ -47,6 +50,7 @@ impl WarpingTileProvider {
         matches!(raster_type, RasterFormat::GeoTiff | RasterFormat::Vrt | RasterFormat::Netcdf)
     }
 
+    #[simd_bounds]
     fn process_pixel_request<T>(meta: &LayerMetadata, band_nr: usize, tile: Tile, dpi_ratio: u8, coord: Coordinate) -> Result<Option<f32>>
     where
         T: ArrayNum + Num + GdalType,
@@ -66,6 +70,7 @@ impl WarpingTileProvider {
         }
     }
 
+    #[simd_bounds]
     fn process_tile_request<T>(meta: &LayerMetadata, band_nr: usize, req: &TileRequest) -> Result<TileData>
     where
         T: ArrayNum + Num + GdalType,
