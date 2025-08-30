@@ -35,23 +35,15 @@ harness = false
 name = "simd"
 
 [dependencies]
-paste = "1.0"
 approx = "0.5"
-calamine = { version = "0.30", features = ["dates"], optional = true }
-proj4rs = { version = "0.1", features = [
-  "geo-types",
-  "crs-definitions",
-], optional = true }
-chrono = { version = "0.4", optional = true }
-proj4wkt = { version = "0.1", optional = true }
-crs-definitions = { version = "0.3.1", optional = true }
-csv = { version = "1.3", optional = true }
-proj = { version = "0.30.0", optional = true }
-polars = { version = "0.50", optional = true }
 arrow = { version = "56", optional = true }
 bon = { version = "3.7", optional = true }
 bytemuck = { version = "1.23" }
+calamine = { version = "0.30", features = ["dates"], optional = true }
 cfg-if = "1.0"
+chrono = { version = "0.4", optional = true }
+crs-definitions = { version = "0.3.1", optional = true }
+csv = { version = "1.3", optional = true }
 gdal = { version = "0.18", optional = true }
 gdal-sys = { version = "0.11", optional = true }
 geo-types = { version = "0.7", features = ["approx"] }
@@ -61,16 +53,24 @@ inf = { path = "../inf" }
 itertools = "0.14"
 log = "0.4"
 num = "0.4"
+paste = "1.0"
+polars = { version = "0.50", optional = true }
+proj = { version = "0.31", optional = true }
+proj4rs = { version = "0.1", features = [
+  "crs-definitions",
+  "geo-types",
+], optional = true }
+proj4wkt = { version = "0.1", optional = true }
 pyo3 = { version = "0.25", optional = true }
 rayon = { version = "1.11", optional = true }
+ruzstd = { version = "0.8", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 simd_macro = { path = "simd_macro" }
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 thiserror = "2.0"
-vector_derive = { optional = true, path = "vector_derive" }
 tiff = { version = "0.10", default-features = false, optional = true }
+vector_derive = { optional = true, path = "vector_derive" }
 weezl = { version = "0.1", optional = true }
-ruzstd = { version = "0.8", optional = true }
 xml-rs = { version = "1.0", optional = true }
 
 [dev-dependencies]
@@ -91,21 +91,21 @@ tsify = { version = "*", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
-default = ["derive", "gdal", "cog"]
 arrow = ["dep:arrow"]
-derive = ["dep:vector_derive"]
-proj = ["dep:proj"]
-proj4rs = ["dep:proj4rs", "dep:proj4wkt", "dep:crs-definitions"]
-gdal = ["proj", "dep:gdal", "dep:gdal-sys", "dep:bon", "geozero/with-gdal"]
 cog = ["raster-io-geotiff"]
+default = ["cog", "derive", "gdal"]
+derive = ["dep:vector_derive"]
+gdal = ["dep:bon", "dep:gdal", "dep:gdal-sys", "geozero/with-gdal", "proj"]
 gdal-static = ["gdal"]
+polars = ["dep:polars"]
+proj = ["dep:proj"]
+proj4rs = ["dep:crs-definitions", "dep:proj4rs", "dep:proj4wkt"]
 python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
+raster-io-geotiff = ["dep:ruzstd", "dep:tiff", "dep:weezl", "dep:xml-rs"]
+rayon = ["dep:rayon"]
 serde = ["dep:serde"]
 simd = ["inf/simd", "simd_macro/simd"]
 specta = ["dep:specta"]
-vector = ["dep:geos", "dep:rayon", "geozero/with-geos", "dep:chrono"]
-raster-io-geotiff = ["dep:tiff", "dep:weezl", "dep:xml-rs", "dep:ruzstd"]
-vector-io-xlsx = ["dep:calamine"]
+vector = ["dep:chrono", "dep:geos", "dep:rayon", "geozero/with-geos"]
 vector-io-csv = ["dep:csv"]
-rayon = ["dep:rayon"]
-polars = ["dep:polars"]
+vector-io-xlsx = ["dep:calamine"]
