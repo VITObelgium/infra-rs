@@ -12,7 +12,7 @@ use gdal::{
     raster::{GdalDataType, GdalType},
 };
 use geo::{
-    Array, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize,
+    Array, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize,
     raster::reader::{self, RasterOpenOptions, RasterReader as _},
 };
 use geo::{CellSize, Columns, GeoReference, LatLonBounds, Rows, Tile, constants, crs, raster, srs::SpatialReference};
@@ -111,7 +111,7 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
     let ds = raster::algo::gdal::translate_file(raster_path, &output_path, &options)?;
 
     let mut data = AlignedVecUnderConstruction::new(meta.raster_size.cell_count());
-    let meta = reader::gdal::GdalRasterIO::from_dataset(ds).read_raster_band(1, ArrayDataType::Float32, data.as_uninit_byte_slice_mut())?;
+    let meta = reader::gdal::GdalRasterIO::from_dataset(ds).read_raster_band(1, T::TYPE, data.as_uninit_slice_mut())?;
     Ok(DenseArray::new(RasterMetadata::with_geo_reference(meta), unsafe {
         data.assume_init()
     })?)
