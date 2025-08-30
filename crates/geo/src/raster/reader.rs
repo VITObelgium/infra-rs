@@ -95,8 +95,7 @@ pub fn create_raster_reader_with_options(path: impl AsRef<Path>, _options: &Rast
 
 fn reinterpret_slice<TDest, T>(data: &mut [MaybeUninit<T>]) -> &mut [MaybeUninit<TDest>] {
     debug_assert!(std::mem::size_of::<TDest>() == std::mem::size_of::<T>());
-    let byte_len = data.len() * std::mem::size_of::<T>();
-    unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<MaybeUninit<TDest>>(), byte_len) }
+    unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<MaybeUninit<TDest>>(), data.len()) }
 }
 
 /// Extension trait: generic convenience method
