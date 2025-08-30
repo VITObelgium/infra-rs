@@ -12,7 +12,7 @@ inf = { features = ["serde"], path = "../inf" }
 log = "0.4"
 mvt = { version = "0.10", optional = true }
 num = "0.4"
-png = "0.17"
+png = "0.18"
 raster-tile = { path = "../raster-tile" }
 serde = { version = "1.0", features = ["derive"], optional = true }
 serde_json = { version = "1.0", optional = true }

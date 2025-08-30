@@ -20,8 +20,7 @@ fn encode_png(colors: &[Color], width: u32, height: u32) -> Result<Vec<u8>> {
         encoder.set_color(png::ColorType::Rgba);
         encoder.set_depth(png::BitDepth::Eight);
         encoder.set_compression(png::Compression::Fast);
-        encoder.set_filter(png::FilterType::Sub);
-        encoder.set_adaptive_filter(png::AdaptiveFilterType::Adaptive);
+        encoder.set_filter(png::Filter::Sub);
 
         let mut writer = encoder
             .write_header()
