@@ -35,6 +35,11 @@ impl GeoTransform {
         Point::new(self.0[0], self.0[3])
     }
 
+    pub fn set_top_left(&mut self, top_left: Point) {
+        self.0[0] = top_left.x();
+        self.0[3] = top_left.y();
+    }
+
     /// The horizontal cell size
     pub fn cell_size_x(&self) -> f64 {
         self.0[1]

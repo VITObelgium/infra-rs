@@ -8,7 +8,7 @@ mod projectioninfo;
 mod reader;
 mod stats;
 pub mod tileio;
-mod utils;
+pub(crate) mod utils;
 
 use projectioninfo::ProjectionInfo;
 

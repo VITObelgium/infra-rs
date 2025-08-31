@@ -177,8 +177,7 @@ pub fn read_chunk_data_into_buffer<T: ArrayNum>(
     reader: &mut (impl Read + Seek),
     tile_data: &mut [T],
 ) -> Result<()> {
-    if chunk.size == 0 {
-        // Empty chunk means geotiff was created with sparse tiles support and this is a sparse tile
+    if chunk.is_sparse() {
         tile_data.fill(cast::option(nodata).ok_or_else(|| Error::Runtime("Invalid nodata value".into()))?);
     }
 

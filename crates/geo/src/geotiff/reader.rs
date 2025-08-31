@@ -1,5 +1,7 @@
+use crate::geotiff::utils;
+use crate::raster::intersection::intersect_georeference;
 use crate::{
-    ArrayDataType, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, GeoReference, RasterSize,
+    ArrayInterop, ArrayMetadata, ArrayNum, Cell, Columns, DenseArray, GeoReference, RasterSize, Rows,
     geotiff::{GeoTiffMetadata, io},
 };
 
@@ -82,61 +84,23 @@ impl GeoTiffReader {
     ) -> Result<DenseArray<T, M>> {
         let nodata = cast::option::<T>(self.geo_ref().nodata()).unwrap_or(T::NODATA);
         let mut data = allocate::aligned_vec_filled_with(nodata, self.geo_ref().raster_size().cell_count());
-        let georef = self.read_tiled_raster_into_buffer(chunks, tile_size, &mut data)?;
+        let georef = Self::read_tiled_raster_into_buffer(&self.meta, chunks, tile_size, &mut self.tiff_file, &mut data)?;
         DenseArray::new_init_nodata(M::with_geo_reference(georef), data)
-    }
-
-    fn read_tiled_raster_into_byte_buffer<M: ArrayMetadata>(
-        &mut self,
-        chunks: &[TiffChunkLocation],
-        tile_size: u32,
-        buffer: &mut [MaybeUninit<u8>],
-    ) -> Result<M> {
-        match self.meta.data_type {
-            ArrayDataType::Int8 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i8>(), buffer.len() / std::mem::size_of::<i8>())
-            }),
-            ArrayDataType::Uint8 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u8>(), buffer.len() / std::mem::size_of::<u8>())
-            }),
-            ArrayDataType::Int16 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i16>(), buffer.len() / std::mem::size_of::<i16>())
-            }),
-            ArrayDataType::Uint16 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u16>(), buffer.len() / std::mem::size_of::<u16>())
-            }),
-            ArrayDataType::Int32 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i32>(), buffer.len() / std::mem::size_of::<i32>())
-            }),
-            ArrayDataType::Uint32 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u32>(), buffer.len() / std::mem::size_of::<u32>())
-            }),
-            ArrayDataType::Int64 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i64>(), buffer.len() / std::mem::size_of::<i64>())
-            }),
-            ArrayDataType::Uint64 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u64>(), buffer.len() / std::mem::size_of::<u64>())
-            }),
-            ArrayDataType::Float32 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<f32>(), buffer.len() / std::mem::size_of::<f32>())
-            }),
-            ArrayDataType::Float64 => self.read_tiled_raster_into_buffer(chunks, tile_size, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<f64>(), buffer.len() / std::mem::size_of::<f64>())
-            }),
-        }
     }
 
     #[simd_bounds]
     fn read_tiled_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(
-        &mut self,
+        meta: &GeoTiffMetadata,
         chunks: &[TiffChunkLocation],
         tile_size: u32,
+        tiff_file: &mut File,
         buffer: &mut [T],
     ) -> Result<M> {
-        let nodata = cast::option::<T>(self.geo_ref().nodata()).unwrap_or(T::NODATA);
+        let geo_reference = meta.geo_reference.clone();
+        let nodata = cast::option::<T>(geo_reference.nodata()).unwrap_or(T::NODATA);
 
-        let right_edge_cols = self.geo_ref().columns().count() as usize % tile_size as usize;
-        let tiles_per_row = (self.geo_ref().columns().count() as usize).div_ceil(tile_size as usize);
+        let right_edge_cols = geo_reference.columns().count() as usize % tile_size as usize;
+        let tiles_per_row = (geo_reference.columns().count() as usize).div_ceil(tile_size as usize);
 
         let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
         for (chunk_index, chunk_offset) in chunks.iter().enumerate() {
@@ -145,21 +109,21 @@ impl GeoTiffReader {
             let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
             let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
 
-            self.read_chunk_data_into_buffer_as(chunk_offset, &mut tile_buf)?;
+            Self::read_chunk_data_into_buffer_as(meta, chunk_offset, tiff_file, &mut tile_buf)?;
 
             for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
-                if row_start * tile_size as usize + tile_row_index >= self.geo_ref().rows().count() as usize {
+                if row_start * tile_size as usize + tile_row_index >= geo_reference.rows().count() as usize {
                     break; // Skip rows that are outside the raster bounds
                 }
 
                 let index_start =
-                    ((row_start * tile_size as usize + tile_row_index) * self.geo_ref().columns().count() as usize) + col_start;
+                    ((row_start * tile_size as usize + tile_row_index) * geo_reference.columns().count() as usize) + col_start;
                 let data_slice = &mut buffer[index_start..index_start + row_size];
                 data_slice.copy_from_slice(&tile_row_data[0..row_size]);
             }
         }
 
-        Ok(M::with_geo_reference(self.geo_ref().clone()))
+        Ok(M::with_geo_reference(geo_reference))
     }
 
     #[simd_bounds]
@@ -174,51 +138,6 @@ impl GeoTiffReader {
         DenseArray::new_init_nodata(georef, unsafe { data.assume_init() })
     }
 
-    fn read_striped_raster_into_byte_buffer<M: ArrayMetadata>(
-        &mut self,
-        chunks: &[TiffChunkLocation],
-        rows_per_strip: u32,
-        buffer: &mut [MaybeUninit<u8>],
-    ) -> Result<M> {
-        debug_assert_eq!(
-            self.meta.data_type.bytes() as usize * self.meta.geo_reference.raster_size().cell_count(),
-            buffer.len()
-        );
-
-        match self.meta.data_type {
-            ArrayDataType::Int8 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i8>(), buffer.len() / std::mem::size_of::<i8>())
-            }),
-            ArrayDataType::Uint8 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u8>(), buffer.len() / std::mem::size_of::<u8>())
-            }),
-            ArrayDataType::Int16 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i16>(), buffer.len() / std::mem::size_of::<i16>())
-            }),
-            ArrayDataType::Uint16 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u16>(), buffer.len() / std::mem::size_of::<u16>())
-            }),
-            ArrayDataType::Int32 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i32>(), buffer.len() / std::mem::size_of::<i32>())
-            }),
-            ArrayDataType::Uint32 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u32>(), buffer.len() / std::mem::size_of::<u32>())
-            }),
-            ArrayDataType::Int64 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<i64>(), buffer.len() / std::mem::size_of::<i64>())
-            }),
-            ArrayDataType::Uint64 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<u64>(), buffer.len() / std::mem::size_of::<u64>())
-            }),
-            ArrayDataType::Float32 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<f32>(), buffer.len() / std::mem::size_of::<f32>())
-            }),
-            ArrayDataType::Float64 => self.read_striped_raster_into_buffer(chunks, rows_per_strip, unsafe {
-                std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<f64>(), buffer.len() / std::mem::size_of::<f64>())
-            }),
-        }
-    }
-
     #[simd_bounds]
     fn read_striped_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
@@ -229,7 +148,7 @@ impl GeoTiffReader {
         let geo_ref = self.meta.geo_reference.clone();
         let strip_size = geo_ref.columns().count() as usize * rows_per_strip as usize;
         for (stripe_offset, stripe_buf) in chunks.iter().zip(buffer.chunks_mut(strip_size)) {
-            self.read_chunk_data_into_buffer_as(stripe_offset, stripe_buf)?;
+            Self::read_chunk_data_into_buffer_as(&self.meta, stripe_offset, &mut self.tiff_file, stripe_buf)?;
         }
 
         Ok(M::with_geo_reference(geo_ref))
@@ -243,10 +162,6 @@ impl GeoTiffReader {
     #[simd_bounds]
     pub fn read_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(&mut self, dst_data: &mut [std::mem::MaybeUninit<T>]) -> Result<M> {
         self.read_overview_into_buffer::<T, M>(0, dst_data)
-    }
-
-    pub fn read_raster<M: ArrayMetadata>(&mut self, dst_data: &mut [std::mem::MaybeUninit<u8>]) -> Result<M> {
-        self.read_overview_into_byte_buffer::<M>(0, dst_data)
     }
 
     /// Reads an overview raster at the specified index
@@ -274,6 +189,18 @@ impl GeoTiffReader {
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
     #[simd_bounds]
+    pub fn read_band_region_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+        &mut self,
+        _band_index: usize,
+        region: &GeoReference,
+        buffer: &mut [MaybeUninit<T>],
+    ) -> Result<M> {
+        self.read_overview_region_into_buffer(0, region, buffer)
+    }
+
+    /// Reads an overview raster at the specified index
+    /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
+    #[simd_bounds]
     pub fn read_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview_index: usize,
@@ -289,7 +216,13 @@ impl GeoTiffReader {
 
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    return self.read_tiled_raster_into_buffer(&overview.chunk_locations, tile_size, buffer);
+                    return Self::read_tiled_raster_into_buffer(
+                        &self.meta,
+                        &overview.chunk_locations,
+                        tile_size,
+                        &mut self.tiff_file,
+                        buffer,
+                    );
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
                     return self.read_striped_raster_into_buffer(&overview.chunk_locations, rows_per_strip, buffer);
@@ -302,18 +235,45 @@ impl GeoTiffReader {
 
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
-    pub fn read_overview_into_byte_buffer<M: ArrayMetadata>(&mut self, overview_index: usize, buffer: &mut [MaybeUninit<u8>]) -> Result<M> {
+    #[simd_bounds]
+    pub fn read_overview_region_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+        &mut self,
+        overview_index: usize,
+        extent: &crate::GeoReference,
+        buffer: &mut [MaybeUninit<T>],
+    ) -> Result<M> {
+        let nodata = MaybeUninit::new(self.geo_ref().nodata().and_then(NumCast::from).unwrap_or(T::NODATA));
+
         if let Some(overview) = self.meta.overviews.get(overview_index).cloned() {
             if overview.chunk_locations.is_empty() {
-                return Err(Error::Runtime("No tiles available in the geotiff".into()));
+                buffer.fill(nodata);
+                return Ok(ArrayMetadata::with_geo_reference(extent.clone()));
             }
 
+            let intersection = intersect_georeference(&self.metadata().geo_reference, extent)?;
+            if intersection.dst_col_offset > 0
+                || intersection.dst_row_offset > 0
+                || intersection.cols + intersection.dst_col_offset < extent.columns().count()
+                || intersection.rows + intersection.dst_row_offset < extent.rows().count()
+            {
+                // The requested extent is partially outside the raster bounds, fill with nodata first
+                buffer.fill(nodata);
+            }
+
+            // Cast away the maybe uninit - we will fill the entire buffer
+            let buffer = unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<T>(), buffer.len()) };
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    return self.read_tiled_raster_into_byte_buffer::<M>(&overview.chunk_locations, tile_size, buffer);
+                    let chunk_tiles = Self::calculate_chunk_tiles_for_extent(&overview, overview_index, self.geo_ref(), extent, tile_size)?;
+                    utils::merge_tile_chunks_into_buffer(&self.meta, extent, tile_size, &chunk_tiles, &mut self.tiff_file, buffer)?;
+                    return Ok(M::with_geo_reference(extent.clone()));
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
-                    return self.read_striped_raster_into_byte_buffer(&overview.chunk_locations, rows_per_strip, buffer);
+                    let chunk_tiles =
+                        Self::calculate_chunk_strips_for_extent(&overview, overview_index, self.geo_ref(), extent, rows_per_strip)?;
+                    utils::merge_strip_chunks_into_buffer(&self.meta, extent, rows_per_strip, &chunk_tiles, &mut self.tiff_file, buffer)?;
+                    return Ok(M::with_geo_reference(extent.clone()));
+                    //return self.read_striped_raster_into_buffer(&overview.chunk_locations, rows_per_strip, buffer);
                 }
             }
         }
@@ -322,33 +282,160 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_chunk_data_into_buffer_as<T: ArrayNum>(&mut self, chunk: &TiffChunkLocation, chunk_data: &mut [T]) -> Result<()> {
-        let row_length = self.meta.chunk_row_length();
+    fn read_chunk_data_into_buffer_as<T: ArrayNum>(
+        meta: &GeoTiffMetadata,
+        chunk: &TiffChunkLocation,
+        tiff_file: &mut File,
+        chunk_data: &mut [T],
+    ) -> Result<()> {
+        let row_length = meta.chunk_row_length();
 
-        if T::TYPE != self.meta.data_type {
+        if T::TYPE != meta.data_type {
             return Err(Error::InvalidArgument(format!(
                 "Tile data type mismatch: expected {:?}, got {:?}",
-                self.meta.data_type,
+                meta.data_type,
                 T::TYPE
             )));
         }
 
         if chunk.is_sparse() {
             // Sparse tiles are filled with nodata value
-            chunk_data.fill(self.meta.geo_reference.nodata().and_then(NumCast::from).unwrap_or(T::NODATA));
+            chunk_data.fill(meta.geo_reference.nodata().and_then(NumCast::from).unwrap_or(T::NODATA));
         } else {
             io::read_chunk_data_into_buffer(
                 chunk,
                 row_length,
-                self.meta.geo_reference.nodata(),
-                self.meta.compression,
-                self.meta.predictor,
-                &mut self.tiff_file,
+                meta.geo_reference.nodata(),
+                meta.compression,
+                meta.predictor,
+                tiff_file,
                 chunk_data,
             )?;
         }
 
         Ok(())
+    }
+
+    /// Calculates the chunks needed and their location in the cutout area
+    fn calculate_chunk_tiles_for_extent(
+        overview: &TiffOverview,
+        overview_index: usize,        // index of the overview to use, 0 is full resolution
+        geo_reference: &GeoReference, // georeference of the full cog image
+        cutout: &GeoReference,        // georeference of the cutout area
+        block_size: u32,
+    ) -> Result<Vec<(TiffChunkLocation, GeoReference)>> {
+        let mut chunk_tiles = Vec::default();
+
+        let cell_size = geo_reference.cell_size() / (overview_index as f64 + 1.0);
+        let geo_ref_overview = utils::change_georef_cell_size(geo_reference, cell_size);
+
+        let tiles_wide = (overview.raster_size.cols.count() as u32).div_ceil(block_size) as usize;
+        let tiles_high = (overview.raster_size.rows.count() as u32).div_ceil(block_size) as usize;
+        assert!(
+            tiles_wide * tiles_high == overview.chunk_locations.len(),
+            "Expected {} tiles, but got {}",
+            tiles_wide * tiles_high,
+            overview.chunk_locations.len()
+        );
+
+        //- Point::new(cell_size.x() / 2.0, cell_size.y() / 2.0)
+
+        let top_left_cell = geo_reference.point_to_cell(cutout.top_left());
+        let bottom_right_cell = geo_reference.point_to_cell(cutout.bottom_right());
+
+        let block_size = block_size as i32;
+        let min_tile_x = (top_left_cell.col / block_size).clamp(0, tiles_wide as i32 - 1) as usize;
+        let max_tile_x = (bottom_right_cell.col / block_size).clamp(0, tiles_wide as i32 - 1) as usize;
+        let min_tile_y = (top_left_cell.row / block_size).clamp(0, tiles_high as i32 - 1) as usize;
+        let max_tile_y = (bottom_right_cell.row / block_size).clamp(0, tiles_high as i32 - 1) as usize;
+
+        for ty in min_tile_y..=max_tile_y {
+            let mut current_source_cell = Cell::from_row_col(ty as i32 * block_size, 0);
+            // Calculate the actual height of this chunk (may be smaller at the edges)
+            let chunk_height = Rows(if current_source_cell.row + block_size > overview.raster_size.rows.count() {
+                debug_assert!(ty + 1 == tiles_high);
+                overview.raster_size.rows.count() - current_source_cell.row
+            } else {
+                block_size
+            });
+
+            for tx in min_tile_x..=max_tile_x {
+                current_source_cell.col = tx as i32 * block_size;
+                let chunk_width = Columns(if current_source_cell.col + block_size > overview.raster_size.cols.count() {
+                    debug_assert!(tx + 1 == tiles_wide);
+                    overview.raster_size.cols.count() - current_source_cell.col
+                } else {
+                    block_size
+                });
+
+                let lower_left_cell = Cell::from_row_col(current_source_cell.row + chunk_height.count() - 1, current_source_cell.col);
+
+                let chunk_geo_ref = GeoReference::with_bottom_left_origin(
+                    String::default(),
+                    RasterSize::with_rows_cols(chunk_height, chunk_width),
+                    geo_ref_overview.cell_lower_left(lower_left_cell),
+                    cell_size,
+                    Option::<f64>::None,
+                );
+
+                let tiff_chunk = &overview.chunk_locations[ty * tiles_wide + tx];
+                chunk_tiles.push((*tiff_chunk, chunk_geo_ref));
+            }
+        }
+
+        Ok(chunk_tiles)
+    }
+
+    /// Calculates the chunks needed and their location in the cutout area
+    fn calculate_chunk_strips_for_extent(
+        overview: &TiffOverview,
+        overview_index: usize,        // index of the overview to use, 0 is full resolution
+        geo_reference: &GeoReference, // georeference of the full cog image
+        cutout: &GeoReference,        // georeference of the cutout area
+        rows_per_strip: u32,
+    ) -> Result<Vec<(TiffChunkLocation, GeoReference, bool)>> {
+        let mut chunk_tiles = Vec::default();
+
+        let cell_size = geo_reference.cell_size() / (overview_index as f64 + 1.0);
+        let geo_ref_overview = utils::change_georef_cell_size(geo_reference, cell_size);
+
+        let number_of_strips = overview.chunk_locations.len();
+
+        let top_left_cell = geo_reference.point_to_cell(cutout.top_left());
+        let bottom_right_cell = geo_reference.point_to_cell(cutout.bottom_right());
+
+        let rows_per_strip = rows_per_strip as i32;
+        let min_strip = (top_left_cell.row / rows_per_strip).clamp(0, number_of_strips as i32 - 1);
+        let max_strip = (bottom_right_cell.row / rows_per_strip).clamp(0, number_of_strips as i32 - 1);
+
+        for strip in min_strip..=max_strip {
+            let current_source_cell = Cell::from_row_col(strip * rows_per_strip, 0);
+            // Calculate the actual height of this chunk (may be smaller at the edges)
+            let chunk_height = Rows(if current_source_cell.row + rows_per_strip > overview.raster_size.rows.count() {
+                debug_assert!(strip + 1 == number_of_strips as i32);
+                overview.raster_size.rows.count() - current_source_cell.row
+            } else {
+                rows_per_strip
+            });
+
+            let lower_left_cell = Cell::from_row_col(current_source_cell.row + chunk_height.count() - 1, current_source_cell.col);
+
+            let chunk_geo_ref = GeoReference::with_bottom_left_origin(
+                String::default(),
+                RasterSize::with_rows_cols(chunk_height, geo_reference.columns()),
+                geo_ref_overview.cell_lower_left(lower_left_cell),
+                cell_size,
+                Option::<f64>::None,
+            );
+
+            chunk_tiles.push((
+                overview.chunk_locations[strip as usize],
+                chunk_geo_ref,
+                strip == number_of_strips as i32 - 1,
+            ));
+        }
+
+        Ok(chunk_tiles)
     }
 }
 

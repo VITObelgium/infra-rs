@@ -7,6 +7,7 @@ use crate::{
 };
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
+use std::ops::Div;
 
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct CellSize {
@@ -65,6 +66,17 @@ impl CellSize {
 
     pub const fn y(&self) -> f64 {
         self.y
+    }
+}
+
+impl Div<f64> for CellSize {
+    type Output = CellSize;
+
+    fn div(self, rhs: f64) -> Self::Output {
+        CellSize {
+            x: self.x / rhs,
+            y: self.y / rhs,
+        }
     }
 }
 
@@ -966,5 +978,21 @@ mod tests {
         assert_eq!(warped.geographic_epsg(), Some(crs::epsg::WGS84));
         assert_eq!(warped.raster_size(), RasterSize::with_rows_cols(Rows(89), Columns(176)),);
         assert_relative_eq!(warped.cell_size(), CellSize::square(0.062023851850733745), epsilon = 1e-10);
+    }
+
+    #[test]
+    fn cellsize_div_operation() {
+        let cell_size = CellSize::new(10.0, 20.0);
+        let result = cell_size / 2.0;
+
+        assert_eq!(result.x(), 5.0);
+        assert_eq!(result.y(), 10.0);
+
+        // Test with negative values
+        let cell_size_neg = CellSize::new(-8.0, 4.0);
+        let result_neg = cell_size_neg / 4.0;
+
+        assert_eq!(result_neg.x(), -2.0);
+        assert_eq!(result_neg.y(), 1.0);
     }
 }

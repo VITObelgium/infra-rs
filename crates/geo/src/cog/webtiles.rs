@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
     GeoTransform, Point, RasterMetadata, RasterWindow, Result, Rows, ZoomLevelStrategy,
-    geotiff::{GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
+    geotiff::{self, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -84,22 +84,22 @@ impl WebTiles {
                 );
 
                 let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level, tile_size);
-                let cog_tile_bounds = create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size).unwrap();
+                if let Ok(cog_tile_bounds) = create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size) {
+                    for tile in &tiles {
+                        let mut tile_sources = Vec::new();
+                        let web_tile_georef = GeoReference::from_tile(tile, tile_size as usize, 1);
 
-                for tile in &tiles {
-                    let mut tile_sources = Vec::new();
-                    let web_tile_georef = GeoReference::from_tile(tile, tile_size as usize, 1);
-
-                    for (cog_tile, bounds) in &cog_tile_bounds {
-                        if web_tile_georef.intersects(bounds)?
-                            && let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef)
-                        {
-                            tile_sources.push((*cog_tile, cutout));
+                        for (cog_tile, bounds) in &cog_tile_bounds {
+                            if web_tile_georef.intersects(bounds)?
+                                && let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef)
+                            {
+                                tile_sources.push((*cog_tile, cutout));
+                            }
                         }
-                    }
 
-                    if !tile_sources.is_empty() {
-                        zoom_levels[tile.z as usize].insert(*tile, TileSource::Unaligned(tile_sources));
+                        if !tile_sources.is_empty() {
+                            zoom_levels[tile.z as usize].insert(*tile, TileSource::Unaligned(tile_sources));
+                        }
                     }
                 }
             }
@@ -253,21 +253,6 @@ fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, zoom_level: i32, 
     tiles
 }
 
-fn change_georef_cell_size(geo_reference: &GeoReference, cell_size: CellSize) -> GeoReference {
-    let mut result = geo_reference.clone();
-    let x_factor = cell_size.x() / geo_reference.cell_size_x();
-    let y_factor = cell_size.y() / geo_reference.cell_size_y();
-    result.set_cell_size(cell_size);
-
-    let raster_size = geo_reference.raster_size();
-    let new_rows = Rows((raster_size.rows.count() as f64 * y_factor).round() as i32);
-    let new_cols = Columns((raster_size.cols.count() as f64 * x_factor).round() as i32);
-    result.set_rows(new_rows);
-    result.set_columns(new_cols);
-
-    result
-}
-
 fn create_cog_tile_web_mercator_bounds(
     overview: &TiffOverview,
     geo_reference: &GeoReference, // georeference of the full cog image
@@ -277,7 +262,7 @@ fn create_cog_tile_web_mercator_bounds(
     let mut web_tiles = Vec::with_capacity(overview.chunk_locations.len());
 
     let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(zoom_level, tile_size));
-    let geo_ref_zoom_level = change_georef_cell_size(geo_reference, cell_size);
+    let geo_ref_zoom_level = geotiff::utils::change_georef_cell_size(geo_reference, cell_size);
 
     let tiles_wide = (overview.raster_size.cols.count() as u32).div_ceil(tile_size) as usize;
     let tiles_high = (overview.raster_size.rows.count() as u32).div_ceil(tile_size) as usize;
@@ -312,7 +297,7 @@ fn create_cog_tile_web_mercator_bounds(
             let lower_left_cell = Cell::from_row_col(current_source_cell.row + tile_height.count() - 1, current_source_cell.col);
 
             let cog_tile_geo_ref = GeoReference::with_bottom_left_origin(
-                "EPSG:3857",
+                crs::epsg::WGS84_WEB_MERCATOR.to_string(),
                 RasterSize::with_rows_cols(tile_height, tile_width),
                 geo_ref_zoom_level.cell_lower_left(lower_left_cell),
                 cell_size,

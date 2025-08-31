@@ -78,14 +78,24 @@ where
 
 pub struct DenserRasterWindowIterator<'a, T: ArrayNum, Metadata: ArrayMetadata> {
     cell: Cell,
-    raster: &'a DenseArray<T, Metadata>,
+    raster_data: &'a [T],
+    geo_reference: &'a Metadata,
     window: RasterWindow,
 }
 
 impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterWindowIterator<'a, T, Metadata> {
     pub fn new(raster: &'a DenseArray<T, Metadata>, window: RasterWindow) -> Self {
+        Self::from_buffer(raster.as_slice(), raster.metadata(), window)
+    }
+
+    pub fn from_buffer(buffer: &'a [T], geo_reference: &'a Metadata, window: RasterWindow) -> Self {
         let cell = if window.is_empty() { Cell::invalid() } else { window.top_left() };
-        DenserRasterWindowIterator { cell, raster, window }
+        DenserRasterWindowIterator {
+            cell,
+            raster_data: buffer,
+            geo_reference,
+            window,
+        }
     }
 
     fn increment_index(&mut self) {
@@ -114,7 +124,9 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.cell.is_valid() {
-            let result = self.raster[self.cell];
+            let index = self.cell.index_in_raster(self.geo_reference.size().cols.count());
+            debug_assert!(index < self.raster_data.len());
+            let result = self.raster_data[index];
             self.increment_index();
             Some(result)
         } else {
@@ -125,14 +137,25 @@ where
 
 pub struct DenserRasterWindowIteratorMut<'a, T: ArrayNum, Metadata: ArrayMetadata> {
     cell: Cell,
-    raster: &'a mut DenseArray<T, Metadata>,
+    raster_data: &'a mut [T],
+    geo_reference: Metadata,
     window: RasterWindow,
 }
 
 impl<'a, T: ArrayNum, Metadata: ArrayMetadata> DenserRasterWindowIteratorMut<'a, T, Metadata> {
     pub fn new(raster: &'a mut DenseArray<T, Metadata>, window: RasterWindow) -> Self {
-        let cell = window.top_left();
-        DenserRasterWindowIteratorMut { cell, raster, window }
+        let meta = raster.metadata().clone();
+        Self::from_buffer(raster.as_mut_slice(), meta, window)
+    }
+
+    pub fn from_buffer(buffer: &'a mut [T], geo_reference: Metadata, window: RasterWindow) -> Self {
+        let cell = if window.is_empty() { Cell::invalid() } else { window.top_left() };
+        DenserRasterWindowIteratorMut {
+            cell,
+            raster_data: buffer,
+            geo_reference,
+            window,
+        }
     }
 
     fn increment_index(&mut self) {
@@ -158,15 +181,15 @@ impl<'a, T: ArrayNum, Metadata: ArrayMetadata> Iterator for DenserRasterWindowIt
     fn next(&mut self) -> Option<Self::Item> {
         if self.cell.is_valid() {
             // SAFETY: Only one mutable reference per cell is ever handed out by this iterator.
-            let index = self.cell.index_in_raster(self.raster.columns().count());
-            let len = self.raster.data.len();
+            let index = self.cell.index_in_raster(self.geo_reference.size().cols.count());
+            let len = self.raster_data.len();
             if index >= len {
                 self.cell = Cell::invalid();
                 return None;
             }
 
             // Use split_at_mut to get a unique mutable reference
-            let ptr = self.raster.data.as_mut_ptr();
+            let ptr = self.raster_data.as_mut_ptr();
             let item = unsafe { &mut *ptr.add(index) };
             self.increment_index();
             Some(item)
