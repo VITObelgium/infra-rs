@@ -137,7 +137,12 @@ fn read_nodata_value<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<Option<
 }
 
 fn read_projection_info<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<Option<ProjectionInfo>> {
-    let key_dir = decoder.get_tag_u16_vec(Tag::GeoKeyDirectoryTag)?;
+    let key_dir = if let Ok(key_dir) = decoder.get_tag_u16_vec(Tag::GeoKeyDirectoryTag) {
+        key_dir
+    } else {
+        return Ok(None);
+    };
+
     if key_dir.len() < 4 {
         return Ok(None);
     }
