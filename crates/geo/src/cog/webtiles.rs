@@ -1,7 +1,7 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
-    GeoTransform, Point, RasterMetadata, RasterWindow, Result, Rows, ZoomLevelStrategy,
-    geotiff::{self, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio},
+    GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
+    geotiff::{self, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio, utils},
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -502,11 +502,9 @@ impl WebTilesReader {
     #[simd_bounds]
     fn merge_tile_sources<T: ArrayNum>(&self, tile_sources: &[(TiffChunkLocation, CutOut)], cog_chunks: &[&[u8]]) -> Result<DenseArray<T>> {
         let tile_size = self.cog_metadata().chunk_row_length() as usize;
+        let tile_raster_size = RasterSize::square(tile_size as i32);
 
-        let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(
-            RasterSize::square(tile_size as i32),
-            NumCast::from(T::NODATA),
-        ));
+        let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(tile_raster_size, NumCast::from(T::NODATA)));
 
         for ((cog_location, cutout), cog_chunck) in tile_sources.iter().zip(cog_chunks) {
             if cog_location.is_sparse() {
@@ -514,19 +512,7 @@ impl WebTilesReader {
             }
 
             let tile_cutout = self.parse_tile_data_as::<T>(cog_chunck)?;
-            let dest_window = RasterWindow::new(
-                Cell::from_row_col(cutout.dst_row_offset, cutout.dst_col_offset),
-                RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
-            );
-
-            let src_window = RasterWindow::new(
-                Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset),
-                RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
-            );
-
-            for (dest, source) in arr.iter_window_mut(dest_window).zip(tile_cutout.iter_window(src_window)) {
-                *dest = source;
-            }
+            utils::merge_tile_chunk_into_buffer(cutout, &tile_cutout, arr.as_mut_slice(), tile_raster_size);
         }
 
         Ok(arr)

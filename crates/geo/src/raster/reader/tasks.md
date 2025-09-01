@@ -1,4 +1,3 @@
 - [Geotiff] Multi band raster reading
-- [Geotiff] Merge tiles into raster: remove code duplication between reader and webtiler
 - [Geotiff] Merge tiles into raster: check why some calculated chunks have no overlap and need to be ignored
 - [Reader] Handle datatype conversion at the reader level

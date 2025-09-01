@@ -1,5 +1,5 @@
 use crate::geotiff::utils;
-use crate::raster::intersection::intersect_georeference;
+use crate::raster::intersection::{CutOut, intersect_georeference};
 use crate::{
     ArrayInterop, ArrayMetadata, ArrayNum, Cell, Columns, DenseArray, GeoReference, RasterSize, Rows,
     geotiff::{GeoTiffMetadata, io},
@@ -323,7 +323,7 @@ impl GeoTiffReader {
         geo_reference: &GeoReference, // georeference of the full cog image
         cutout: &GeoReference,        // georeference of the cutout area
         block_size: u32,
-    ) -> Result<Vec<(TiffChunkLocation, GeoReference)>> {
+    ) -> Result<Vec<(TiffChunkLocation, CutOut)>> {
         let mut chunk_tiles = Vec::default();
 
         let cell_size = geo_reference.cell_size() / (overview_index as f64 + 1.0);
@@ -379,7 +379,10 @@ impl GeoTiffReader {
                 );
 
                 let tiff_chunk = &overview.chunk_locations[ty * tiles_wide + tx];
-                chunk_tiles.push((*tiff_chunk, chunk_geo_ref));
+                let cutout_offsets = intersect_georeference(&chunk_geo_ref, cutout)?;
+                debug_assert!(cutout_offsets.cols > 0 && cutout_offsets.rows > 0);
+
+                chunk_tiles.push((*tiff_chunk, cutout_offsets));
             }
         }
 

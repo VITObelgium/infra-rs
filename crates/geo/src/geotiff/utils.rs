@@ -1,10 +1,10 @@
 use std::fs::File;
 
 use crate::{
-    Array, ArrayNum, Cell, CellSize, Columns, GeoReference, RasterSize, RasterWindow, Result, Rows,
+    Array, ArrayNum, Cell, CellSize, Columns, DenseArray, GeoReference, RasterSize, RasterWindow, Result, Rows,
     densearrayiterators::{DenserRasterWindowIterator, DenserRasterWindowIteratorMut},
     geotiff::{GeoTiffMetadata, TiffChunkLocation, io, tileio},
-    raster::intersection::intersect_georeference,
+    raster::intersection::{CutOut, intersect_georeference},
 };
 
 use simd_macro::simd_bounds;
@@ -123,37 +123,44 @@ pub fn merge_tile_chunks_into_buffer<T: ArrayNum>(
     meta: &GeoTiffMetadata,
     geo_reference: &GeoReference, // The georeference of the provided buffer
     tile_size: u32,
-    tile_sources: &[(TiffChunkLocation, GeoReference)],
+    tile_sources: &[(TiffChunkLocation, CutOut)],
     tiff_file: &mut File,
     buffer: &mut [T],
 ) -> Result<()> {
     let nodata = geo_reference.nodata();
 
-    for (cog_location, chunk_geo_reference) in tile_sources {
+    for (cog_location, cutout) in tile_sources {
         if cog_location.is_sparse() {
             continue; // Skip sparse tiles, they are already filled with nodata
         }
 
         let tile_cutout = tileio::read_tile_data::<T>(cog_location, tile_size, nodata, meta.compression, meta.predictor, tiff_file)?;
-        let cutout = intersect_georeference(chunk_geo_reference, geo_reference)?;
-
-        let dest_window = RasterWindow::new(
-            Cell::from_row_col(cutout.dst_row_offset, cutout.dst_col_offset),
-            RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
-        );
-
-        let src_window = RasterWindow::new(
-            Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset),
-            RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
-        );
-
-        let dest_iterator = DenserRasterWindowIteratorMut::from_buffer(buffer, geo_reference.clone(), dest_window);
-        for (dest, source) in dest_iterator.zip(tile_cutout.iter_window(src_window)) {
-            *dest = source;
-        }
+        merge_tile_chunk_into_buffer(cutout, &tile_cutout, buffer, geo_reference.raster_size());
     }
 
     Ok(())
+}
+
+pub fn merge_tile_chunk_into_buffer<T: ArrayNum>(
+    cutout: &CutOut,
+    tiff_tile: &DenseArray<T>,
+    buffer: &mut [T],
+    buffer_size: RasterSize, // The size of the provided buffer
+) {
+    let dest_window = RasterWindow::new(
+        Cell::from_row_col(cutout.dst_row_offset, cutout.dst_col_offset),
+        RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
+    );
+
+    let src_window = RasterWindow::new(
+        Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset),
+        RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
+    );
+
+    let dest_iterator = DenserRasterWindowIteratorMut::from_buffer(buffer, buffer_size, dest_window);
+    for (dest, source) in dest_iterator.zip(tiff_tile.iter_window(src_window)) {
+        *dest = source;
+    }
 }
 
 #[simd_bounds]
@@ -204,8 +211,8 @@ pub fn merge_strip_chunks_into_buffer<T: ArrayNum>(
             RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols)),
         );
 
-        let dest_iterator = DenserRasterWindowIteratorMut::from_buffer(buffer, geo_reference.clone(), dest_window);
-        let src_iterator = DenserRasterWindowIterator::from_buffer(&strip_buffer, chunk_geo_reference, src_window);
+        let dest_iterator = DenserRasterWindowIteratorMut::from_buffer(buffer, geo_reference.raster_size(), dest_window);
+        let src_iterator = DenserRasterWindowIterator::from_buffer(&strip_buffer, chunk_geo_reference.raster_size(), src_window);
         for (dest, source) in dest_iterator.zip(src_iterator) {
             *dest = source;
         }
