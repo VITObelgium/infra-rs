@@ -1,6 +1,6 @@
 use std::path::Path;
 
-use crate::raster::reader;
+use crate::raster::formats;
 use crate::{ArrayNum, Error, Result, raster};
 use crate::{GeoReference, gdalinterop, vector::io::FeatureDefinitionExtension};
 use gdal::vector::Feature;
@@ -176,7 +176,7 @@ pub fn rasterize_with_cli_options<T: ArrayNum + GdalType>(
         return Err(Error::InvalidArgument("Vector rasterize: invalid arguments".to_string()));
     }
 
-    let meta = reader::gdal::read_band_metadata(&mem_ds, 1)?;
+    let meta = formats::gdal::read_band_metadata(&mem_ds, 1)?;
     Ok((meta, data))
 }
 

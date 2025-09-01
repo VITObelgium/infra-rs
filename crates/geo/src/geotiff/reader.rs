@@ -9,7 +9,7 @@ use inf::{allocate, cast};
 use num::NumCast;
 use simd_macro::simd_bounds;
 
-use crate::{Error, Result};
+use crate::{Error, Result, raster};
 use std::{fs::File, mem::MaybeUninit, ops::Range, path::Path};
 
 #[cfg(feature = "simd")]
@@ -212,7 +212,7 @@ impl GeoTiffReader {
             }
 
             // Cast away the maybe uninit - we will fill the entire buffer
-            let buffer = unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<T>(), buffer.len()) };
+            let buffer = raster::utils::cast_away_uninit_mut(buffer);
 
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
@@ -261,7 +261,7 @@ impl GeoTiffReader {
             }
 
             // Cast away the maybe uninit - we will fill the entire buffer
-            let buffer = unsafe { std::slice::from_raw_parts_mut(buffer.as_mut_ptr().cast::<T>(), buffer.len()) };
+            let buffer = raster::utils::cast_away_uninit_mut(buffer);
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
                     let chunk_tiles = Self::calculate_chunk_tiles_for_extent(&overview, overview_index, self.geo_ref(), extent, tile_size)?;

@@ -1,4 +1,4 @@
-use geo::{ZoomLevelStrategy, raster::io::RasterFormat};
+use geo::{ZoomLevelStrategy, raster::formats::RasterFileFormat};
 
 use crate::{Result, cogtileprovider::CogTileProvider};
 use std::path::Path;
@@ -17,11 +17,11 @@ pub struct TileProviderOptions {
 
 /// Create a tile provider for hosting a single file
 pub fn create_single_file_tile_provider(path: &Path, opts: &TileProviderOptions) -> Result<Box<dyn TileProvider + Send + Sync>> {
-    let raster_type = RasterFormat::guess_from_path(path);
+    let raster_type = RasterFileFormat::guess_from_path(path);
 
-    if raster_type == RasterFormat::MBTiles {
+    if raster_type == RasterFileFormat::MBTiles {
         Ok(Box::new(MbtilesTileProvider::new(path)?))
-    } else if raster_type == RasterFormat::GeoTiff && CogTileProvider::tiff_is_cog(path) {
+    } else if raster_type == RasterFileFormat::GeoTiff && CogTileProvider::tiff_is_cog(path) {
         Ok(Box::new(CogTileProvider::new(path, opts)?))
     } else if WarpingTileProvider::supports_raster_type(raster_type) {
         Ok(Box::new(WarpingTileProvider::new(path, opts)?))

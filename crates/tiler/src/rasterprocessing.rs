@@ -1,8 +1,8 @@
 use geo::{
     Columns, RasterSize, Rows,
     raster::{
-        io::{RasterFormat, RasterIO},
-        reader::RasterOpenOptions,
+        formats::{RasterFileFormat, RasterOpenOptions},
+        io::RasterIO,
     },
 };
 use std::path::Path;
@@ -97,12 +97,12 @@ pub fn metadata_bounds_wgs84(meta: GeoReference) -> Result<LatLonBounds> {
 }
 
 pub fn source_type_for_path(path: &std::path::Path) -> LayerSourceType {
-    match RasterFormat::guess_from_path(path) {
-        RasterFormat::ArcAscii => LayerSourceType::ArcAscii,
-        RasterFormat::GeoTiff => LayerSourceType::GeoTiff,
-        RasterFormat::MBTiles => LayerSourceType::Mbtiles,
-        RasterFormat::GeoPackage => LayerSourceType::GeoPackage,
-        RasterFormat::Netcdf => LayerSourceType::Netcdf,
+    match RasterFileFormat::guess_from_path(path) {
+        RasterFileFormat::ArcAscii => LayerSourceType::ArcAscii,
+        RasterFileFormat::GeoTiff => LayerSourceType::GeoTiff,
+        RasterFileFormat::MBTiles => LayerSourceType::Mbtiles,
+        RasterFileFormat::GeoPackage => LayerSourceType::GeoPackage,
+        RasterFileFormat::Netcdf => LayerSourceType::Netcdf,
         _ => LayerSourceType::Unknown,
     }
 }

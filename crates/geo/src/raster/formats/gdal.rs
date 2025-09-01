@@ -11,10 +11,9 @@ use crate::{
     ArrayDataType, ArrayNum, Columns, Error, GeoReference, RasterSize, Result, Rows,
     gdalinterop::check_rc,
     raster::{
+        formats::{RasterFileFormat, RasterFormat, RasterFormatDyn, RasterOpenOptions},
         intersection::{CutOut, intersect_georeference},
-        io::RasterFormat,
-        reader::{RasterOpenOptions, RasterReader, RasterReaderDyn},
-        utils::{reinterpret_uninit_byte_slice, reinterpret_uninit_slice_to_byte},
+        utils::{cast_uninit_byte_slice_mut, cast_uninit_slice_to_byte},
     },
 };
 
@@ -42,139 +41,28 @@ impl TryFrom<gdal::raster::GdalDataType> for ArrayDataType {
     }
 }
 
-impl RasterFormat {
+impl RasterFileFormat {
     pub fn gdal_driver_name(&self) -> &str {
         match self {
-            RasterFormat::Memory => "MEM",
-            RasterFormat::ArcAscii => "AAIGrid",
-            RasterFormat::GeoTiff => "GTiff",
-            RasterFormat::Gif => "GIF",
-            RasterFormat::Png => "PNG",
-            RasterFormat::PcRaster => "PCRaster",
-            RasterFormat::Netcdf => "netCDF",
-            RasterFormat::MBTiles => "MBTiles",
-            RasterFormat::GeoPackage => "GPKG",
-            RasterFormat::Grib => "GRIB",
-            RasterFormat::Postgis => "PostGISRaster",
-            RasterFormat::Vrt => "VRT",
-            RasterFormat::Unknown => "Unknown",
+            RasterFileFormat::Memory => "MEM",
+            RasterFileFormat::ArcAscii => "AAIGrid",
+            RasterFileFormat::GeoTiff => "GTiff",
+            RasterFileFormat::Gif => "GIF",
+            RasterFileFormat::Png => "PNG",
+            RasterFileFormat::PcRaster => "PCRaster",
+            RasterFileFormat::Netcdf => "netCDF",
+            RasterFileFormat::MBTiles => "MBTiles",
+            RasterFileFormat::GeoPackage => "GPKG",
+            RasterFileFormat::Grib => "GRIB",
+            RasterFileFormat::Postgis => "PostGISRaster",
+            RasterFileFormat::Vrt => "VRT",
+            RasterFileFormat::Unknown => "Unknown",
         }
     }
-}
-
-fn open_with_options(path: impl AsRef<Path>, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
-    let path = path.as_ref();
-    gdal::Dataset::open_ex(path, options).map_err(|err| match err {
-        // Match on the error to give a cleaner error message when the file does not exist
-        GdalError::NullPointer { method_name: _, msg: _ } => {
-            if !path.exists() {
-                Error::InvalidPath(PathBuf::from(path))
-            } else {
-                let ras_type = RasterFormat::guess_from_path(path);
-                if ras_type != RasterFormat::Unknown && gdal::DriverManager::get_driver_by_name(ras_type.gdal_driver_name()).is_err() {
-                    return Error::Runtime(format!("Gdal driver not supported: {}", ras_type.gdal_driver_name()));
-                }
-
-                Error::Runtime(format!(
-                    "Failed to open raster dataset ({}), check file correctness or driver configuration ({})",
-                    path.to_string_lossy(),
-                    err
-                ))
-            }
-        }
-        _ => Error::Runtime(format!("Failed to open raster dataset: {} ({})", path.to_string_lossy(), err)),
-    })
 }
 
 impl GdalRasterIO {
-    pub fn from_dataset(ds: gdal::Dataset) -> Self {
-        Self { ds }
-    }
-}
-
-impl RasterReaderDyn for GdalRasterIO {
-    fn band_count(&self) -> Result<usize> {
-        Ok(self.ds.raster_count())
-    }
-
-    fn raster_size(&self) -> Result<RasterSize> {
-        let (width, height) = self.ds.raster_size();
-        Ok(RasterSize {
-            rows: Rows(height as i32),
-            cols: Columns(width as i32),
-        })
-    }
-
-    fn georeference(&mut self, band_index: usize) -> Result<GeoReference> {
-        read_band_metadata(&self.ds, band_index)
-    }
-
-    fn data_type(&self, band_index: usize) -> Result<crate::ArrayDataType> {
-        self.ds.rasterband(band_index)?.band_type().try_into()
-    }
-
-    fn overview_count(&self, band_index: usize) -> Result<usize> {
-        Ok(self.ds.rasterband(band_index)?.overview_count()? as usize)
-    }
-
-    fn read_raster_band(
-        &mut self,
-        band: usize,
-        data_type: crate::ArrayDataType,
-        data: &mut [std::mem::MaybeUninit<u8>],
-    ) -> Result<GeoReference> {
-        match data_type {
-            ArrayDataType::Uint8 => self.read_raster_band_as::<u8>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Uint16 => self.read_raster_band_as::<u16>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Uint32 => self.read_raster_band_as::<u32>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Uint64 => self.read_raster_band_as::<u64>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int8 => self.read_raster_band_as::<i8>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int16 => self.read_raster_band_as::<i16>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int32 => self.read_raster_band_as::<i32>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int64 => self.read_raster_band_as::<i64>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Float32 => self.read_raster_band_as::<f32>(band, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Float64 => self.read_raster_band_as::<f64>(band, data_type, reinterpret_uninit_byte_slice(data)),
-        }
-    }
-
-    fn read_raster_band_region(
-        &mut self,
-        band: usize,
-        region: &GeoReference,
-        data_type: ArrayDataType,
-        data: &mut [MaybeUninit<u8>],
-    ) -> Result<GeoReference> {
-        match data_type {
-            ArrayDataType::Uint8 => self.read_raster_band_region_as::<u8>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Uint16 => self.read_raster_band_region_as::<u16>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Uint32 => self.read_raster_band_region_as::<u32>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Uint64 => self.read_raster_band_region_as::<u64>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int8 => self.read_raster_band_region_as::<i8>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int16 => self.read_raster_band_region_as::<i16>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int32 => self.read_raster_band_region_as::<i32>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Int64 => self.read_raster_band_region_as::<i64>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Float32 => self.read_raster_band_region_as::<f32>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-            ArrayDataType::Float64 => self.read_raster_band_region_as::<f64>(band, region, data_type, reinterpret_uninit_byte_slice(data)),
-        }
-    }
-}
-
-impl RasterReader for GdalRasterIO {
-    /// Open a GDAL raster dataset for reading
-    fn open_read_only(path: impl AsRef<Path>) -> Result<Self> {
-        Ok(Self {
-            ds: open_dataset_read_only(path)?,
-        })
-    }
-
-    /// Open a GDAL raster dataset for reading with driver open options
-    fn open_read_only_with_options(path: impl AsRef<Path>, options: &RasterOpenOptions) -> Result<Self> {
-        Ok(Self {
-            ds: open_dataset_read_only_with_options(path, options)?,
-        })
-    }
-
-    fn read_raster_band_as<T: ArrayNum>(
+    pub fn read_raster_band_as<T: ArrayNum>(
         &mut self,
         band_index: usize,
         data_type: ArrayDataType,
@@ -202,7 +90,7 @@ impl RasterReader for GdalRasterIO {
         Ok(meta)
     }
 
-    fn read_raster_band_region_as<T: ArrayNum>(
+    pub fn read_raster_band_region_as<T: ArrayNum>(
         &mut self,
         band_index: usize,
         region: &GeoReference,
@@ -245,13 +133,126 @@ impl RasterReader for GdalRasterIO {
                 band_index,
                 &cut_out,
                 &self.ds,
-                reinterpret_uninit_slice_to_byte(dst_data),
+                cast_uninit_slice_to_byte(dst_data),
                 dst_meta.columns().count(),
                 data_type,
             )?;
         }
 
         Ok(dst_meta)
+    }
+}
+
+fn open_with_options(path: impl AsRef<Path>, options: gdal::DatasetOptions) -> Result<gdal::Dataset> {
+    let path = path.as_ref();
+    gdal::Dataset::open_ex(path, options).map_err(|err| match err {
+        // Match on the error to give a cleaner error message when the file does not exist
+        GdalError::NullPointer { method_name: _, msg: _ } => {
+            if !path.exists() {
+                Error::InvalidPath(PathBuf::from(path))
+            } else {
+                let ras_type = RasterFileFormat::guess_from_path(path);
+                if ras_type != RasterFileFormat::Unknown && gdal::DriverManager::get_driver_by_name(ras_type.gdal_driver_name()).is_err() {
+                    return Error::Runtime(format!("Gdal driver not supported: {}", ras_type.gdal_driver_name()));
+                }
+
+                Error::Runtime(format!(
+                    "Failed to open raster dataset ({}), check file correctness or driver configuration ({})",
+                    path.to_string_lossy(),
+                    err
+                ))
+            }
+        }
+        _ => Error::Runtime(format!("Failed to open raster dataset: {} ({})", path.to_string_lossy(), err)),
+    })
+}
+
+impl GdalRasterIO {
+    pub fn from_dataset(ds: gdal::Dataset) -> Self {
+        Self { ds }
+    }
+}
+
+impl RasterFormatDyn for GdalRasterIO {
+    fn band_count(&self) -> Result<usize> {
+        Ok(self.ds.raster_count())
+    }
+
+    fn raster_size(&self) -> Result<RasterSize> {
+        let (width, height) = self.ds.raster_size();
+        Ok(RasterSize {
+            rows: Rows(height as i32),
+            cols: Columns(width as i32),
+        })
+    }
+
+    fn georeference(&mut self, band_index: usize) -> Result<GeoReference> {
+        read_band_metadata(&self.ds, band_index)
+    }
+
+    fn data_type(&self, band_index: usize) -> Result<crate::ArrayDataType> {
+        self.ds.rasterband(band_index)?.band_type().try_into()
+    }
+
+    fn overview_count(&self, band_index: usize) -> Result<usize> {
+        Ok(self.ds.rasterband(band_index)?.overview_count()? as usize)
+    }
+
+    fn read_raster_band(
+        &mut self,
+        band: usize,
+        data_type: crate::ArrayDataType,
+        data: &mut [std::mem::MaybeUninit<u8>],
+    ) -> Result<GeoReference> {
+        match data_type {
+            ArrayDataType::Uint8 => self.read_raster_band_as::<u8>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint16 => self.read_raster_band_as::<u16>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint32 => self.read_raster_band_as::<u32>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint64 => self.read_raster_band_as::<u64>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int8 => self.read_raster_band_as::<i8>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int16 => self.read_raster_band_as::<i16>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int32 => self.read_raster_band_as::<i32>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int64 => self.read_raster_band_as::<i64>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Float32 => self.read_raster_band_as::<f32>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Float64 => self.read_raster_band_as::<f64>(band, data_type, cast_uninit_byte_slice_mut(data)),
+        }
+    }
+
+    fn read_raster_band_region(
+        &mut self,
+        band: usize,
+        region: &GeoReference,
+        data_type: ArrayDataType,
+        data: &mut [MaybeUninit<u8>],
+    ) -> Result<GeoReference> {
+        match data_type {
+            ArrayDataType::Uint8 => self.read_raster_band_region_as::<u8>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint16 => self.read_raster_band_region_as::<u16>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint32 => self.read_raster_band_region_as::<u32>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint64 => self.read_raster_band_region_as::<u64>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int8 => self.read_raster_band_region_as::<i8>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int16 => self.read_raster_band_region_as::<i16>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int32 => self.read_raster_band_region_as::<i32>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int64 => self.read_raster_band_region_as::<i64>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Float32 => self.read_raster_band_region_as::<f32>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Float64 => self.read_raster_band_region_as::<f64>(band, region, data_type, cast_uninit_byte_slice_mut(data)),
+        }
+    }
+}
+
+impl RasterFormat for GdalRasterIO {
+    /// Open a GDAL raster dataset for reading
+    fn open_read_only(path: impl AsRef<Path>) -> Result<Self> {
+        Ok(Self {
+            ds: open_dataset_read_only(path)?,
+        })
+    }
+
+    /// Open a GDAL raster dataset for reading with driver open options
+    fn open_read_only_with_options(path: impl AsRef<Path>, options: &RasterOpenOptions) -> Result<Self> {
+        Ok(Self {
+            ds: open_dataset_read_only_with_options(path, options)?,
+        })
     }
 }
 
@@ -267,7 +268,7 @@ pub fn open_dataset_read_only(path: impl AsRef<Path>) -> Result<gdal::Dataset> {
 
 /// Open a GDAL raster dataset for reading with driver open options
 pub fn open_dataset_read_only_with_options(path: impl AsRef<Path>, open_options: &RasterOpenOptions) -> Result<gdal::Dataset> {
-    let raster_format = RasterFormat::guess_from_path(path.as_ref());
+    let raster_format = RasterFileFormat::guess_from_path(path.as_ref());
     let open_options = create_gdal_open_options(raster_format, open_options);
     let open_options = open_options.iter().map(|s| s.as_str()).collect::<Vec<_>>();
 
@@ -297,11 +298,11 @@ pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoRe
     ))
 }
 
-fn create_gdal_open_options(raster_format: RasterFormat, open_options: &RasterOpenOptions) -> Vec<String> {
+fn create_gdal_open_options(raster_format: RasterFileFormat, open_options: &RasterOpenOptions) -> Vec<String> {
     let mut options = Vec::new();
 
     if let Some(layer_name) = &open_options.layer_name
-        && raster_format == RasterFormat::GeoPackage
+        && raster_format == RasterFileFormat::GeoPackage
     {
         options.push(format!("TABLE={}", layer_name));
     }

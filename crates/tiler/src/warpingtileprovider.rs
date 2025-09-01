@@ -5,7 +5,7 @@ use gdal::raster::GdalType;
 use inf::allocate::AlignedVec;
 use inf::legend::Legend;
 
-use geo::raster::io::RasterFormat;
+use geo::raster::formats::RasterFileFormat;
 use geo::{Array, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize, simd_bounds};
 use geo::{Columns, Coordinate, GeoReference, LatLonBounds, Rows, Tile, crs};
 use num::Num;
@@ -46,8 +46,11 @@ impl WarpingTileProvider {
         })
     }
 
-    pub fn supports_raster_type(raster_type: RasterFormat) -> bool {
-        matches!(raster_type, RasterFormat::GeoTiff | RasterFormat::Vrt | RasterFormat::Netcdf)
+    pub fn supports_raster_type(raster_type: RasterFileFormat) -> bool {
+        matches!(
+            raster_type,
+            RasterFileFormat::GeoTiff | RasterFileFormat::Vrt | RasterFileFormat::Netcdf
+        )
     }
 
     #[simd_bounds]

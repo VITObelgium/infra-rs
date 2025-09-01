@@ -277,7 +277,7 @@ mod tests {
     use super::*;
 
     use crate::{TileProvider, tileproviderfactory::TileProviderOptions};
-    use geo::raster::reader;
+    use geo::raster::formats;
     use inf::{
         Legend,
         colormap::{ColorMap, ColorMapDirection, ColorMapPreset},
@@ -289,7 +289,7 @@ mod tests {
     }
 
     fn create_test_cog(input_tif: &Path, output_tif: &Path, tile_size: u32, compress: &str) -> Result<()> {
-        let src_ds = reader::gdal::open_dataset_read_only(input_tif).expect("Failed to open test COG input file");
+        let src_ds = formats::gdal::open_dataset_read_only(input_tif).expect("Failed to open test COG input file");
         let options = vec![
             "-f".to_string(),
             "COG".to_string(),

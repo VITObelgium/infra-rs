@@ -3,10 +3,10 @@
 pub mod algo;
 mod denseraster;
 mod denserasterconversions;
+pub mod formats;
 pub mod intersection;
 pub mod io;
-pub mod reader;
-mod utils;
+pub(crate) mod utils;
 
 use std::path::Path;
 

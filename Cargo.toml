@@ -62,6 +62,8 @@ tui = ["tileserver/tui"]
 geozero = { git = "https://github.com/georust/geozero.git", rev = "e52422b54ab469ce8de6e33f859d4321be63d657" }
 crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev = "9d01fb7993537a3ba632bf60899b884434a1d453" }
 proj4wkt = { git = "https://github.com/dirkvdb/proj4wkt-rs.git", rev = "35e8db67c43e9944dd941d34539886cb727adc41" }
+tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "47811747dda727073d6d48be918ce5831e124174" }
+
 
 [profile.samply]
 inherits = "release"

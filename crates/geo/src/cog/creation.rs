@@ -149,7 +149,7 @@ pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<St
 
 pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -> Result<()> {
     let options = create_gdal_args(input, opts)?;
-    let src_ds = raster::reader::gdal::open_dataset_read_only(input)?;
+    let src_ds = raster::formats::gdal::open_dataset_read_only(input)?;
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
 
     Ok(())
