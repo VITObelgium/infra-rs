@@ -1,10 +1,15 @@
 use std::{mem::MaybeUninit, path::Path};
 
+use inf::allocate::{self};
+use num::NumCast;
 use simd_macro::simd_bounds;
 
 use crate::{
     ArrayDataType, ArrayNum, Error, GeoReference, RasterSize, Result,
-    raster::{io::RasterFormat, utils::reinterpret_uninit_slice_to_byte},
+    raster::{
+        io::RasterFormat,
+        utils::{self, reinterpret_uninit_slice_to_byte},
+    },
 };
 
 #[cfg(feature = "gdal")]
@@ -94,22 +99,56 @@ pub fn create_raster_reader_with_options(path: impl AsRef<Path>, _options: &Rast
     }
 }
 
+fn cast_into_array<TSrc: ArrayNum, TDest: ArrayNum>(src: &[TSrc], dst: &mut [TDest], nodata: TDest) {
+    for (&value, dst_value) in src.iter().zip(dst) {
+        *dst_value = NumCast::from(value).unwrap_or(nodata);
+    }
+}
+
 /// Extension trait: generic convenience method
 pub trait RasterReaderGeneric: RasterReaderDyn {
     fn read_band<T: crate::ArrayNum>(&mut self, band_index: usize, dst: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
         use crate::ArrayDataType;
 
-        match T::TYPE {
-            ArrayDataType::Uint8 => self.read_raster_band(band_index, ArrayDataType::Uint8, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint16 => self.read_raster_band(band_index, ArrayDataType::Uint16, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint32 => self.read_raster_band(band_index, ArrayDataType::Uint32, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint64 => self.read_raster_band(band_index, ArrayDataType::Uint64, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int8 => self.read_raster_band(band_index, ArrayDataType::Int8, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int16 => self.read_raster_band(band_index, ArrayDataType::Int16, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int32 => self.read_raster_band(band_index, ArrayDataType::Int32, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int64 => self.read_raster_band(band_index, ArrayDataType::Int64, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Float32 => self.read_raster_band(band_index, ArrayDataType::Float32, reinterpret_uninit_slice_to_byte(dst)),
-            ArrayDataType::Float64 => self.read_raster_band(band_index, ArrayDataType::Float64, reinterpret_uninit_slice_to_byte(dst)),
+        let native_data_type = self.data_type(band_index)?;
+
+        if native_data_type == T::TYPE {
+            // We can read directly into the destination buffer
+            match T::TYPE {
+                ArrayDataType::Uint8 => self.read_raster_band(band_index, ArrayDataType::Uint8, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Uint16 => self.read_raster_band(band_index, ArrayDataType::Uint16, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Uint32 => self.read_raster_band(band_index, ArrayDataType::Uint32, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Uint64 => self.read_raster_band(band_index, ArrayDataType::Uint64, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Int8 => self.read_raster_band(band_index, ArrayDataType::Int8, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Int16 => self.read_raster_band(band_index, ArrayDataType::Int16, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Int32 => self.read_raster_band(band_index, ArrayDataType::Int32, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Int64 => self.read_raster_band(band_index, ArrayDataType::Int64, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Float32 => self.read_raster_band(band_index, ArrayDataType::Float32, reinterpret_uninit_slice_to_byte(dst)),
+                ArrayDataType::Float64 => self.read_raster_band(band_index, ArrayDataType::Float64, reinterpret_uninit_slice_to_byte(dst)),
+            }
+        } else {
+            // First read into a temporary buffer of the native data type
+            let raster_size = self.raster_size()?;
+            let mut temp_buffer =
+                allocate::AlignedVecUnderConstruction::<u8>::new(raster_size.cell_count() * native_data_type.bytes() as usize);
+            let georef = self.read_raster_band(band_index, native_data_type, temp_buffer.as_uninit_slice_mut())?;
+            let nodata = georef.nodata_as::<T>()?.unwrap_or(T::NODATA);
+            let dst = utils::cast_away_uninit(dst);
+
+            match native_data_type {
+                ArrayDataType::Uint8 => cast_into_array(unsafe { temp_buffer.as_slice() }, dst, nodata),
+                ArrayDataType::Uint16 => cast_into_array::<u16, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Uint32 => cast_into_array::<u32, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Uint64 => cast_into_array::<u64, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Int8 => cast_into_array::<i8, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Int16 => cast_into_array::<i16, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Int32 => cast_into_array::<i32, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Int64 => cast_into_array::<i64, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Float32 => cast_into_array::<f32, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+                ArrayDataType::Float64 => cast_into_array::<f64, _>(bytemuck::cast_slice(unsafe { temp_buffer.as_slice() }), dst, nodata),
+            };
+
+            Ok(georef)
         }
     }
 
