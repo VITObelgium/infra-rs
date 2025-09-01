@@ -2,7 +2,10 @@ use std::{mem::MaybeUninit, path::Path};
 
 use simd_macro::simd_bounds;
 
-use crate::{ArrayDataType, ArrayNum, Error, GeoReference, RasterSize, Result, raster::io::RasterFormat};
+use crate::{
+    ArrayDataType, ArrayNum, Error, GeoReference, RasterSize, Result,
+    raster::{io::RasterFormat, utils::reinterpret_uninit_slice_to_byte},
+};
 
 #[cfg(feature = "gdal")]
 pub mod gdal;
@@ -12,6 +15,7 @@ pub mod geotiff;
 const LANES: usize = inf::simd::LANES;
 
 // Dyn compatible methods for raster reading
+// Dyn compatibility is obtained by passing the databuffer as a byte slice whuch is then reinterpreted to the desired type in the concrete implementation
 pub trait RasterReaderDyn {
     fn band_count(&self) -> Result<usize>;
     fn raster_size(&self) -> Result<RasterSize>;
@@ -19,95 +23,13 @@ pub trait RasterReaderDyn {
     fn data_type(&self, band_index: usize) -> Result<ArrayDataType>;
     fn overview_count(&self, band_index: usize) -> Result<usize>;
 
-    fn read_raster_band_u8(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u8>]) -> Result<GeoReference>;
-    fn read_raster_band_u16(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u16>]) -> Result<GeoReference>;
-    fn read_raster_band_u32(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u32>]) -> Result<GeoReference>;
-    fn read_raster_band_u64(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<u64>]) -> Result<GeoReference>;
-
-    fn read_raster_band_i8(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i8>]) -> Result<GeoReference>;
-    fn read_raster_band_i16(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i16>]) -> Result<GeoReference>;
-    fn read_raster_band_i32(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i32>]) -> Result<GeoReference>;
-    fn read_raster_band_i64(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<i64>]) -> Result<GeoReference>;
-
-    fn read_raster_band_f32(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<f32>]) -> Result<GeoReference>;
-    fn read_raster_band_f64(&mut self, band_index: usize, dst_data: &mut [MaybeUninit<f64>]) -> Result<GeoReference>;
-
-    fn read_raster_band_region_u8(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<u8>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_u16(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<u16>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_u32(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<u32>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_u64(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<u64>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_i8(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<i8>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_i16(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<i16>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_i32(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<i32>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_i64(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<i64>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_f32(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<f32>],
-    ) -> Result<GeoReference>;
-
-    fn read_raster_band_region_f64(
-        &mut self,
-        band_index: usize,
-        region: &GeoReference,
-        dst_data: &mut [MaybeUninit<f64>],
-    ) -> Result<GeoReference>;
-
+    fn read_raster_band(&mut self, band_index: usize, data_type: ArrayDataType, dst_data: &mut [MaybeUninit<u8>]) -> Result<GeoReference>;
     fn read_raster_band_region(
         &mut self,
-        band_index: usize,
-        extent: &GeoReference,
+        band: usize,
+        region: &GeoReference,
         data_type: ArrayDataType,
-        dst_data: &mut [MaybeUninit<u8>],
+        data: &mut [MaybeUninit<u8>],
     ) -> Result<GeoReference>;
 }
 
@@ -118,9 +40,18 @@ pub trait RasterReader: RasterReaderDyn + Sized {
     fn open_read_only_with_options(path: impl AsRef<Path>, open_options: &RasterOpenOptions) -> Result<Self>;
 
     #[simd_bounds]
-    fn read_raster_band<T: ArrayNum>(
+    fn read_raster_band_as<T: ArrayNum>(
         &mut self,
         band_index: usize,
+        data_type: ArrayDataType,
+        dst_data: &mut [MaybeUninit<T>],
+    ) -> Result<GeoReference>;
+
+    #[simd_bounds]
+    fn read_raster_band_region_as<T: ArrayNum>(
+        &mut self,
+        band_index: usize,
+        region: &GeoReference,
         data_type: ArrayDataType,
         dst_data: &mut [MaybeUninit<T>],
     ) -> Result<GeoReference>;
@@ -163,49 +94,54 @@ pub fn create_raster_reader_with_options(path: impl AsRef<Path>, _options: &Rast
     }
 }
 
-fn reinterpret_slice<TDest, T>(data: &mut [MaybeUninit<T>]) -> &mut [MaybeUninit<TDest>] {
-    debug_assert!(std::mem::size_of::<TDest>() == std::mem::size_of::<T>());
-    unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<MaybeUninit<TDest>>(), data.len()) }
-}
-
 /// Extension trait: generic convenience method
 pub trait RasterReaderGeneric: RasterReaderDyn {
     fn read_band<T: crate::ArrayNum>(&mut self, band_index: usize, dst: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
         use crate::ArrayDataType;
 
         match T::TYPE {
-            ArrayDataType::Uint8 => self.read_raster_band_u8(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Uint16 => self.read_raster_band_u16(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Uint32 => self.read_raster_band_u32(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Uint64 => self.read_raster_band_u64(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Int8 => self.read_raster_band_i8(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Int16 => self.read_raster_band_i16(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Int32 => self.read_raster_band_i32(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Int64 => self.read_raster_band_i64(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Float32 => self.read_raster_band_f32(band_index, reinterpret_slice(dst)),
-            ArrayDataType::Float64 => self.read_raster_band_f64(band_index, reinterpret_slice(dst)),
+            ArrayDataType::Uint8 => self.read_raster_band(band_index, ArrayDataType::Uint8, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint16 => self.read_raster_band(band_index, ArrayDataType::Uint16, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint32 => self.read_raster_band(band_index, ArrayDataType::Uint32, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint64 => self.read_raster_band(band_index, ArrayDataType::Uint64, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int8 => self.read_raster_band(band_index, ArrayDataType::Int8, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int16 => self.read_raster_band(band_index, ArrayDataType::Int16, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int32 => self.read_raster_band(band_index, ArrayDataType::Int32, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int64 => self.read_raster_band(band_index, ArrayDataType::Int64, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Float32 => self.read_raster_band(band_index, ArrayDataType::Float32, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Float64 => self.read_raster_band(band_index, ArrayDataType::Float64, reinterpret_uninit_slice_to_byte(dst)),
         }
     }
 
     fn read_band_region<T: crate::ArrayNum>(
         &mut self,
-        band_index: usize,
+        band: usize,
         region: &GeoReference,
         dst: &mut [MaybeUninit<T>],
     ) -> Result<GeoReference> {
         use crate::ArrayDataType;
 
         match T::TYPE {
-            ArrayDataType::Uint8 => self.read_raster_band_region_u8(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Uint16 => self.read_raster_band_region_u16(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Uint32 => self.read_raster_band_region_u32(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Uint64 => self.read_raster_band_region_u64(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Int8 => self.read_raster_band_region_i8(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Int16 => self.read_raster_band_region_i16(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Int32 => self.read_raster_band_region_i32(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Int64 => self.read_raster_band_region_i64(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Float32 => self.read_raster_band_region_f32(band_index, region, reinterpret_slice(dst)),
-            ArrayDataType::Float64 => self.read_raster_band_region_f64(band_index, region, reinterpret_slice(dst)),
+            ArrayDataType::Uint8 => self.read_raster_band_region(band, region, ArrayDataType::Uint8, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint16 => {
+                self.read_raster_band_region(band, region, ArrayDataType::Uint16, reinterpret_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Uint32 => {
+                self.read_raster_band_region(band, region, ArrayDataType::Uint32, reinterpret_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Uint64 => {
+                self.read_raster_band_region(band, region, ArrayDataType::Uint64, reinterpret_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Int8 => self.read_raster_band_region(band, region, ArrayDataType::Int8, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int16 => self.read_raster_band_region(band, region, ArrayDataType::Int16, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int32 => self.read_raster_band_region(band, region, ArrayDataType::Int32, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int64 => self.read_raster_band_region(band, region, ArrayDataType::Int64, reinterpret_uninit_slice_to_byte(dst)),
+            ArrayDataType::Float32 => {
+                self.read_raster_band_region(band, region, ArrayDataType::Float32, reinterpret_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Float64 => {
+                self.read_raster_band_region(band, region, ArrayDataType::Float64, reinterpret_uninit_slice_to_byte(dst))
+            }
         }
     }
 }
@@ -262,8 +198,8 @@ mod tests {
         } else {
             // Read the full raster band
             (
-                gdal_reader.read_raster_band(band_index, data_type, gdal_region_data.as_uninit_byte_slice_mut())?,
-                gtif_reader.read_raster_band(band_index, data_type, gtif_region_data.as_uninit_byte_slice_mut())?,
+                gdal_reader.read_raster_band_as(band_index, data_type, gdal_region_data.as_uninit_byte_slice_mut())?,
+                gtif_reader.read_raster_band_as(band_index, data_type, gtif_region_data.as_uninit_byte_slice_mut())?,
             )
         };
 
