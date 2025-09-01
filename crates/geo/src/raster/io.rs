@@ -2,25 +2,23 @@
 //! These functions should only be used for specific use-cases.
 //! For general use, the [`crate::Array`] and [`crate::raster::RasterReadWrite`] traits should be used.
 
-use std::{mem::MaybeUninit, path::Path};
-
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
 #[cfg(feature = "gdal")]
 use crate::raster::formats::RasterFormat as _;
 use crate::{
-    ArrayDataType, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, Error, Result,
+    ArrayDataType, ArrayMetadata, ArrayNum, Error, GeoReference, RasterSize, Result,
     raster::{
         formats::{self, FormatProvider, RasterFileFormat, RasterFormatDyn, RasterOpenOptions},
-        utils::{self},
+        utils,
     },
 };
-use crate::{GeoReference, RasterSize};
 use bytemuck::cast_slice;
 use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
 use num::NumCast;
 use simd_macro::simd_bounds;
+use std::{mem::MaybeUninit, path::Path};
 
 //////////////////////////////////////////////////////////////////////////////////////////////
 // Some convenience functions to quickly read raster data without dealing with RasterIO struct
@@ -110,6 +108,8 @@ impl RasterIO {
         self.io.overview_count(band_index)
     }
 
+    /// Read the raster band from the file into a newly allocated buffer.
+    /// Returns the georeference information and the data buffer.
     pub fn read_raster_band<T: ArrayNum>(&mut self, band_index: usize) -> Result<(GeoReference, AlignedVec<T>)> {
         let raster_size = self.io.raster_size()?;
         let mut dst_data = AlignedVecUnderConstruction::<T>::new(raster_size.cell_count());
@@ -118,13 +118,10 @@ impl RasterIO {
         Ok((georef, unsafe { dst_data.assume_init() }))
     }
 
-    #[simd_bounds]
-    pub fn read_raster_band_as_array<T: ArrayNum, M: ArrayMetadata>(&mut self, band_index: usize) -> Result<DenseArray<T, M>> {
-        let (georef, data) = self.read_raster_band(band_index)?;
-        DenseArray::new_init_nodata(ArrayMetadata::with_geo_reference(georef), data)
-    }
-
-    #[simd_bounds]
+    /// Read the raster band region from the file into a newly allocated buffer.
+    /// The region is not required to be fully contained within the raster extent.
+    /// If the region extends beyond the raster extent, the areas outside the raster will be filled with nodata values.
+    /// Returns the georeference information and the data buffer.
     pub fn read_raster_band_region<T: ArrayNum>(
         &mut self,
         band_index: usize,
@@ -135,16 +132,6 @@ impl RasterIO {
         Ok((georef, unsafe { dst_data.assume_init() }))
     }
 
-    #[simd_bounds]
-    pub fn read_raster_band_region_as_array<T: ArrayNum, M: ArrayMetadata>(
-        &mut self,
-        band_index: usize,
-        bounds: &GeoReference,
-    ) -> Result<DenseArray<T, M>> {
-        let (georef, data) = self.read_raster_band_region(band_index, bounds)?;
-        DenseArray::new_init_nodata(ArrayMetadata::with_geo_reference(georef), data)
-    }
-
     /// Read the raster band into an already allocated buffer.
     /// The buffer must have the exact size to hold all the data.
     /// To know the required size, first call `raster_size()` and allocate a buffer of that size.
@@ -152,7 +139,9 @@ impl RasterIO {
         self.read_raster_band_into_byte_buffer(band_index, T::TYPE, utils::cast_uninit_slice_to_byte(buffer))
     }
 
-    /// Read the raster band into an already allocated buffer.
+    /// Read the raster band region into an already allocated buffer.
+    /// The region is not required to be fully contained within the raster extent.
+    /// If the region extends beyond the raster extent, the areas outside the raster will be filled with nodata values.
     /// The buffer must have the exact size to hold all the data.
     /// The data size is determined by the provided bounds.
     pub fn read_raster_band_region_into_buffer<T: ArrayNum>(
@@ -162,39 +151,6 @@ impl RasterIO {
         buffer: &mut [MaybeUninit<T>],
     ) -> Result<GeoReference> {
         self.read_raster_band_region_into_byte_buffer(band_index, bounds, T::TYPE, utils::cast_uninit_slice_to_byte(buffer))
-    }
-
-    /// Read the raster band into an already allocated buffer.
-    /// The buffer must have the exact size to hold all the data.
-    /// The data size is determined by the provided bounds.
-    /// This method should not generally be used, except for special use-cases where a generic context is not available
-    pub fn read_raster_band_region_into_byte_buffer(
-        &mut self,
-        band_index: usize,
-        bounds: &GeoReference,
-        data_type: ArrayDataType,
-        buffer: &mut [MaybeUninit<u8>],
-    ) -> Result<GeoReference> {
-        let src_data_type = self.data_type(band_index)?;
-        if src_data_type == data_type {
-            self.io.read_band_region_into_byte_buffer(band_index, bounds, src_data_type, buffer)
-        } else {
-            // First read into a temporary buffer of the native data type
-            let mut tmp_buf = AlignedVecUnderConstruction::<u8>::new(bounds.size().cell_count() * src_data_type.bytes() as usize);
-            let georef = self
-                .io
-                .read_band_region_into_byte_buffer(band_index, bounds, src_data_type, tmp_buf.as_uninit_slice_mut())?;
-
-            cast_to_buffer(
-                data_type,
-                src_data_type,
-                tmp_buf,
-                utils::cast_away_uninit_mut(buffer),
-                georef.nodata(),
-            );
-
-            Ok(georef)
-        }
     }
 
     /// Read the raster band into an already allocated buffer.
@@ -220,6 +176,41 @@ impl RasterIO {
             let georef = self
                 .io
                 .read_band_into_byte_buffer(band_index, src_data_type, tmp_buf.as_uninit_slice_mut())?;
+
+            cast_to_buffer(
+                data_type,
+                src_data_type,
+                tmp_buf,
+                utils::cast_away_uninit_mut(buffer),
+                georef.nodata(),
+            );
+
+            Ok(georef)
+        }
+    }
+
+    /// Read the raster band region into an already allocated buffer.
+    /// The region is not required to be fully contained within the raster extent.
+    /// If the region extends beyond the raster extent, the areas outside the raster will be filled with nodata values.
+    /// The buffer must have the exact size to hold all the data.
+    /// The data size is determined by the provided bounds.
+    /// This method should not generally be used, except for special use-cases where a generic context is not available
+    pub fn read_raster_band_region_into_byte_buffer(
+        &mut self,
+        band_index: usize,
+        bounds: &GeoReference,
+        data_type: ArrayDataType,
+        buffer: &mut [MaybeUninit<u8>],
+    ) -> Result<GeoReference> {
+        let src_data_type = self.data_type(band_index)?;
+        if src_data_type == data_type {
+            self.io.read_band_region_into_byte_buffer(band_index, bounds, src_data_type, buffer)
+        } else {
+            // First read into a temporary buffer of the native data type
+            let mut tmp_buf = AlignedVecUnderConstruction::<u8>::new(bounds.size().cell_count() * src_data_type.bytes() as usize);
+            let georef = self
+                .io
+                .read_band_region_into_byte_buffer(band_index, bounds, src_data_type, tmp_buf.as_uninit_slice_mut())?;
 
             cast_to_buffer(
                 data_type,
@@ -306,12 +297,12 @@ fn create_raster_impl_with_options_for_format(
 fn create_raster_impl_with_options(path: impl AsRef<Path>, _options: &RasterOpenOptions) -> Result<Box<dyn RasterFormatDyn>> {
     match RasterFileFormat::guess_from_path(path.as_ref()) {
         // #[cfg(feature = "raster-io-geotiff")]
-        // RasterFormat::GeoTiff => Ok(Box::new(formats::geotiff::GeotiffRasterIO::open_read_only_with_options(
+        // RasterFileFormat::GeoTiff => Ok(Box::new(formats::geotiff::GeotiffRasterIO::open_read_only_with_options(
         //     path.as_ref(),
         //     _options,
         // )?)),
         // #[cfg(not(feature = "raster-io-geotiff"))]
-        // RasterFormat::GeoTiff => Ok(Box::new(formats::gdal::GdalRasterIO::open_read_only_with_options(path.as_ref(), options)?)),
+        // RasterFileFormat::GeoTiff => Ok(Box::new(formats::gdal::GdalRasterIO::open_read_only_with_options(path.as_ref(), options)?)),
         #[cfg(feature = "gdal")]
         RasterFileFormat::ArcAscii
         | RasterFileFormat::Gif
@@ -545,6 +536,7 @@ mod tests {
         assert!(!meta.projection().is_empty());
         assert!(meta.projected_epsg().is_some());
         assert_eq!(meta.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
+        #[cfg(not(feature = "raster-io-geotiff"))]
         assert_eq!(meta.geographic_epsg(), Some(crs::epsg::BELGE72_GEO));
         assert_eq!(meta.projection_frienly_name(), "EPSG:31370");
     }
@@ -556,6 +548,7 @@ mod tests {
         assert!(!meta.projection().is_empty());
         assert!(meta.projected_epsg().is_some());
         assert_eq!(meta.projected_epsg().unwrap(), crs::epsg::WGS84_WEB_MERCATOR);
+        #[cfg(not(feature = "raster-io-geotiff"))]
         assert_eq!(meta.geographic_epsg().unwrap(), crs::epsg::WGS84);
         assert_eq!(meta.projection_frienly_name(), "EPSG:3857");
     }
@@ -767,12 +760,20 @@ mod tests {
         let input = testutils::geo_test_data_dir().join("reference/clusteridwithobstacles.tif");
 
         let mut geotiff = io::RasterIO::open_read_only_force_format(&input, FormatProvider::GeoTiff)?;
-        let raster = geotiff.read_raster_band_as_array::<f32, GeoReference>(1)?;
+        let gtif_raster = {
+            use crate::{ArrayInterop, raster::DenseRaster};
+            let (geo_ref, vec) = geotiff.read_raster_band::<f32>(1)?;
+            DenseRaster::new_init_nodata(geo_ref, vec)?
+        };
 
         let mut gdal = io::RasterIO::open_read_only_force_format(&input, FormatProvider::Gdal)?;
-        let gdal_raster = gdal.read_raster_band_as_array::<f32, GeoReference>(1)?;
+        let gdal_raster = {
+            use crate::{ArrayInterop, raster::DenseRaster};
+            let (geo_ref, vec) = gdal.read_raster_band::<f32>(1)?;
+            DenseRaster::new_init_nodata(geo_ref, vec)?
+        };
 
-        assert_eq!(raster, gdal_raster);
+        assert_eq!(gtif_raster, gdal_raster);
 
         Ok(())
     }
@@ -785,12 +786,20 @@ mod tests {
         let input = testutils::geo_test_data_dir().join("reference/clusteridwithobstacles.tif");
 
         let mut geotiff = io::RasterIO::open_read_only_force_format(&input, FormatProvider::GeoTiff)?;
-        let raster = geotiff.read_raster_band_as_array::<f64, GeoReference>(1)?;
+        let gtif_raster = {
+            use crate::{ArrayInterop, raster::DenseRaster};
+            let (geo_ref, vec) = geotiff.read_raster_band::<f32>(1)?;
+            DenseRaster::new_init_nodata(geo_ref, vec)?
+        };
 
         let mut gdal = io::RasterIO::open_read_only_force_format(&input, FormatProvider::Gdal)?;
-        let gdal_raster = gdal.read_raster_band_as_array::<f64, GeoReference>(1)?;
+        let gdal_raster = {
+            use crate::{ArrayInterop, raster::DenseRaster};
+            let (geo_ref, vec) = gdal.read_raster_band::<f32>(1)?;
+            DenseRaster::new_init_nodata(geo_ref, vec)?
+        };
 
-        assert_eq!(raster, gdal_raster);
+        assert_eq!(gtif_raster, gdal_raster);
 
         Ok(())
     }

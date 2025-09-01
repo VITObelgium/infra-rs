@@ -1,3 +1,3 @@
 - [Geotiff] Multi band raster reading
 - [Geotiff] Merge tiles into raster: check why some calculated chunks have no overlap and need to be ignored
-- [Reader] Handle datatype conversion at the reader level
+- [Geotiff] Merge tiles into raster: faster if done chunk line by chunk line (memcpy) instead of pixel by pixel

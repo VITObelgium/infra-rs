@@ -166,5 +166,5 @@ pub trait RasterFormatGeneric: RasterFormatDyn {
     }
 }
 
-// Make sure boxed trait objects are also RasterFormat
+// Make sure boxed trait objects are also RasterFormatGeneric
 impl<R: RasterFormatDyn + ?Sized> RasterFormatGeneric for R {}
