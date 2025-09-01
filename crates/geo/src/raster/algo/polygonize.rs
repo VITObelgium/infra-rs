@@ -1,6 +1,6 @@
 use gdal::{raster::GdalType, vector::LayerAccess};
 
-use crate::{gdalinterop, raster, vector, Error, GeoReference, Nodata, Result};
+use crate::{Error, GeoReference, Nodata, Result, gdalinterop, raster, vector};
 
 fn polygonize_dataset(ds: &gdal::Dataset) -> Result<gdal::Dataset> {
     let mut mem_ds = vector::io::dataset::create_in_memory()?;
@@ -49,6 +49,6 @@ fn polygonize_dataset(ds: &gdal::Dataset) -> Result<gdal::Dataset> {
 }
 
 pub fn polygonize<T: GdalType + Nodata>(meta: &GeoReference, data: &[T]) -> Result<gdal::Dataset> {
-    let ds = raster::io::dataset::create_in_memory_with_data(meta, data)?;
+    let ds = raster::formats::gdal::create_in_memory_dataset_with_data(meta, data)?;
     polygonize_dataset(&ds)
 }

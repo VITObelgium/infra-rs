@@ -157,7 +157,7 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
 
     let meta = RasterMetadata::sized_for_type::<T>(RasterSize::square(scaled_size));
     let data = DenseArray::filled_with_nodata(meta);
-    let mut dest_ds = raster::io::dataset::create_in_memory_with_data::<T>(&dest_extent, data.as_ref())?;
+    let mut dest_ds = raster::formats::gdal::create_in_memory_dataset_with_data::<T>(&dest_extent, data.as_ref())?;
 
     let options = vec![
         "-b".to_string(),

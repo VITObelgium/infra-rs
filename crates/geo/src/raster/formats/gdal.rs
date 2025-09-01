@@ -1,16 +1,17 @@
-use gdal::errors::GdalError;
+use gdal::{Metadata as _, cpl::CslStringList, errors::GdalError, raster::GdalType};
 
 use num::NumCast;
 use std::{
-    ffi::c_void,
+    ffi::{CString, c_void},
     mem::MaybeUninit,
     path::{Path, PathBuf},
 };
 
 use crate::{
-    ArrayDataType, ArrayNum, Columns, Error, GeoReference, RasterSize, Result, Rows,
-    gdalinterop::check_rc,
+    ArrayDataType, ArrayNum, Columns, Error, GeoReference, Nodata, RasterSize, Result, Rows,
+    gdalinterop::{FALSE, check_pointer, check_rc, create_output_directory_if_needed},
     raster::{
+        Compression, Predictor, TiffChunkType, WriteRasterOptions,
         formats::{RasterFileFormat, RasterFormat, RasterFormatDyn, RasterOpenOptions},
         intersection::{CutOut, intersect_georeference},
         utils::{cast_uninit_byte_slice_mut, cast_uninit_slice_to_byte},
@@ -254,6 +255,24 @@ impl RasterFormat for GdalRasterIO {
             ds: open_dataset_read_only_with_options(path, options)?,
         })
     }
+
+    fn write_band<T: ArrayNum>(
+        path: impl AsRef<Path>,
+        geo_reference: &GeoReference,
+        data: &[T],
+        options: crate::raster::WriteRasterOptions,
+    ) -> Result<()> {
+        let path = path.as_ref();
+        create_output_directory_if_needed(path)?;
+
+        // To write a raster to disk we need a dataset that contains the data
+        // Create a memory dataset with 0 bands, then assign a band given the pointer of our vector
+        // Creating a dataset with 1 band would casuse unnecessary memory allocation
+        let mut ds = create_in_memory_dataset_with_data(geo_reference, data)?;
+        write_to_disk(&mut ds, path, &write_raster_options_to_gdal(options), &[])?;
+
+        Ok(())
+    }
 }
 
 /// Open a GDAL raster dataset for reading
@@ -264,6 +283,50 @@ pub fn open_dataset_read_only(path: impl AsRef<Path>) -> Result<gdal::Dataset> {
     };
 
     open_with_options(path, options)
+}
+
+fn write_raster_options_to_gdal(options: WriteRasterOptions) -> Vec<String> {
+    match options {
+        WriteRasterOptions::Default => Vec::default(),
+        WriteRasterOptions::GeoTiff(tiff_opts) => {
+            let mut opts = Vec::default();
+            opts.push(format!(
+                "TILED={}",
+                match tiff_opts.chunk_type {
+                    TiffChunkType::Tiled => "YES",
+                    TiffChunkType::Striped => "NO",
+                }
+            ));
+
+            opts.push(format!(
+                "COMPRESS={}",
+                match tiff_opts.compression {
+                    Some(Compression::Lzw) => "LZW",
+                    Some(Compression::Zstd) => "ZSTD",
+                    None => "NONE",
+                }
+            ));
+
+            opts.push(format!(
+                "PREDICTOR={}",
+                match tiff_opts.predictor {
+                    None => "1",
+                    Some(Predictor::Horizontal) => "2",
+                    Some(Predictor::FloatingPoint) => "3",
+                }
+            ));
+
+            opts.push(format!(
+                "SPARSE_OK={}",
+                match tiff_opts.sparse_ok {
+                    true => "TRUE",
+                    false => "FALSE",
+                }
+            ));
+
+            opts
+        }
+    }
 }
 
 /// Open a GDAL raster dataset for reading with driver open options
@@ -296,6 +359,103 @@ pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoRe
         ds.geo_transform()?.into(),
         rasterband.no_data_value(),
     ))
+}
+
+/// Creates an in-memory dataset without any bands
+pub fn create_in_memory_dataset(size: RasterSize) -> Result<gdal::Dataset> {
+    let mem_driver = gdal::DriverManager::get_driver_by_name("MEM")?;
+    Ok(mem_driver.create(PathBuf::from("in_mem"), size.cols.count() as usize, size.rows.count() as usize, 0)?)
+}
+
+/// Creates an in-memory dataset with the provided metadata.
+/// The array passed data will be used as the dataset band.
+/// Make sure the data array is the correct size and will live as long as the dataset.
+pub fn create_in_memory_dataset_with_data<T: GdalType + Nodata>(meta: &GeoReference, data: &[T]) -> Result<gdal::Dataset> {
+    let mut ds = create_in_memory_dataset(meta.raster_size())?;
+    add_band_from_data_ptr(&mut ds, data)?;
+    metadata_to_dataset_band(&mut ds, meta, 1)?;
+    Ok(ds)
+}
+
+pub(crate) fn metadata_to_dataset_band(ds: &mut gdal::Dataset, meta: &GeoReference, band_index: usize) -> Result<()> {
+    ds.set_geo_transform(&meta.geo_transform().into())?;
+    ds.set_projection(meta.projection())?;
+    ds.rasterband(band_index)?.set_no_data_value(meta.nodata())?;
+    Ok(())
+}
+
+fn add_band_from_data_ptr<T: GdalType>(ds: &mut gdal::Dataset, data: &[T]) -> Result<()> {
+    // convert the data pointer to a string
+    let data_ptr = format!("DATAPOINTER={:p}", data.as_ptr());
+
+    let mut str_options = gdal::cpl::CslStringList::new();
+    str_options.add_string(data_ptr.as_str())?;
+    let rc = unsafe { gdal_sys::GDALAddBand(ds.c_dataset(), T::gdal_ordinal(), str_options.as_ptr()) };
+    check_rc(rc)?;
+
+    Ok(())
+}
+
+fn create_raster_driver_for_path(path: impl AsRef<Path>) -> Result<gdal::Driver> {
+    let path = path.as_ref();
+    let raster_format = RasterFileFormat::guess_from_path(path);
+    if raster_format == RasterFileFormat::Unknown {
+        return Err(Error::Runtime(format!(
+            "Could not detect raster type from filename: {}",
+            path.to_string_lossy()
+        )));
+    }
+
+    Ok(gdal::DriverManager::get_driver_by_name(raster_format.gdal_driver_name())?)
+}
+
+// Write dataset to disk using the Drivers CreateCopy method
+fn write_to_disk(
+    ds: &mut gdal::Dataset,
+    path: impl AsRef<Path>,
+    driver_options: &[String],
+    metadata_values: &[(String, String)],
+) -> Result<()> {
+    let path = path.as_ref();
+    let driver = create_raster_driver_for_path(path)?;
+
+    let mut c_opts = CslStringList::new();
+    for opt in driver_options {
+        c_opts.add_string(opt)?;
+    }
+
+    if driver_options.is_empty() && driver.description().unwrap_or_default() == RasterFileFormat::GeoTiff.gdal_driver_name() {
+        // Provide sane default for GeoTIFF files
+        c_opts.add_string("COMPRESS=LZW")?;
+        c_opts.add_string("NUM_THREADS=ALL_CPUS")?;
+    }
+
+    for (key, value) in metadata_values {
+        ds.set_metadata_item(key, value, "")?;
+    }
+
+    let path_str = path.to_string_lossy();
+    let path_str = CString::new(path_str.as_ref())?;
+
+    let ds_handle = check_pointer(
+        unsafe {
+            gdal_sys::GDALCreateCopy(
+                driver.c_driver(),
+                path_str.as_ptr(),
+                ds.c_dataset(),
+                FALSE,
+                c_opts.as_ptr(),
+                Some(gdal_sys::GDALDummyProgress),
+                std::ptr::null_mut(),
+            )
+        },
+        "GDALCreateCopy",
+    )
+    .map_err(|err| Error::Runtime(format!("Failed to write raster to disk: {err}")))?;
+
+    unsafe { gdal_sys::GDALClose(ds_handle) };
+
+    Ok(())
 }
 
 fn create_gdal_open_options(raster_format: RasterFileFormat, open_options: &RasterOpenOptions) -> Vec<String> {

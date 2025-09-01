@@ -1,6 +1,9 @@
 use std::{mem::MaybeUninit, path::Path};
 
-use crate::{ArrayDataType, GeoReference, RasterSize, Result, raster::utils::cast_uninit_slice_to_byte};
+use crate::{
+    ArrayDataType, ArrayNum, GeoReference, RasterSize, Result,
+    raster::{WriteRasterOptions, utils::cast_uninit_slice_to_byte},
+};
 
 #[cfg(feature = "gdal")]
 pub mod gdal;
@@ -100,12 +103,15 @@ pub trait RasterFormatDyn {
 pub trait RasterFormat: RasterFormatDyn + Sized {
     fn open_read_only(path: impl AsRef<Path>) -> Result<Self>;
     fn open_read_only_with_options(path: impl AsRef<Path>, open_options: &RasterOpenOptions) -> Result<Self>;
+
+    fn write_band<T: ArrayNum>(path: impl AsRef<Path>, geo_reference: &GeoReference, data: &[T], options: WriteRasterOptions)
+    -> Result<()>;
 }
 
 pub trait RasterFormatGeneric: RasterFormatDyn {
     // Read a complete raster band into the provided buffer
     // implemented here to avoid code duplication in implementations
-    fn read_band<T: crate::ArrayNum>(&mut self, band: usize, dst: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
+    fn read_band<T: ArrayNum>(&mut self, band: usize, dst: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
         assert_eq!(T::TYPE, self.data_type(band)?);
         match T::TYPE {
             ArrayDataType::Uint8 => self.read_band_into_byte_buffer(band, ArrayDataType::Uint8, cast_uninit_slice_to_byte(dst)),
@@ -123,12 +129,7 @@ pub trait RasterFormatGeneric: RasterFormatDyn {
 
     // Read a raster band region into the provided buffer
     // implemented here to avoid code duplication in implementations
-    fn read_band_region<T: crate::ArrayNum>(
-        &mut self,
-        band: usize,
-        region: &GeoReference,
-        dst: &mut [MaybeUninit<T>],
-    ) -> Result<GeoReference> {
+    fn read_band_region<T: ArrayNum>(&mut self, band: usize, region: &GeoReference, dst: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
         assert_eq!(T::TYPE, self.data_type(band)?);
 
         match T::TYPE {

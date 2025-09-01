@@ -157,9 +157,9 @@ pub fn rasterize_with_cli_options<T: ArrayNum + GdalType>(
     let gdal_options = RasterizeOptionsWrapper::new(options)?;
 
     let data = allocate::aligned_vec_filled_with(meta.nodata_as::<T>()?.unwrap_or(T::zero()), meta.rows() * meta.columns());
-    let mut mem_ds = raster::io::dataset::create_in_memory_with_data::<T>(meta, &data)?;
+    let mut mem_ds = raster::formats::gdal::create_in_memory_dataset_with_data::<T>(meta, &data)?;
 
-    raster::io::dataset::metadata_to_dataset_band(&mut mem_ds, meta, 1)?;
+    raster::formats::gdal::metadata_to_dataset_band(&mut mem_ds, meta, 1)?;
 
     let mut usage_error: std::ffi::c_int = gdal_sys::CPLErr::CE_None as std::ffi::c_int;
     unsafe {
