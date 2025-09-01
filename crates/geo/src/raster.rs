@@ -6,6 +6,7 @@ mod denserasterconversions;
 pub mod intersection;
 pub mod io;
 pub mod reader;
+mod utils;
 
 use std::path::Path;
 

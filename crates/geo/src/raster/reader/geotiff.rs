@@ -6,7 +6,10 @@ const LANES: usize = inf::simd::LANES;
 
 use crate::{
     ArrayDataType, ArrayNum, GeoReference, RasterSize, Result,
-    raster::reader::{RasterReader, RasterReaderDyn},
+    raster::{
+        reader::{RasterReader, RasterReaderDyn},
+        utils::reinterpret_uninit_byte_slice,
+    },
 };
 
 use crate::geotiff::GeoTiffReader;
@@ -88,7 +91,18 @@ impl RasterReaderDyn for GeotiffRasterIO {
         data_type: crate::ArrayDataType,
         dst_data: &mut [std::mem::MaybeUninit<u8>],
     ) -> Result<GeoReference> {
-        self.reader.read_band_region_into_buffer(band_index, extent, dst_data)
+        match data_type {
+            ArrayDataType::Uint8 => self.read_raster_band_region_u8(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Uint16 => self.read_raster_band_region_u16(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Uint32 => self.read_raster_band_region_u32(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Uint64 => self.read_raster_band_region_u64(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Int8 => self.read_raster_band_region_i8(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Int16 => self.read_raster_band_region_i16(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Int32 => self.read_raster_band_region_i32(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Int64 => self.read_raster_band_region_i64(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Float32 => self.read_raster_band_region_f32(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+            ArrayDataType::Float64 => self.read_raster_band_region_f64(band_index, extent, reinterpret_uninit_byte_slice(dst_data)),
+        }
     }
 
     fn read_raster_band_region_u8(

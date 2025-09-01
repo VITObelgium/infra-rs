@@ -14,6 +14,7 @@ use crate::{
         intersection::{CutOut, intersect_georeference},
         io::RasterFormat,
         reader::{RasterOpenOptions, RasterReader, RasterReaderDyn},
+        utils::reinterpret_uninit_slice_to_byte,
     },
 };
 
@@ -89,10 +90,6 @@ impl GdalRasterIO {
     pub fn from_dataset(ds: gdal::Dataset) -> Self {
         Self { ds }
     }
-}
-
-fn reinterpret_slice_to_byte<T>(data: &mut [MaybeUninit<T>]) -> &mut [MaybeUninit<u8>] {
-    unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<MaybeUninit<u8>>(), data.len() * std::mem::size_of::<T>()) }
 }
 
 impl RasterReaderDyn for GdalRasterIO {
@@ -220,7 +217,12 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<u16>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Uint16, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(
+            band_index,
+            region,
+            ArrayDataType::Uint16,
+            reinterpret_uninit_slice_to_byte(dst_data),
+        )
     }
 
     fn read_raster_band_region_u32(
@@ -229,7 +231,12 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<u32>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Uint32, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(
+            band_index,
+            region,
+            ArrayDataType::Uint32,
+            reinterpret_uninit_slice_to_byte(dst_data),
+        )
     }
 
     fn read_raster_band_region_u64(
@@ -238,7 +245,12 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<u64>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Uint64, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(
+            band_index,
+            region,
+            ArrayDataType::Uint64,
+            reinterpret_uninit_slice_to_byte(dst_data),
+        )
     }
 
     fn read_raster_band_region_i8(
@@ -247,7 +259,7 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<i8>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Int8, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(band_index, region, ArrayDataType::Int8, reinterpret_uninit_slice_to_byte(dst_data))
     }
 
     fn read_raster_band_region_i16(
@@ -256,7 +268,7 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<i16>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Int16, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(band_index, region, ArrayDataType::Int16, reinterpret_uninit_slice_to_byte(dst_data))
     }
 
     fn read_raster_band_region_i32(
@@ -265,7 +277,7 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<i32>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Int32, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(band_index, region, ArrayDataType::Int32, reinterpret_uninit_slice_to_byte(dst_data))
     }
 
     fn read_raster_band_region_i64(
@@ -274,7 +286,7 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<i64>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Int64, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(band_index, region, ArrayDataType::Int64, reinterpret_uninit_slice_to_byte(dst_data))
     }
 
     fn read_raster_band_region_f32(
@@ -283,7 +295,12 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<f32>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Float32, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(
+            band_index,
+            region,
+            ArrayDataType::Float32,
+            reinterpret_uninit_slice_to_byte(dst_data),
+        )
     }
 
     fn read_raster_band_region_f64(
@@ -292,7 +309,12 @@ impl RasterReaderDyn for GdalRasterIO {
         region: &GeoReference,
         dst_data: &mut [MaybeUninit<f64>],
     ) -> Result<GeoReference> {
-        self.read_raster_band_region(band_index, region, ArrayDataType::Float64, reinterpret_slice_to_byte(dst_data))
+        self.read_raster_band_region(
+            band_index,
+            region,
+            ArrayDataType::Float64,
+            reinterpret_uninit_slice_to_byte(dst_data),
+        )
     }
 }
 

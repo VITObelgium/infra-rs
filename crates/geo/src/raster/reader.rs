@@ -232,10 +232,7 @@ mod tests {
     ) -> Result<()> {
         use inf::allocate::AlignedVecUnderConstruction;
 
-        use crate::{
-            ArrayInterop,
-            raster::{DenseRaster, RasterReadWrite as _},
-        };
+        use crate::{ArrayInterop, raster::DenseRaster};
 
         let mut gdal_reader = gdal::GdalRasterIO::open_read_only(input)?;
         let mut gtif_reader = geotiff::GeotiffRasterIO::open_read_only(input)?;
