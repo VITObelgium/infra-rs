@@ -177,13 +177,13 @@ impl RasterIO {
     ) -> Result<GeoReference> {
         let src_data_type = self.data_type(band_index)?;
         if src_data_type == data_type {
-            self.io.read_raster_band_region(band_index, bounds, src_data_type, buffer)
+            self.io.read_band_region_into_byte_buffer(band_index, bounds, src_data_type, buffer)
         } else {
             // First read into a temporary buffer of the native data type
             let mut tmp_buf = AlignedVecUnderConstruction::<u8>::new(bounds.size().cell_count() * src_data_type.bytes() as usize);
             let georef = self
                 .io
-                .read_raster_band_region(band_index, bounds, src_data_type, tmp_buf.as_uninit_slice_mut())?;
+                .read_band_region_into_byte_buffer(band_index, bounds, src_data_type, tmp_buf.as_uninit_slice_mut())?;
 
             cast_to_buffer(
                 data_type,
@@ -212,12 +212,14 @@ impl RasterIO {
 
         if src_data_type == data_type {
             // We can read directly into the destination buffer
-            self.io.read_raster_band(band_index, data_type, buffer)
+            self.io.read_band_into_byte_buffer(band_index, data_type, buffer)
         } else {
             // First read into a temporary buffer of the native data type
             let buffer_size = buffer.len() / data_type.bytes() as usize * src_data_type.bytes() as usize;
             let mut tmp_buf = AlignedVecUnderConstruction::<u8>::new(buffer_size);
-            let georef = self.io.read_raster_band(band_index, src_data_type, tmp_buf.as_uninit_slice_mut())?;
+            let georef = self
+                .io
+                .read_band_into_byte_buffer(band_index, src_data_type, tmp_buf.as_uninit_slice_mut())?;
 
             cast_to_buffer(
                 data_type,

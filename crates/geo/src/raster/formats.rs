@@ -74,8 +74,18 @@ pub trait RasterFormatDyn {
     fn data_type(&self, band_index: usize) -> Result<ArrayDataType>;
     fn overview_count(&self, band_index: usize) -> Result<usize>;
 
-    fn read_raster_band(&mut self, band_index: usize, data_type: ArrayDataType, dst_data: &mut [MaybeUninit<u8>]) -> Result<GeoReference>;
-    fn read_raster_band_region(
+    /// Reads a full raster band into the provided data buffer.
+    /// The buffer should be allocated and have the correct size. (bytecount = raster rows * raster cols * `data_type` bytes)
+    fn read_band_into_byte_buffer(
+        &mut self,
+        band_index: usize,
+        data_type: ArrayDataType,
+        dst_data: &mut [MaybeUninit<u8>],
+    ) -> Result<GeoReference>;
+
+    /// Reads a subregion of a raster band into the provided data buffer.
+    /// The buffer should be allocated and have the correct size. (bytecount = region rows * region cols * `data_type` bytes)
+    fn read_band_region_into_byte_buffer(
         &mut self,
         band: usize,
         region: &GeoReference,
@@ -86,6 +96,7 @@ pub trait RasterFormatDyn {
 
 /// Trait for reading raster data from various formats.
 /// Meant to be implemented by different raster format readers and not be used directly.
+/// Clients should use the `crate::raster::io::RasterIO` struct to open and read rasters.
 pub trait RasterFormat: RasterFormatDyn + Sized {
     fn open_read_only(path: impl AsRef<Path>) -> Result<Self>;
     fn open_read_only_with_options(path: impl AsRef<Path>, open_options: &RasterOpenOptions) -> Result<Self>;
@@ -97,16 +108,16 @@ pub trait RasterFormatGeneric: RasterFormatDyn {
     fn read_band<T: crate::ArrayNum>(&mut self, band: usize, dst: &mut [MaybeUninit<T>]) -> Result<GeoReference> {
         assert_eq!(T::TYPE, self.data_type(band)?);
         match T::TYPE {
-            ArrayDataType::Uint8 => self.read_raster_band(band, ArrayDataType::Uint8, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint16 => self.read_raster_band(band, ArrayDataType::Uint16, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint32 => self.read_raster_band(band, ArrayDataType::Uint32, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint64 => self.read_raster_band(band, ArrayDataType::Uint64, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int8 => self.read_raster_band(band, ArrayDataType::Int8, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int16 => self.read_raster_band(band, ArrayDataType::Int16, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int32 => self.read_raster_band(band, ArrayDataType::Int32, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int64 => self.read_raster_band(band, ArrayDataType::Int64, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Float32 => self.read_raster_band(band, ArrayDataType::Float32, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Float64 => self.read_raster_band(band, ArrayDataType::Float64, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint8 => self.read_band_into_byte_buffer(band, ArrayDataType::Uint8, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint16 => self.read_band_into_byte_buffer(band, ArrayDataType::Uint16, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint32 => self.read_band_into_byte_buffer(band, ArrayDataType::Uint32, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint64 => self.read_band_into_byte_buffer(band, ArrayDataType::Uint64, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int8 => self.read_band_into_byte_buffer(band, ArrayDataType::Int8, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int16 => self.read_band_into_byte_buffer(band, ArrayDataType::Int16, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int32 => self.read_band_into_byte_buffer(band, ArrayDataType::Int32, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Int64 => self.read_band_into_byte_buffer(band, ArrayDataType::Int64, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Float32 => self.read_band_into_byte_buffer(band, ArrayDataType::Float32, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Float64 => self.read_band_into_byte_buffer(band, ArrayDataType::Float64, cast_uninit_slice_to_byte(dst)),
         }
     }
 
@@ -121,16 +132,36 @@ pub trait RasterFormatGeneric: RasterFormatDyn {
         assert_eq!(T::TYPE, self.data_type(band)?);
 
         match T::TYPE {
-            ArrayDataType::Uint8 => self.read_raster_band_region(band, region, ArrayDataType::Uint8, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint16 => self.read_raster_band_region(band, region, ArrayDataType::Uint16, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint32 => self.read_raster_band_region(band, region, ArrayDataType::Uint32, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Uint64 => self.read_raster_band_region(band, region, ArrayDataType::Uint64, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int8 => self.read_raster_band_region(band, region, ArrayDataType::Int8, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int16 => self.read_raster_band_region(band, region, ArrayDataType::Int16, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int32 => self.read_raster_band_region(band, region, ArrayDataType::Int32, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Int64 => self.read_raster_band_region(band, region, ArrayDataType::Int64, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Float32 => self.read_raster_band_region(band, region, ArrayDataType::Float32, cast_uninit_slice_to_byte(dst)),
-            ArrayDataType::Float64 => self.read_raster_band_region(band, region, ArrayDataType::Float64, cast_uninit_slice_to_byte(dst)),
+            ArrayDataType::Uint8 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Uint8, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Uint16 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Uint16, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Uint32 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Uint32, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Uint64 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Uint64, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Int8 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Int8, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Int16 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Int16, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Int32 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Int32, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Int64 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Int64, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Float32 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Float32, cast_uninit_slice_to_byte(dst))
+            }
+            ArrayDataType::Float64 => {
+                self.read_band_region_into_byte_buffer(band, region, ArrayDataType::Float64, cast_uninit_slice_to_byte(dst))
+            }
         }
     }
 }

@@ -44,7 +44,7 @@ impl RasterFormatDyn for GeotiffRasterIO {
         Ok(if overview_count > 0 { overview_count - 1 } else { 0 })
     }
 
-    fn read_raster_band(
+    fn read_band_into_byte_buffer(
         &mut self,
         band: usize,
         data_type: crate::ArrayDataType,
@@ -64,7 +64,7 @@ impl RasterFormatDyn for GeotiffRasterIO {
         }
     }
 
-    fn read_raster_band_region(
+    fn read_band_region_into_byte_buffer(
         &mut self,
         band: usize,
         extent: &crate::GeoReference,

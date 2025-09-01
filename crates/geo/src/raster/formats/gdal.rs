@@ -198,7 +198,7 @@ impl RasterFormatDyn for GdalRasterIO {
         Ok(self.ds.rasterband(band_index)?.overview_count()? as usize)
     }
 
-    fn read_raster_band(
+    fn read_band_into_byte_buffer(
         &mut self,
         band: usize,
         data_type: crate::ArrayDataType,
@@ -218,7 +218,7 @@ impl RasterFormatDyn for GdalRasterIO {
         }
     }
 
-    fn read_raster_band_region(
+    fn read_band_region_into_byte_buffer(
         &mut self,
         band: usize,
         region: &GeoReference,
