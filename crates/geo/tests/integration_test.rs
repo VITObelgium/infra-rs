@@ -1,5 +1,5 @@
 #[cfg(test)]
-#[allow(unused_imports)]
+#[allow(unused_imports, dead_code)]
 mod tests {
     use approx::assert_relative_eq;
     use geo::{Cell, RasterSize};
