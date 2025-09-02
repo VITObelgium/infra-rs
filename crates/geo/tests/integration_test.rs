@@ -134,7 +134,7 @@ mod tests {
                 header_row: HeaderRow::Row(0),
                 ..Default::default()
             };
-            let iter = DataRowsIterator::<EmptySheetData>::new_with_options(&path, opts).unwrap();
+            let iter = DataRowsIterator::<EmptySheetData>::new_with_options(&path, &opts).unwrap();
             assert_eq!(iter.count(), 0);
         }
 
@@ -146,7 +146,7 @@ mod tests {
                 header_row: HeaderRow::Row(0),
                 ..Default::default()
             };
-            let df: Vec<EmptySheetData> = vector::datarow::read_dataframe_rows(&path, opts).unwrap();
+            let df: Vec<EmptySheetData> = vector::datarow::read_dataframe_rows(&path, &opts).unwrap();
             assert_eq!(df.len(), 0);
         }
     }

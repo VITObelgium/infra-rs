@@ -18,15 +18,15 @@ pub fn read_table_empty_sheet<R: DataFrameReader>(ext: &str) -> Result<()> {
 
     // Expected column names from the Excel file
     let expected_columns = vec![
-        FieldInfo::new("VITO_installatieID".into(), FieldType::String),
-        FieldInfo::new("Jaar".into(), FieldType::String),
-        FieldInfo::new("Type".into(), FieldType::String),
-        FieldInfo::new("Substantie".into(), FieldType::String),
-        FieldInfo::new("EF".into(), FieldType::String),
-        FieldInfo::new("Eenheid (NG)".into(), FieldType::String),
-        FieldInfo::new("Tag".into(), FieldType::String),
-        FieldInfo::new("CRF/NFR-sector".into(), FieldType::String),
-        FieldInfo::new("Categorie".into(), FieldType::String),
+        FieldInfo::new("VITO_installatieID", FieldType::String),
+        FieldInfo::new("Jaar", FieldType::String),
+        FieldInfo::new("Type", FieldType::String),
+        FieldInfo::new("Substantie", FieldType::String),
+        FieldInfo::new("EF", FieldType::String),
+        FieldInfo::new("Eenheid (NG)", FieldType::String),
+        FieldInfo::new("Tag", FieldType::String),
+        FieldInfo::new("CRF/NFR-sector", FieldType::String),
+        FieldInfo::new("Categorie", FieldType::String),
     ];
 
     assert_eq!(schema.len(), expected_columns.len());
@@ -54,14 +54,11 @@ pub fn read_table<R: DataFrameReader>(ext: &str) -> Result<()> {
 
     // Expected column names from the input file
     let expected_columns = [
-        FieldInfo::new("String Column".into(), FieldType::String),
-        FieldInfo::new("Double Column".into(), FieldType::Float),
-        FieldInfo::new("Integer Column".into(), FieldType::Integer),
-        FieldInfo::new("Date Column".into(), FieldType::DateTime),
-        FieldInfo::new(
-            "Bool Column".into(),
-            if has_bool_type { FieldType::Boolean } else { FieldType::Integer },
-        ),
+        FieldInfo::new("String Column", FieldType::String),
+        FieldInfo::new("Double Column", FieldType::Float),
+        FieldInfo::new("Integer Column", FieldType::Integer),
+        FieldInfo::new("Date Column", FieldType::DateTime),
+        FieldInfo::new("Bool Column", if has_bool_type { FieldType::Boolean } else { FieldType::Integer }),
     ];
 
     assert_eq!(schema.len(), expected_columns.len());
@@ -98,8 +95,8 @@ pub fn read_table_override_schema<R: DataFrameReader>(ext: &str) -> Result<()> {
 
     let schema = Schema {
         fields: vec![
-            FieldInfo::new("String Column".into(), FieldType::Integer), // Read the strings as integer (will fail for non-integer strings)
-            FieldInfo::new("Double Column".into(), FieldType::String),  // Read the doubles as string
+            FieldInfo::new("String Column", FieldType::Integer), // Read the strings as integer (will fail for non-integer strings)
+            FieldInfo::new("Double Column", FieldType::String),  // Read the doubles as string
         ],
     };
 
@@ -159,10 +156,10 @@ pub fn read_table_header_offset<R: DataFrameReader>(ext: &str) -> Result<()> {
 
     // Expected column names from the Excel file
     let expected_columns = [
-        FieldInfo::new("String Column".into(), FieldType::String),
-        FieldInfo::new("Double Column".into(), FieldType::Float),
-        FieldInfo::new("Integer Column".into(), FieldType::Integer),
-        FieldInfo::new("Date Column".into(), FieldType::DateTime),
+        FieldInfo::new("String Column", FieldType::String),
+        FieldInfo::new("Double Column", FieldType::Float),
+        FieldInfo::new("Integer Column", FieldType::Integer),
+        FieldInfo::new("Date Column", FieldType::DateTime),
     ];
 
     let schema = reader.schema(&options)?;
@@ -180,7 +177,7 @@ pub fn read_table_header_offset<R: DataFrameReader>(ext: &str) -> Result<()> {
     {
         // Invalid column name
         options.schema_override = Some(Schema {
-            fields: vec![FieldInfo::new("Strang Column".into(), FieldType::String)],
+            fields: vec![FieldInfo::new("Strang Column", FieldType::String)],
         });
         assert!(reader.iter_rows(&options).is_err());
     }
@@ -201,10 +198,10 @@ pub fn read_table_no_header<R: DataFrameReader>(ext: &str) -> Result<()> {
 
     // Expected column names from the Excel file
     let expected_columns = [
-        FieldInfo::new("Field1".into(), FieldType::String),
-        FieldInfo::new("Field2".into(), FieldType::Float),
-        FieldInfo::new("Field3".into(), FieldType::Integer),
-        FieldInfo::new("Field4".into(), FieldType::DateTime),
+        FieldInfo::new("Field1", FieldType::String),
+        FieldInfo::new("Field2", FieldType::Float),
+        FieldInfo::new("Field3", FieldType::Integer),
+        FieldInfo::new("Field4", FieldType::DateTime),
     ];
 
     let schema = reader.schema(&options)?;
@@ -231,7 +228,7 @@ pub fn read_table_no_header<R: DataFrameReader>(ext: &str) -> Result<()> {
     {
         // Auto generated column indexes start a 1
         options.schema_override = Some(Schema {
-            fields: vec![FieldInfo::new("Field0".into(), FieldType::String)],
+            fields: vec![FieldInfo::new("Field0", FieldType::String)],
         });
         assert!(reader.iter_rows(&options).is_err());
     }
@@ -239,7 +236,7 @@ pub fn read_table_no_header<R: DataFrameReader>(ext: &str) -> Result<()> {
     {
         // Column index too big
         options.schema_override = Some(Schema {
-            fields: vec![FieldInfo::new("Field5".into(), FieldType::String)],
+            fields: vec![FieldInfo::new("Field5", FieldType::String)],
         });
         assert!(reader.iter_rows(&options).is_err());
     }

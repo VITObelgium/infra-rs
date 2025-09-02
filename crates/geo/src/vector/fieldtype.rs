@@ -5,13 +5,17 @@ use chrono::DateTime;
 use num::NumCast;
 
 fn parse_value_range(year_range: &str) -> Result<RangeInclusive<i32>> {
-    let years: Vec<&str> = year_range.split('-').map(str::trim).collect();
-    if years.len() == 1 {
-        let year = years[0].parse::<i32>()?;
-        Ok(RangeInclusive::new(year, year))
-    } else if years.len() == 2 {
-        let start_year = years[0].parse::<i32>()?;
-        let end_year = years[1].parse::<i32>()?;
+    let values: Vec<&str> = year_range.split('-').map(str::trim).collect();
+    if values.len() == 1 {
+        let value = values[0].parse::<i32>()?;
+        Ok(RangeInclusive::new(value, value))
+    } else if values.len() == 2 {
+        let start_year = values[0]
+            .parse::<i32>()
+            .map_err(|_| Error::Runtime(format!("Invalid range start value: '{}'", values[0])))?;
+        let end_year = values[1]
+            .parse::<i32>()
+            .map_err(|_| Error::Runtime(format!("Invalid range end value: '{}'", values[1])))?;
         Ok(RangeInclusive::new(start_year, end_year))
     } else {
         Err(Error::Runtime(format!("Invalid value range: {year_range}")))
@@ -81,7 +85,9 @@ impl VectorFieldType for f64 {
         match field {
             Field::Float(val) => Ok(Some(val)),
             Field::Integer(val) => Ok(NumCast::from(val)),
-            Field::String(val) => Ok(Some(val.parse()?)),
+            Field::String(val) => Ok(Some(
+                val.parse().map_err(|_| Error::Runtime(format!("Invalid float value: '{val}'")))?,
+            )),
             _ => Ok(None),
         }
     }
@@ -98,7 +104,9 @@ impl VectorFieldType for i32 {
         match field {
             Field::Float(val) => Ok(NumCast::from(val)),
             Field::Integer(val) => Ok(NumCast::from(val)),
-            Field::String(val) => Ok(val.parse().ok()),
+            Field::String(val) => Ok(Some(
+                val.parse().map_err(|_| Error::Runtime(format!("Invalid integer value: '{val}'")))?,
+            )),
             _ => Ok(None),
         }
     }
@@ -115,7 +123,9 @@ impl VectorFieldType for i64 {
         match field {
             Field::Float(val) => Ok(NumCast::from(val)),
             Field::Integer(val) => Ok(NumCast::from(val)),
-            Field::String(val) => Ok(val.parse().ok()),
+            Field::String(val) => Ok(Some(
+                val.parse().map_err(|_| Error::Runtime(format!("Invalid integer value: '{val}'")))?,
+            )),
             _ => Ok(None),
         }
     }
