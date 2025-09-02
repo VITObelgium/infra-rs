@@ -10,7 +10,7 @@ mod gdaltranslate;
 mod gdalwarp;
 mod limits;
 mod nodata;
-#[cfg(all(feature = "gdal", feature = "vector"))]
+#[cfg(feature = "gdal")]
 mod polygonize;
 mod quantile;
 mod rasterdiff;
@@ -21,7 +21,7 @@ mod warp;
 mod clusterid;
 pub(crate) mod clusterutils;
 
-#[cfg(all(feature = "gdal", feature = "vector"))]
+#[cfg(feature = "gdal")]
 pub use polygonize::polygonize;
 
 use crate::Array;

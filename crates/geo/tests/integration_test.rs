@@ -1,4 +1,3 @@
-#[cfg(all(feature = "gdal", feature = "vector"))]
 #[cfg(test)]
 mod tests {
     use approx::assert_relative_eq;
@@ -11,6 +10,8 @@ mod tests {
     };
     use inf::progressinfo::DummyProgress;
     use path_macro::path;
+
+    #[cfg(feature = "vector-processing")]
     use vector::polygoncoverage::CoverageConfiguration;
 
     #[cfg(feature = "derive")]
@@ -69,6 +70,7 @@ mod tests {
         }
 
         #[test]
+        #[cfg(feature = "vector-io-csv")]
         fn integration_row_data_derive() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
             let mut iter = DataRowsIterator::<PollutantData>::new(&path, None).unwrap();
@@ -101,6 +103,7 @@ mod tests {
         }
 
         #[test]
+        #[cfg(feature = "vector-io-csv")]
         fn integration_row_data_derive_subset() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
             let mut iter = DataRowsIterator::<PollutantDataSubset>::new(&path, None).unwrap();
@@ -130,6 +133,7 @@ mod tests {
         }
 
         #[test]
+        #[cfg(feature = "vector-io-csv")]
         fn integration_row_data_derive_missing() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
             let mut iter = DataRowsIterator::<PollutantData>::new(&path, None).unwrap();
@@ -140,6 +144,7 @@ mod tests {
         }
 
         #[test]
+        #[cfg(feature = "vector-io-csv")]
         fn integration_row_data_derive_missing_optionals() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
             let mut iter = DataRowsIterator::<PollutantOptionalData>::new(&path, None).unwrap();
@@ -165,6 +170,7 @@ mod tests {
         }
 
         #[test]
+        #[cfg(feature = "vector-io-xlsx")]
         fn integration_iterate_empty_sheet() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
             let opts = DataFrameOptions {
@@ -177,6 +183,7 @@ mod tests {
         }
 
         #[test]
+        #[cfg(feature = "vector-io-xlsx")]
         fn integration_read_dataframe_empty_sheet() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "empty_sheet.xlsx");
             let opts = DataFrameOptions {
@@ -190,6 +197,7 @@ mod tests {
     }
 
     #[test_log::test]
+    #[cfg(all(feature = "gdal", feature = "vector-processing"))]
     fn integration_polygon_coverage() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "boundaries.gpkg");
 

@@ -3,7 +3,7 @@ use gdal::{raster::GdalType, vector::LayerAccess};
 use crate::{Error, GeoReference, Nodata, Result, gdalinterop, raster, vector};
 
 fn polygonize_dataset(ds: &gdal::Dataset) -> Result<gdal::Dataset> {
-    let mut mem_ds = vector::io::dataset::create_in_memory()?;
+    let mut mem_ds = vector::io::gdal::dataset::create_in_memory()?;
     if ds.raster_count() == 0 {
         return Err(Error::InvalidArgument(
             "Polygonize should be called on a raster dataset".to_string(),

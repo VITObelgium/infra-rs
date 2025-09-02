@@ -39,14 +39,14 @@ pub enum Error {
     PythonError(#[from] pyo3::PyErr),
     #[error("Geozero error: {0}")]
     GeoZeroError(#[from] geozero::error::GeozeroError),
-    #[cfg(feature = "vector")]
+    #[cfg(feature = "vector-processing")]
     #[error("Geos error: {0}")]
     GeosError(#[from] geos::Error),
     //#[error("Proj error: {0}")]
     //ProjError(#[from] proj4rs::errors::Error),
     #[error("Error: {0}")]
     Infra(#[from] inf::Error),
-    #[cfg(feature = "cog")]
+    #[cfg(feature = "raster-io-geotiff")]
     #[error("Tiff error: {0}")]
     TiffError(#[from] tiff::TiffError),
     #[cfg(feature = "vector-io-xlsx")]

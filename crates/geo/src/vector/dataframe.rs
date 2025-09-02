@@ -196,26 +196,26 @@ pub trait DataFrameReader {
 
 /// Creates a `DataFrameReader` for the specified path based on the file extension.
 pub fn create_dataframe_reader(path: &Path) -> Result<Box<dyn DataFrameReader>> {
-    match vector::VectorFormat::guess_from_path(path) {
+    match vector::VectorFileFormat::guess_from_path(path) {
         #[cfg(feature = "vector-io-xlsx")]
-        vector::VectorFormat::Xlsx => Ok(Box::new(vector::readers::XlsxReader::from_file(path)?)),
+        vector::VectorFileFormat::Xlsx => Ok(Box::new(vector::readers::XlsxReader::from_file(path)?)),
 
         #[cfg(feature = "vector-io-csv")]
-        vector::VectorFormat::Csv => Ok(Box::new(vector::readers::CsvReader::from_file(path)?)),
+        vector::VectorFileFormat::Csv => Ok(Box::new(vector::readers::CsvReader::from_file(path)?)),
 
         #[cfg(feature = "gdal")]
-        vector::VectorFormat::ShapeFile
-        | vector::VectorFormat::GeoJson
-        | vector::VectorFormat::GeoPackage
-        | vector::VectorFormat::Tab
-        | vector::VectorFormat::Parquet
-        | vector::VectorFormat::Arrow => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
+        vector::VectorFileFormat::ShapeFile
+        | vector::VectorFileFormat::GeoJson
+        | vector::VectorFileFormat::GeoPackage
+        | vector::VectorFileFormat::Tab
+        | vector::VectorFileFormat::Parquet
+        | vector::VectorFileFormat::Arrow => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
 
         #[cfg(all(feature = "gdal", not(feature = "vector-io-xlsx")))]
-        vector::VectorFormat::Xlsx => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
+        vector::VectorFileFormat::Xlsx => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
 
         #[cfg(all(feature = "gdal", not(feature = "vector-io-csv")))]
-        vector::VectorFormat::Csv => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
+        vector::VectorFileFormat::Csv => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
         _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
     }
 }
@@ -231,23 +231,23 @@ pub mod polars {
 
     /// Reads a `polars::frame::DataFrame` from the specified path using the provided options.
     pub fn read_dataframe(path: &Path, options: &DataFrameOptions) -> Result<polars::frame::DataFrame> {
-        match vector::VectorFormat::guess_from_path(path) {
+        match vector::VectorFileFormat::guess_from_path(path) {
             #[cfg(feature = "vector-io-xlsx")]
-            vector::VectorFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options),
+            vector::VectorFileFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options),
 
             #[cfg(feature = "vector-io-csv")]
-            vector::VectorFormat::Csv => read_dataframe_with::<vector::readers::CsvReader>(path, options),
+            vector::VectorFileFormat::Csv => read_dataframe_with::<vector::readers::CsvReader>(path, options),
 
             #[cfg(feature = "gdal")]
-            vector::VectorFormat::ShapeFile
-            | vector::VectorFormat::GeoJson
-            | vector::VectorFormat::GeoPackage
-            | vector::VectorFormat::Tab
-            | vector::VectorFormat::Parquet
-            | vector::VectorFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, options),
+            vector::VectorFileFormat::ShapeFile
+            | vector::VectorFileFormat::GeoJson
+            | vector::VectorFileFormat::GeoPackage
+            | vector::VectorFileFormat::Tab
+            | vector::VectorFileFormat::Parquet
+            | vector::VectorFileFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, options),
 
             #[cfg(all(feature = "gdal", not(feature = "vector-io-csv")))]
-            vector::VectorFormat::Csv => read_dataframe_with::<vector::readers::GdalReader>(path, options),
+            vector::VectorFileFormat::Csv => read_dataframe_with::<vector::readers::GdalReader>(path, options),
             _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
         }
     }

@@ -4,8 +4,8 @@ use gdal::vector::{Feature, FieldValue, LayerAccess, OwnedLayer};
 use gdal_sys::OGRFieldType;
 
 use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow, Field, FieldInfo, FieldType, HeaderRow, Schema};
-use crate::vector::io::FeatureExtension;
-use crate::vector::{VectorFormat, io};
+use crate::vector::io::gdal::FeatureExtension as _;
+use crate::vector::{VectorFileFormat, io};
 use crate::{Error, Result};
 
 const GDAL_UNNAMED_COL_PREFIX: &str = "Field";
@@ -16,8 +16,8 @@ pub struct GdalReader {
 
 fn create_open_options_for_file(path: &Path, options: &DataFrameOptions) -> Vec<String> {
     let mut open_options = Vec::new();
-    match VectorFormat::guess_from_path(path) {
-        VectorFormat::Xlsx => {
+    match VectorFileFormat::guess_from_path(path) {
+        VectorFileFormat::Xlsx => {
             let header_detection = match options.header_row {
                 crate::vector::dataframe::HeaderRow::None => "DISABLE",
                 crate::vector::dataframe::HeaderRow::Row(0) => "FORCE",
@@ -29,7 +29,7 @@ fn create_open_options_for_file(path: &Path, options: &DataFrameOptions) -> Vec<
             };
             open_options.push(format!("HEADERS={header_detection}"));
         }
-        VectorFormat::Csv => {
+        VectorFileFormat::Csv => {
             open_options.push("AUTODETECT_TYPE=YES".into());
         }
         _ => {}
@@ -40,7 +40,7 @@ fn create_open_options_for_file(path: &Path, options: &DataFrameOptions) -> Vec<
 fn create_layer_for_file(path: &Path, options: &DataFrameOptions) -> Result<OwnedLayer> {
     let open_options = create_open_options_for_file(path, options);
     let open_options_refs: Vec<&str> = open_options.iter().map(|s| s.as_str()).collect();
-    let dataset = io::dataset::open_read_only_with_options(path, Some(&open_options_refs))?;
+    let dataset = io::gdal::dataset::open_read_only_with_options(path, Some(&open_options_refs))?;
 
     // Get layer - use the specified layer or default to first layer
     Ok(match &options.layer {
@@ -189,7 +189,7 @@ impl DataFrameReader for GdalReader {
     }
 
     fn layer_names(&self) -> Result<Vec<String>> {
-        let dataset = io::dataset::open_read_only(&self.path)?;
+        let dataset = io::gdal::dataset::open_read_only(&self.path)?;
         let mut layer_names = Vec::new();
 
         for i in 0..dataset.layer_count() {

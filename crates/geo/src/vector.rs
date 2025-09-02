@@ -1,28 +1,31 @@
 //! Vector data handling with type-safe data structures and I/O.
 
 #[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub mod algo;
 mod burnvalue;
-#[cfg(feature = "gdal")]
+#[cfg(feature = "vector-processing")]
+#[cfg_attr(docsrs, doc(cfg(feature = "vector-processing")))]
 mod coveragetools;
 pub mod dataframe;
 pub mod datarow;
 pub mod fieldtype;
 pub mod geometrytype;
-#[cfg(feature = "gdal")]
+#[cfg(feature = "vector-io")]
+#[cfg_attr(docsrs, doc(cfg(feature = "vector-io")))]
 pub mod io;
-#[cfg(feature = "gdal")]
+#[cfg(feature = "vector-processing")]
+#[cfg_attr(docsrs, doc(cfg(feature = "vector-processing")))]
 pub mod polygoncoverage;
 pub mod readers;
 
 #[doc(inline)]
 pub use burnvalue::BurnValue;
 #[doc(inline)]
-#[cfg(feature = "gdal")]
 pub use datarow::DataRow;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-pub enum VectorFormat {
+pub enum VectorFileFormat {
     Memory,
     Csv,
     Tab,
@@ -38,33 +41,33 @@ pub enum VectorFormat {
     Unknown,
 }
 
-impl VectorFormat {
+impl VectorFileFormat {
     /// Given a file path, guess the raster type based on the file extension
-    pub fn guess_from_path(file_path: &std::path::Path) -> VectorFormat {
+    pub fn guess_from_path(file_path: &std::path::Path) -> VectorFileFormat {
         let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
 
         if let Some(ext) = ext {
             match ext.as_ref() {
-                "csv" => return VectorFormat::Csv,
-                "tab" => return VectorFormat::Tab,
-                "shp" | "dbf" => return VectorFormat::ShapeFile,
-                "xlsx" => return VectorFormat::Xlsx,
-                "json" | "geojson" => return VectorFormat::GeoJson,
-                "gpkg" => return VectorFormat::GeoPackage,
-                "vrt" => return VectorFormat::Vrt,
-                "parquet" => return VectorFormat::Parquet,
-                "arrow" | "arrows" => return VectorFormat::Arrow,
+                "csv" => return VectorFileFormat::Csv,
+                "tab" => return VectorFileFormat::Tab,
+                "shp" | "dbf" => return VectorFileFormat::ShapeFile,
+                "xlsx" => return VectorFileFormat::Xlsx,
+                "json" | "geojson" => return VectorFileFormat::GeoJson,
+                "gpkg" => return VectorFileFormat::GeoPackage,
+                "vrt" => return VectorFileFormat::Vrt,
+                "parquet" => return VectorFileFormat::Parquet,
+                "arrow" | "arrows" => return VectorFileFormat::Arrow,
                 _ => {}
             }
         }
 
         let path = file_path.to_string_lossy();
         if path.starts_with("postgresql://") || path.starts_with("pg:") {
-            VectorFormat::PostgreSQL
+            VectorFileFormat::PostgreSQL
         } else if path.starts_with("wfs:") {
-            VectorFormat::Wfs
+            VectorFileFormat::Wfs
         } else {
-            VectorFormat::Unknown
+            VectorFileFormat::Unknown
         }
     }
 }
@@ -72,4 +75,6 @@ impl VectorFormat {
 #[doc(inline)]
 pub use datarow::{DataRowsIterator, read_dataframe_rows};
 
+#[cfg(feature = "derive")]
+#[cfg_attr(docsrs, doc(cfg(feature = "derive")))]
 pub use vector_derive::DataRow;

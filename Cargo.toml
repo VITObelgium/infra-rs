@@ -5,10 +5,10 @@ edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
-  "gdal[core,netcdf,zstd,expat]",
-  "hdf5[core,zlib]",
-  "netcdf-c[core,netcdf-4,hdf5]",
-  "tiff[core,lzma,zstd]",
+    "gdal[core,netcdf,zstd,expat]",
+    "hdf5[core,zlib]",
+    "netcdf-c[core,netcdf-4,hdf5]",
+    "tiff[core,lzma,zstd]",
 ] # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
 overlay-triplets-path = "vcpkg-overlay/triplets"
@@ -24,16 +24,16 @@ x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 
 [workspace]
 members = [
-  "crates/geo",
-  "crates/geo/vector_derive",
-  "crates/inf",
-  "crates/raster-tile",
-  "crates/sqlite",
-  "crates/tiler",
-  "tools/creatembtiles",
-  "tools/createcog",
-  "tools/tiles2raster",
-  "tools/tileserver",
+    "crates/geo",
+    "crates/geo/vector_derive",
+    "crates/inf",
+    "crates/raster-tile",
+    "crates/sqlite",
+    "crates/tiler",
+    "tools/creatembtiles",
+    "tools/createcog",
+    "tools/tiles2raster",
+    "tools/tileserver",
 ]
 
 [dependencies]
@@ -61,9 +61,8 @@ tui = ["tileserver/tui"]
 # more recent geozero to avoid multiple gdal copies
 geozero = { git = "https://github.com/georust/geozero.git", rev = "e52422b54ab469ce8de6e33f859d4321be63d657" }
 crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev = "9d01fb7993537a3ba632bf60899b884434a1d453" }
-proj4wkt = { git = "https://github.com/dirkvdb/proj4wkt-rs.git", rev = "35e8db67c43e9944dd941d34539886cb727adc41" }
+proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
 tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "47811747dda727073d6d48be918ce5831e124174" }
-
 
 [profile.samply]
 inherits = "release"

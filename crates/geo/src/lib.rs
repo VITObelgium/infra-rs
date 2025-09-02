@@ -27,8 +27,8 @@ mod error;
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub mod gdalinterop;
 mod georeference;
-#[cfg(feature = "cog")]
-#[cfg_attr(docsrs, doc(cfg(feature = "cog")))]
+#[cfg(feature = "raster-io-geotiff")]
+#[cfg_attr(docsrs, doc(cfg(feature = "raster-io-geotiff")))]
 pub mod geotiff;
 mod geotransform;
 mod latlonbounds;
@@ -47,8 +47,6 @@ mod runtimeconfiguration;
 pub mod srs;
 mod tile;
 pub mod tileutils;
-#[cfg(feature = "vector")]
-#[cfg_attr(docsrs, doc(cfg(feature = "vector")))]
 pub mod vector;
 
 #[cfg(test)]
