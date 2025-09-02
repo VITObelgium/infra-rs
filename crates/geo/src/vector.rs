@@ -16,6 +16,9 @@ pub mod datarow;
 #[cfg(feature = "vector-io")]
 #[cfg_attr(docsrs, doc(cfg(feature = "vector-io")))]
 pub mod fieldtype;
+#[cfg(feature = "gdal")]
+#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
+pub mod gdalio;
 pub mod geometrytype;
 #[cfg(feature = "vector-io")]
 #[cfg_attr(docsrs, doc(cfg(feature = "vector-io")))]

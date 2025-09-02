@@ -3,9 +3,9 @@ use std::path::Path;
 use gdal::vector::{Feature, FieldValue, LayerAccess, OwnedLayer};
 use gdal_sys::OGRFieldType;
 
+use crate::vector::VectorFileFormat;
 use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow, Field, FieldInfo, FieldType, HeaderRow, Schema};
-use crate::vector::io::gdal::FeatureExtension as _;
-use crate::vector::{VectorFileFormat, io};
+use crate::vector::gdalio::{self, FeatureExtension as _};
 use crate::{Error, Result};
 
 const GDAL_UNNAMED_COL_PREFIX: &str = "Field";
@@ -40,7 +40,7 @@ fn create_open_options_for_file(path: &Path, options: &DataFrameOptions) -> Vec<
 fn create_layer_for_file(path: &Path, options: &DataFrameOptions) -> Result<OwnedLayer> {
     let open_options = create_open_options_for_file(path, options);
     let open_options_refs: Vec<&str> = open_options.iter().map(|s| s.as_str()).collect();
-    let dataset = io::gdal::dataset::open_read_only_with_options(path, Some(&open_options_refs))?;
+    let dataset = gdalio::dataset::open_read_only_with_options(path, Some(&open_options_refs))?;
 
     // Get layer - use the specified layer or default to first layer
     Ok(match &options.layer {
@@ -189,7 +189,7 @@ impl DataFrameReader for GdalReader {
     }
 
     fn layer_names(&self) -> Result<Vec<String>> {
-        let dataset = io::gdal::dataset::open_read_only(&self.path)?;
+        let dataset = gdalio::dataset::open_read_only(&self.path)?;
         let mut layer_names = Vec::new();
 
         for i in 0..dataset.layer_count() {

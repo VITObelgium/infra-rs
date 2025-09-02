@@ -1,20 +1,21 @@
 use std::path::Path;
 
 use crate::raster::formats;
+use crate::vector::gdalio::{self, FeatureDefinitionExtension as _};
 use crate::{ArrayNum, Error, Result, raster};
-use crate::{GeoReference, gdalinterop, vector::io::gdal::FeatureDefinitionExtension as _};
+use crate::{GeoReference, gdalinterop};
 use gdal::vector::Feature;
 use gdal::{raster::GdalType, vector::LayerAccess};
 use inf::allocate::{self, AlignedVec};
 
-use super::{BurnValue, geometrytype::GeometryType, io};
+use super::{BurnValue, geometrytype::GeometryType};
 
 /// Translate a GDAL vector dataset using the provided translate options
 /// The options are passed as a list of strings in the form `["-option1", "value1", "-option2", "value2"]`
 /// and match the options of the gdal ogr2ogr command line tool
 /// The translated dataset is returned
 pub fn translate_cli_opts(ds: &gdal::Dataset, options: &[String]) -> Result<gdal::Dataset> {
-    let mem_ds = io::gdal::dataset::create_in_memory()?;
+    let mem_ds = gdalio::dataset::create_in_memory()?;
     let mut opts = VectorTranslateOptionsWrapper::new(options)?;
 
     let mut usage_error: std::ffi::c_int = 0;
@@ -221,7 +222,7 @@ pub struct BufferOptions {
 pub fn buffer(ds: &gdal::Dataset, opts: &BufferOptions) -> Result<gdal::Dataset> {
     assert!(opts.distance > 0.0);
 
-    let mut mem_ds = io::gdal::dataset::create_in_memory()?;
+    let mut mem_ds = gdalio::dataset::create_in_memory()?;
 
     for i in 0..ds.layer_count() {
         let mut src_layer = ds.layer(i)?;
@@ -353,7 +354,6 @@ mod tests {
     use path_macro::path;
 
     use crate::Result;
-    use crate::vector;
 
     use super::*;
 
@@ -365,7 +365,7 @@ mod tests {
     fn test_buffer() -> Result<()> {
         let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "boundaries.gpkg");
 
-        let ds = vector::io::gdal::dataset::open_read_only(&path).unwrap();
+        let ds = gdalio::dataset::open_read_only(&path).unwrap();
         let buffered_ds = buffer(
             &ds,
             &BufferOptions {
@@ -388,7 +388,7 @@ mod tests {
     fn test_buffer_include_fields() -> Result<()> {
         let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "boundaries.gpkg");
 
-        let ds = vector::io::gdal::dataset::open_read_only(&path).unwrap();
+        let ds = gdalio::dataset::open_read_only(&path).unwrap();
         let buffered_ds = buffer(
             &ds,
             &BufferOptions {

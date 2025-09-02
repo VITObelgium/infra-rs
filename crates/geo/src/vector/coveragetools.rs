@@ -7,7 +7,7 @@ use crate::Error;
 use crate::Result;
 
 use super::algo;
-use super::io;
+use super::gdalio;
 
 pub struct VectorBuilder {
     layer: gdal::vector::OwnedLayer,
@@ -15,7 +15,7 @@ pub struct VectorBuilder {
 
 impl VectorBuilder {
     pub fn with_layer(name: &str, projection: &str) -> Result<Self> {
-        let mut ds = io::dataset::create_in_memory()?;
+        let mut ds = gdalio::dataset::create_in_memory()?;
         let srs = gdal::spatial_ref::SpatialRef::from_definition(projection)?;
         ds.create_layer(gdal::vector::LayerOptions {
             name,
