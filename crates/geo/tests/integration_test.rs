@@ -66,7 +66,7 @@ mod tests {
             pollutant: String,
             #[vector(column = "EF")]
             ef: f64,
-            #[vector(column = "TAG")]
+            #[vector(column = "Tag")]
             tag: String,
         }
 
