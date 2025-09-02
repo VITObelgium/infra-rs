@@ -4,7 +4,7 @@ use std::path::Path;
 
 use crate::{
     Error, Result,
-    vector::dataframe::{DataFrameOptions, DataFrameRow, create_dataframe_reader},
+    vector::dataframe::{DataFrameOptions, DataFrameRow, FieldInfo, FieldType, Schema, create_dataframe_reader},
 };
 
 pub trait DataRow {
@@ -43,7 +43,7 @@ pub mod __private {
 
 /// Reads all rows from a table based data source located at `path` and returns them as a vector of `TRow` objects
 /// `TRow` must implement the [`DataRow`] trait
-pub fn read_dataframe_rows<TRow: DataRow, P: AsRef<Path>>(path: &P, opts: &DataFrameOptions) -> Result<Vec<TRow>> {
+pub fn read_dataframe_rows<TRow: DataRow, P: AsRef<Path>>(path: &P, opts: DataFrameOptions) -> Result<Vec<TRow>> {
     let rows: Result<Vec<_>> = DataRowsIterator::<TRow>::new_with_options(path, opts)?.collect();
     rows.map_err(|e| Error::Runtime(format!("Failed to read data frame rows: {e}")))
 }
@@ -61,12 +61,27 @@ impl<TRow: DataRow> DataRowsIterator<TRow> {
             layer,
             ..Default::default()
         };
-        Self::new_with_options(path, &options)
+        Self::create_from_options(path, options)
     }
 
-    pub fn new_with_options<P: AsRef<Path>>(path: &P, options: &DataFrameOptions) -> Result<Self> {
+    pub fn new_with_options<P: AsRef<Path>>(path: &P, options: DataFrameOptions) -> Result<Self> {
+        if options.schema_override.is_some() {
+            return Err(Error::InvalidArgument(
+                "schema_override can not be set for iterating DataRows, the types from the struct will be used".into(),
+            ));
+        }
+
+        Self::create_from_options(path, options)
+    }
+
+    fn create_from_options<P: AsRef<Path>>(path: &P, mut options: DataFrameOptions) -> Result<Self> {
+        let field_names = TRow::field_names();
+        options.schema_override = Some(Schema {
+            fields: field_names.iter().map(|&name| FieldInfo::new(name, FieldType::Native)).collect(),
+        });
+
         let mut reader = create_dataframe_reader(path.as_ref())?;
-        let iterator = reader.iter_rows(options)?;
+        let iterator = reader.iter_rows(&options)?;
 
         Ok(Self {
             iterator,

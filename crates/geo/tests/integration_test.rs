@@ -34,6 +34,15 @@ mod tests {
         }
 
         #[derive(vector::DataRow)]
+        struct PollutantDataSubset {
+            #[vector(column = "Pollutant")]
+            pollutant: String,
+            value: f64,
+            #[vector(skip)]
+            not_in_csv: String,
+        }
+
+        #[derive(vector::DataRow)]
         struct PollutantOptionalData {
             #[vector(column = "Pollutant")]
             pollutant: String,
@@ -92,6 +101,35 @@ mod tests {
         }
 
         #[test]
+        fn integration_row_data_derive_subset() {
+            let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road.csv");
+            let mut iter = DataRowsIterator::<PollutantDataSubset>::new(&path, None).unwrap();
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.value, 10.0);
+                assert_eq!(row.not_in_csv, String::default());
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "NO2");
+                assert_eq!(row.value, 11.5);
+                assert_eq!(row.not_in_csv, String::default());
+            }
+
+            {
+                let row = iter.next().unwrap().unwrap();
+                assert_eq!(row.pollutant, "PM10");
+                assert_eq!(row.value, 13.0);
+                assert_eq!(row.not_in_csv, String::default());
+            }
+
+            assert!(iter.next().is_none());
+        }
+
+        #[test]
         fn integration_row_data_derive_missing() {
             let path = path!(env!("CARGO_MANIFEST_DIR") / "tests" / "data" / "road_missing_data.csv");
             let mut iter = DataRowsIterator::<PollutantData>::new(&path, None).unwrap();
@@ -134,7 +172,7 @@ mod tests {
                 header_row: HeaderRow::Row(0),
                 ..Default::default()
             };
-            let iter = DataRowsIterator::<EmptySheetData>::new_with_options(&path, &opts).unwrap();
+            let iter = DataRowsIterator::<EmptySheetData>::new_with_options(&path, opts).unwrap();
             assert_eq!(iter.count(), 0);
         }
 
@@ -146,7 +184,7 @@ mod tests {
                 header_row: HeaderRow::Row(0),
                 ..Default::default()
             };
-            let df: Vec<EmptySheetData> = vector::datarow::read_dataframe_rows(&path, &opts).unwrap();
+            let df: Vec<EmptySheetData> = vector::datarow::read_dataframe_rows(&path, opts).unwrap();
             assert_eq!(df.len(), 0);
         }
     }
