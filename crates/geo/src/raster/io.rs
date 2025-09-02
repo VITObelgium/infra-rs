@@ -39,7 +39,7 @@ pub fn write_raster_band_as<TStore: ArrayNum, T: ArrayNum>(
     data: &[T],
     options: WriteRasterOptions,
 ) -> Result<()> {
-    if T::datatype() == TStore::datatype() {
+    if T::TYPE == TStore::TYPE {
         write_raster_band(path, georef, data, options)
     } else {
         let converted: Vec<TStore> = data.iter().map(|&v| NumCast::from(v).unwrap_or(TStore::NODATA)).collect();
@@ -53,11 +53,8 @@ pub fn write_raster_band<T: ArrayNum>(
     data: &[T],
     options: WriteRasterOptions,
 ) -> Result<()> {
-    match <T>::datatype() {
-        gdal::raster::GdalDataType::UInt8
-        | gdal::raster::GdalDataType::UInt16
-        | gdal::raster::GdalDataType::UInt32
-        | gdal::raster::GdalDataType::UInt64 => {
+    match T::TYPE {
+        ArrayDataType::Uint8 | ArrayDataType::Uint16 | ArrayDataType::Uint32 | ArrayDataType::Uint64 => {
             if georef.nodata().is_some_and(|v| v < 0.0) {
                 return Err(Error::InvalidArgument(
                     "Trying to store a raster with unsigned data type using a negative nodata value".to_string(),
@@ -80,7 +77,8 @@ pub fn write_raster_band<T: ArrayNum>(
             }
             #[cfg(all(feature = "raster-io-geotiff", not(feature = "gdal")))]
             {
-                return formats::geotiff::GeotiffRasterIO::write_band::<T>(path, georef, data, options);
+                use crate::raster::formats::RasterFormat as _;
+                formats::geotiff::GeotiffRasterIO::write_band::<T>(path, georef, data, options)
             }
         }
         _ => {
@@ -352,7 +350,7 @@ fn create_raster_impl_with_options_for_format(
             }
             #[cfg(not(feature = "gdal"))]
             {
-                return Err(Error::Runtime("GDAL format support not compiled in".to_string()));
+                Err(Error::Runtime("GDAL format support not compiled in".to_string()))
             }
         }
     }
