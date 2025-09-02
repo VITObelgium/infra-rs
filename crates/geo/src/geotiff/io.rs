@@ -55,7 +55,7 @@ impl CogHeaderReader {
         // Read up to header_size bytes, handling partial reads
         let mut buffer = Vec::default();
         Self::append_from_stream_to_buffer(&mut buffer, stream, header_size)?;
-        Self::from_buffer(buffer)
+        Ok(Self::from_buffer(buffer))
     }
 
     fn append_from_stream_to_buffer(buffer: &mut Vec<u8>, stream: &mut impl Read, size: usize) -> Result<()> {
@@ -91,8 +91,12 @@ impl CogHeaderReader {
         Ok(())
     }
 
-    pub fn from_buffer(buffer: Vec<u8>) -> Result<Self> {
-        Ok(Self { buffer, pos: 0 })
+    pub fn from_buffer(buffer: Vec<u8>) -> Self {
+        Self { buffer, pos: 0 }
+    }
+
+    pub fn into_buffer(self) -> Vec<u8> {
+        self.buffer
     }
 
     pub fn cog_header(&self) -> &[u8] {

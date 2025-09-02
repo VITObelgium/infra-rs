@@ -12,6 +12,6 @@ pub(crate) mod utils;
 
 use projectioninfo::ProjectionInfo;
 
-pub use metadata::GeoTiffMetadata;
+pub use metadata::{GeoTiffMetadata, ParseFromBufferError};
 pub use reader::{ChunkDataLayout, GeoTiffReader, TiffChunkLocation, TiffOverview};
 pub use stats::TiffStats;

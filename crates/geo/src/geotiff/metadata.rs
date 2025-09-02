@@ -22,6 +22,11 @@ pub struct GeoTiffMetadata {
     pub overviews: Vec<TiffOverview>,
 }
 
+pub enum ParseFromBufferError {
+    BufferTooSmall(Vec<u8>),
+    Error(crate::Error),
+}
+
 impl GeoTiffMetadata {
     pub fn from_file(path: &Path) -> Result<Self> {
         let mut file_reader = File::open(path)?;
@@ -54,9 +59,18 @@ impl GeoTiffMetadata {
         }
     }
 
-    pub fn from_buffer(buf: Vec<u8>) -> Result<Self> {
-        let mut reader = CogHeaderReader::from_buffer(buf)?;
-        decoder::parse_geotiff_metadata(&mut reader)
+    pub fn from_buffer(buf: Vec<u8>) -> std::result::Result<Self, ParseFromBufferError> {
+        let mut reader = CogHeaderReader::from_buffer(buf);
+        match decoder::parse_geotiff_metadata(&mut reader) {
+            Ok(meta) => Ok(meta),
+            Err(Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err)))
+                if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
+            {
+                Err(ParseFromBufferError::BufferTooSmall(reader.into_buffer()))
+            }
+
+            Err(e) => Err(ParseFromBufferError::Error(e)),
+        }
     }
 
     pub fn chunk_row_length(&self) -> u32 {
