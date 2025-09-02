@@ -4840,6 +4840,7 @@ source = "git+https://github.com/dirkvdb/image-tiff.git?rev=47811747dda727073d6d
 dependencies = [
  "half",
  "quick-error",
+ "weezl",
 ]
 
 [[package]]

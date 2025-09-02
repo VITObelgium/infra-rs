@@ -5,9 +5,9 @@ use std::{mem::MaybeUninit, path::Path};
 const LANES: usize = inf::simd::LANES;
 
 use crate::{
-    ArrayDataType, ArrayNum, Error, GeoReference, RasterSize, Result,
+    ArrayDataType, ArrayNum, GeoReference, RasterSize, Result,
     raster::{
-        WriteRasterOptions,
+        GeoTiffWriteOptions, WriteRasterOptions,
         formats::{RasterFormat, RasterFormatDyn},
         utils::cast_uninit_byte_slice_mut,
     },
@@ -101,12 +101,17 @@ impl RasterFormat for GeotiffRasterIO {
     }
 
     fn write_band<T: ArrayNum>(
-        _path: impl AsRef<Path>,
-        _geo_reference: &GeoReference,
-        _data: &[T],
-        _options: WriteRasterOptions,
+        path: impl AsRef<Path>,
+        geo_reference: &GeoReference,
+        data: &[T],
+        options: WriteRasterOptions,
     ) -> Result<()> {
-        Err(Error::Runtime("Writing GeoTiff not yet implemented".to_string()))
+        let geotiff_options = match options {
+            WriteRasterOptions::GeoTiff(opts) => opts,
+            WriteRasterOptions::Default => GeoTiffWriteOptions::default(),
+        };
+
+        crate::geotiff::write_geotiff_band(path, geo_reference, data, &geotiff_options)
     }
 }
 

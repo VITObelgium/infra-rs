@@ -9,9 +9,11 @@ mod reader;
 mod stats;
 pub mod tileio;
 pub(crate) mod utils;
+mod writer;
 
 use projectioninfo::ProjectionInfo;
 
 pub use metadata::GeoTiffMetadata;
 pub use reader::{ChunkDataLayout, GeoTiffReader, TiffChunkLocation, TiffOverview};
 pub use stats::TiffStats;
+pub use writer::write_geotiff_band;
