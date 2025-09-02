@@ -7,8 +7,14 @@ mod burnvalue;
 #[cfg(feature = "vector-processing")]
 #[cfg_attr(docsrs, doc(cfg(feature = "vector-processing")))]
 mod coveragetools;
+#[cfg(feature = "vector-io")]
+#[cfg_attr(docsrs, doc(cfg(feature = "vector-io")))]
 pub mod dataframe;
+#[cfg(feature = "vector-io")]
+#[cfg_attr(docsrs, doc(cfg(feature = "vector-io")))]
 pub mod datarow;
+#[cfg(feature = "vector-io")]
+#[cfg_attr(docsrs, doc(cfg(feature = "vector-io")))]
 pub mod fieldtype;
 pub mod geometrytype;
 #[cfg(feature = "vector-io")]
@@ -22,6 +28,7 @@ pub mod readers;
 #[doc(inline)]
 pub use burnvalue::BurnValue;
 #[doc(inline)]
+#[cfg(feature = "vector-io")]
 pub use datarow::DataRow;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -73,6 +80,7 @@ impl VectorFileFormat {
 }
 
 #[doc(inline)]
+#[cfg(feature = "vector-io")]
 pub use datarow::{DataRowsIterator, read_dataframe_rows};
 
 #[cfg(feature = "derive")]

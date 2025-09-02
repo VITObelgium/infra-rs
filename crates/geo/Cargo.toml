@@ -14,16 +14,16 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.vcpkg]
 dependencies = [
-    "gdal[core,geos,sqlite3]",
-    "proj[core,embed-data]",
-    "tiff[core,lzma,zip]",
+  "gdal[core,geos,sqlite3]",
+  "proj[core,embed-data]",
+  "tiff[core,lzma,zip]",
 ]
 
 [package.metadata.vcpkg.target]
 x86_64-unknown-linux-gnu = { dependencies = [
-    "gdal[core,geos,iconv,sqlite3]",
-    "proj[core,embed-data]",
-    "tiff[core,lzma,zip]",
+  "gdal[core,geos,iconv,sqlite3]",
+  "proj[core,embed-data]",
+  "tiff[core,lzma,zip]",
 ] }
 
 [[bench]]
@@ -57,8 +57,8 @@ paste = "1.0"
 polars = { version = "0.50", optional = true }
 proj = { version = "0.31", optional = true }
 proj4rs = { version = "0.1", features = [
-    "crs-definitions",
-    "geo-types",
+  "crs-definitions",
+  "geo-types",
 ], optional = true }
 proj4wkt = { version = "0.1", optional = true }
 pyo3 = { version = "0.25", optional = true }
@@ -97,7 +97,7 @@ default = ["cog", "derive", "gdal"]
 derive = ["dep:vector_derive"]
 gdal = ["dep:bon", "dep:gdal", "dep:gdal-sys", "geozero/with-gdal", "proj"]
 gdal-static = ["gdal"]
-polars = ["dep:polars"]
+polars = ["dep:polars", "vector-io"]
 proj = ["dep:proj"]
 proj4rs = ["dep:crs-definitions", "dep:proj4rs", "dep:proj4wkt"]
 python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
