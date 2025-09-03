@@ -1,0 +1,20 @@
+name: ci
+
+on: [push]
+
+jobs:
+  ci:
+    name: ${{ matrix.cfg.id }}
+    runs-on: ${{ matrix.cfg.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        cfg:
+          - { id: linux, os: ubuntu-latest, target: x86_64-unknown-linux-gnu }
+          - { id: windows, os: windows-2025, target: x86_64-pc-windows-msvc }
+          - { id: mac-arm, os: macos-latest, target: aarch64-apple-darwin }
+          - { id: mac-intel, os: macos-latest, target: x86_64-apple-darwin }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v2
+      - run: mise run ci

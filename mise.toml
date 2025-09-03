@@ -1,0 +1,9 @@
+[tools]
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-vcpkg" = "latest"
+rust = "1.89"
+
+[tasks]
+build = "cargo build --workspace --release --no-default-features --features=serde,derive,vector,polars,rayon,proj4rs"
+test = "cargo nextest run --workspace --release --no-default-features --features=serde,derive,vector,polars,rayon,proj4rs"
+ci = "cargo nextest run --profile ci --workspace --release --no-default-features --features=serde,derive,vector,polars,rayon,proj4rs"
