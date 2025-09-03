@@ -86,7 +86,9 @@ impl GeoTiffMetadata {
 }
 
 #[cfg(test)]
+#[cfg(feature = "gdal")]
 mod tests {
+
     use crate::{
         Tile, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles},

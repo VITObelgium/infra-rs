@@ -8,7 +8,7 @@ dependencies = ["gdal[core,netcdf]"]
 
 [dependencies]
 inf = { path = "../../crates/inf", features = [] }
-geo = { path = "../../crates/geo", features = ["gdal-static", "cog"] }
+geo = { path = "../../crates/geo", features = ["gdal-static"] }
 tiler = { path = "../../crates/tiler", features = [] }
 sqlite = { path = "../../crates/sqlite", features = [] }
 clap = { version = "4.5", features = ["derive", "env"] }

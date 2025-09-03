@@ -3,7 +3,7 @@ use crate::{
     array::{ArrayMetadata, Columns, Rows},
     crs::{self, Epsg},
     raster::{self},
-    srs::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg},
+    srs::{self, projection_from_epsg, projection_to_epsg, projection_to_geo_epsg},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
@@ -389,6 +389,18 @@ impl GeoReference {
     pub fn with_nodata(mut self, nodata: Option<f64>) -> Self {
         self.set_nodata(nodata);
         self
+    }
+
+    pub fn epsg(&self) -> Option<Epsg> {
+        if self.projection.is_empty() {
+            return None;
+        }
+
+        let srs = srs::SpatialReference::from_definition(&self.projection).ok()?;
+        match srs.is_projected() {
+            true => srs.epsg_cs(),
+            false => srs.epsg_geog_cs(),
+        }
     }
 
     pub fn geographic_epsg(&self) -> Option<Epsg> {
@@ -973,7 +985,6 @@ mod tests {
         );
 
         let warped = meta.warped_to_epsg(crs::epsg::WGS84).unwrap();
-
         assert_eq!(warped.projected_epsg(), Some(crs::epsg::WGS84_WEB_MERCATOR));
         assert_eq!(warped.geographic_epsg(), Some(crs::epsg::WGS84));
         assert_eq!(warped.raster_size(), RasterSize::with_rows_cols(Rows(89), Columns(176)),);

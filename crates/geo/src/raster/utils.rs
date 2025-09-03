@@ -1,5 +1,6 @@
 use std::mem::MaybeUninit;
 
+#[allow(unused)]
 pub fn cast_uninit_byte_slice_mut<T>(data: &mut [MaybeUninit<u8>]) -> &mut [MaybeUninit<T>] {
     debug_assert_eq!(data.len() % std::mem::size_of::<T>(), 0);
     unsafe { std::slice::from_raw_parts_mut(data.as_mut_ptr().cast::<MaybeUninit<T>>(), data.len() / std::mem::size_of::<T>()) }

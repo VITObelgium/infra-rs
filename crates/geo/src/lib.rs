@@ -9,15 +9,13 @@ mod arraydatatype;
 mod arraynum;
 pub mod arrayops;
 mod cell;
-#[cfg(feature = "cog")]
-#[cfg_attr(docsrs, doc(cfg(feature = "cog")))]
+#[cfg(feature = "raster-io-geotiff")]
+#[cfg_attr(docsrs, doc(cfg(feature = "raster-io-geotiff")))]
 pub mod cog;
 pub mod constants;
 mod coordinate;
 pub mod crs;
 mod densearray;
-#[cfg(feature = "gdal")]
-#[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 mod densearrayio;
 mod densearrayiterators;
 mod densearrayops;

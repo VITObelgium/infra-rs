@@ -30,8 +30,13 @@ use crate::Array;
 pub mod gdal {
     pub use super::{
         gdaltranslate::translate, gdaltranslate::translate_file, gdalwarp::GdalWarpOptions, gdalwarp::warp, gdalwarp::warp_cli,
-        gdalwarp::warp_georeference, gdalwarp::warp_options_to_gdalwarp_cli_args, gdalwarp::warp_to_disk_cli,
+        gdalwarp::warp_georeference, gdalwarp::warp_to_disk_cli,
     };
+}
+
+#[cfg(any(feature = "proj", feature = "proj4rs"))]
+pub mod gdal {
+    pub use super::warp::warp_options_to_gdalwarp_cli_args;
 }
 
 #[cfg(feature = "gdal")]

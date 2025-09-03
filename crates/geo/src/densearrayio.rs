@@ -3,13 +3,12 @@ use std::path::Path;
 use crate::array::ArrayInterop as _;
 use crate::raster::{self, RasterReadWrite, WriteRasterOptions};
 use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, GeoReference, Result};
-use gdal::raster::GdalType;
 
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
 #[simd_macro::simd_bounds]
-impl<T: ArrayNum + GdalType, Metadata: ArrayMetadata> RasterReadWrite for DenseArray<T, Metadata> {
+impl<T: ArrayNum, Metadata: ArrayMetadata> RasterReadWrite for DenseArray<T, Metadata> {
     fn read(path: impl AsRef<Path>) -> Result<Self> {
         Self::read_band(path, 1)
     }

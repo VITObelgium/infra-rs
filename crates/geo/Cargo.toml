@@ -92,8 +92,7 @@ wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
 arrow = ["dep:arrow"]
-cog = ["raster-io-geotiff"]
-default = ["cog", "derive", "gdal"]
+default = ["derive"]
 derive = ["dep:vector_derive"]
 gdal = ["dep:bon", "dep:gdal", "dep:gdal-sys", "geozero/with-gdal", "proj"]
 gdal-static = ["gdal"]

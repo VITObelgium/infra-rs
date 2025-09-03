@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 gdal = "0.18"
-geo = { features = ["gdal", "serde", "cog"], path = "../geo" }
+geo = { features = ["gdal", "serde", "raster-io-geotiff"], path = "../geo" }
 geo-types = "0.7"
 geozero = { version = "0.14", optional = true }
 inf = { features = ["serde"], path = "../inf" }

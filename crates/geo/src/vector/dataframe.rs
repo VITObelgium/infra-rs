@@ -230,13 +230,13 @@ pub mod polars {
     use std::path::Path;
 
     /// Reads a `polars::frame::DataFrame` from the specified path using the provided options.
-    pub fn read_dataframe(path: &Path, options: &DataFrameOptions) -> Result<polars::frame::DataFrame> {
+    pub fn read_dataframe(path: &Path, _options: &DataFrameOptions) -> Result<polars::frame::DataFrame> {
         match vector::VectorFileFormat::guess_from_path(path) {
             #[cfg(feature = "vector-io-xlsx")]
-            vector::VectorFileFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, options),
+            vector::VectorFileFormat::Xlsx => read_dataframe_with::<vector::readers::XlsxReader>(path, _options),
 
             #[cfg(feature = "vector-io-csv")]
-            vector::VectorFileFormat::Csv => read_dataframe_with::<vector::readers::CsvReader>(path, options),
+            vector::VectorFileFormat::Csv => read_dataframe_with::<vector::readers::CsvReader>(path, _options),
 
             #[cfg(feature = "gdal")]
             vector::VectorFileFormat::ShapeFile
@@ -244,14 +244,15 @@ pub mod polars {
             | vector::VectorFileFormat::GeoPackage
             | vector::VectorFileFormat::Tab
             | vector::VectorFileFormat::Parquet
-            | vector::VectorFileFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, options),
+            | vector::VectorFileFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, _options),
 
             #[cfg(all(feature = "gdal", not(feature = "vector-io-csv")))]
-            vector::VectorFileFormat::Csv => read_dataframe_with::<vector::readers::GdalReader>(path, options),
+            vector::VectorFileFormat::Csv => read_dataframe_with::<vector::readers::GdalReader>(path, _options),
             _ => Err(Error::Runtime(format!("Unsupported vector file type: {}", path.display()))),
         }
     }
 
+    #[allow(unused)]
     fn read_dataframe_with<R: DataFrameReader>(path: &Path, options: &DataFrameOptions) -> Result<polars::frame::DataFrame> {
         let mut reader = R::from_file(path)?;
         let schema = match &options.schema_override {

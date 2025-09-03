@@ -5,13 +5,13 @@
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
-#[cfg(feature = "gdal")]
-use crate::raster::formats::RasterFormat as _;
+#[cfg(any(feature = "gdal", feature = "raster-io-geotiff"))]
+use crate::raster::formats::{self, RasterFormat as _};
 use crate::{
     ArrayDataType, ArrayMetadata, ArrayNum, Error, GeoReference, RasterSize, Result,
     raster::{
         WriteRasterOptions,
-        formats::{self, FormatProvider, RasterFileFormat, RasterFormatDyn, RasterOpenOptions},
+        formats::{FormatProvider, RasterFileFormat, RasterFormatDyn, RasterOpenOptions},
         utils,
     },
 };
@@ -50,7 +50,7 @@ pub fn write_raster_band_as<TStore: ArrayNum, T: ArrayNum>(
 pub fn write_raster_band<T: ArrayNum>(
     path: impl AsRef<Path>,
     georef: &GeoReference,
-    data: &[T],
+    _data: &[T],
     options: WriteRasterOptions,
 ) -> Result<()> {
     match T::TYPE {
@@ -71,25 +71,29 @@ pub fn write_raster_band<T: ArrayNum>(
 
     match format {
         RasterFileFormat::GeoTiff => {
-            #[cfg(feature = "gdal")]
-            {
-                formats::gdal::GdalRasterIO::write_band::<T>(path, georef, data, options)
-            }
-            #[cfg(all(feature = "raster-io-geotiff", not(feature = "gdal")))]
-            {
-                use crate::raster::formats::RasterFormat as _;
-                formats::geotiff::GeotiffRasterIO::write_band::<T>(path, georef, data, options)
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "gdal")] {
+                    formats::gdal::GdalRasterIO::write_band::<T>(path, georef, _data, options)
+                } else if #[cfg(feature = "raster-io-geotiff")] {
+                    formats::geotiff::GeotiffRasterIO::write_band::<T>(path, georef, _data, options)
+                } else {
+                    return Err(Error::Runtime(
+                        "GeoTiff format support not compiled in".into()
+                    ));
+                }
             }
         }
         _ => {
-            #[cfg(feature = "gdal")]
-            return formats::gdal::GdalRasterIO::write_band::<T>(path, georef, data, options);
-
-            #[cfg(not(feature = "gdal"))]
-            return Err(Error::Runtime(format!(
-                "Unsupported raster file type for writing: {}",
-                path.as_ref().display()
-            )));
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "gdal")] {
+                    formats::gdal::GdalRasterIO::write_band::<T>(path, georef, _data, options)
+                } else {
+                    Err(Error::Runtime(format!(
+                        "Unsupported raster file type for writing: {}",
+                        path.as_ref().display()
+                    )))
+                }
+            }
         }
     }
 }
@@ -309,7 +313,7 @@ fn cast_to_buffer(
 }
 
 fn create_raster_impl_with_options_for_format(
-    path: impl AsRef<Path>,
+    _path: impl AsRef<Path>,
     _options: &RasterOpenOptions,
     format: FormatProvider,
 ) -> Result<Box<dyn RasterFormatDyn>> {
@@ -319,7 +323,7 @@ fn create_raster_impl_with_options_for_format(
             {
                 use crate::raster::formats::RasterFormat as _;
                 Ok(Box::new(formats::geotiff::GeotiffRasterIO::open_read_only_with_options(
-                    path.as_ref(),
+                    _path.as_ref(),
                     _options,
                 )?))
             }
@@ -328,7 +332,7 @@ fn create_raster_impl_with_options_for_format(
                 #[cfg(feature = "gdal")]
                 {
                     return Ok(Box::new(formats::gdal::GdalRasterIO::open_read_only_with_options(
-                        path.as_ref(),
+                        _path.as_ref(),
                         _options,
                     )?));
                 }
@@ -344,7 +348,7 @@ fn create_raster_impl_with_options_for_format(
                 use crate::raster::formats::RasterFormat as _;
 
                 Ok(Box::new(formats::gdal::GdalRasterIO::open_read_only_with_options(
-                    path.as_ref(),
+                    _path.as_ref(),
                     _options,
                 )?))
             }
@@ -358,13 +362,11 @@ fn create_raster_impl_with_options_for_format(
 
 fn create_raster_impl_with_options(path: impl AsRef<Path>, _options: &RasterOpenOptions) -> Result<Box<dyn RasterFormatDyn>> {
     match RasterFileFormat::guess_from_path(path.as_ref()) {
-        // #[cfg(feature = "raster-io-geotiff")]
-        // RasterFileFormat::GeoTiff => Ok(Box::new(formats::geotiff::GeotiffRasterIO::open_read_only_with_options(
-        //     path.as_ref(),
-        //     _options,
-        // )?)),
-        // #[cfg(not(feature = "raster-io-geotiff"))]
-        // RasterFileFormat::GeoTiff => Ok(Box::new(formats::gdal::GdalRasterIO::open_read_only_with_options(path.as_ref(), options)?)),
+        #[cfg(all(feature = "raster-io-geotiff", not(feature = "gdal")))]
+        RasterFileFormat::GeoTiff => Ok(Box::new(formats::geotiff::GeotiffRasterIO::open_read_only_with_options(
+            path.as_ref(),
+            _options,
+        )?)),
         #[cfg(feature = "gdal")]
         RasterFileFormat::ArcAscii
         | RasterFileFormat::Gif
@@ -410,6 +412,7 @@ fn cast_into_byte_array<T: ArrayNum>(src: &[T], dst_data_type: ArrayDataType, ds
 }
 
 #[cfg(test)]
+#[allow(unused_imports)]
 mod tests {
     use crate::crs;
     use path_macro::path;
@@ -417,10 +420,11 @@ mod tests {
     #[cfg(all(feature = "raster-io-geotiff", feature = "gdal"))]
     use std::path::Path;
 
+    use crate::ArrayDataType;
     #[cfg(all(feature = "raster-io-geotiff", feature = "gdal"))]
     use crate::GeoReference;
-    use crate::{ArrayDataType, Result, testutils};
 
+    use crate::raster::RasterReadWrite as _;
     use crate::raster::formats::{RasterFormat as _, RasterFormatDyn as _};
     use crate::{Point, RasterSize, raster::formats};
     use inf::allocate::AlignedVecUnderConstruction;
@@ -434,7 +438,6 @@ mod tests {
         assert!(!meta.projection().is_empty());
         assert!(meta.projected_epsg().is_some());
         assert_eq!(meta.projected_epsg(), Some(crs::epsg::BELGIAN_LAMBERT72));
-        #[cfg(not(feature = "raster-io-geotiff"))]
         assert_eq!(meta.geographic_epsg(), Some(crs::epsg::BELGE72_GEO));
         assert_eq!(meta.projection_frienly_name(), "EPSG:31370");
     }
@@ -446,11 +449,11 @@ mod tests {
         assert!(!meta.projection().is_empty());
         assert!(meta.projected_epsg().is_some());
         assert_eq!(meta.projected_epsg().unwrap(), crs::epsg::WGS84_WEB_MERCATOR);
-        #[cfg(not(feature = "raster-io-geotiff"))]
         assert_eq!(meta.geographic_epsg().unwrap(), crs::epsg::WGS84);
         assert_eq!(meta.projection_frienly_name(), "EPSG:3857");
     }
 
+    #[allow(unused)]
     fn test_input_files() -> Vec<(&'static str, ArrayDataType)> {
         vec![
             ("landusebyte.tif", ArrayDataType::Uint8),
@@ -521,7 +524,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "cog", feature = "gdal"))]
+    #[cfg(all(feature = "raster-io-geotiff", feature = "gdal"))]
     fn compare_geotiff_gdal_read() -> Result<()> {
         for (input_file, data_type) in test_input_files() {
             let input = crate::testutils::workspace_test_data_dir().join(input_file);
@@ -533,7 +536,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "cog", feature = "gdal"))]
+    #[cfg(all(feature = "raster-io-geotiff", feature = "gdal"))]
     fn compare_tiled_geotiff_gdal_read_region_within_extent() -> Result<()> {
         use crate::Point;
 
@@ -566,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "cog", feature = "gdal"))]
+    #[cfg(all(feature = "raster-io-geotiff", feature = "gdal"))]
     fn compare_tiled_geotiff_gdal_read_region_outside_extent_top_left() -> Result<()> {
         for (input_file, data_type) in test_input_files() {
             let band_index = 1;
@@ -623,7 +626,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(all(feature = "cog", feature = "gdal"))]
+    #[cfg(all(feature = "raster-io-geotiff", feature = "gdal"))]
     fn compare_tiled_geotiff_gdal_read_region_larger_then_raster() -> Result<()> {
         for (input_file, data_type) in test_input_files() {
             let band_index = 1;

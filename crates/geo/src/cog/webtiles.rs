@@ -520,6 +520,7 @@ impl WebTilesReader {
 }
 
 #[cfg(test)]
+#[cfg(feature = "gdal")]
 mod tests {
     use std::{
         fs::File,

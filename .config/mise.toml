@@ -1,0 +1,9 @@
+[tools]
+"cargo:cargo-nextest" = "latest"
+"cargo:cargo-vcpkg" = "latest"
+rust = "1.89"
+
+[tasks]
+build = "cargo build -p geo --release --no-default-features --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs"
+test = "cargo nextest run -p geo --release --no-default-features --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs"
+ci = "cargo nextest run --profile ci -p geo --release --no-default-features --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs"

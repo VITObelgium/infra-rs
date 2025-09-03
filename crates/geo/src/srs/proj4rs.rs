@@ -141,6 +141,7 @@ fn is_wkt_string(s: &str) -> bool {
     WKT_ROOTS.iter().any(|&root| s.starts_with(root)) || WKT2_ROOTS.iter().any(|&root| s.starts_with(root))
 }
 
+/// The returned bool is true if the parsed WKT is a geographic CRS
 fn parse_wkt_epsg(s: &str) -> (Option<Epsg>, Option<Epsg>, bool) {
     let builder = proj4wkt::Builder;
 
@@ -188,10 +189,11 @@ fn proj_epsg_from_string(srs_str: &str) -> Result<(String, Option<Epsg>, Option<
         .strip_prefix("EPSG:")
         .and_then(|code| code.parse::<u16>().ok().map(Epsg::from));
     Ok(if let Some(epsg) = epsg_code {
-        let proj_str = crs_definitions::from_code(epsg.code())
-            .map(|def| def.proj4.to_string())
+        let (proj_str, wkt_str) = crs_definitions::from_code(epsg.code())
+            .map(|def| (def.proj4.to_string(), def.wkt))
             .ok_or_else(|| Error::Runtime("".into()))?;
-        (proj_str, Some(epsg), None)
+        let (proj_epsg, geo_epsg, _is_geo) = parse_wkt_epsg(wkt_str);
+        (proj_str, proj_epsg, geo_epsg)
     } else {
         if srs_str.eq_ignore_ascii_case("WGS84") {
             return Ok((srs_str.into(), Some(epsg::WGS84_WEB_MERCATOR), Some(epsg::WGS84)));

@@ -74,6 +74,74 @@ impl Default for WarpOptions {
     }
 }
 
+pub fn warp_options_to_gdalwarp_cli_args(opts: &WarpOptions) -> Vec<String> {
+    let mut args = vec!["-r".to_string(), "near".to_string(), "-ovr".to_string(), "none".to_string()];
+
+    // Handle target size based on WarpTargetSize
+    match &opts.target_size {
+        WarpTargetSize::Source => {
+            // Default behavior - GDAL will try to preserve resolution
+        }
+        WarpTargetSize::Sized(raster_size) => {
+            args.extend([
+                "-ts".to_string(),
+                raster_size.cols.count().to_string(),
+                raster_size.rows.count().to_string(),
+            ]);
+        }
+        WarpTargetSize::CellSize(cell_size, alignment) => {
+            args.extend(["-tr".to_string(), cell_size.x().to_string(), cell_size.y().abs().to_string()]);
+            if let TargetPixelAlignment::Yes = alignment {
+                args.push("-tap".to_string()); // Target aligned pixels
+            }
+        }
+        WarpTargetSize::Exact(geo_transform, raster_size) => {
+            args.extend([
+                "-ts".to_string(),
+                raster_size.cols.count().to_string(),
+                raster_size.rows.count().to_string(),
+            ]);
+
+            let min_x = geo_transform.top_left().x();
+            let max_y = geo_transform.top_left().y();
+            let max_x = min_x + raster_size.cols.count() as f64 * geo_transform.cell_size_x();
+            let min_y = max_y + raster_size.rows.count() as f64 * geo_transform.cell_size_y();
+
+            args.extend([
+                "-te".to_string(),
+                min_x.to_string(),
+                min_y.to_string(),
+                max_x.to_string(),
+                max_y.to_string(),
+            ]);
+        }
+    }
+
+    match &opts.target_srs {
+        TargetSrs::Epsg(epsg) => {
+            args.extend(["-t_srs".to_string(), format!("{}", epsg)]);
+        }
+        TargetSrs::Proj4(proj4) => {
+            args.extend(["-t_srs".to_string(), proj4.clone()]);
+        }
+    }
+
+    // Error threshold (corresponds to -et option in gdalwarp)
+    args.extend(["-et".to_string(), opts.error_threshold.to_string()]);
+
+    // Multi-threading
+    match opts.num_threads {
+        NumThreads::AllCpus => args.extend(["-multi".to_string(), "-wo".to_string(), "NUM_THREADS=ALL_CPUS".to_string()]),
+        NumThreads::Count(cpus) if cpus > 1 => args.extend(["-multi".to_string(), "-wo".to_string(), format!("NUM_THREADS={cpus}")]),
+        NumThreads::Count(_) => {}
+    }
+
+    // Output format
+    args.extend(["-of".to_string(), "GTiff".to_string()]);
+
+    args
+}
+
 /// Warp a bounding box to a different coordinate system with configurable edge sampling
 ///
 /// This function transforms a bounding box from one coordinate system to another by sampling
@@ -137,7 +205,7 @@ fn warp_bounding_box_with_edge_sampling(bbox: &Rect<f64>, coord_trans: &Coordina
 
 pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<GeoReference> {
     let source_epsg = georef
-        .projected_epsg()
+        .epsg()
         .ok_or_else(|| Error::InvalidArgument("Source georef has no EPSG code".to_string()))?;
 
     let target_georef = || -> Result<GeoReference> {

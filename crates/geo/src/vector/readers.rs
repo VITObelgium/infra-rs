@@ -2,7 +2,7 @@
 mod csv;
 #[cfg(feature = "gdal")]
 mod gdal;
-#[cfg(test)]
+#[cfg(all(test, any(feature = "vector-io-csv", feature = "vector-io-xlsx", feature = "gdal")))]
 mod readertests;
 #[cfg(feature = "vector-io-xlsx")]
 mod xlsx;
