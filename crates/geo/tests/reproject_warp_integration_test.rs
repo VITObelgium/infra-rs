@@ -99,7 +99,7 @@ mod tests {
 
     fn create_gdalwarp_args(opts: &WarpOptions, src_path: &Path, dst_path: &Path) -> Vec<String> {
         let mut args = vec![src_path.to_string_lossy().to_string(), dst_path.to_string_lossy().to_string()];
-        args.extend(raster::algo::gdal::warp_options_to_gdalwarp_cli_args(opts));
+        args.extend(raster::algo::warp_options_to_gdalwarp_cli_args(opts));
         args
     }
 
@@ -172,7 +172,7 @@ mod tests {
     fn warp_using_linked_gdal<T: ArrayNum>(input: &Path, tmp_dir: &TempDir, opts: &WarpOptions) -> Result<DenseRaster<T>> {
         let output_path = tmp_dir.path().join("gdal_warped.tif");
 
-        let gdalwarp_args = raster::algo::gdal::warp_options_to_gdalwarp_cli_args(opts);
+        let gdalwarp_args = raster::algo::warp_options_to_gdalwarp_cli_args(opts);
         let src_ds = gdal::Dataset::open(input)?;
         raster::algo::gdal::warp_to_disk_cli(&src_ds, &output_path, &gdalwarp_args, &Vec::default())?;
         DenseRaster::<T>::read(&output_path)

@@ -34,16 +34,11 @@ pub mod gdal {
     };
 }
 
-#[cfg(any(feature = "proj", feature = "proj4rs"))]
-pub mod gdal {
-    pub use super::warp::warp_options_to_gdalwarp_cli_args;
-}
-
 #[cfg(feature = "gdal")]
 pub use {rasterdiff::raster_files_diff, rasterdiff::raster_files_intersection_diff};
 
 #[cfg(any(feature = "proj", feature = "proj4rs"))]
-pub use warp::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, warp};
+pub use warp::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize, warp, warp_options_to_gdalwarp_cli_args};
 
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,

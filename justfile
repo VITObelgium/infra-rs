@@ -17,7 +17,7 @@ default_target := if os_family() == "windows" {
         "aarch64-apple-darwin"
     } else { "x86_64-apple-darwin" }
     } else {
-    "x64-linux-release"
+    "x86_64-unknown-linux-gnu"
     }
 PYTHON_EXE := if os_family() == "windows" {
         "python.exe"

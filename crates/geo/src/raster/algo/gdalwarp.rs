@@ -6,7 +6,7 @@ use std::{
 use crate::{
     Columns, Error, GeoReference, RasterSize, Result, Rows,
     gdalinterop::{self, check_rc},
-    raster::algo::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTargetSize},
+    raster::algo::{TargetSrs, WarpOptions},
     srs::SpatialReference,
 };
 use gdal::cpl::CslStringList;

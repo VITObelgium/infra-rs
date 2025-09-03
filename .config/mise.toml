@@ -1,6 +1,5 @@
 [tools]
 "cargo:cargo-nextest" = "latest"
-"cargo:cargo-vcpkg" = "latest"
 rust = "1.89"
 
 [tasks]

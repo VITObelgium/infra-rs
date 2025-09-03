@@ -1,0 +1,50 @@
+[tools]
+"cargo:cargo-vcpkg" = "latest"
+fd = "latest"
+sd = "latest"
+
+[env]
+VCPKG_OVERLAY_PORTS = '{{config_root}}/vcpkg-overlay/ports'
+VCPKG_FORCE_DOWNLOADED_BINARIES = '1'
+VCPKG_DEFAULT_TRIPLET = """
+  {%- if os() == "macos" and arch() == "arm64" -%}arm64-osx-release
+  {%- elif os() == "macos" and arch() == "x86_64" -%}x64-osx-release
+  {%- elif os() == "linux" and arch() == "x86_64" -%}x64-linux-release
+  {%- elif os() == "windows" and arch() == "x86_64" -%}x64-windows-static-release
+  {%- else -%}unsupported
+  {%- endif -%}
+"""
+BUILD_TARGET = """
+  {%- if os() == "macos" and arch() == "arm64" -%}aarch64-apple-darwin
+  {%- elif os() == "macos" and arch() == "x86_64" -%}x86_64-apple-darwin
+  {%- elif os() == "linux" and arch() == "x86_64" -%}x86_64-unknown-linux-gnu
+  {%- elif os() == "windows" and arch() == "x86_64" -%}x86_64-pc-windows-msvc
+  {%- else -%}unsupported
+  {%- endif -%}
+"""
+PYTHON_EXE = """
+  {%- if os() == "windows"-%}python.exe
+  {%- else -%}bin/python3
+  {%- endif -%}
+"""
+VCPKG_DEFAULT_HOST_TRIPLET = '{{env.VCPKG_DEFAULT_TRIPLET}}'
+
+[tasks.bootstrap]
+description = 'Bootstrap the vcpkg dependencies'
+run = [
+    "cp .cargo/config.toml.in .cargo/config.vcpkg.toml",
+    "sd @CARGO_VCPKG_TRIPLET@ {{env.VCPKG_DEFAULT_TRIPLET}} .cargo/config.vcpkg.toml",
+    "sd @CARGO_VCPKG_HOST_TRIPLET@ {{env.VCPKG_DEFAULT_HOST_TRIPLET}} .cargo/config.vcpkg.toml",
+    "sd @PYTHON_EXE@ {{env.PYTHON_EXE}} .cargo/config.vcpkg.toml",
+    "sd @WORKSPACE_ROOT@ {{config_root}} .cargo/config.vcpkg.toml",
+    'echo "Bootstrapping vcpkg:{{env.VCPKG_DEFAULT_TRIPLET}} for {{env.BUILD_TARGET}}..."',
+    'cargo vcpkg -v build --target {{env.BUILD_TARGET}}',
+    #'-cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib',
+    'fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- "-l-framework" "framework"',
+    'fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- " shlwapi " " -lshlwapi "'
+]
+
+[tasks]
+build = "cargo build -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
+test = "cargo nextest run -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
+ci = "cargo nextest run --profile ci -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"

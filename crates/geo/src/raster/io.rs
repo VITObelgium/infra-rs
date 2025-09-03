@@ -69,31 +69,28 @@ pub fn write_raster_band<T: ArrayNum>(
         WriteRasterOptions::Default => RasterFileFormat::guess_from_path(path.as_ref()),
     };
 
-    match format {
-        RasterFileFormat::GeoTiff => {
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "gdal")] {
-                    formats::gdal::GdalRasterIO::write_band::<T>(path, georef, _data, options)
-                } else if #[cfg(feature = "raster-io-geotiff")] {
-                    formats::geotiff::GeotiffRasterIO::write_band::<T>(path, georef, _data, options)
-                } else {
-                    return Err(Error::Runtime(
-                        "GeoTiff format support not compiled in".into()
-                    ));
-                }
+    if format == RasterFileFormat::GeoTiff {
+        cfg_if::cfg_if! {
+            if #[cfg(feature = "gdal")] {
+                return formats::gdal::GdalRasterIO::write_band::<T>(path, georef, _data, options);
+            } else if #[cfg(feature = "raster-io-geotiff")] {
+                return formats::geotiff::GeotiffRasterIO::write_band::<T>(path, georef, _data, options);
+            } else {
+                return Err(Error::Runtime(
+                    "GeoTiff format support not compiled in".into()
+                ));
             }
         }
-        _ => {
-            cfg_if::cfg_if! {
-                if #[cfg(feature = "gdal")] {
-                    formats::gdal::GdalRasterIO::write_band::<T>(path, georef, _data, options)
-                } else {
-                    Err(Error::Runtime(format!(
-                        "Unsupported raster file type for writing: {}",
-                        path.as_ref().display()
-                    )))
-                }
-            }
+    };
+
+    cfg_if::cfg_if! {
+        if #[cfg(feature = "gdal")] {
+            formats::gdal::GdalRasterIO::write_band::<T>(path, georef, _data, options)
+        } else {
+            Err(Error::Runtime(format!(
+                "Unsupported raster file type for writing: {}",
+                path.as_ref().display()
+            )))
         }
     }
 }
@@ -658,7 +655,7 @@ mod tests {
     fn read_raster_no_srs() -> Result<()> {
         use crate::raster::{formats::FormatProvider, io};
 
-        let input = testutils::geo_test_data_dir().join("reference/clusteridwithobstacles.tif");
+        let input = crate::testutils::geo_test_data_dir().join("reference/clusteridwithobstacles.tif");
 
         let mut geotiff = io::RasterIO::open_read_only_force_format(&input, FormatProvider::GeoTiff)?;
         let gtif_raster = {
@@ -684,7 +681,7 @@ mod tests {
     fn read_raster_with_different_data_type() -> Result<()> {
         use crate::raster::{formats::FormatProvider, io};
 
-        let input = testutils::geo_test_data_dir().join("reference/clusteridwithobstacles.tif");
+        let input = crate::testutils::geo_test_data_dir().join("reference/clusteridwithobstacles.tif");
 
         let mut geotiff = io::RasterIO::open_read_only_force_format(&input, FormatProvider::GeoTiff)?;
         let gtif_raster = {
