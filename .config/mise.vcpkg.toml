@@ -14,7 +14,7 @@ VCPKG_DEFAULT_TRIPLET = """
   {%- else -%}unsupported
   {%- endif -%}
 """
-BUILD_TARGET = """
+CARGO_BUILD_TARGET = """
   {%- if os() == "macos" and arch() == "arm64" -%}aarch64-apple-darwin
   {%- elif os() == "macos" and arch() == "x86_64" -%}x86_64-apple-darwin
   {%- elif os() == "linux" and arch() == "x86_64" -%}x86_64-unknown-linux-gnu
@@ -37,14 +37,15 @@ run = [
     "sd @CARGO_VCPKG_HOST_TRIPLET@ {{env.VCPKG_DEFAULT_HOST_TRIPLET}} .cargo/config.vcpkg.toml",
     "sd @PYTHON_EXE@ {{env.PYTHON_EXE}} .cargo/config.vcpkg.toml",
     "sd @WORKSPACE_ROOT@ {{config_root}} .cargo/config.vcpkg.toml",
-    'echo "Bootstrapping vcpkg:{{env.VCPKG_DEFAULT_TRIPLET}} for {{env.BUILD_TARGET}}..."',
-    'cargo vcpkg -v build --target {{env.BUILD_TARGET}}',
+    'echo "Bootstrapping vcpkg:{{env.VCPKG_DEFAULT_TRIPLET}} for {{env.CARGO_BUILD_TARGET}}..."',
+    'cargo vcpkg -v build --target {{env.CARGO_BUILD_TARGET}}',
     #'-cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib',
     'fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- "-l-framework" "framework"',
     'fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- " shlwapi " " -lshlwapi "'
 ]
 
-[tasks]
-build = "cargo build -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
+[tasks.build]
+description = 'Build the workspace with vcpkg'
+build = "cargo build --workspace --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
 test = "cargo nextest run -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
 ci = "cargo nextest run --profile ci -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
