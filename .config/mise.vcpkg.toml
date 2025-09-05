@@ -5,6 +5,11 @@ pixi = "latest"
 fd = "latest"
 sd = "latest"
 
+[tools.rust]
+version = "1.89.0"
+profile = "minimal"
+targets = "wasm32-unknown-unknown{% if os() == 'macos' %},x86_64-apple-darwin{% endif %}"
+
 [vars]
 build_target = """
   {%- if os() == "macos" and arch() == "arm64" -%}aarch64-apple-darwin
@@ -29,11 +34,16 @@ python_exe = """
 """
 
 [env]
+CONDA_ENV = false
 VCPKG_ROOT = '{{config_root}}/target/vcpkg'
 VCPKG_OVERLAY_PORTS = '{{config_root}}/vcpkg-overlay/ports'
 VCPKG_FORCE_DOWNLOADED_BINARIES = '1'
 VCPKG_DEFAULT_HOST_TRIPLET = '{{vars.default_triplet}}'
 
+# gdal-sys uses pkg-config to find the gdal library
+# the gdal.pc file contains shlwapi as link flag for the shlwapi library but this gets ignored
+# by the pkg-config crate implementation, so we need to replace it with a format (post_bootstrap) that is picked up by the crate
+# Warning: gdal fails to build when zstd is enabled and the CONDA_ENV enrironment variable is set
 [tasks.bootstrap]
 description = 'Vcpkg build'
 depends_post = ["post_bootstrap"]
