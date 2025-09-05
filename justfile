@@ -4,21 +4,21 @@ test_filter := ''
 default_triplet := if os_family() == "windows" {
     "x64-windows-static-release"
     } else if os() == "macos" {
-    if arch() == "aarch64" {
-        "arm64-osx-release"
-    } else { "x64-osx-release" }
-    } else {
-    "x64-linux-release"
-    }
+        if arch() == "arm64" {
+            "aarch64-apple-darwin"
+        } else {
+            "x86_64-apple-darwin"
+        }
+    } else { "x64-linux-release" }
 default_target := if os_family() == "windows" {
     "x86_64-pc-windows-msvc"
     } else if os() == "macos" {
-    if arch() == "aarch64" {
-        "aarch64-apple-darwin"
-    } else { "x86_64-apple-darwin" }
-    } else {
-    "x86_64-unknown-linux-gnu"
-    }
+        if arch() == "arm64" {
+            "aarch64-apple-darwin"
+        } else {
+            "x86_64-apple-darwin"
+        }
+    } else { "x86_64-unknown-linux-gnu" }
 PYTHON_EXE := if os_family() == "windows" {
         "python.exe"
     } else {

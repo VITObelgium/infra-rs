@@ -1,6 +1,16 @@
+# Devenv configuration for building cargo-only without external native dependencies
 [tools]
+cargo-binstall = "latest"
 "cargo:cargo-nextest" = "latest"
-rust = "1.89"
+
+[tools.rust]
+version = "1.89.0"
+profile = "minimal"
+targets = "wasm32-unknown-unknown{% if os() == 'macos' %},x86_64-apple-darwin{% endif %}"
+
+
+[settings]
+cargo.binstall = true
 
 [tasks]
 build = "cargo build -p geo --release --no-default-features --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs"

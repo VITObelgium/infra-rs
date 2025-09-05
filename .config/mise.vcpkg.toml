@@ -1,51 +1,157 @@
+# Devenv configuration for building using vcpkg for native dependencies
 [tools]
 "cargo:cargo-vcpkg" = "latest"
+pixi = "latest"
 fd = "latest"
 sd = "latest"
 
-[env]
-VCPKG_OVERLAY_PORTS = '{{config_root}}/vcpkg-overlay/ports'
-VCPKG_FORCE_DOWNLOADED_BINARIES = '1'
-VCPKG_DEFAULT_TRIPLET = """
-  {%- if os() == "macos" and arch() == "arm64" -%}arm64-osx-release
-  {%- elif os() == "macos" and arch() == "x86_64" -%}x64-osx-release
-  {%- elif os() == "linux" and arch() == "x86_64" -%}x64-linux-release
-  {%- elif os() == "windows" and arch() == "x86_64" -%}x64-windows-static-release
-  {%- else -%}unsupported
-  {%- endif -%}
-"""
-CARGO_BUILD_TARGET = """
+[vars]
+build_target = """
   {%- if os() == "macos" and arch() == "arm64" -%}aarch64-apple-darwin
-  {%- elif os() == "macos" and arch() == "x86_64" -%}x86_64-apple-darwin
-  {%- elif os() == "linux" and arch() == "x86_64" -%}x86_64-unknown-linux-gnu
-  {%- elif os() == "windows" and arch() == "x86_64" -%}x86_64-pc-windows-msvc
+  {%- elif os() == "macos" and arch() == "x64" -%}x86_64-apple-darwin
+  {%- elif os() == "linux" and arch() == "x64" -%}x86_64-unknown-linux-gnu
+  {%- elif os() == "windows" and arch() == "x64" -%}x86_64-pc-windows-msvc
   {%- else -%}unsupported
   {%- endif -%}
 """
-PYTHON_EXE = """
+default_triplet = """
+  {%- if os() == "macos" and arch() == "arm64" -%}arm64-osx-release
+  {%- elif os() == "macos" and arch() == "x64" -%}x64-osx-release
+  {%- elif os() == "linux" and arch() == "x64" -%}x64-linux-release
+  {%- elif os() == "windows" and arch() == "x64" -%}x64-windows-static-release
+  {%- else -%}unsupported
+  {%- endif -%}
+"""
+python_exe = """
   {%- if os() == "windows"-%}python.exe
   {%- else -%}bin/python3
   {%- endif -%}
 """
-VCPKG_DEFAULT_HOST_TRIPLET = '{{env.VCPKG_DEFAULT_TRIPLET}}'
+
+[env]
+VCPKG_ROOT = '{{config_root}}/target/vcpkg'
+VCPKG_OVERLAY_PORTS = '{{config_root}}/vcpkg-overlay/ports'
+VCPKG_FORCE_DOWNLOADED_BINARIES = '1'
+VCPKG_DEFAULT_HOST_TRIPLET = '{{vars.default_triplet}}'
 
 [tasks.bootstrap]
-description = 'Bootstrap the vcpkg dependencies'
+description = 'Vcpkg build'
+depends_post = ["post_bootstrap"]
 run = [
-    "cp .cargo/config.toml.in .cargo/config.vcpkg.toml",
-    "sd @CARGO_VCPKG_TRIPLET@ {{env.VCPKG_DEFAULT_TRIPLET}} .cargo/config.vcpkg.toml",
-    "sd @CARGO_VCPKG_HOST_TRIPLET@ {{env.VCPKG_DEFAULT_HOST_TRIPLET}} .cargo/config.vcpkg.toml",
-    "sd @PYTHON_EXE@ {{env.PYTHON_EXE}} .cargo/config.vcpkg.toml",
-    "sd @WORKSPACE_ROOT@ {{config_root}} .cargo/config.vcpkg.toml",
-    'echo "Bootstrapping vcpkg:{{env.VCPKG_DEFAULT_TRIPLET}} for {{env.CARGO_BUILD_TARGET}}..."',
-    'cargo vcpkg -v build --target {{env.CARGO_BUILD_TARGET}}',
-    #'-cp target/vcpkg/installed/x64-windows-static/lib/gdal.lib target/vcpkg/installed/x64-windows-static/lib/gdal_i.lib',
-    'fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- "-l-framework" "framework"',
-    'fd --base-directory target/vcpkg/installed -g gdal.pc --exec sd -F -- " shlwapi " " -lshlwapi "'
+    "echo Setting up cargo vcpkg config...",
+    """
+        {% set triplet_opt = option(name="triplet") | default(value="") %}
+        {% set triplet = vars.default_triplet %}
+        {% if triplet_opt != "" %}
+            {% set triplet = triplet_opt %}
+        {% endif %}
+        echo Bootstrapping vcpkg:{{triplet}} on {{os()}} {{arch()}}... && \
+        cp .cargo/config.toml.in .cargo/config.vcpkg.toml && \
+        sd @CARGO_VCPKG_TRIPLET@ {{triplet}} .cargo/config.vcpkg.toml && \
+        sd @CARGO_VCPKG_HOST_TRIPLET@ {{env.VCPKG_DEFAULT_HOST_TRIPLET}} .cargo/config.vcpkg.toml && \
+        sd @PYTHON_EXE@ {{vars.python_exe}} .cargo/config.vcpkg.toml
+    """,
+    'sd @WORKSPACE_ROOT@ {{config_root | replace(from="\", to="/")}} .cargo/config.vcpkg.toml',
+    """
+        {% set tgt = option(name="target") | default(value="") %}
+        echo Vcpkg build for target {{tgt}}... && \
+        cargo vcpkg -v build \
+        {% if tgt != "" %}--target {{ tgt }}{% endif %}
+    """,
+]
+
+[tasks.post_bootstrap]
+description = 'Bootstrap the vcpkg dependencies'
+hide = true
+# in a seperate bat file because mise messess up the quoting of the fd arguments
+run_windows = [
+    'cmd /c {{config_root}}/.config/vcpkg_win_tweaks.bat'
+]
+
+[tasks.bootstrap_py]
+description = 'Bootstrap the python environment'
+run = [
+    'echo Bootstrapping python environment...',
+    'pixi install'
 ]
 
 [tasks.build]
-description = 'Build the workspace with vcpkg'
-build = "cargo build --workspace --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
-test = "cargo nextest run -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
-ci = "cargo nextest run --profile ci -p geo --config .cargo/config.vcpkg.toml --release --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon"
+description = 'Build the workspace with vcpkg dependencies'
+run = [
+    'echo Building the workspace with vcpkg...',
+    """
+        {% set tgt = option(name="target") | default(value="") %}
+        cargo build --workspace \
+            --config .cargo/config.vcpkg.toml \
+            {% if tgt != "" %}--target {{ tgt }}{% endif %} \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            --no-default-features \
+            --features gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+    """
+]
+
+[tasks.test]
+description = 'Run the unit tests with vcpkg dependencies'
+run = [
+    """
+        {% set tgt = option(name="target") | default(value="") %}
+        cargo nextest run --workspace --config .cargo/config.vcpkg.toml \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            {% if tgt != "" %}--target {{ tgt }}{% endif %} \
+            --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+    """
+]
+
+[tasks.test_simd]
+description = 'Test the workspace with simd enabled'
+tools.rust = "nightly"
+run = [
+    'echo Building the workspace with vcpkg and simd...',
+    """
+        {% set tgt = option(name="target") | default(value="") %}
+        cargo +nightly nextest run --workspace --profile ci \
+            --config .cargo/config.vcpkg.toml \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            {% if tgt != "" %}--target {{ tgt }}{% endif %} \
+            --features=simd,serde,gdal,gdal-static,derive,vector,vector-io-xlsx,vector-io-csv
+    """
+]
+
+[tasks.test_ci]
+description = 'Run the unit tests in the ci environment'
+run = [
+    """
+        {% set tgt = option(name="target") | default(value="") %}
+        cargo nextest run --profile ci --workspace --config .cargo/config.vcpkg.toml \
+            {% if tgt != "" %}--target {{ tgt }}{% endif %} \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+    """
+]
+
+[tasks.test_integration]
+description = 'Run the unit tests in the ci environment'
+run = [
+    """
+        {% set tgt = option(name="target") | default(value="") %}
+        cargo nextest run --profile integration --workspace --config .cargo/config.vcpkg.toml \
+            {% if tgt != "" %}--target {{ tgt }}{% endif %} \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            --no-capture \
+            --no-default-features --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
+    """
+]
+
+[tasks.test_py]
+description = 'Run the unit tests with vcpkg dependencies and python interop'
+depends = ['bootstrap_py']
+run = [
+    "pixi run test_release"
+]
+
+[tasks.doc]
+description = 'Generate the documentation'
+env.RUSTDOCFLAGS = '-D warnings --cfg docsrs'
+run = [
+    'cargo +nightly doc --workspace --config .cargo/config.vcpkg.toml --exclude=infra-rs --exclude=vector_derive --no-deps --all-features',
+]

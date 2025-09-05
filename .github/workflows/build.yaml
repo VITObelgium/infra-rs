@@ -37,15 +37,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable,nightly
-          target: ${{ matrix.cfg.target }}
-      - uses: prefix-dev/setup-pixi@v0.8.8
-        if: matrix.cfg.id != 'mac-intel'
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: just,sd,fd-find,cargo-vcpkg,cargo-nextest
+      - uses: jdx/mise-action@v2
       - name: Cache vcpkg packages
         id: cache-vcpkg
         uses: actions/cache@v4
@@ -55,24 +47,24 @@ jobs:
             ~/AppData/Local/vcpkg/archives
           key: ${{ matrix.cfg.os }}-${{ hashFiles('**/Cargo.toml') }}
       - name: Build the C++ dependencies using vcpkg
-        run: just bootstrap ${{ matrix.cfg.triplet }} ${{ matrix.cfg.target }}
+        run: mise -E vcpkg run bootstrap --target ${{ matrix.cfg.target }} --triplet ${{ matrix.cfg.triplet }}
       - name: Install the python environment with pixi
         if: matrix.cfg.id != 'mac-intel'
-        run: just pybootstrap
+        run: mise -E vcpkg run bootstrap_py
       - name: Build the project
-        run: just build ${{ matrix.cfg.target }}
+        run: mise -E vcpkg run build --release --target ${{ matrix.cfg.target }}
       - name: Run the unit tests
-        run: just test_ci ${{ matrix.cfg.target }}
+        run: mise -E vcpkg run test_ci --release --target ${{ matrix.cfg.target }}
       - name: Run the integration tests
-        run: just test_integration ${{ matrix.cfg.target }}
+        run: mise -E vcpkg run test_integration --release --target ${{ matrix.cfg.target }}
       - name: Run the unit tests with python feature enabled
         if: matrix.cfg.id != 'mac-intel'
-        run: just test_release_py
+        run: mise -E vcpkg run test_py
       - name: Run the unit tests with simd feature enabled
-        run: just test_simd ${{ matrix.cfg.target }}
+        run: mise -E vcpkg run test_simd --release --target ${{ matrix.cfg.target }}
       - name: Build the docs
         if: matrix.cfg.id != 'mac-intel'
-        run: just doc
+        run: mise -E vcpkg doc
       - name: Archive build logs
         if: ${{ failure() }}
         uses: actions/upload-artifact@v4
