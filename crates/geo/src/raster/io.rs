@@ -8,12 +8,11 @@ const LANES: usize = inf::simd::LANES;
 #[cfg(any(feature = "gdal", feature = "raster-io-geotiff"))]
 use crate::raster::formats::{self, RasterFormat as _};
 use crate::{
-    ArrayDataType, ArrayMetadata, ArrayNum, Error, GeoReference, RasterSize, Result,
     raster::{
-        WriteRasterOptions,
         formats::{FormatProvider, RasterFileFormat, RasterFormatDyn, RasterOpenOptions},
-        utils,
+        utils, WriteRasterOptions,
     },
+    ArrayDataType, ArrayMetadata, ArrayNum, Error, GeoReference, RasterSize, Result,
 };
 use bytemuck::cast_slice;
 use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
@@ -421,9 +420,9 @@ mod tests {
     #[cfg(all(feature = "raster-io-geotiff", feature = "gdal"))]
     use crate::GeoReference;
 
-    use crate::raster::RasterReadWrite as _;
     use crate::raster::formats::{RasterFormat as _, RasterFormatDyn as _};
-    use crate::{Point, RasterSize, raster::formats};
+    use crate::raster::RasterReadWrite as _;
+    use crate::{raster::formats, Point, RasterSize};
     use inf::allocate::AlignedVecUnderConstruction;
 
     use super::*;
@@ -659,14 +658,14 @@ mod tests {
 
         let mut geotiff = io::RasterIO::open_read_only_force_format(&input, FormatProvider::GeoTiff)?;
         let gtif_raster = {
-            use crate::{ArrayInterop, raster::DenseRaster};
+            use crate::{raster::DenseRaster, ArrayInterop};
             let (geo_ref, vec) = geotiff.read_raster_band::<f32>(1)?;
             DenseRaster::new_init_nodata(geo_ref, vec)?
         };
 
         let mut gdal = io::RasterIO::open_read_only_force_format(&input, FormatProvider::Gdal)?;
         let gdal_raster = {
-            use crate::{ArrayInterop, raster::DenseRaster};
+            use crate::{raster::DenseRaster, ArrayInterop};
             let (geo_ref, vec) = gdal.read_raster_band::<f32>(1)?;
             DenseRaster::new_init_nodata(geo_ref, vec)?
         };
@@ -685,14 +684,14 @@ mod tests {
 
         let mut geotiff = io::RasterIO::open_read_only_force_format(&input, FormatProvider::GeoTiff)?;
         let gtif_raster = {
-            use crate::{ArrayInterop, raster::DenseRaster};
+            use crate::{raster::DenseRaster, ArrayInterop};
             let (geo_ref, vec) = geotiff.read_raster_band::<f32>(1)?;
             DenseRaster::new_init_nodata(geo_ref, vec)?
         };
 
         let mut gdal = io::RasterIO::open_read_only_force_format(&input, FormatProvider::Gdal)?;
         let gdal_raster = {
-            use crate::{ArrayInterop, raster::DenseRaster};
+            use crate::{raster::DenseRaster, ArrayInterop};
             let (geo_ref, vec) = gdal.read_raster_band::<f32>(1)?;
             DenseRaster::new_init_nodata(geo_ref, vec)?
         };

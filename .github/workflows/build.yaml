@@ -52,7 +52,7 @@ jobs:
         if: matrix.cfg.id != 'mac-intel'
         run: mise -E vcpkg run bootstrap_py
       - name: Build the project
-        run: mise -E vcpkg run build --release --target ${{ matrix.cfg.target }}
+        run: mise -E vcpkg run build_ci --release --target ${{ matrix.cfg.target }}
       - name: Run the unit tests
         run: mise -E vcpkg run test_ci --release --target ${{ matrix.cfg.target }}
       - name: Run the integration tests
@@ -61,7 +61,7 @@ jobs:
         if: matrix.cfg.id != 'mac-intel'
         run: mise -E vcpkg run test_py
       - name: Run the unit tests with simd feature enabled
-        run: mise -E vcpkg run test_simd --release --target ${{ matrix.cfg.target }}
+        run: mise -E simd run test_ci --release --target ${{ matrix.cfg.target }}
       - name: Build the docs
         if: matrix.cfg.id != 'mac-intel'
         run: mise -E vcpkg doc

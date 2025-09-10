@@ -18,37 +18,37 @@ doc:
 docdeps:
     cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features
 
-build_debug target=default_target:
+build_debug:
     mise -E vcpkg run build
 
-build_release target=default_target:
+build_release:
     mise -E vcpkg run build --release
 
-build_nofeatures target=default_target:
-    cargo build --workspace  --target {{target}} --release --no-default-features
+build_nofeatures:
+    cargo build --workspace --release --no-default-features
 
 build: build_release
 
 test_debug $RUST_LOG="debug":
     mise -E vcpkg run test
 
-test_release target=default_target:
+test_release:
     mise -E vcpkg run test --release
 
 test_debug_simd:
     mise -E vcpkg run test_simd
 
 test_release_simd:
-    mise -E vcpkg run test_simd --release
+    mise -E simd run test_simd --release
 
-test_debug_py: pybootstrap
+test_debug_py: bootstrap_py
     pixi run test_debug
 
-test_release_py: pybootstrap
+test_release_py: bootstrap_py
     pixi run test_release
 
-test_warp target=default_target:
-    cargo nextest run  --profile integration --target {{target}} -p geo --release --no-default-features --features=gdal-static,proj4rs,rayon --no-capture run_all_warp_integration_tests
+test_warp:
+    cargo nextest run  --profile integration -p geo --release --no-default-features --features=gdal-static,proj4rs,rayon --no-capture run_all_warp_integration_tests
 
 test_integration:
     mise -E vcpkg run test_integration
@@ -60,7 +60,7 @@ test_ci: test_release
 test_simd: test_release_simd
 
 miri:
-    cargo +nightly miri test --target {{target}} --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs
+    cargo +nightly miri test --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs
 
 rasterbench:
     cargo bench --bench rasterops --package=geo

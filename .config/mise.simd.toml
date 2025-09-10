@@ -6,7 +6,7 @@ sd = "latest"
 fd = { version = "latest", os = ["windows"] }
 
 [tools.rust]
-version = "1.89.0"
+version = "nightly"
 profile = "minimal"
 targets = "wasm32-unknown-unknown{% if os() == 'macos' %},x86_64-apple-darwin{% endif %}"
 
@@ -78,25 +78,18 @@ run_windows = [
     'cmd /c {{config_root}}/.config/vcpkg_win_tweaks.bat'
 ]
 
-[tasks.bootstrap_py]
-description = 'Bootstrap the python environment'
-run = [
-    'echo Bootstrapping python environment...',
-    'pixi install'
-]
-
 [tasks.build]
 description = 'Build the workspace with vcpkg dependencies'
 run = [
     'echo Building the workspace with vcpkg...',
     """
         {% set tgt = option(name="target") | default(value="") %}
-        cargo build \
+        cargo +nightly build \
             --config .cargo/config.vcpkg.toml \
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
             {% if flag(name='release') == "true" %}--release{% endif %} \
             --no-default-features \
-            --features gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
+            --features simd,gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
     """
 ]
 
@@ -106,62 +99,38 @@ run = [
     'echo Building the workspace with vcpkg...',
     """
         {% set tgt = option(name="target") | default(value="") %}
-        cargo build --workspace \
+        cargo +nightly build --workspace \
             --config .cargo/config.vcpkg.toml \
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
             {% if flag(name='release') == "true" %}--release{% endif %} \
             --no-default-features \
-            --features gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
+            --features simd,gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
     """
 ]
 
-[tasks.test]
-description = 'Run the unit tests with vcpkg dependencies'
+[tasks.test_simd]
+description = 'Test the workspace with simd enabled'
+tools.rust = "nightly"
 run = [
+    'echo Building the workspace with vcpkg and simd...',
     """
         {% set tgt = option(name="target") | default(value="") %}
-        cargo nextest run --config .cargo/config.vcpkg.toml \
+        cargo +nightly nextest run --profile ci \
+            --config .cargo/config.vcpkg.toml \
             {% if flag(name='release') == "true" %}--release{% endif %} \
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
-            --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+            --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv
     """
 ]
 
 [tasks.test_ci]
-description = 'Run the unit tests in the ci environment'
+description = 'Run the unit tests in the ci environment with simd enabled'
 run = [
     """
         {% set tgt = option(name="target") | default(value="") %}
         cargo nextest run --profile ci --config .cargo/config.vcpkg.toml \
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
             {% if flag(name='release') == "true" %}--release{% endif %} \
-            --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+            --no-default-features --features=simd,gdal,gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
     """
-]
-
-[tasks.test_integration]
-description = 'Run the unit tests in the ci environment'
-run = [
-    """
-        {% set tgt = option(name="target") | default(value="") %}
-        cargo nextest run --profile integration --config .cargo/config.vcpkg.toml \
-            {% if tgt != "" %}--target {{ tgt }}{% endif %} \
-            {% if flag(name='release') == "true" %}--release{% endif %} \
-            --no-capture \
-            --no-default-features --features=serde,gdal,gdal-static,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
-    """
-]
-
-[tasks.test_py]
-description = 'Run the unit tests with vcpkg dependencies and python interop'
-depends = ['bootstrap_py']
-run = [
-    "pixi run test_release"
-]
-
-[tasks.doc]
-description = 'Generate the documentation'
-env.RUSTDOCFLAGS = '-D warnings --cfg docsrs'
-run = [
-    'cargo +nightly doc --workspace --config .cargo/config.vcpkg.toml --exclude=infra-rs --exclude=vector_derive --no-deps --all-features',
 ]
