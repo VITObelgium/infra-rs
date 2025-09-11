@@ -12,7 +12,36 @@ targets = "wasm32-unknown-unknown{% if os() == 'macos' %},x86_64-apple-darwin{% 
 [settings]
 cargo.binstall = true
 
-[tasks]
-build = "cargo build -p geo --release --no-default-features --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs"
-test = "cargo nextest run -p geo --release --no-default-features --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs"
-ci = "cargo nextest run --profile ci -p geo --release --no-default-features --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs"
+[tasks.build]
+run = [
+    """
+        {% set feat = option(name="features") | default(value="") %}
+        cargo build -p geo \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            {% if flag(name='no-default-features') == "true" %}--no-default-features{% endif %} \
+            {% if feat != "" %}--features {{ feat }}{% endif %} \
+    """
+]
+
+[tasks.test]
+run = [
+    """
+        {% set feat = option(name="features") | default(value="") %}
+        cargo nextest run -p geo \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            {% if flag(name='no-default-features') == "true" %}--no-default-features{% endif %} \
+            {% if feat != "" %}--features {{ feat }}{% endif %} \
+    """
+]
+
+[tasks.ci]
+run = [
+    """
+        {% set feat = option(name="features") | default(value="") %}
+        cargo nextest run -p geo \
+            --profile ci \
+            --release \
+            --no-default-features \
+            --features=serde,derive,raster-io-geotiff,vector-io,polars,rayon,proj4rs
+    """
+]
