@@ -94,7 +94,14 @@ wasm-bindgen = { version = "0.2", features = ["serde"] }
 arrow = ["dep:arrow"]
 default = ["derive"]
 derive = ["dep:vector_derive"]
-gdal = ["dep:bon", "dep:gdal", "dep:gdal-sys", "geozero/with-gdal", "proj"]
+gdal = [
+    "dep:bon",
+    "dep:gdal",
+    "dep:gdal-sys",
+    "geozero/with-gdal",
+    "proj",
+    "vector-io",
+]
 gdal-static = ["gdal"]
 polars = ["dep:polars", "vector-io"]
 proj = ["dep:proj"]
