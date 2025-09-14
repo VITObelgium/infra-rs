@@ -42,6 +42,7 @@ pub use warp::{NumThreads, TargetPixelAlignment, TargetSrs, WarpOptions, WarpTar
 
 pub use {
     clusterid::cluster_id, clusterid::cluster_id_with_obstacles, clusterid::fuzzy_cluster_id, clusterid::fuzzy_cluster_id_with_obstacles,
+    clusterutils::ClusterDiagonals,
 };
 
 #[cfg(any(feature = "proj", feature = "proj4rs"))]

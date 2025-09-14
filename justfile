@@ -29,6 +29,9 @@ build_nofeatures:
 
 build: build_release
 
+tools:
+    mise -E vcpkg run build --release --workspace
+
 test_debug $RUST_LOG="debug":
     mise -E vcpkg run test
 

@@ -1792,6 +1792,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "geocli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "geo",
+]
+
+[[package]]
 name = "geojson"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"

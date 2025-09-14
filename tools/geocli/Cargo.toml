@@ -1,0 +1,11 @@
+[package]
+name = "geocli"
+version = "0.1.0"
+edition = "2024"
+
+[package.metadata.vcpkg]
+dependencies = ["gdal[core,netcdf]"]
+
+[dependencies]
+geo = { path = "../../crates/geo", features = ["gdal-static"] }
+clap = { version = "4.5", features = ["derive", "env"] }

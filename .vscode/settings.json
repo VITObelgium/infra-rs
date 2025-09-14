@@ -1,7 +1,23 @@
 {
     "editor.formatOnSave": true,
     "rust-analyzer.check.command": "clippy",
-    "rust-analyzer.cargo.features": "all",
-    "rust-analyzer.check.features": "all",
+    "rust-analyzer.cargo.features": [
+        "gdal",
+        "proj4rs",
+        "vector",
+        "vector-io-xlsx",
+        "vector-io-csv",
+        "rayon",
+        "polars"
+    ],
+    "rust-analyzer.check.features": [
+        "gdal",
+        "proj4rs",
+        "vector",
+        "vector-io-xlsx",
+        "vector-io-csv",
+        "rayon",
+        "polars"
+    ],
     "evenBetterToml.formatter.reorderKeys": true,
 }

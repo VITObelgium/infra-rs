@@ -95,6 +95,7 @@ run = [
             --config .cargo/config.vcpkg.toml \
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
             {% if flag(name='release') == "true" %}--release{% endif %} \
+            {% if flag(name='workspace') == "true" %}--workspace{% endif %} \
             --no-default-features \
             --features gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
     """
