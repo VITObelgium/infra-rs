@@ -228,7 +228,7 @@ fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, zoom_level: i32, 
     let bottom_right_tile = Tile::for_coordinate(bottom_right, zoom_level);
 
     assert!(
-        tile_size % Tile::TILE_SIZE == 0,
+        tile_size.is_multiple_of(Tile::TILE_SIZE),
         "Tile size must be a factor of {}",
         Tile::TILE_SIZE
     );
