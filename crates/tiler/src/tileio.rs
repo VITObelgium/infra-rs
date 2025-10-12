@@ -11,12 +11,12 @@ use crate::{
     tileproviderfactory::TileProviderOptions,
 };
 use gdal::{
-    Dataset,
+    Dataset, Metadata as _,
     raster::{GdalDataType, GdalType},
 };
 use geo::{
     Array, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize,
-    raster::formats::{self, RasterOpenOptions},
+    raster::formats::{self, RasterFileFormat, RasterOpenOptions},
     simd_bounds,
 };
 use geo::{CellSize, Columns, GeoReference, LatLonBounds, Rows, Tile, constants, crs, raster, srs::SpatialReference};
@@ -244,6 +244,24 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
     let ds = formats::gdal::open_dataset_read_only(path)?;
 
     let raster_count = ds.raster_count();
+    if raster_count == 0
+        && RasterFileFormat::guess_from_path(path) == RasterFileFormat::Netcdf
+        && let Some(subdatasets) = ds.metadata_domain("SUBDATASETS")
+    {
+        // NetCDF file with subdatasets, create metadata for each subdataset
+        let mut subdataset_metas = Vec::new();
+        for meta in subdatasets {
+            if let Some((_, subdataset_path)) = meta.split_once('=') {
+                match create_metadata_for_file(std::path::Path::new(subdataset_path), opts) {
+                    Err(e) => log::warn!("Failed to read subdataset {}: {}", subdataset_path, e),
+                    Ok(metas) => subdataset_metas.extend(metas),
+                }
+            }
+        }
+
+        return Ok(subdataset_metas);
+    }
+
     let mut result = Vec::with_capacity(raster_count);
 
     for band_nr in 1..=raster_count {
