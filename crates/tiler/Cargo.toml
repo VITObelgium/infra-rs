@@ -34,3 +34,8 @@ slow_tests = []
 simd = ["inf/simd", "geo/simd"]
 specta = ["dep:specta", "geo/specta", "inf/specta"]
 vector-tiles = ["dep:geozero", "dep:mvt", "geo/vector-processing"]
+
+[package.metadata.vcpkg]
+dependencies = [
+  "hdf5[core,threadsafe]"
+]
