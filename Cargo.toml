@@ -5,6 +5,7 @@ edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
+  "proj[core,embed-data]",
   "gdal[core,netcdf,zstd,expat]",
   "hdf5[core,zlib]",
   "netcdf-c[core,netcdf-4,hdf5]",
@@ -73,6 +74,8 @@ crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev 
 proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
 # https://github.com/image-rs/image-tiff/issues/253
 tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "47811747dda727073d6d48be918ce5831e124174" }
+gdal = { git = "https://github.com/georust/gdal.git", rev = "2c76f92489e7ac868f776b6c7224ce05efdbefaf" }
+gdal-sys = { git = "https://github.com/georust/gdal.git", rev = "2c76f92489e7ac868f776b6c7224ce05efdbefaf" }
 
 # [profile.dev]
 # debug = "line-tables-only"

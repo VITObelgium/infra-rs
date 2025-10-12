@@ -56,6 +56,8 @@ impl RasterFileFormat {
         let path = file_path.to_string_lossy();
         if path.starts_with("postgresql://") || path.starts_with("pg:") {
             RasterFileFormat::Postgis
+        } else if path.starts_with("NETCDF:") {
+            RasterFileFormat::Netcdf
         } else {
             RasterFileFormat::Unknown
         }
