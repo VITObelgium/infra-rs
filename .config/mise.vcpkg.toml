@@ -6,8 +6,8 @@ sd = "latest"
 fd = { version = "latest", os = ["windows"] }
 
 [tools.rust]
-version = "1.89.0"
-profile = "minimal"
+version = "1.90.0"
+profile = "default"
 targets = "wasm32-unknown-unknown{% if os() == 'macos' %},x86_64-apple-darwin{% endif %}"
 
 [vars]
@@ -96,7 +96,8 @@ run = [
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
             {% if flag(name='release') == "true" %}--release{% endif %} \
             --no-default-features \
-            --features gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
+            --features gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon && \
+            cp .cargo/config.vcpkg.toml .cargo/config.toml
     """
 ]
 
@@ -136,6 +137,18 @@ run = [
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
             {% if flag(name='release') == "true" %}--release{% endif %} \
             --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+    """
+]
+
+[tasks.test_warp]
+description = 'Run the warp comparison test'
+run = [
+    """
+        {% set tgt = option(name="target") | default(value="") %}
+        cargo nextest run --config .cargo/config.vcpkg.toml \
+            {% if flag(name='release') == "true" %}--release{% endif %} \
+            {% if tgt != "" %}--target {{ tgt }}{% endif %} \
+            --profile integration -p geo --no-default-features --features=gdal-static,proj4rs,rayon --no-capture run_all_warp_integration_tests
     """
 ]
 

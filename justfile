@@ -38,6 +38,9 @@ test_release:
 test_debug_simd:
     mise -E vcpkg run test_simd
 
+test_warp:
+    mise -E vcpkg run test_warp --release
+
 test_release_simd:
     mise -E simd run test_simd --release
 
@@ -46,9 +49,6 @@ test_debug_py: bootstrap_py
 
 test_release_py: bootstrap_py
     pixi run test_release
-
-test_warp:
-    cargo nextest run  --profile integration -p geo --release --no-default-features --features=gdal-static,proj4rs,rayon --no-capture run_all_warp_integration_tests
 
 test_integration:
     mise -E vcpkg run test_integration
