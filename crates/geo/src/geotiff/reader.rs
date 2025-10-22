@@ -77,57 +77,26 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_tiled_raster_as<T: ArrayNum, M: ArrayMetadata>(
-        &mut self,
-        chunks: &[TiffChunkLocation],
-        tile_size: u32,
-    ) -> Result<DenseArray<T, M>> {
+    fn read_tiled_raster_as<T: ArrayNum, M: ArrayMetadata>(&mut self, overview: &TiffOverview, tile_size: u32) -> Result<DenseArray<T, M>> {
         let nodata = cast::option::<T>(self.geo_ref().nodata()).unwrap_or(T::NODATA);
-        let mut data = allocate::aligned_vec_filled_with(nodata, self.geo_ref().raster_size().cell_count());
-        let georef = Self::read_tiled_raster_into_buffer(&self.meta, chunks, tile_size, &mut self.tiff_file, &mut data)?;
+        let mut data = allocate::aligned_vec_filled_with(nodata, overview.raster_size.cell_count());
+        let georef = Self::read_tiled_raster_into_buffer(&self.meta, overview, tile_size, &mut self.tiff_file, &mut data)?;
         DenseArray::new_init_nodata(M::with_geo_reference(georef), data)
     }
 
     #[simd_bounds]
     fn read_tiled_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         meta: &GeoTiffMetadata,
-        chunks: &[TiffChunkLocation],
+        overview: &TiffOverview,
         tile_size: u32,
         tiff_file: &mut File,
         buffer: &mut [T],
     ) -> Result<M> {
-        let geo_reference = meta.geo_reference.clone();
-        let nodata = cast::option::<T>(geo_reference.nodata()).unwrap_or(T::NODATA);
-
-        let right_edge_cols = match geo_reference.columns().count() as usize % tile_size as usize {
-            0 => tile_size as usize, // Exact fit
-            cols => cols,
-        };
-
-        let tiles_per_row = (geo_reference.columns().count() as usize).div_ceil(tile_size as usize);
-
-        let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
-        for (chunk_index, chunk_offset) in chunks.iter().enumerate() {
-            let col_start = (chunk_index % tiles_per_row) * tile_size as usize;
-            let row_start = chunk_index / tiles_per_row;
-            let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
-            let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
-
-            Self::read_chunk_data_into_buffer_as(meta, chunk_offset, tiff_file, &mut tile_buf)?;
-
-            for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
-                if row_start * tile_size as usize + tile_row_index >= geo_reference.rows().count() as usize {
-                    break; // Skip rows that are outside the raster bounds
-                }
-
-                let index_start =
-                    ((row_start * tile_size as usize + tile_row_index) * geo_reference.columns().count() as usize) + col_start;
-                let data_slice = &mut buffer[index_start..index_start + row_size];
-                data_slice.copy_from_slice(&tile_row_data[0..row_size]);
-            }
-        }
-
-        Ok(M::with_geo_reference(geo_reference))
+        io::merge_overview_into_buffer(meta, overview, tile_size, buffer, |chunk| {
+            let mut buf = vec![0; chunk.size as usize];
+            io::read_chunk(&chunk, tiff_file, &mut buf)?;
+            Ok(buf)
+        })
     }
 
     #[simd_bounds]
@@ -179,7 +148,7 @@ impl GeoTiffReader {
 
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    return self.read_tiled_raster_as::<T, M>(&overview.chunk_locations, tile_size);
+                    return self.read_tiled_raster_as::<T, M>(&overview, tile_size);
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
                     return self.read_striped_raster_as::<T, M>(&overview.chunk_locations, rows_per_strip);
@@ -220,13 +189,7 @@ impl GeoTiffReader {
 
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    return Self::read_tiled_raster_into_buffer(
-                        &self.meta,
-                        &overview.chunk_locations,
-                        tile_size,
-                        &mut self.tiff_file,
-                        buffer,
-                    );
+                    return Self::read_tiled_raster_into_buffer(&self.meta, &overview, tile_size, &mut self.tiff_file, buffer);
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
                     return self.read_striped_raster_into_buffer(&overview.chunk_locations, rows_per_strip, buffer);

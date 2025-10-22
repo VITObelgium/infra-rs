@@ -387,7 +387,11 @@ impl WebTilesReader {
         })
     }
 
-    pub fn read_overview(&self, overview: &TiffOverview, chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>) -> Result<AnyDenseArray> {
+    pub fn read_overview(
+        &self,
+        overview: &TiffOverview,
+        chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
+    ) -> Result<AnyDenseArray> {
         Ok(match self.data_type() {
             ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_overview_as::<u8>(overview, chunk_cb)?),
             ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_overview_as::<u16>(overview, chunk_cb)?),
@@ -406,7 +410,7 @@ impl WebTilesReader {
     pub fn read_overview_as<T: ArrayNum>(
         &self,
         overview: &TiffOverview,
-        chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
+        chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.cog_meta.data_type {
             return Err(Error::InvalidArgument(format!(
@@ -417,13 +421,12 @@ impl WebTilesReader {
         }
 
         let mut buffer = AlignedVecUnderConstruction::new(overview.raster_size.cell_count());
-        io::merge_tiles_into_buffer::<T, RasterMetadata>(
+        io::merge_overview_into_buffer::<T, RasterMetadata>(
             &self.cog_meta,
-            overview.raster_size,
-            &overview.chunk_locations,
+            overview,
             self.cog_meta.chunk_row_length(),
-            chunk_cb,
             unsafe { buffer.as_slice_mut() },
+            chunk_cb,
         )?;
 
         DenseArray::<T>::new_init_nodata(
@@ -1129,11 +1132,11 @@ mod tests {
 
         let mut reader = File::open(&cog_path)?;
         assert_eq!(RasterSize::with_rows_cols(Rows(512), Columns(1024)), overview.raster_size);
-        let actual = cog.read_overview_as::<u8>(overview, &mut |chunk: TiffChunkLocation| {
+        let actual = cog.read_overview_as::<u8>(overview, |chunk: TiffChunkLocation| {
             let mut buf = vec![0; chunk.size as usize];
             reader.seek(std::io::SeekFrom::Start(chunk.offset)).unwrap();
-            reader.read_exact(&mut buf).unwrap();
-            buf
+            reader.read_exact(&mut buf)?;
+            Ok(buf)
         })?;
 
         let reference = DenseArray::<u8>::read(testutils::geo_test_data_dir().join("reference").join("raster_overview.tif"))?;

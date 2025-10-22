@@ -2,12 +2,8 @@
 /// Should only be needed for specific use cases.
 /// Normal clients should use higher-level functions in `cog` module for reading COGs.
 use crate::{
-    ArrayDataType, ArrayMetadata, ArrayNum, RasterSize,
-    geotiff::{
-        GeoTiffMetadata, TiffChunkLocation,
-        gdalghostdata::GdalGhostData,
-        utils::{self},
-    },
+    ArrayDataType, ArrayMetadata, ArrayNum,
+    geotiff::{GeoTiffMetadata, TiffChunkLocation, TiffOverview, gdalghostdata::GdalGhostData, utils},
     raster::{Compression, Predictor},
 };
 use inf::cast;
@@ -187,10 +183,10 @@ pub fn read_chunk_data_into_buffer<T: ArrayNum>(
         nodata,
         compression,
         predictor,
-        &mut |chunk_loc| {
+        |chunk_loc| {
             let mut buf = vec![0; chunk_loc.size as usize];
-            read_chunk(&chunk_loc, reader, &mut buf).unwrap();
-            buf
+            read_chunk(&chunk_loc, reader, &mut buf)?;
+            Ok(buf)
         },
         tile_data,
     )
@@ -203,13 +199,13 @@ pub fn read_chunk_data_into_buffer_cb<T: ArrayNum>(
     nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
-    read_chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
+    mut read_chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
     tile_data: &mut [T],
 ) -> Result<()> {
     if chunk.is_sparse() {
         tile_data.fill(cast::option(nodata).ok_or_else(|| Error::Runtime("Invalid nodata value".into()))?);
     } else {
-        let cog_chunk = read_chunk_cb(*chunk);
+        let cog_chunk = read_chunk_cb(*chunk)?;
         parse_chunk_data_into_buffer(row_length, compression, predictor, &cog_chunk, tile_data)?;
     }
 
@@ -265,7 +261,7 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
 fn read_chunk_data_into_buffer_cb_as<T: ArrayNum>(
     meta: &GeoTiffMetadata,
     chunk: &TiffChunkLocation,
-    read_chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
+    read_chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
     chunk_data: &mut [T],
 ) -> Result<()> {
     let row_length = meta.chunk_row_length();
@@ -293,47 +289,48 @@ fn read_chunk_data_into_buffer_cb_as<T: ArrayNum>(
 }
 
 #[simd_bounds]
-pub fn merge_tiles_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     meta: &GeoTiffMetadata,
-    buffer_size: RasterSize,
-    chunks: &[TiffChunkLocation],
+    overview: &TiffOverview,
     tile_size: u32,
-    read_chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
     buffer: &mut [T],
+    mut read_chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
 ) -> Result<M> {
+    debug_assert_eq!(buffer.len(), overview.raster_size.cell_count());
+    let raster_size = &overview.raster_size;
     let mut geo_reference = meta.geo_reference.clone();
     let nodata = cast::option::<T>(geo_reference.nodata()).unwrap_or(T::NODATA);
 
-    let right_edge_cols = match buffer_size.cols.count() as usize % tile_size as usize {
+    let right_edge_cols = match raster_size.cols.count() as usize % tile_size as usize {
         0 => tile_size as usize, // Exact fit, so use full tile size
         cols => cols,
     };
 
-    let tiles_per_row = (buffer_size.cols.count() as usize).div_ceil(tile_size as usize);
+    let tiles_per_row = (raster_size.cols.count() as usize).div_ceil(tile_size as usize);
 
     let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
-    for (chunk_index, chunk_offset) in chunks.iter().enumerate() {
+    for (chunk_index, chunk_offset) in overview.chunk_locations.iter().enumerate() {
         let col_index = (chunk_index % tiles_per_row) * tile_size as usize;
         let chunk_row_index = chunk_index / tiles_per_row;
         let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
         let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
 
-        read_chunk_data_into_buffer_cb_as(meta, chunk_offset, read_chunk_cb, &mut tile_buf)?;
+        read_chunk_data_into_buffer_cb_as(meta, chunk_offset, &mut read_chunk_cb, &mut tile_buf)?;
 
         for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
             let start_row = chunk_row_index * tile_size as usize + tile_row_index;
-            if start_row >= buffer_size.rows.count() as usize {
+            if start_row >= raster_size.rows.count() as usize {
                 break; // Skip rows that are outside the raster bounds
             }
 
-            let index_start = (start_row * buffer_size.cols.count() as usize) + col_index;
+            let index_start = (start_row * raster_size.cols.count() as usize) + col_index;
             let data_slice = &mut buffer[index_start..index_start + row_size];
             data_slice.copy_from_slice(&tile_row_data[0..row_size]);
         }
     }
 
-    geo_reference.set_columns(buffer_size.cols);
-    geo_reference.set_rows(buffer_size.rows);
+    geo_reference.set_columns(raster_size.cols);
+    geo_reference.set_rows(raster_size.rows);
     Ok(M::with_geo_reference(geo_reference))
 }
 
