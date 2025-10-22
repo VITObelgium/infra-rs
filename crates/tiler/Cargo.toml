@@ -1,7 +1,7 @@
 [package]
 name = "tiler"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true
+edition.workspace = true
 
 [package.metadata.vcpkg.target]
 aarch64-apple-darwin = { dependencies = ["hdf5[core, threadsafe]"] }
@@ -35,7 +35,7 @@ tempfile = "3"
 
 [features]
 serde = ["dep:serde", "dep:serde_json", "inf/serde"]
-slow_tests = []
 simd = ["inf/simd", "geo/simd"]
+slow_tests = []
 specta = ["dep:specta", "geo/specta", "inf/specta"]
 vector-tiles = ["dep:geozero", "dep:mvt", "geo/vector-processing"]

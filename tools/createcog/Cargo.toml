@@ -1,7 +1,7 @@
 [package]
 name = "createcog"
-version = "0.1.0"
-edition = "2024"
+version.workspace = true # inherit from [workspace.package]
+edition.workspace = true
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,netcdf]"]
@@ -9,8 +9,8 @@ dependencies = ["gdal[core,netcdf]"]
 [dependencies]
 inf = { path = "../../crates/inf", features = [] }
 geo = { path = "../../crates/geo", features = [
-  "gdal-static",
-  "raster-io-geotiff",
+    "gdal-static",
+    "raster-io-geotiff",
 ] }
 clap = { version = "4.5", features = ["derive"] }
 log = "0.4"

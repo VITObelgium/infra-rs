@@ -20,6 +20,7 @@ mod mbtilesmetadata;
 
 #[derive(Parser, Debug)]
 #[clap(name = "creatembtiles", about = "Preprocess raster tiles")]
+#[command(version)]
 pub struct Opt {
     #[clap(long = "input", short = 'i')]
     pub input: PathBuf,

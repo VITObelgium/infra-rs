@@ -14,6 +14,7 @@ mod createtiles;
 
 #[derive(Parser, Debug)]
 #[clap(name = "createcog", about = "Create Cloud Optimized GeoTIFF")]
+#[command(version)]
 pub struct Opt {
     #[arg(long = "input", short = 'i')]
     pub input: PathBuf,

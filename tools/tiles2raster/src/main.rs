@@ -21,6 +21,7 @@ pub type Result<T> = raster_tile::Result<T>;
 
 #[derive(Parser, Debug)]
 #[clap(name = "tiles2raster", about = "Reassemble a raster from tiles")]
+#[command(version)]
 pub struct Opt {
     #[clap(long = "url", short = 'u')]
     pub url: String,

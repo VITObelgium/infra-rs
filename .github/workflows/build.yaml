@@ -3,76 +3,78 @@ name: Build
 on: [push]
 
 jobs:
-  compile:
-    name: ${{ matrix.cfg.id }}
-    runs-on: ${{ matrix.cfg.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        cfg:
-          - {
-              id: linux,
-              os: ubuntu-latest,
-              triplet: x64-linux-release,
-              target: x86_64-unknown-linux-gnu,
-            }
-          - {
-              id: windows,
-              os: windows-2025,
-              triplet: x64-windows-static-release,
-              target: x86_64-pc-windows-msvc,
-            }
-          - {
-              id: mac-arm,
-              os: macos-latest,
-              triplet: arm64-osx-release,
-              target: aarch64-apple-darwin,
-            }
-          - {
-              id: mac-intel,
-              os: macos-latest,
-              triplet: x64-osx-release,
-              target: x86_64-apple-darwin,
-            }
+    compile:
+        name: ${{ matrix.cfg.id }}
+        runs-on: ${{ matrix.cfg.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                cfg:
+                    - {
+                          id: linux,
+                          os: ubuntu-latest,
+                          triplet: x64-linux-release,
+                          target: x86_64-unknown-linux-gnu,
+                      }
+                    - {
+                          id: windows,
+                          os: windows-2025,
+                          triplet: x64-windows-static-release,
+                          target: x86_64-pc-windows-msvc,
+                      }
+                    - {
+                          id: mac-arm,
+                          os: macos-latest,
+                          triplet: arm64-osx-release,
+                          target: aarch64-apple-darwin,
+                      }
+                    - {
+                          id: mac-intel,
+                          os: macos-latest,
+                          triplet: x64-osx-release,
+                          target: x86_64-apple-darwin,
+                      }
 
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - name: Cache vcpkg packages
-        id: cache-vcpkg
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/vcpkg
-            ~/AppData/Local/vcpkg/archives
-          key: ${{ matrix.cfg.os }}-${{ hashFiles('**/Cargo.toml') }}
-      - name: Build the C++ dependencies using vcpkg
-        run: mise -E vcpkg run bootstrap --target ${{ matrix.cfg.target }} --triplet ${{ matrix.cfg.triplet }}
-      - name: Install the python environment with pixi
-        if: matrix.cfg.id != 'mac-intel'
-        run: mise -E vcpkg run bootstrap_py
-      - name: Build the project
-        run: mise -E vcpkg run build_ci --release --target ${{ matrix.cfg.target }}
-      - name: Run the unit tests
-        run: mise -E vcpkg run test_ci --release --target ${{ matrix.cfg.target }}
-      - name: Run the integration tests
-        run: mise -E vcpkg run test_integration --release --target ${{ matrix.cfg.target }}
-      - name: Run the unit tests with python feature enabled
-        if: matrix.cfg.id != 'mac-intel'
-        run: mise -E vcpkg run test_py
-      - name: Run the unit tests with simd feature enabled
-        run: mise -E simd run test_ci --release --target ${{ matrix.cfg.target }}
-      - name: Build the docs
-        if: matrix.cfg.id != 'mac-intel'
-        run: mise -E vcpkg doc
-      - name: Archive build logs
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.cfg.id }}-build-logs
-          path: |
-            target/vcpkg/buildtrees/**/autoconf*.log
-            target/vcpkg/buildtrees/**/config*.log
-            target/vcpkg/buildtrees/**/build*.log
-            target/vcpkg/buildtrees/**/install*.log
-            target/vcpkg/buildtrees/**/package*.log
+        steps:
+            - uses: actions/checkout@v4
+            - uses: jdx/mise-action@v3
+              with:
+                  cache_key: "mise-{{platform}}-{{version}}-{{file_hash}}"
+            - name: Cache vcpkg packages
+              id: cache-vcpkg
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cache/vcpkg
+                      ~/AppData/Local/vcpkg/archives
+                  key: ${{ matrix.cfg.os }}-${{ hashFiles('**/Cargo.toml') }}
+            - name: Build the C++ dependencies using vcpkg
+              run: mise -E vcpkg run bootstrap --target ${{ matrix.cfg.target }} --triplet ${{ matrix.cfg.triplet }}
+            - name: Install the python environment with pixi
+              if: matrix.cfg.id != 'mac-intel'
+              run: mise -E vcpkg run bootstrap_py
+            - name: Build the project
+              run: mise -E vcpkg run build_ci --release --target ${{ matrix.cfg.target }}
+            - name: Run the unit tests
+              run: mise -E vcpkg run test_ci --release --target ${{ matrix.cfg.target }}
+            - name: Run the integration tests
+              run: mise -E vcpkg run test_integration --release --target ${{ matrix.cfg.target }}
+            - name: Run the unit tests with python feature enabled
+              if: matrix.cfg.id != 'mac-intel'
+              run: mise -E vcpkg run test_py
+            - name: Run the unit tests with simd feature enabled
+              run: mise -E simd run test_ci --release --target ${{ matrix.cfg.target }}
+            - name: Build the docs
+              if: matrix.cfg.id != 'mac-intel'
+              run: mise -E vcpkg doc
+            - name: Archive build logs
+              if: ${{ failure() }}
+              uses: actions/upload-artifact@v4
+              with:
+                  name: ${{ matrix.cfg.id }}-build-logs
+                  path: |
+                      target/vcpkg/buildtrees/**/autoconf*.log
+                      target/vcpkg/buildtrees/**/config*.log
+                      target/vcpkg/buildtrees/**/build*.log
+                      target/vcpkg/buildtrees/**/install*.log
+                      target/vcpkg/buildtrees/**/package*.log

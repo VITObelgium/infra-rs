@@ -8,6 +8,7 @@ use tileserver::tileapihandler;
 
 #[derive(Parser, Debug)]
 #[clap(name = "tileserver", about = "The tile server")]
+#[command(version)]
 pub struct Opt {
     // set the listen addr
     #[clap(short = 'a', long = "addr")]

@@ -1,13 +1,13 @@
 [package]
-name    = "vector_derive"
-version = "0.1.0"
-edition = "2024"
+name = "vector_derive"
+version.workspace = true
+edition.workspace = true
 
 [lib]
 proc-macro = true
 
 [dependencies]
-inf         = { path = "../../inf" }
-syn         = "2.0"
-quote       = "1.0"
+inf = { path = "../../inf" }
+syn = "2.0"
+quote = "1.0"
 proc-macro2 = "1.0"
