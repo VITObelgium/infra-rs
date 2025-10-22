@@ -2,7 +2,7 @@ use crate::{
     Array, ArrayMetadata, Nodata, RasterSize,
     array::{Columns, Rows},
 };
-use inf::allocate::AlignedVec;
+use inf::allocate::{self};
 
 pub fn crop<RasterType>(ras: &mut RasterType) -> RasterType
 where
@@ -45,7 +45,7 @@ where
     let new_meta = RasterType::Metadata::sized_with_nodata(new_size, ras.metadata().nodata());
 
     // Create new data buffer and copy the cropped region
-    let mut new_data = AlignedVec::with_capacity((new_rows * new_cols) as usize);
+    let mut new_data = allocate::aligned_vec_with_capacity((new_rows * new_cols) as usize);
 
     for row in top_row..=bottom_row {
         for col in left_col..=right_col {
