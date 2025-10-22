@@ -51,7 +51,7 @@ test_release_py: bootstrap_py
     pixi run test_release
 
 test_integration:
-    mise -E vcpkg run test_integration
+    mise -E vcpkg run test_integration --release
 
 test_all: test_release test_release_py test_integration test_simd
 
