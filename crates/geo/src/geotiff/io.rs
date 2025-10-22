@@ -2,9 +2,9 @@
 /// Should only be needed for specific use cases.
 /// Normal clients should use higher-level functions in `cog` module for reading COGs.
 use crate::{
-    ArrayDataType, ArrayNum,
+    ArrayDataType, ArrayMetadata, ArrayNum, RasterSize,
     geotiff::{
-        TiffChunkLocation,
+        GeoTiffMetadata, TiffChunkLocation,
         gdalghostdata::GdalGhostData,
         utils::{self},
     },
@@ -181,12 +181,36 @@ pub fn read_chunk_data_into_buffer<T: ArrayNum>(
     reader: &mut (impl Read + Seek),
     tile_data: &mut [T],
 ) -> Result<()> {
+    read_chunk_data_into_buffer_cb(
+        chunk,
+        row_length,
+        nodata,
+        compression,
+        predictor,
+        &mut |chunk_loc| {
+            let mut buf = vec![0; chunk_loc.size as usize];
+            read_chunk(&chunk_loc, reader, &mut buf).unwrap();
+            buf
+        },
+        tile_data,
+    )
+}
+
+#[simd_bounds]
+pub fn read_chunk_data_into_buffer_cb<T: ArrayNum>(
+    chunk: &TiffChunkLocation,
+    row_length: u32,
+    nodata: Option<f64>,
+    compression: Option<Compression>,
+    predictor: Option<Predictor>,
+    read_chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
+    tile_data: &mut [T],
+) -> Result<()> {
     if chunk.is_sparse() {
         tile_data.fill(cast::option(nodata).ok_or_else(|| Error::Runtime("Invalid nodata value".into()))?);
     }
 
-    let mut cog_chunk = vec![0; chunk.size as usize];
-    read_chunk(chunk, reader, &mut cog_chunk)?;
+    let cog_chunk = read_chunk_cb(*chunk);
     parse_chunk_data_into_buffer(row_length, compression, predictor, &cog_chunk, tile_data)?;
 
     Ok(())
@@ -235,6 +259,77 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
     }
 
     Ok(())
+}
+
+#[simd_bounds]
+fn read_chunk_data_into_buffer_cb_as<T: ArrayNum>(
+    meta: &GeoTiffMetadata,
+    chunk: &TiffChunkLocation,
+    read_chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
+    chunk_data: &mut [T],
+) -> Result<()> {
+    let row_length = meta.chunk_row_length();
+
+    if T::TYPE != meta.data_type {
+        return Err(Error::InvalidArgument(format!(
+            "Tile data type mismatch: expected {:?}, got {:?}",
+            meta.data_type,
+            T::TYPE
+        )));
+    }
+
+    // io function handles the sparse check
+    read_chunk_data_into_buffer_cb(
+        chunk,
+        row_length,
+        meta.geo_reference.nodata(),
+        meta.compression,
+        meta.predictor,
+        read_chunk_cb,
+        chunk_data,
+    )?;
+
+    Ok(())
+}
+
+#[simd_bounds]
+pub fn merge_tiles_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+    meta: &GeoTiffMetadata,
+    buffer_size: RasterSize,
+    chunks: &[TiffChunkLocation],
+    tile_size: u32,
+    read_chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
+    buffer: &mut [T],
+) -> Result<M> {
+    let mut geo_reference = meta.geo_reference.clone();
+    let nodata = cast::option::<T>(geo_reference.nodata()).unwrap_or(T::NODATA);
+
+    let right_edge_cols = buffer_size.cols.count() as usize % tile_size as usize;
+    let tiles_per_row = (buffer_size.cols.count() as usize).div_ceil(tile_size as usize);
+
+    let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
+    for (chunk_index, chunk_offset) in chunks.iter().enumerate() {
+        let col_start = (chunk_index % tiles_per_row) * tile_size as usize;
+        let row_start = chunk_index / tiles_per_row;
+        let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
+        let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
+
+        read_chunk_data_into_buffer_cb_as(meta, chunk_offset, read_chunk_cb, &mut tile_buf)?;
+
+        for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
+            if row_start * tile_size as usize + tile_row_index >= buffer_size.rows.count() as usize {
+                break; // Skip rows that are outside the raster bounds
+            }
+
+            let index_start = ((row_start * tile_size as usize + tile_row_index) * buffer_size.cols.count() as usize) + col_start;
+            let data_slice = &mut buffer[index_start..index_start + row_size];
+            data_slice.copy_from_slice(&tile_row_data[0..row_size]);
+        }
+    }
+
+    geo_reference.set_columns(buffer_size.cols);
+    geo_reference.set_rows(buffer_size.rows);
+    Ok(M::with_geo_reference(geo_reference))
 }
 
 fn lzw_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<()> {

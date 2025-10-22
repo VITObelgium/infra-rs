@@ -30,6 +30,10 @@ impl RasterSize {
     pub fn cell_count(&self) -> usize {
         self.rows * self.cols
     }
+
+    pub fn max_dimension(&self) -> i32 {
+        self.rows.count().max(self.cols.count())
+    }
 }
 
 impl std::fmt::Display for RasterSize {

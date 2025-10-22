@@ -374,6 +374,63 @@ impl WebTilesReader {
         self.cog_metadata().overviews.get(overview_index)
     }
 
+    /// Returns the most suitable overview for the given square area in pixels.
+    pub fn overview_for_display_size(&self, display_size: usize) -> Option<&TiffOverview> {
+        let display_size = display_size as i32;
+
+        self.cog_meta.overviews.iter().min_by(|&lhs, &rhs| {
+            let left_diff = lhs.raster_size.max_dimension().abs_diff(display_size);
+            let right_diff = rhs.raster_size.max_dimension().abs_diff(display_size);
+
+            left_diff.cmp(&right_diff)
+        })
+    }
+
+    pub fn read_overview(&self, overview: &TiffOverview, chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>) -> Result<AnyDenseArray> {
+        Ok(match self.data_type() {
+            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_overview_as::<u8>(overview, chunk_cb)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_overview_as::<u16>(overview, chunk_cb)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_overview_as::<u32>(overview, chunk_cb)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_overview_as::<u64>(overview, chunk_cb)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_overview_as::<i8>(overview, chunk_cb)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_overview_as::<i16>(overview, chunk_cb)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_overview_as::<i32>(overview, chunk_cb)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_overview_as::<i64>(overview, chunk_cb)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_overview_as::<f32>(overview, chunk_cb)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_overview_as::<f64>(overview, chunk_cb)?),
+        })
+    }
+
+    pub fn read_overview_as<T: ArrayNum>(
+        &self,
+        overview: &TiffOverview,
+        chunk_cb: &mut impl FnMut(TiffChunkLocation) -> Vec<u8>,
+    ) -> Result<DenseArray<T>> {
+        if T::TYPE != self.cog_meta.data_type {
+            return Err(Error::InvalidArgument(format!(
+                "Overview data type mismatch: expected {:?}, got {:?}",
+                self.cog_meta.data_type,
+                T::TYPE
+            )));
+        }
+
+        let mut buffer = DenseArray::<T>::filled_with_nodata(RasterMetadata::sized_with_nodata(
+            overview.raster_size,
+            self.cog_meta.geo_reference.nodata(),
+        ));
+
+        io::merge_tiles_into_buffer::<T, RasterMetadata>(
+            &self.cog_meta,
+            overview.raster_size,
+            &overview.chunk_locations,
+            self.cog_meta.chunk_row_length(),
+            chunk_cb,
+            buffer.as_mut_slice(),
+        )?;
+
+        Ok(buffer)
+    }
+
     /// Read the tile data for the given tile using the provided reader.
     /// This method will return an error if the tile does not exist in the COG index
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned

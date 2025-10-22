@@ -15,7 +15,7 @@ use std::{fs::File, mem::MaybeUninit, ops::Range, path::Path};
 #[cfg(feature = "simd")]
 const LANES: usize = inf::simd::LANES;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct TiffChunkLocation {
     pub offset: u64,
     pub size: u64,
@@ -298,20 +298,16 @@ impl GeoTiffReader {
             )));
         }
 
-        if chunk.is_sparse() {
-            // Sparse tiles are filled with nodata value
-            chunk_data.fill(meta.geo_reference.nodata().and_then(NumCast::from).unwrap_or(T::NODATA));
-        } else {
-            io::read_chunk_data_into_buffer(
-                chunk,
-                row_length,
-                meta.geo_reference.nodata(),
-                meta.compression,
-                meta.predictor,
-                tiff_file,
-                chunk_data,
-            )?;
-        }
+        // io function handles the sparse check
+        io::read_chunk_data_into_buffer(
+            chunk,
+            row_length,
+            meta.geo_reference.nodata(),
+            meta.compression,
+            meta.predictor,
+            tiff_file,
+            chunk_data,
+        )?;
 
         Ok(())
     }

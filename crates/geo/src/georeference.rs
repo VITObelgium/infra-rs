@@ -3,7 +3,7 @@ use crate::{
     array::{ArrayMetadata, Columns, Rows},
     crs::{self, Epsg},
     raster::{self},
-    srs::{self, projection_from_epsg, projection_to_epsg, projection_to_geo_epsg},
+    srs::{projection_from_epsg, projection_to_epsg, projection_to_geo_epsg},
 };
 use approx::{AbsDiffEq, RelativeEq};
 use num::{NumCast, ToPrimitive};
@@ -396,11 +396,16 @@ impl GeoReference {
             return None;
         }
 
-        let srs = srs::SpatialReference::from_definition(&self.projection).ok()?;
-        match srs.is_projected() {
-            true => srs.epsg_cs(),
-            false => srs.epsg_geog_cs(),
+        #[cfg(any(feature = "gdal", feature = "proj4rs"))]
+        {
+            let srs = srs::SpatialReference::from_definition(&self.projection).ok()?;
+            return match srs.is_projected() {
+                true => srs.epsg_cs(),
+                false => srs.epsg_geog_cs(),
+            };
         }
+
+        None
     }
 
     pub fn geographic_epsg(&self) -> Option<Epsg> {
