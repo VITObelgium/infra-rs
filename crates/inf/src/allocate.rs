@@ -38,7 +38,7 @@ impl<T: bytemuck::AnyBitPattern> AlignedVecUnderConstruction<T> {
         }
     }
 
-    /// Obtain the underlying buffer as a mutable byte slice
+    /// Obtain the underlying buffer as a mutable slice of type T
     /// # Safety
     /// The caller must ensure that the buffer is used correctly and that the data is not accessed in an invalid way.
     pub unsafe fn as_slice_mut(&mut self) -> &mut [T] {

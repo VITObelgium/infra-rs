@@ -1,6 +1,6 @@
 use crate::{
-    AnyDenseArray, Array as _, ArrayDataType, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error, GeoReference,
-    GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
+    AnyDenseArray, Array as _, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error,
+    GeoReference, GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
     geotiff::{self, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio, utils},
     raster::intersection::{CutOut, intersect_georeference},
 };
@@ -11,6 +11,7 @@ use std::{
 
 use crate::{LatLonBounds, RasterSize, Tile, crs};
 
+use inf::allocate::AlignedVecUnderConstruction;
 use num::NumCast;
 use simd_macro::simd_bounds;
 
@@ -415,21 +416,20 @@ impl WebTilesReader {
             )));
         }
 
-        let mut buffer = DenseArray::<T>::filled_with_nodata(RasterMetadata::sized_with_nodata(
-            overview.raster_size,
-            self.cog_meta.geo_reference.nodata(),
-        ));
-
+        let mut buffer = AlignedVecUnderConstruction::new(overview.raster_size.cell_count());
         io::merge_tiles_into_buffer::<T, RasterMetadata>(
             &self.cog_meta,
             overview.raster_size,
             &overview.chunk_locations,
             self.cog_meta.chunk_row_length(),
             chunk_cb,
-            buffer.as_mut_slice(),
+            unsafe { buffer.as_slice_mut() },
         )?;
 
-        Ok(buffer)
+        DenseArray::<T>::new_init_nodata(
+            RasterMetadata::sized_with_nodata(overview.raster_size, self.cog_meta.geo_reference.nodata()),
+            unsafe { buffer.assume_init() },
+        )
     }
 
     /// Read the tile data for the given tile using the provided reader.
