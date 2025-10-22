@@ -296,6 +296,22 @@ pub trait Array:
     fn fill(&mut self, val: Self::Pixel);
 
     fn cast_to<TDest: ArrayNum>(&self) -> Self::WithPixelType<TDest>;
+
+    /// Returns a slice containing all pixels in the specified row.
+    /// The row parameter is 0-based.
+    fn row_slice(&self, row: i32) -> &[Self::Pixel] {
+        let cols = self.columns().count();
+        let start = (row * cols) as usize;
+        let end = start + cols as usize;
+        &self.as_slice()[start..end]
+    }
+
+    /// Returns an iterator over all pixels in the specified column.
+    /// The column parameter is 0-based.
+    fn col_iter(&self, col: i32) -> impl Iterator<Item = &Self::Pixel> {
+        let cols = self.columns().count();
+        self.as_slice().iter().skip(col as usize).step_by(cols as usize)
+    }
 }
 
 pub trait ArrayCopy<T: ArrayNum, Rhs = Self> {
