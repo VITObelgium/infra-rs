@@ -9,7 +9,7 @@ name = "colormapping"
 
 [dependencies]
 approx = "0.5"
-bytemuck = { version = "1.23", features = ["extern_crate_alloc", "derive"] }
+bytemuck = { version = "1.24", features = ["extern_crate_alloc", "derive"] }
 log = "0.4"
 num = "0.4"
 serde = { version = "1.0", features = ["derive"], optional = true }
@@ -18,7 +18,7 @@ strum = { version = "0.27", features = ["derive"] }
 thiserror = "2.0"
 
 [dev-dependencies]
-ctor = "0.5"
+ctor = "0.6"
 env_logger = "0.11"
 generic-tests = "0.1"
 test-log = "0.2"

@@ -14,16 +14,16 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.vcpkg]
 dependencies = [
-  "gdal[core,geos,sqlite3]",
-  "proj[core,embed-data]",
-  "tiff[core,lzma,zip]",
+    "gdal[core,geos,sqlite3]",
+    "proj[core,embed-data]",
+    "tiff[core,lzma,zip]",
 ]
 
 [package.metadata.vcpkg.target]
 x86_64-unknown-linux-gnu = { dependencies = [
-  "gdal[core,geos,iconv,sqlite3]",
-  "proj[core,embed-data]",
-  "tiff[core,lzma,zip]",
+    "gdal[core,geos,iconv,sqlite3]",
+    "proj[core,embed-data]",
+    "tiff[core,lzma,zip]",
 ] }
 
 [[bench]]
@@ -37,13 +37,13 @@ name = "simd"
 [dependencies]
 approx = "0.5"
 arrow = { version = "56", optional = true }
-bon = { version = "3.7", optional = true }
-bytemuck = { version = "1.23" }
-calamine = { version = "0.30", features = ["dates"], optional = true }
+bon = { version = "3.8", optional = true }
+bytemuck = { version = "1.24" }
+calamine = { version = "0.31", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.3.1", optional = true }
-csv = { version = "1.3", optional = true }
+csv = { version = "1.4", optional = true }
 gdal = { version = "0.18", optional = true }
 gdal-sys = { version = "0.11", optional = true }
 geo-types = { version = "0.7", features = ["approx"] }
@@ -54,11 +54,11 @@ itertools = "0.14"
 log = "0.4"
 num = "0.4"
 paste = "1.0"
-polars = { version = "0.50", optional = true }
+polars = { version = "0.51", optional = true }
 proj = { version = "0.31", optional = true }
 proj4rs = { version = "0.1", features = [
-  "crs-definitions",
-  "geo-types",
+    "crs-definitions",
+    "geo-types",
 ], optional = true }
 proj4wkt = { version = "0.1", optional = true }
 pyo3 = { version = "0.25", optional = true }
@@ -74,7 +74,7 @@ weezl = { version = "0.1", optional = true }
 xml-rs = { version = "1.0", optional = true }
 
 [dev-dependencies]
-ctor = "0.5"
+ctor = "0.6"
 env_logger = "0.11"
 generic-tests = "0.1"
 path_macro = "1.0"
