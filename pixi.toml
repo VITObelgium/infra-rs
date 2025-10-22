@@ -1,4 +1,4 @@
-[project]
+[workspace]
 authors     = ["Dirk Vanden Boer <dirk.vdb@gmail.com>"]
 channels    = ["conda-forge"]
 description = "Python environment for testing python bindings related code"
