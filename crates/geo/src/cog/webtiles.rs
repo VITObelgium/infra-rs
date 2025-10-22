@@ -401,6 +401,7 @@ impl WebTilesReader {
         })
     }
 
+    #[simd_bounds]
     pub fn read_overview_as<T: ArrayNum>(
         &self,
         overview: &TiffOverview,
@@ -590,7 +591,7 @@ mod tests {
     use crate::{
         Array, Nodata as _, Point, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles, debug},
-        raster::{Compression, Predictor},
+        raster::{Compression, Predictor, RasterReadWrite},
         testutils,
     };
 
@@ -1113,6 +1114,30 @@ mod tests {
                 assert_eq!(cutout.dst_row_offset, 256);
             }
         }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn overview_for_display_size() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE * 2)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
+
+        let overview = cog.overview_for_display_size(512).unwrap();
+
+        let mut reader = File::open(&cog_path)?;
+        assert_eq!(RasterSize::with_rows_cols(Rows(512), Columns(1024)), overview.raster_size);
+        let actual = cog.read_overview_as::<u8>(overview, &mut |chunk: TiffChunkLocation| {
+            let mut buf = vec![0; chunk.size as usize];
+            reader.seek(std::io::SeekFrom::Start(chunk.offset)).unwrap();
+            reader.read_exact(&mut buf).unwrap();
+            buf
+        })?;
+
+        let reference = DenseArray::<u8>::read(testutils::geo_test_data_dir().join("reference").join("raster_overview.tif"))?;
+        assert_eq!(reference, actual);
 
         Ok(())
     }

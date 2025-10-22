@@ -99,7 +99,11 @@ impl GeoTiffReader {
         let geo_reference = meta.geo_reference.clone();
         let nodata = cast::option::<T>(geo_reference.nodata()).unwrap_or(T::NODATA);
 
-        let right_edge_cols = geo_reference.columns().count() as usize % tile_size as usize;
+        let right_edge_cols = match geo_reference.columns().count() as usize % tile_size as usize {
+            0 => tile_size as usize, // Exact fit
+            cols => cols,
+        };
+
         let tiles_per_row = (geo_reference.columns().count() as usize).div_ceil(tile_size as usize);
 
         let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];

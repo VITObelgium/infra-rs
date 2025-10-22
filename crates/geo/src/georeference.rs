@@ -398,14 +398,14 @@ impl GeoReference {
 
         #[cfg(any(feature = "gdal", feature = "proj4rs"))]
         {
-            let srs = srs::SpatialReference::from_definition(&self.projection).ok()?;
-            return match srs.is_projected() {
-                true => srs.epsg_cs(),
-                false => srs.epsg_geog_cs(),
-            };
+            let srs = crate::srs::SpatialReference::from_definition(&self.projection).ok()?;
+            if srs.is_projected() { srs.epsg_cs() } else { srs.epsg_geog_cs() }
         }
 
-        None
+        #[cfg(not(any(feature = "gdal", feature = "proj4rs")))]
+        {
+            None
+        }
     }
 
     pub fn geographic_epsg(&self) -> Option<Epsg> {

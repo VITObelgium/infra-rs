@@ -208,10 +208,10 @@ pub fn read_chunk_data_into_buffer_cb<T: ArrayNum>(
 ) -> Result<()> {
     if chunk.is_sparse() {
         tile_data.fill(cast::option(nodata).ok_or_else(|| Error::Runtime("Invalid nodata value".into()))?);
+    } else {
+        let cog_chunk = read_chunk_cb(*chunk);
+        parse_chunk_data_into_buffer(row_length, compression, predictor, &cog_chunk, tile_data)?;
     }
-
-    let cog_chunk = read_chunk_cb(*chunk);
-    parse_chunk_data_into_buffer(row_length, compression, predictor, &cog_chunk, tile_data)?;
 
     Ok(())
 }
@@ -304,24 +304,29 @@ pub fn merge_tiles_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     let mut geo_reference = meta.geo_reference.clone();
     let nodata = cast::option::<T>(geo_reference.nodata()).unwrap_or(T::NODATA);
 
-    let right_edge_cols = buffer_size.cols.count() as usize % tile_size as usize;
+    let right_edge_cols = match buffer_size.cols.count() as usize % tile_size as usize {
+        0 => tile_size as usize, // Exact fit, so use full tile size
+        cols => cols,
+    };
+
     let tiles_per_row = (buffer_size.cols.count() as usize).div_ceil(tile_size as usize);
 
     let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
     for (chunk_index, chunk_offset) in chunks.iter().enumerate() {
-        let col_start = (chunk_index % tiles_per_row) * tile_size as usize;
-        let row_start = chunk_index / tiles_per_row;
+        let col_index = (chunk_index % tiles_per_row) * tile_size as usize;
+        let chunk_row_index = chunk_index / tiles_per_row;
         let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
         let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
 
         read_chunk_data_into_buffer_cb_as(meta, chunk_offset, read_chunk_cb, &mut tile_buf)?;
 
         for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
-            if row_start * tile_size as usize + tile_row_index >= buffer_size.rows.count() as usize {
+            let start_row = chunk_row_index * tile_size as usize + tile_row_index;
+            if start_row >= buffer_size.rows.count() as usize {
                 break; // Skip rows that are outside the raster bounds
             }
 
-            let index_start = ((row_start * tile_size as usize + tile_row_index) * buffer_size.cols.count() as usize) + col_start;
+            let index_start = (start_row * buffer_size.cols.count() as usize) + col_index;
             let data_slice = &mut buffer[index_start..index_start + row_size];
             data_slice.copy_from_slice(&tile_row_data[0..row_size]);
         }
