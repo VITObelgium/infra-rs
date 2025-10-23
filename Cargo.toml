@@ -24,7 +24,7 @@ x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 
 [workspace]
 package.name = "infra-rs"
-package.version = "2025.8.6"
+package.version = "2025.10.23"
 package.edition = "2024"
 members = [
     "crates/geo",
