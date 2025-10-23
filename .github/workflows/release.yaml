@@ -1,125 +1,118 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+    push:
+        tags:
+            - "v*"
 
 env:
-  CARGO_TERM_COLOR: always
+    CARGO_TERM_COLOR: always
 
 jobs:
-  create-release:
-    runs-on: ubuntu-latest
-    outputs:
-      tag_name: ${{ steps.tag.outputs.tag_name }}
-    steps:
-      - uses: actions/checkout@v4
+    create-release:
+        runs-on: ubuntu-latest
+        outputs:
+            tag_name: ${{ steps.tag.outputs.tag_name }}
+        steps:
+            - uses: actions/checkout@v4
 
-      - name: Get tag name
-        id: tag
-        run: echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            - name: Get tag name
+              id: tag
+              run: echo "tag_name=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Create Release
-        run: |
-          gh release create ${{ steps.tag.outputs.tag_name }} \
-            --title "Release ${{ steps.tag.outputs.tag_name }}" \
-            --generate-notes \
-            --draft=false \
-            --prerelease=false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+            - name: Create Release
+              run: |
+                  gh release create ${{ steps.tag.outputs.tag_name }} \
+                    --title "Release ${{ steps.tag.outputs.tag_name }}" \
+                    --generate-notes \
+                    --draft=false \
+                    --prerelease=false
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  build-and-upload:
-    needs: create-release
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            artifact_name: linux-x86_64
-            vcpkg_triplet: x64-linux-release
-          - os: windows-2025
-            target: x86_64-pc-windows-msvc
-            artifact_name: windows-x86_64
-            vcpkg_triplet: x64-windows-static-release
-          - os: macos-latest
-            target: x86_64-apple-darwin
-            artifact_name: macos-x86_64
-            vcpkg_triplet: x64-osx-release
-          - os: macos-latest
-            target: aarch64-apple-darwin
-            artifact_name: macos-arm64
-            vcpkg_triplet: arm64-osx-release
+    build-and-upload:
+        needs: create-release
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - os: ubuntu-latest
+                      target: x86_64-unknown-linux-gnu
+                      artifact_name: linux-x86_64
+                      vcpkg_triplet: x64-linux-release
+                    - os: windows-2025
+                      target: x86_64-pc-windows-msvc
+                      artifact_name: windows-x86_64
+                      vcpkg_triplet: x64-windows-static-release
+                    - os: macos-latest
+                      target: x86_64-apple-darwin
+                      artifact_name: macos-x86_64
+                      vcpkg_triplet: x64-osx-release
+                    - os: macos-latest
+                      target: aarch64-apple-darwin
+                      artifact_name: macos-arm64
+                      vcpkg_triplet: arm64-osx-release
 
-    runs-on: ${{ matrix.os }}
+        runs-on: ${{ matrix.os }}
 
-    steps:
-      - uses: actions/checkout@v4
+        steps:
+            - uses: actions/checkout@v4
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
+            - uses: jdx/mise-action@v3
+              with:
+                  cache_key: "mise-{{platform}}-{{file_hash}}"
 
-      - uses: prefix-dev/setup-pixi@v0.8.8
+            - name: Cache vcpkg packages
+              uses: actions/cache@v4
+              with:
+                  path: |
+                      ~/.cache/vcpkg
+                      ~/AppData/Local/vcpkg/archives
+                      ./target/vcpkg
+                  key: ${{ matrix.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.toml') }}
+                  restore-keys: |
+                      ${{ matrix.os }}-${{ matrix.target }}-
+                      ${{ matrix.os }}-
 
-      - uses: taiki-e/install-action@v2
-        with:
-          tool: just,sd,fd-find,cargo-vcpkg
+            - name: Set VCPKG environment variables
+              run: |
+                  echo "VCPKG_DEFAULT_TRIPLET=${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
+                  echo "VCPKG_DEFAULT_HOST_TRIPLET=${{ matrix.vcpkg_triplet }}" >>mise exec -E vcpkg cargo -- cargo build --release --target ${{ matrix.target }} -p createcog -p creatembtiles -p tiles2raster -p tileserver $GITHUB_ENV
+              shell: bash
 
-      - name: Cache vcpkg packages
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/vcpkg
-            ~/AppData/Local/vcpkg/archives
-            ./target/vcpkg
-          key: ${{ matrix.os }}-${{ matrix.target }}-${{ hashFiles('Cargo.toml') }}
-          restore-keys: |
-            ${{ matrix.os }}-${{ matrix.target }}-
-            ${{ matrix.os }}-
+            - name: Bootstrap vcpkg dependencies
+              run: just bootstrap ${{ matrix.vcpkg_triplet }} ${{ matrix.target }}
 
-      - name: Set VCPKG environment variables
-        run: |
-          echo "VCPKG_DEFAULT_TRIPLET=${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
-          echo "VCPKG_DEFAULT_HOST_TRIPLET=${{ matrix.vcpkg_triplet }}" >> $GITHUB_ENV
-        shell: bash
+            - name: Build tools for release
+              run: mise exec -E vcpkg cargo -- cargo build --release --target ${{ matrix.target }} -p createcog -p creatembtiles -p tiles2raster -p tileserver
 
-      - name: Bootstrap vcpkg dependencies
-        run: just bootstrap ${{ matrix.vcpkg_triplet }} ${{ matrix.target }}
+            - name: Create archives and upload (Unix)
+              if: matrix.os != 'windows-2025'
+              run: |
+                  # Create individual archives for each tool
+                  for tool in createcog creatembtiles tiles2raster tileserver; do
+                    mkdir -p ${tool}-temp
+                    cp target/${{ matrix.target }}/release/${tool} ${tool}-temp/
+                    tar -czf ${tool}-${{ matrix.artifact_name }}.tar.gz -C ${tool}-temp ${tool}
+                    rm -rf ${tool}-temp
+                    gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-${{ matrix.artifact_name }}.tar.gz
+                  done
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build tools for release
-        run: cargo build --release --target ${{ matrix.target }} -p createcog -p creatembtiles -p tiles2raster -p tileserver
-
-      - name: Create archives and upload (Unix)
-        if: matrix.os != 'windows-2025'
-        run: |
-          # Create individual archives for each tool
-          for tool in createcog creatembtiles tiles2raster tileserver; do
-            mkdir -p ${tool}-temp
-            cp target/${{ matrix.target }}/release/${tool} ${tool}-temp/
-            tar -czf ${tool}-${{ matrix.artifact_name }}.tar.gz -C ${tool}-temp ${tool}
-            rm -rf ${tool}-temp
-            gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-${{ matrix.artifact_name }}.tar.gz
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Create archives and upload (Windows)
-        if: matrix.os == 'windows-2025'
-        run: |
-          # Create individual archives for each tool
-          for tool in createcog creatembtiles tiles2raster tileserver; do
-            mkdir -p ${tool}-temp
-            cp target/${{ matrix.target }}/release/${tool}.exe ${tool}-temp/
-            cd ${tool}-temp
-            7z a ../${tool}-${{ matrix.artifact_name }}.zip ${tool}.exe
-            cd ..
-            rm -rf ${tool}-temp
-            gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-${{ matrix.artifact_name }}.zip
-          done
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
+            - name: Create archives and upload (Windows)
+              if: matrix.os == 'windows-2025'
+              run: |
+                  # Create individual archives for each tool
+                  for tool in createcog creatembtiles tiles2raster tileserver; do
+                    mkdir -p ${tool}-temp
+                    cp target/${{ matrix.target }}/release/${tool}.exe ${tool}-temp/
+                    cd ${tool}-temp
+                    7z a ../${tool}-${{ matrix.artifact_name }}.zip ${tool}.exe
+                    cd ..
+                    rm -rf ${tool}-temp
+                    gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-${{ matrix.artifact_name }}.zip
+                  done
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              shell: bash

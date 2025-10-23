@@ -45,10 +45,10 @@ test_release_simd:
     mise -E simd run test_simd --release
 
 test_debug_py: bootstrap_py
-    pixi run test_debug
+    mise exec -E vcpkg pixi -- pixi run test_debug
 
 test_release_py: bootstrap_py
-    pixi run test_release
+    mise exec -E vcpkg pixi -- pixi run test_release
 
 test_integration:
     mise -E vcpkg run test_integration --release
