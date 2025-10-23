@@ -23,39 +23,62 @@ pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterMetadata> {
     F64(DenseArray<f64, Metadata>),
 }
 
-macro_rules! unerase_raster_type_op {
-    ( $raster_op:ident, $ret:path ) => {
-        pub fn $raster_op(&self) -> $ret {
+/// Macro for applying an operation to an `AnyDenseArray` that returns a non-`AnyDenseArray` type.
+/// This is useful for methods like `rows()`, `columns()`, `is_empty()`, `len()`, etc.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Define a method that returns the same type regardless of variant
+/// apply_anydensearray_method!(rows, Rows);
+/// apply_anydensearray_method!(columns, Columns);
+/// apply_anydensearray_method!(is_empty, bool);
+/// apply_anydensearray_method!(len, usize);
+/// ```
+#[macro_export]
+macro_rules! apply_anydensearray_method {
+    ($method:ident, $ret:ty) => {
+        pub fn $method(&self) -> $ret {
             match self {
-                AnyDenseArray::U8(raster) => raster.$raster_op(),
-                AnyDenseArray::U16(raster) => raster.$raster_op(),
-                AnyDenseArray::U32(raster) => raster.$raster_op(),
-                AnyDenseArray::U64(raster) => raster.$raster_op(),
-                AnyDenseArray::I8(raster) => raster.$raster_op(),
-                AnyDenseArray::I16(raster) => raster.$raster_op(),
-                AnyDenseArray::I32(raster) => raster.$raster_op(),
-                AnyDenseArray::I64(raster) => raster.$raster_op(),
-                AnyDenseArray::F32(raster) => raster.$raster_op(),
-                AnyDenseArray::F64(raster) => raster.$raster_op(),
+                $crate::AnyDenseArray::U8(raster) => raster.$method(),
+                $crate::AnyDenseArray::U16(raster) => raster.$method(),
+                $crate::AnyDenseArray::U32(raster) => raster.$method(),
+                $crate::AnyDenseArray::U64(raster) => raster.$method(),
+                $crate::AnyDenseArray::I8(raster) => raster.$method(),
+                $crate::AnyDenseArray::I16(raster) => raster.$method(),
+                $crate::AnyDenseArray::I32(raster) => raster.$method(),
+                $crate::AnyDenseArray::I64(raster) => raster.$method(),
+                $crate::AnyDenseArray::F32(raster) => raster.$method(),
+                $crate::AnyDenseArray::F64(raster) => raster.$method(),
             }
         }
     };
 }
 
-macro_rules! unerase_raster_type_op_ref {
-    ( $raster_op:ident, $ret:path ) => {
-        pub fn $raster_op(&self) -> &$ret {
+/// Macro for applying an operation to an `AnyDenseArray` that returns a reference to a non-`AnyDenseArray` type.
+/// This is useful for methods like `metadata()` that return references.
+///
+/// # Examples
+///
+/// ```ignore
+/// // Define a method that returns a reference to the same type regardless of variant
+/// apply_anydensearray_method_ref!(metadata, Metadata);
+/// ```
+#[macro_export]
+macro_rules! apply_anydensearray_method_ref {
+    ($method:ident, $ret:ty) => {
+        pub fn $method(&self) -> &$ret {
             match self {
-                AnyDenseArray::U8(raster) => raster.$raster_op(),
-                AnyDenseArray::U16(raster) => raster.$raster_op(),
-                AnyDenseArray::U32(raster) => raster.$raster_op(),
-                AnyDenseArray::U64(raster) => raster.$raster_op(),
-                AnyDenseArray::I8(raster) => raster.$raster_op(),
-                AnyDenseArray::I16(raster) => raster.$raster_op(),
-                AnyDenseArray::I32(raster) => raster.$raster_op(),
-                AnyDenseArray::I64(raster) => raster.$raster_op(),
-                AnyDenseArray::F32(raster) => raster.$raster_op(),
-                AnyDenseArray::F64(raster) => raster.$raster_op(),
+                $crate::AnyDenseArray::U8(raster) => raster.$method(),
+                $crate::AnyDenseArray::U16(raster) => raster.$method(),
+                $crate::AnyDenseArray::U32(raster) => raster.$method(),
+                $crate::AnyDenseArray::U64(raster) => raster.$method(),
+                $crate::AnyDenseArray::I8(raster) => raster.$method(),
+                $crate::AnyDenseArray::I16(raster) => raster.$method(),
+                $crate::AnyDenseArray::I32(raster) => raster.$method(),
+                $crate::AnyDenseArray::I64(raster) => raster.$method(),
+                $crate::AnyDenseArray::F32(raster) => raster.$method(),
+                $crate::AnyDenseArray::F64(raster) => raster.$method(),
             }
         }
     };
@@ -80,9 +103,9 @@ macro_rules! apply_to_anydensearray {
 }
 
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
-    unerase_raster_type_op!(rows, Rows);
-    unerase_raster_type_op!(columns, Columns);
-    unerase_raster_type_op_ref!(metadata, Metadata);
+    apply_anydensearray_method!(rows, Rows);
+    apply_anydensearray_method!(columns, Columns);
+    apply_anydensearray_method_ref!(metadata, Metadata);
 
     /// Applies a unary operation to each element of the array and returns a new array with the result.
     /// If the type of the array does not match the type of the operation, the internal raster is first cast
@@ -240,18 +263,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 
     pub fn with_metadata<M: ArrayMetadata>(self, meta: M) -> Result<AnyDenseArray<M>> {
-        Ok(match self {
-            AnyDenseArray::U8(raster) => AnyDenseArray::U8(raster.with_metadata(meta)?),
-            AnyDenseArray::U16(raster) => AnyDenseArray::U16(raster.with_metadata(meta)?),
-            AnyDenseArray::U32(raster) => AnyDenseArray::U32(raster.with_metadata(meta)?),
-            AnyDenseArray::U64(raster) => AnyDenseArray::U64(raster.with_metadata(meta)?),
-            AnyDenseArray::I8(raster) => AnyDenseArray::I8(raster.with_metadata(meta)?),
-            AnyDenseArray::I16(raster) => AnyDenseArray::I16(raster.with_metadata(meta)?),
-            AnyDenseArray::I32(raster) => AnyDenseArray::I32(raster.with_metadata(meta)?),
-            AnyDenseArray::I64(raster) => AnyDenseArray::I64(raster.with_metadata(meta)?),
-            AnyDenseArray::F32(raster) => AnyDenseArray::F32(raster.with_metadata(meta)?),
-            AnyDenseArray::F64(raster) => AnyDenseArray::F64(raster.with_metadata(meta)?),
-        })
+        Ok(apply_to_anydensearray!(self, raster, raster.with_metadata(meta)?))
     }
 
     pub fn min_max(&self) -> Result<Option<std::ops::RangeInclusive<f64>>> {
@@ -286,35 +298,9 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         Ok(())
     }
 
-    pub fn is_empty(&self) -> bool {
-        match self {
-            AnyDenseArray::U8(raster) => raster.is_empty(),
-            AnyDenseArray::U16(raster) => raster.is_empty(),
-            AnyDenseArray::U32(raster) => raster.is_empty(),
-            AnyDenseArray::U64(raster) => raster.is_empty(),
-            AnyDenseArray::I8(raster) => raster.is_empty(),
-            AnyDenseArray::I16(raster) => raster.is_empty(),
-            AnyDenseArray::I32(raster) => raster.is_empty(),
-            AnyDenseArray::I64(raster) => raster.is_empty(),
-            AnyDenseArray::F32(raster) => raster.is_empty(),
-            AnyDenseArray::F64(raster) => raster.is_empty(),
-        }
-    }
+    apply_anydensearray_method!(is_empty, bool);
 
-    pub fn len(&self) -> usize {
-        match self {
-            AnyDenseArray::U8(raster) => raster.len(),
-            AnyDenseArray::U16(raster) => raster.len(),
-            AnyDenseArray::U32(raster) => raster.len(),
-            AnyDenseArray::U64(raster) => raster.len(),
-            AnyDenseArray::I8(raster) => raster.len(),
-            AnyDenseArray::I16(raster) => raster.len(),
-            AnyDenseArray::I32(raster) => raster.len(),
-            AnyDenseArray::I64(raster) => raster.len(),
-            AnyDenseArray::F32(raster) => raster.len(),
-            AnyDenseArray::F64(raster) => raster.len(),
-        }
-    }
+    apply_anydensearray_method!(len, usize);
 
     #[cfg(feature = "gdal")]
     #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
