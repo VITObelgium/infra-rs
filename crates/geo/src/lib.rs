@@ -3,6 +3,7 @@
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
 mod anydensearray;
+pub mod anydensearrayalgo;
 mod anydensearrayops;
 mod array;
 mod arraydatatype;

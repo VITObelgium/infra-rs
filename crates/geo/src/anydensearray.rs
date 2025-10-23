@@ -61,6 +61,24 @@ macro_rules! unerase_raster_type_op_ref {
     };
 }
 
+#[macro_export]
+macro_rules! apply_to_anydensearray {
+    ($array:expr, $var:ident, $expr:expr) => {
+        match $array {
+            $crate::AnyDenseArray::U8($var) => $crate::AnyDenseArray::U8($expr),
+            $crate::AnyDenseArray::U16($var) => $crate::AnyDenseArray::U16($expr),
+            $crate::AnyDenseArray::U32($var) => $crate::AnyDenseArray::U32($expr),
+            $crate::AnyDenseArray::U64($var) => $crate::AnyDenseArray::U64($expr),
+            $crate::AnyDenseArray::I8($var) => $crate::AnyDenseArray::I8($expr),
+            $crate::AnyDenseArray::I16($var) => $crate::AnyDenseArray::I16($expr),
+            $crate::AnyDenseArray::I32($var) => $crate::AnyDenseArray::I32($expr),
+            $crate::AnyDenseArray::I64($var) => $crate::AnyDenseArray::I64($expr),
+            $crate::AnyDenseArray::F32($var) => $crate::AnyDenseArray::F32($expr),
+            $crate::AnyDenseArray::F64($var) => $crate::AnyDenseArray::F64($expr),
+        }
+    };
+}
+
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     unerase_raster_type_op!(rows, Rows);
     unerase_raster_type_op!(columns, Columns);
@@ -543,5 +561,50 @@ mod tests {
         assert!(TryInto::<&DenseArray<i32>>::try_into(&type_erased).is_err());
         assert!(TryInto::<&DenseArray<f32>>::try_into(&type_erased).is_err());
         assert!(TryInto::<&DenseArray<f64>>::try_into(&type_erased).is_err());
+    }
+
+    #[test]
+    fn apply_to_anydensearray_macro() {
+        const TILE_WIDTH: Columns = Columns(5);
+        const TILE_HEIGHT: Rows = Rows(5);
+
+        // Test with U32 variant
+        let raster_u32 = DenseArray::new(
+            RasterMetadata::sized(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH), ArrayDataType::Uint32),
+            allocate::aligned_vec_from_iter(0..(TILE_WIDTH * TILE_HEIGHT) as u32),
+        )
+        .unwrap();
+
+        let any_array_u32 = AnyDenseArray::U32(raster_u32.clone());
+
+        // Test that the macro correctly unpacks and repacks
+        let result = apply_to_anydensearray!(any_array_u32, arr, arr.clone());
+
+        match result {
+            AnyDenseArray::U32(arr) => {
+                assert_eq!(arr.rows(), raster_u32.rows());
+                assert_eq!(arr.columns(), raster_u32.columns());
+            }
+            _ => panic!("Expected U32 variant"),
+        }
+
+        // Test with F64 variant
+        let raster_f64 = DenseArray::new(
+            RasterMetadata::sized(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH), ArrayDataType::Float64),
+            allocate::aligned_vec_from_iter((0..(TILE_WIDTH * TILE_HEIGHT)).map(|i| i as f64)),
+        )
+        .unwrap();
+
+        let any_array_f64 = AnyDenseArray::F64(raster_f64.clone());
+
+        let result = apply_to_anydensearray!(any_array_f64, arr, arr.clone());
+
+        match result {
+            AnyDenseArray::F64(arr) => {
+                assert_eq!(arr.rows(), raster_f64.rows());
+                assert_eq!(arr.columns(), raster_f64.columns());
+            }
+            _ => panic!("Expected F64 variant"),
+        }
     }
 }
