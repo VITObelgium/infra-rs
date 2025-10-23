@@ -81,7 +81,7 @@ jobs:
               shell: bash
 
             - name: Bootstrap vcpkg dependencies
-              run: just bootstrap ${{ matrix.vcpkg_triplet }} ${{ matrix.target }}
+              run: mise -E vcpkg run bootstrap --target ${{ matrix.cfg.target }} --triplet ${{ matrix.cfg.triplet }}
 
             - name: Build tools for release
               run: mise exec -E vcpkg cargo -- cargo build --release --target ${{ matrix.target }} -p createcog -p creatembtiles -p tiles2raster -p tileserver
