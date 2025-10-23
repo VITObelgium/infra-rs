@@ -1,6 +1,6 @@
 use crate::{
     Array, ArrayCopy, ArrayMetadata, ArrayNum, Cell, Error, RasterSize, Result,
-    array::{ArrayInterop, Columns, Rows, RasterWindow},
+    array::{ArrayInterop, Columns, RasterWindow, Rows},
     densearrayiterators, densearrayutil,
     raster::{self},
     rastermetadata::RasterMetadata,
@@ -54,13 +54,6 @@ impl<T: Clone + ArrayNum, Metadata: Clone + ArrayMetadata> Clone for DenseArray<
 }
 
 impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
-    pub fn empty() -> Self {
-        DenseArray {
-            meta: Metadata::sized_with_nodata_as::<T>(RasterSize::with_rows_cols(Rows(0), Columns(0)), Some(T::NODATA)),
-            data: allocate::new_aligned_vec(),
-        }
-    }
-
     pub fn with_metadata<M: ArrayMetadata>(self, meta: M) -> Result<DenseArray<T, M>> {
         assert!(meta.size() == self.size());
         let (_, data) = self.into_raw_parts();
@@ -181,6 +174,13 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
         }
 
         Ok(DenseArray { meta, data })
+    }
+
+    fn empty() -> Self {
+        DenseArray {
+            meta: Metadata::sized_with_nodata_as::<T>(RasterSize::with_rows_cols(Rows(0), Columns(0)), Some(T::NODATA)),
+            data: allocate::new_aligned_vec(),
+        }
     }
 
     fn from_iter_opt<Iter>(meta: Metadata, iter: Iter) -> Result<Self>

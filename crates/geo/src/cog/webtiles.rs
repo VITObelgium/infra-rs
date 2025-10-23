@@ -24,17 +24,23 @@ pub enum TileSource {
     Unaligned(Vec<(TiffChunkLocation, CutOut)>),
 }
 
+#[derive(Debug, Clone, Default)]
+struct ZoomLevelInfo {
+    tile_aligned: bool, // Web tiles are aligned with COG tiles at this zoom level
+    tiles: HashMap<Tile, TileSource>,
+}
+
 #[derive(Debug, Clone)]
 /// `WebTiles` is a structure that holds the necessary information to read Web xyz tiles from a cog.
 /// It is constructed from the metadata of a COG file, which contains information about the tiff tile layout and the locations of the tiff tiles in the COG.
 /// Tiff tiles don't always have a one-to-one mapping to web tiles, so this structure contains the necessary information to create web tiles from 1 or more tiff tiles.
 pub struct WebTiles {
-    zoom_levels: Vec<HashMap<Tile, TileSource>>,
+    zoom_levels: Vec<ZoomLevelInfo>,
 }
 
 impl WebTiles {
     pub fn from_cog_metadata(meta: &GeoTiffMetadata) -> Result<Self> {
-        let mut zoom_levels = vec![HashMap::default(); 22];
+        let mut zoom_levels = vec![ZoomLevelInfo::default(); 22];
 
         let tile_size = meta.chunk_row_length();
         let mut zoom_level = Tile::zoom_level_for_pixel_size(meta.geo_reference.cell_size_x(), ZoomLevelStrategy::Closest, tile_size);
@@ -65,15 +71,18 @@ impl WebTiles {
             let bottom_right_aligned = br_diff.x().abs() < 1e-6 && br_diff.y().abs() < 1e-6;
             let tile_aligned = top_left_aligned && bottom_right_aligned;
 
+            if zoom_level as usize >= zoom_levels.len() {
+                zoom_levels.resize(zoom_level as usize + 1, ZoomLevelInfo::default());
+            }
+
+            zoom_levels[zoom_level as usize].tile_aligned = tile_aligned;
+
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
                 tiles.into_iter().zip(&overview.chunk_locations).for_each(|(web_tile, cog_tile)| {
-                    let zoom_level = web_tile.z as usize;
-                    if zoom_level >= zoom_levels.len() {
-                        zoom_levels.resize(zoom_level + 1, HashMap::default());
-                    }
-
-                    zoom_levels[web_tile.z as usize].insert(web_tile, TileSource::Aligned(*cog_tile));
+                    zoom_levels[web_tile.z as usize]
+                        .tiles
+                        .insert(web_tile, TileSource::Aligned(*cog_tile));
                 });
             } else {
                 let overview_geo_ref = GeoReference::with_bottom_left_origin(
@@ -99,7 +108,9 @@ impl WebTiles {
                         }
 
                         if !tile_sources.is_empty() {
-                            zoom_levels[tile.z as usize].insert(*tile, TileSource::Unaligned(tile_sources));
+                            zoom_levels[tile.z as usize]
+                                .tiles
+                                .insert(*tile, TileSource::Unaligned(tile_sources));
                         }
                     }
                 }
@@ -114,7 +125,7 @@ impl WebTiles {
     }
 
     pub fn tile_source(&self, tile: &Tile) -> Option<&TileSource> {
-        self.zoom_levels.get(tile.z as usize).and_then(|level| level.get(tile))
+        self.zoom_levels.get(tile.z as usize).and_then(|level| level.tiles.get(tile))
     }
 
     pub fn zoom_level_tile_sources(&self, zoom_level: i32) -> Option<&HashMap<Tile, TileSource>> {
@@ -122,13 +133,13 @@ impl WebTiles {
             return None;
         }
 
-        Some(&self.zoom_levels[zoom_level as usize])
+        Some(&self.zoom_levels[zoom_level as usize].tiles)
     }
 
     pub fn min_zoom(&self) -> i32 {
         let mut min_zoom = 0;
         for zoom_level in &self.zoom_levels {
-            if zoom_level.is_empty() {
+            if zoom_level.tiles.is_empty() {
                 min_zoom += 1;
             } else {
                 break;
@@ -150,7 +161,7 @@ impl WebTiles {
         let mut max_tile_y = i32::MIN;
 
         if let Some(last_zoom_level) = self.zoom_levels.last() {
-            for (tile, _) in last_zoom_level.iter().filter(|(_, loc)| match loc {
+            for (tile, _) in last_zoom_level.tiles.iter().filter(|(_, loc)| match loc {
                 TileSource::Aligned(loc) => loc.size > 0,
                 TileSource::Unaligned(_) => false, // Max zoom levels should not have unaligned tiles
             }) {
@@ -184,10 +195,10 @@ impl WebTiles {
     }
 }
 
-fn trim_empty_zoom_levels(zoom_levels: &mut Vec<HashMap<Tile, TileSource>>) {
+fn trim_empty_zoom_levels(zoom_levels: &mut Vec<ZoomLevelInfo>) {
     // Remove empty zoom levels from the end
     while let Some(last) = zoom_levels.last() {
-        if last.is_empty() {
+        if last.tiles.is_empty() {
             zoom_levels.pop();
         } else {
             break;

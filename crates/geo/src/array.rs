@@ -171,6 +171,9 @@ pub trait Array:
     /// If this is not the case `Array::new_process_nodata` should be used instead.
     fn new(meta: Self::Metadata, data: AlignedVec<Self::Pixel>) -> Result<Self>;
 
+    /// Create an empty raster with zero rows and columns.
+    fn empty() -> Self;
+
     /// Create a new raster from an iterator of optional pixels where None values will become nodata.
     fn from_iter_opt<Iter>(meta: Self::Metadata, iter: Iter) -> Result<Self>
     where

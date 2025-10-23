@@ -4,7 +4,7 @@ use crate::{
 };
 use inf::allocate::{self};
 
-pub fn crop<RasterType>(ras: &mut RasterType) -> RasterType
+pub fn crop<RasterType>(ras: RasterType) -> RasterType
 where
     RasterType: Array,
 {
@@ -13,12 +13,9 @@ where
 
     // Find the first row from top that contains data
     let top_row = (0..rows).find(|&row| ras.row_slice(row).iter().any(|val| !val.is_nodata()));
-
-    // If no data found, return an empty raster
     let Some(top_row) = top_row else {
-        let empty_size = RasterSize::with_rows_cols(Rows(0), Columns(0));
-        let empty_meta = RasterType::Metadata::sized_with_nodata(empty_size, ras.metadata().nodata());
-        return RasterType::filled_with_nodata(empty_meta);
+        // Not a single row contained data
+        return RasterType::empty();
     };
 
     // Find the last row from bottom that contains data
@@ -36,26 +33,27 @@ where
         .find(|&col| ras.col_iter(col).any(|val| !val.is_nodata()))
         .unwrap_or(left_col);
 
-    // Calculate new dimensions
     let new_rows = bottom_row - top_row + 1;
     let new_cols = right_col - left_col + 1;
     let new_size = RasterSize::with_rows_cols(Rows(new_rows), Columns(new_cols));
 
-    // Create new metadata
-    let new_meta = RasterType::Metadata::sized_with_nodata(new_size, ras.metadata().nodata());
+    if new_rows == rows && new_cols == cols {
+        // No cropping needed
+        return ras;
+    }
 
-    // Create new data buffer and copy the cropped region
-    let mut new_data = allocate::aligned_vec_with_capacity((new_rows * new_cols) as usize);
+    let cropped_meta = RasterType::Metadata::sized_with_nodata(new_size, ras.metadata().nodata());
+    let mut cropped_data = allocate::aligned_vec_with_capacity((new_rows * new_cols) as usize);
 
+    // TODO  optimize with a single copy per row
     for row in top_row..=bottom_row {
         for col in left_col..=right_col {
             let index = (row * cols + col) as usize;
-            new_data.push(ras.as_slice()[index]);
+            cropped_data.push(ras.as_slice()[index]);
         }
     }
 
-    // Create and return the new raster
-    RasterType::new(new_meta, new_data).expect("Failed to create cropped raster")
+    RasterType::new(cropped_meta, cropped_data).expect("Failed to create cropped raster")
 }
 
 #[cfg(test)]
@@ -73,7 +71,7 @@ mod tests {
     fn crop_removes_nodata_edges<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(5), Columns(6));
         #[rustfmt::skip]
-        let mut raster = R::new(
+        let raster = R::new(
             RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD, NOD, NOD, NOD, NOD,
@@ -95,7 +93,7 @@ mod tests {
             ]),
         )?;
 
-        let result = crop(&mut raster);
+        let result = crop(raster);
         assert_eq!(result.size(), expected.size());
         assert_eq!(result, expected);
 
@@ -106,7 +104,7 @@ mod tests {
     fn crop_single_data_cell<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(3), Columns(3));
         #[rustfmt::skip]
-        let mut raster = R::new(
+        let raster = R::new(
             RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD, NOD,
@@ -122,7 +120,7 @@ mod tests {
             create_vec(&[42.0]),
         )?;
 
-        let result = crop(&mut raster);
+        let result = crop(raster);
         assert_eq!(result.size(), expected.size());
         assert_eq!(result, expected);
 
@@ -133,7 +131,7 @@ mod tests {
     fn crop_all_nodata<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(3), Columns(3));
         #[rustfmt::skip]
-        let mut raster = R::new(
+        let raster = R::new(
             RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD, NOD,
@@ -142,7 +140,7 @@ mod tests {
             ]),
         )?;
 
-        let result = crop(&mut raster);
+        let result = crop(raster);
         assert_eq!(result.size().rows.count(), 0);
         assert_eq!(result.size().cols.count(), 0);
 
@@ -153,7 +151,7 @@ mod tests {
     fn crop_no_cropping_needed<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(2), Columns(2));
         #[rustfmt::skip]
-        let mut raster = R::new(
+        let raster = R::new(
             RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 1.0, 2.0,
@@ -161,8 +159,7 @@ mod tests {
             ]),
         )?;
 
-        let result = crop(&mut raster);
-        assert_eq!(result.size(), size);
+        let result = crop(raster.clone());
         assert_eq!(result, raster);
 
         Ok(())
@@ -172,7 +169,7 @@ mod tests {
     fn crop_partial_edges<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(4), Columns(5));
         #[rustfmt::skip]
-        let mut raster = R::new(
+        let raster = R::new(
             RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 NOD, NOD, NOD, NOD, NOD,
@@ -192,7 +189,7 @@ mod tests {
             ]),
         )?;
 
-        let result = crop(&mut raster);
+        let result = crop(raster);
         assert_eq!(result.size(), expected.size());
         assert_eq!(result, expected);
 
@@ -203,7 +200,7 @@ mod tests {
     fn crop_corners_only<R: Array<Metadata = RasterMetadata>>() -> Result<()> {
         let size = RasterSize::with_rows_cols(Rows(4), Columns(4));
         #[rustfmt::skip]
-        let mut raster = R::new(
+        let raster = R::new(
             RasterMetadata::sized_with_nodata(size, Some(NOD)),
             create_vec(&[
                 1.0, NOD, NOD, 2.0,
@@ -225,7 +222,7 @@ mod tests {
             ]),
         )?;
 
-        let result = crop(&mut raster);
+        let result = crop(raster);
         assert_eq!(result.size(), expected.size());
         assert_eq!(result, expected);
 
