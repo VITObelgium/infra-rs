@@ -56,7 +56,6 @@ run = [
             {% set triplet = triplet_opt %}
         {% endif %}
         echo Bootstrapping vcpkg:{{triplet}} on {{os()}} {{arch()}}... && \
-        git config --global core.longpaths true && \
         cp .cargo/config.toml.in .cargo/config.vcpkg.toml && \
         mise exec -E vcpkg sd -- sd @CARGO_VCPKG_TRIPLET@ {{triplet}} .cargo/config.vcpkg.toml && \
         mise exec -E vcpkg sd -- sd @CARGO_VCPKG_HOST_TRIPLET@ {{env.VCPKG_DEFAULT_HOST_TRIPLET}} .cargo/config.vcpkg.toml && \
