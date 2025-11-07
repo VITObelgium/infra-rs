@@ -20,6 +20,7 @@ pub struct TileCreationOptions {
     pub max_zoom: Option<i32>,
     pub zoom_level_selection: Option<ZoomLevelSelection>,
     pub tile_size: u32,
+    pub multi_band: bool,
 }
 
 fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions> {
@@ -49,6 +50,13 @@ pub fn print_gdal_translate_command(input: &Path, opts: TileCreationOptions) -> 
     Ok(())
 }
 
-pub fn create_cog_tiles(input: &Path, output: PathBuf, opts: TileCreationOptions) -> Result<()> {
-    Ok(geo::cog::create_cog_tiles(input, &output, create_opts(opts)?)?)
+pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions) -> Result<()> {
+    let multi_band = opts.multi_band;
+    let cog_create_opts = create_opts(opts)?;
+
+    if multi_band {
+        Ok(geo::cog::create_multiband_cog_tiles(input, &output, cog_create_opts)?)
+    } else {
+        Ok(geo::cog::create_cog_tiles(&PathBuf::from(input), &output, cog_create_opts)?)
+    }
 }
