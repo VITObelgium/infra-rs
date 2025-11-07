@@ -1,5 +1,6 @@
 use std::io::{Read, Seek};
 
+use itertools::Itertools;
 use tiff::{
     decoder::{Decoder, ifd::Value},
     tags::Tag,
@@ -196,8 +197,16 @@ fn read_projection_info<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<Opti
 fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffMetadata> {
     let bits_per_sample = match decoder.get_tag(Tag::BitsPerSample) {
         Ok(Value::Short(bits)) => bits,
-        Ok(Value::List(_)) => {
-            return Err(Error::InvalidArgument("Alpha channels are not supported".into()));
+        Ok(Value::List(bits_list)) => {
+            if !bits_list.iter().all_equal() {
+                return Err(Error::InvalidArgument("Alpha channels are not supported".into()));
+            }
+
+            if let Some(Value::Short(bits)) = bits_list.first() {
+                *bits
+            } else {
+                return Err(Error::InvalidArgument("Unexpected bit depth information".into()));
+            }
         }
         _ => {
             return Err(Error::InvalidArgument("Unexpected bit depth information".into()));
@@ -215,6 +224,16 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         (Value::Short(2), 64) => ArrayDataType::Int64,
         (Value::Short(3), 32) => ArrayDataType::Float32,
         (Value::Short(3), 64) => ArrayDataType::Float64,
+        (Value::List(ref list), 8) if list.iter().all(|v| matches!(v, Value::Short(1))) => ArrayDataType::Uint8,
+        (Value::List(ref list), 16) if list.iter().all(|v| matches!(v, Value::Short(1))) => ArrayDataType::Uint16,
+        (Value::List(ref list), 32) if list.iter().all(|v| matches!(v, Value::Short(1))) => ArrayDataType::Uint32,
+        (Value::List(ref list), 64) if list.iter().all(|v| matches!(v, Value::Short(1))) => ArrayDataType::Uint64,
+        (Value::List(ref list), 8) if list.iter().all(|v| matches!(v, Value::Short(2))) => ArrayDataType::Int8,
+        (Value::List(ref list), 16) if list.iter().all(|v| matches!(v, Value::Short(2))) => ArrayDataType::Int16,
+        (Value::List(ref list), 32) if list.iter().all(|v| matches!(v, Value::Short(2))) => ArrayDataType::Int32,
+        (Value::List(ref list), 64) if list.iter().all(|v| matches!(v, Value::Short(2))) => ArrayDataType::Int64,
+        (Value::List(ref list), 32) if list.iter().all(|v| matches!(v, Value::Short(3))) => ArrayDataType::Float32,
+        (Value::List(ref list), 64) if list.iter().all(|v| matches!(v, Value::Short(3))) => ArrayDataType::Float64,
         (data_type, _) => {
             return Err(Error::InvalidArgument(format!(
                 "Unsupported data type: {data_type:?} {bits_per_sample}"
@@ -223,13 +242,13 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
     };
 
     let samples_per_pixel = decoder.get_tag_u32(Tag::SamplesPerPixel)?;
-    if samples_per_pixel != 1 {
-        // When we will support multi-band COGs, the unpredict functions will need to be adjusted accordingly
-        // or we will need to use a different approach to handle multi-band data (e.g vec of DenseArray)
-        return Err(Error::InvalidArgument(format!(
-            "Only single band COGs are supported ({samples_per_pixel} bands found)",
-        )));
-    }
+    // if samples_per_pixel != 1 {
+    //     // When we will support multi-band COGs, the unpredict functions will need to be adjusted accordingly
+    //     // or we will need to use a different approach to handle multi-band data (e.g vec of DenseArray)
+    //     return Err(Error::InvalidArgument(format!(
+    //         "Only single band COGs are supported ({samples_per_pixel} bands found)",
+    //     )));
+    // }
 
     let compression = match decoder.get_tag_u32(Tag::Compression)? {
         1 => None,

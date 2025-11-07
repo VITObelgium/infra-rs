@@ -17,7 +17,7 @@ mod createtiles;
 #[command(version)]
 pub struct Opt {
     #[arg(long = "input", short = 'i')]
-    pub input: PathBuf,
+    pub input: String,
 
     #[arg(long = "output", short = 'o')]
     pub output: PathBuf,
@@ -33,6 +33,9 @@ pub struct Opt {
 
     #[arg(long = "tile-size", default_value = "512")]
     pub tile_size: u32,
+
+    #[arg(long = "multi-band")]
+    pub multi_band: bool,
 
     #[arg(long = "noprogress")]
     pub no_progress: bool,
@@ -66,13 +69,14 @@ fn main() -> Result<()> {
         max_zoom: opt.max_zoom,
         tile_size: opt.tile_size,
         zoom_level_selection: opt.zoom_level_selection,
+        multi_band: opt.multi_band,
     };
 
     let progress = multi.add(ProgressBar::new(100));
     let p = progress.clone();
 
     if opt.print_command {
-        print_gdal_translate_command(&opt.input, tile_opts)?;
+        print_gdal_translate_command(&PathBuf::from(opt.input), tile_opts)?;
     } else {
         create_cog_tiles(&opt.input, opt.output, tile_opts)?;
         p.finish_with_message("COG creation done");

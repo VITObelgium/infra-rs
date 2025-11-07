@@ -124,7 +124,7 @@ run = [
         cargo nextest run --config .cargo/config.vcpkg.toml \
             {% if flag(name='release') == "true" %}--release{% endif %} \
             {% if tgt != "" %}--target {{ tgt }}{% endif %} \
-            --no-default-features --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+            --no-default-features --no-capture --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon read_multiband_raster
     """
 ]
 
@@ -170,6 +170,16 @@ description = 'Run the unit tests with vcpkg dependencies and python interop'
 depends = ['bootstrap_py']
 run = [
     "pixi run test_release"
+]
+
+[tasks.createcog]
+description = 'Run the createcog tool'
+run = [
+    """
+        {% set input = option(name="input") | default(value="") %}
+        {% set output = option(name="output") | default(value="") %}
+        cargo run -p createcog --release -- --input {{ input }} --output {{ output }} {% if flag(name='multi-band') == "true" %}--multi-band{% endif %}
+    """
 ]
 
 [tasks.doc]

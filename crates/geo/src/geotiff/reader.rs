@@ -146,6 +146,8 @@ impl GeoTiffReader {
                 return Err(Error::Runtime("No tiles available in the geotiff".into()));
             }
 
+            dbg!(overview.chunk_locations.len());
+
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
                     return self.read_tiled_raster_as::<T, M>(&overview, tile_size);
@@ -509,6 +511,21 @@ mod tests {
 
         let raster = geotiff.read_raster_as::<u8, GeoReference>()?;
         let gdal_raster = DenseRaster::<u8>::read(input)?;
+
+        assert_eq!(raster, gdal_raster);
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_multiband_raster() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband.tif");
+
+        let mut geotiff = GeoTiffReader::from_file(&input)?;
+        assert_eq!(geotiff.metadata().data_layout, ChunkDataLayout::Tiled(512));
+
+        let raster = geotiff.read_raster_as::<f32, GeoReference>()?;
+        let gdal_raster = DenseRaster::<f32>::read(input)?;
 
         assert_eq!(raster, gdal_raster);
 

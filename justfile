@@ -95,8 +95,11 @@ simdbench:
 rasterbenchbaseline name:
     cargo bench --bench rasterops --package=geo -- --save-baseline {{ name }}
 
-create_tiles input output:
-    cargo run -p creatembtiles --release -- --input {{ input }} --output {{ output }} --tile-size 512
+createcog input output:
+    mise -E vcpkg run createcog --input "{{input}}" --output {{output}}
+
+createmultibandcog input output:
+    mise -E vcpkg run createcog --input "{{input}}" --output {{output}} --multi-band
 
 tiles2raster zoom tile_size="256":
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.vrt?tile_format=vrt&tile_size={{ tile_size }}" --zoom {{ zoom }} --tile-size={{ tile_size }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_{{ zoom }}_{{ tile_size }}.tif

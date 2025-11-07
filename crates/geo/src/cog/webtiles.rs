@@ -22,6 +22,8 @@ const LANES: usize = inf::simd::LANES;
 pub enum TileSource {
     Aligned(TiffChunkLocation),
     Unaligned(Vec<(TiffChunkLocation, CutOut)>),
+    MultiBandAligned(Vec<TiffChunkLocation>),
+    MultiBandUnaligned(Vec<(Vec<TiffChunkLocation>, CutOut)>),
 }
 
 #[derive(Debug, Clone, Default)]
@@ -79,6 +81,7 @@ impl WebTiles {
 
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
+                dbg!(overview, tiles.len(), overview.chunk_locations.len());
                 tiles.into_iter().zip(&overview.chunk_locations).for_each(|(web_tile, cog_tile)| {
                     zoom_levels[web_tile.z as usize]
                         .tiles
@@ -94,6 +97,7 @@ impl WebTiles {
                 );
 
                 let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level, tile_size);
+                dbg!(overview, tiles.len(), overview.chunk_locations.len());
                 if let Ok(cog_tile_bounds) = create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size) {
                     for tile in &tiles {
                         let mut tile_sources = Vec::new();
@@ -163,7 +167,8 @@ impl WebTiles {
         if let Some(last_zoom_level) = self.zoom_levels.last() {
             for (tile, _) in last_zoom_level.tiles.iter().filter(|(_, loc)| match loc {
                 TileSource::Aligned(loc) => loc.size > 0,
-                TileSource::Unaligned(_) => false, // Max zoom levels should not have unaligned tiles
+                TileSource::Unaligned(_) | TileSource::MultiBandUnaligned(_) => false, // Max zoom level should be aligned
+                TileSource::MultiBandAligned(locs) => locs.iter().all(|loc| loc.size > 0),
             }) {
                 min_tile_x = min_tile_x.min(tile.x);
                 max_tile_x = max_tile_x.max(tile.x);
@@ -490,6 +495,9 @@ impl WebTilesReader {
                 ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(tile_sources, cog_chunks)?),
                 ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
             }),
+            TileSource::MultiBandAligned(_) | TileSource::MultiBandUnaligned(_) => {
+                Err(Error::InvalidArgument("Single tile request on multi band raster".into()))
+            }
         }
     }
 
@@ -529,6 +537,9 @@ impl WebTilesReader {
 
                     let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
                     Ok(Some(self.merge_tile_sources(tile_sources, &cog_chunk_refs)?))
+                }
+                TileSource::MultiBandAligned(_) | TileSource::MultiBandUnaligned(_) => {
+                    Err(Error::InvalidArgument("Single tile request on multi band raster".into()))
                 }
             }
         } else {
@@ -855,11 +866,11 @@ mod tests {
             let tile = Tile { z: 7, x: 66, y: 42 };
             let tile_source = cog.tile_source(&tile).unwrap();
             match tile_source {
-                TileSource::Aligned(_) => {
-                    panic!("Expected unaligned tile source for tile {tile:?}");
-                }
                 TileSource::Unaligned(tile_sources) => {
                     assert_eq!(1, tile_sources.len());
+                }
+                _ => {
+                    panic!("Expected unaligned single band tile source for tile {tile:?}");
                 }
             }
 
@@ -898,11 +909,11 @@ mod tests {
             let tile = Tile { z: 8, x: 131, y: 85 };
             let tile_source = cog.tile_source(&tile).unwrap();
             match tile_source {
-                TileSource::Aligned(_) => {
-                    panic!("Expected unaligned tile source for tile {tile:?}");
-                }
                 TileSource::Unaligned(tile_sources) => {
                     assert_eq!(2, tile_sources.len());
+                }
+                _ => {
+                    panic!("Expected unaligned single band tile source for tile {tile:?}");
                 }
             }
 
@@ -1065,7 +1076,6 @@ mod tests {
 
         let tile = tile_sources.get(&web_tile).unwrap();
         match tile {
-            TileSource::Aligned(_) => panic!("Expected unaligned tile source for tile {tile:?}"),
             TileSource::Unaligned(items) => {
                 assert_eq!(1, items.len());
                 let (tile_location, cutout) = items.first().unwrap();
@@ -1081,6 +1091,9 @@ mod tests {
                 assert_eq!(cutout.src_row_offset, 0);
                 assert_eq!(cutout.dst_col_offset, 0);
                 assert_eq!(cutout.dst_row_offset, 0);
+            }
+            _ => {
+                panic!("Expected unaligned single band tile source for tile {tile:?}");
             }
         }
 
@@ -1104,7 +1117,6 @@ mod tests {
 
         let tile = tile_sources.get(&web_tile).unwrap();
         match tile {
-            TileSource::Aligned(_) => panic!("Expected unaligned tile source for tile {tile:?}"),
             TileSource::Unaligned(items) => {
                 assert_eq!(2, items.len());
                 let (tile_location, cutout) = &items[0];
@@ -1126,6 +1138,9 @@ mod tests {
                 assert_eq!(cutout.src_row_offset, 0);
                 assert_eq!(cutout.dst_col_offset, 256);
                 assert_eq!(cutout.dst_row_offset, 256);
+            }
+            _ => {
+                panic!("Expected unaligned single band tile source for tile {tile:?}");
             }
         }
 

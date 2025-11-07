@@ -2,6 +2,10 @@ use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum Error {
+    #[error("Glob pattern error: {0}")]
+    GlobPatternError(#[from] glob::PatternError),
+    #[error("Glob error: {0}")]
+    GlobError(#[from] glob::GlobError),
     #[error("Raster dimensions do not match ({}x{}) <-> ({}x{})", .size1.0, .size1.1, .size2.0, .size2.1)]
     SizeMismatch { size1: (usize, usize), size2: (usize, usize) },
     #[error("The operation has been cancelled")]

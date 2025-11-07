@@ -1,7 +1,7 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::{
-    ArrayDataType, GeoReference, Result, Tile, ZoomLevelStrategy, crs,
+    ArrayDataType, Error, GeoReference, Result, Tile, ZoomLevelStrategy, crs,
     raster::{self, Compression},
 };
 
@@ -169,6 +169,32 @@ pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<St
     Ok(options)
 }
 
+pub fn create_multiband_cog_tiles(input: &str, output: &Path, opts: CogCreationOptions) -> Result<()> {
+    let file_paths: Vec<PathBuf> = glob::glob(input)?.filter_map(|entry| entry.ok()).collect();
+    for path in file_paths.iter() {
+        log::info!("Input file: {:?}", path);
+    }
+
+    let datasets = file_paths
+        .iter()
+        .map(raster::formats::gdal::open_dataset_read_only)
+        .collect::<Result<Vec<_>>>()?;
+
+    if datasets.is_empty() {
+        return Err(Error::InvalidArgument(format!("No files match the input pattern: {}", input)));
+    }
+
+    let mut options = create_gdal_args(file_paths.first().unwrap(), opts)?;
+    options.extend(["-co".into(), "INTERLEAVE=TILE".into()]);
+
+    let vrt_options = gdal::programs::raster::BuildVRTOptions::new(["-separate", "-strict"])?;
+    let src_ds = gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?;
+
+    let options = create_gdal_args(&PathBuf::from(input), opts)?;
+    raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
+    Ok(())
+}
+
 /// Creates a VRT wrapper around a source dataset that adds a nodata value if it doesn't have one already.
 /// This allows setting nodata metadata without modifying the original read-only file.
 fn create_vrt_with_nodata(src_ds: gdal::Dataset) -> Result<gdal::Dataset> {
@@ -197,7 +223,6 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
     let src_ds = create_vrt_with_nodata(src_ds)?;
 
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
-
     Ok(())
 }
 
