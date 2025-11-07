@@ -88,7 +88,7 @@ impl VectorFieldType for f64 {
             Field::String(val) => Ok(Some(
                 val.parse().map_err(|_| Error::Runtime(format!("Invalid float value: '{val}'")))?,
             )),
-            _ => Ok(None),
+            _ => Err(Error::Runtime(format!("Unexpected field type for f64: '{field:?}'"))),
         }
     }
 }
@@ -107,7 +107,7 @@ impl VectorFieldType for i32 {
             Field::String(val) => Ok(Some(
                 val.parse().map_err(|_| Error::Runtime(format!("Invalid integer value: '{val}'")))?,
             )),
-            _ => Ok(None),
+            _ => Err(Error::Runtime(format!("Unexpected field type for i32: '{field:?}'"))),
         }
     }
 }
@@ -126,7 +126,7 @@ impl VectorFieldType for i64 {
             Field::String(val) => Ok(Some(
                 val.parse().map_err(|_| Error::Runtime(format!("Invalid integer value: '{val}'")))?,
             )),
-            _ => Ok(None),
+            _ => Err(Error::Runtime(format!("Unexpected field type for i64: '{field:?}'"))),
         }
     }
 }
@@ -141,8 +141,9 @@ impl VectorFieldType for bool {
     fn read_from_field(field: Field) -> Result<Option<Self>> {
         match field {
             Field::Integer(val) => Ok(Some(val != 0)),
+            Field::Float(val) => Ok(Some(val != 0.0)),
             Field::String(val) => Ok(parse_bool_str(&val)),
-            _ => Ok(None),
+            _ => Err(Error::Runtime(format!("Unexpected field type for bool: '{field:?}'"))),
         }
     }
 }
@@ -177,7 +178,7 @@ impl VectorFieldType for RangeInclusive<i32> {
             Field::Float(val) => Ok(Some(RangeInclusive::new(val as i32, val as i32))),
             Field::Integer(val) => Ok(Some(RangeInclusive::new(val as i32, val as i32))),
             Field::String(val) => Ok(Some(parse_value_range(&val)?)),
-            _ => Ok(None),
+            _ => Err(Error::Runtime(format!("Unexpected field type for i32: '{field:?}'"))),
         }
     }
 }
