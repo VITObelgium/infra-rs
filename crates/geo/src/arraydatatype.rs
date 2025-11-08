@@ -51,7 +51,7 @@ impl ArrayDataType {
         }
     }
 
-    pub fn bytes(&self) -> u8 {
+    pub const fn bytes(&self) -> u8 {
         match self {
             Self::Int8 | Self::Uint8 => 1,
             Self::Int16 | Self::Uint16 => 2,

@@ -1,4 +1,4 @@
-use crate::{AnyDenseArray, ArrayMetadata, DenseArray};
+use crate::{AnyDenseArray, ArrayDataType, ArrayMetadata, DenseArray};
 
 fn assert_same_data_type<Metadata: ArrayMetadata>(a: &AnyDenseArray<Metadata>, b: &AnyDenseArray<Metadata>) {
     assert_eq!(
@@ -221,6 +221,70 @@ macro_rules! any_dense_raster_inclusive_op {
     };
 }
 
+fn output_type_for_inputs(data_type_1: ArrayDataType, data_type_2: ArrayDataType) -> ArrayDataType {
+    if data_type_1 == data_type_2 {
+        return data_type_1;
+    }
+
+    match (data_type_1, data_type_2) {
+        (ArrayDataType::Int8 | ArrayDataType::Int16 | ArrayDataType::Int32, _) => combined_output_signed(data_type_2, false),
+        (ArrayDataType::Uint8 | ArrayDataType::Uint16 | ArrayDataType::Uint32, _) => combined_output_unsigned(data_type_2, false),
+        (ArrayDataType::Int64, _) => combined_output_signed(data_type_2, true),
+        (ArrayDataType::Uint64, _) => combined_output_unsigned(data_type_2, true),
+        (ArrayDataType::Float32, _) => combined_output_f32(data_type_2),
+        (ArrayDataType::Float64, _) => ArrayDataType::Float64,
+    }
+}
+
+fn combined_output_signed(other: ArrayDataType, wide: bool) -> ArrayDataType {
+    match other {
+        ArrayDataType::Int8
+        | ArrayDataType::Int16
+        | ArrayDataType::Int32
+        | ArrayDataType::Int64
+        | ArrayDataType::Uint8
+        | ArrayDataType::Uint16
+        | ArrayDataType::Uint32
+        | ArrayDataType::Uint64 => {
+            if wide {
+                ArrayDataType::Int64
+            } else {
+                ArrayDataType::Int32
+            }
+        }
+        ArrayDataType::Float32 => ArrayDataType::Float32,
+        ArrayDataType::Float64 => ArrayDataType::Float64,
+    }
+}
+
+fn combined_output_unsigned(other: ArrayDataType, wide: bool) -> ArrayDataType {
+    match other {
+        ArrayDataType::Int8 | ArrayDataType::Int16 | ArrayDataType::Int32 | ArrayDataType::Int64 => {
+            if wide {
+                ArrayDataType::Int64
+            } else {
+                ArrayDataType::Int32
+            }
+        }
+        ArrayDataType::Uint8 | ArrayDataType::Uint16 | ArrayDataType::Uint32 | ArrayDataType::Uint64 => {
+            if wide {
+                ArrayDataType::Uint64
+            } else {
+                ArrayDataType::Uint32
+            }
+        }
+        ArrayDataType::Float32 => ArrayDataType::Float32,
+        ArrayDataType::Float64 => ArrayDataType::Float64,
+    }
+}
+
+fn combined_output_f32(other: ArrayDataType) -> ArrayDataType {
+    match other {
+        ArrayDataType::Int64 | ArrayDataType::Uint64 | ArrayDataType::Float64 => ArrayDataType::Float64,
+        _ => ArrayDataType::Float32,
+    }
+}
+
 any_dense_raster_op!(
     std::ops::Add,
     std::ops::AddAssign,
@@ -267,3 +331,39 @@ any_dense_raster_op!(
     div,
     div_assign,
 );
+
+#[cfg(test)]
+mod tests {
+
+    use crate::{
+        Array, ArrayDataType, RasterMetadata, RasterSize,
+        array::{Columns, Rows},
+    };
+
+    use super::*;
+
+    #[test]
+    fn division_output_type() {
+        const TILE_WIDTH: Columns = Columns(2);
+        const TILE_HEIGHT: Rows = Rows(2);
+
+        let int_raster1 = AnyDenseArray::U32(
+            DenseArray::new(
+                RasterMetadata::sized_for_type::<u32>(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH)),
+                (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
+            )
+            .unwrap(),
+        );
+
+        let int_raster2 = AnyDenseArray::U32(
+            DenseArray::new(
+                RasterMetadata::sized_for_type::<u32>(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH)),
+                (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
+            )
+            .unwrap(),
+        );
+
+        let result = int_raster1.clone() / int_raster2.clone();
+        assert_eq!(result.data_type(), ArrayDataType::Float32);
+    }
+}

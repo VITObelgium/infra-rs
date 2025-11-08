@@ -1,6 +1,6 @@
 use inf::{allocate::AlignedVec, cast};
 
-use crate::{ArrayDataType, Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
+use crate::{arraynum::ArrayNum, ArrayDataType, Cell, Error, GeoReference, Nodata, RasterSize, Result};
 use std::fmt::Debug;
 
 pub trait ArrayMetadata: Clone + Debug {
