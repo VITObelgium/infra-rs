@@ -16,3 +16,4 @@ crates/geo/tests/data/cog_debug/lower_web_tile
 .cargo/config.vcpkg.toml
 crates/geo/tests/data/cog_debug/cog_tile_10m
 crates/geo/tests/data/cog_debug/web_tile_10m
+.direnv

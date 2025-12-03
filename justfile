@@ -6,6 +6,48 @@ bootstrap:
 bootstrap_py:
     mise -E vcpkg run bootstrap_py
 
+[windows]
+build_debug:
+    mise -E vcpkg run build
+[windows]
+build_release:
+    mise -E vcpkg run build --release
+
+[unix]
+[private]
+build_config config:
+    cargo build {{config}} --no-default-features --features gdal-static,serde,derive,raster-io-geotiff,vector-io,rayon
+[unix]
+build_debug: (build_config '')
+[unix]
+build_release: (build_config '--release')
+
+[windows]
+test_debug $RUST_LOG="debug":
+    mise -E vcpkg run test
+[windows]
+test_release:
+    mise -E vcpkg run test --release
+
+[unix]
+test_debug: (nix_test_config '')
+[unix]
+test_release: (nix_test_config '--release')
+
+[windows]
+test_warp:
+    mise -E vcpkg run test_warp --release
+
+[unix]
+test_warp:
+    cargo nextest run --release --profile integration -p geo \
+        --no-default-features --features=gdal-static,proj4rs,rayon \
+        --no-capture run_all_warp_integration_tests
+
+build: build_release
+test: test_debug
+test_ci: test_release
+
 serve_tiles dir:
     cargo run -p tileserver --release -- --gis-dir {{dir}}
 
@@ -18,28 +60,11 @@ doc:
 docdeps:
     cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features
 
-build_debug:
-    mise -E vcpkg run build
-
-build_release:
-    mise -E vcpkg run build --release
-
 build_nofeatures:
     cargo build --workspace --release --no-default-features
 
-build: build_release
-
-test_debug $RUST_LOG="debug":
-    mise -E vcpkg run test
-
-test_release:
-    mise -E vcpkg run test --release
-
 test_debug_simd:
     mise -E vcpkg run test_simd
-
-test_warp:
-    mise -E vcpkg run test_warp --release
 
 test_release_simd:
     mise -E simd run test_simd --release
@@ -51,12 +76,15 @@ test_release_py: bootstrap_py
     mise exec -E vcpkg pixi -- pixi run test_release
 
 test_integration:
-    mise -E vcpkg run test_integration --release
+    cargo nextest run --profile integration --release --no-capture --no-default-features \
+        --features=serde,gdal,gdal-static,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
 
 test_all: test_release test_release_py test_integration test_simd
 
-test: test_debug
-test_ci: test_release
+[private]
+nix_test_config config:
+    cargo nextest run {{config}} --no-default-features --no-capture --features=gdal-static,serde,derive,raster-io-geotiff,vector-io,polars,rayon
+
 test_simd: test_release_simd
 
 miri:

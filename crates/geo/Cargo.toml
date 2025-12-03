@@ -39,7 +39,7 @@ approx = "0.5"
 arrow = { version = "57", optional = true }
 bon = { version = "3.8", optional = true }
 bytemuck = { version = "1.24" }
-calamine = { version = "0.31", features = ["dates"], optional = true }
+calamine = { version = "0.32", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.3.1", optional = true }
@@ -84,7 +84,7 @@ tempfile = "3"
 test-log = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
-criterion = "0.7"
+criterion = "0.8"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 serde = { version = "1.0" }
