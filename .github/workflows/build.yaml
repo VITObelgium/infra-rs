@@ -30,6 +30,9 @@ jobs:
                       }
 
         steps:
+            - name: Enable Git long paths
+              if: matrix.cfg.id == 'windows'
+              run: git config --system core.longpaths true
             - uses: actions/checkout@v4
             - uses: jdx/mise-action@v3
               with:
