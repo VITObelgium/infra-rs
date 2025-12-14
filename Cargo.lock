@@ -1051,29 +1051,6 @@ dependencies = [
 
 [[package]]
 name = "criterion"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e1c047a62b0cc3e145fa84415a3191f628e980b194c2755aa12300a4e6cbd928"
-dependencies = [
- "anes",
- "cast",
- "ciborium",
- "clap",
- "criterion-plot 0.6.0",
- "itertools 0.13.0",
- "num-traits",
- "oorandom",
- "plotters",
- "rayon",
- "regex",
- "serde",
- "serde_json",
- "tinytemplate",
- "walkdir",
-]
-
-[[package]]
-name = "criterion"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4d883447757bb0ee46f233e9dc22eb84d93a9508c9b868687b274fc431d886bf"
@@ -1083,7 +1060,7 @@ dependencies = [
  "cast",
  "ciborium",
  "clap",
- "criterion-plot 0.8.1",
+ "criterion-plot",
  "itertools 0.13.0",
  "num-traits",
  "oorandom",
@@ -1095,16 +1072,6 @@ dependencies = [
  "serde_json",
  "tinytemplate",
  "walkdir",
-]
-
-[[package]]
-name = "criterion-plot"
-version = "0.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b1bcc0dc7dfae599d84ad0b1a55f80cde8af3725da8313b528da95ef783e338"
-dependencies = [
- "cast",
- "itertools 0.13.0",
 ]
 
 [[package]]
@@ -1769,7 +1736,7 @@ dependencies = [
  "calamine",
  "cfg-if",
  "chrono",
- "criterion 0.8.1",
+ "criterion",
  "crs-definitions",
  "csv",
  "ctor",
@@ -1779,7 +1746,7 @@ dependencies = [
  "generic-tests",
  "geo-types",
  "geos",
- "geozero 0.15.1",
+ "geozero",
  "glob",
  "inf",
  "itertools 0.14.0",
@@ -1864,19 +1831,6 @@ dependencies = [
  "libc",
  "pkg-config",
  "semver",
-]
-
-[[package]]
-name = "geozero"
-version = "0.14.0"
-source = "git+https://github.com/georust/geozero.git?rev=e52422b54ab469ce8de6e33f859d4321be63d657#e52422b54ab469ce8de6e33f859d4321be63d657"
-dependencies = [
- "geo-types",
- "geojson",
- "log",
- "serde_json",
- "thiserror 1.0.69",
- "wkt 0.11.1",
 ]
 
 [[package]]
@@ -2334,7 +2288,7 @@ version = "2025.10.24"
 dependencies = [
  "approx",
  "bytemuck",
- "criterion 0.7.0",
+ "criterion",
  "ctor",
  "env_logger",
  "generic-tests",
@@ -2653,9 +2607,9 @@ dependencies = [
 
 [[package]]
 name = "lz4_flex"
-version = "0.11.5"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "08ab2867e3eeeca90e844d1940eab391c9dc5228783db2ed999acbc0a9ed375a"
+checksum = "ab6473172471198271ff72e9379150e9dfd70d8e533e0752a27e515b48dd375e"
 dependencies = [
  "twox-hash",
 ]
@@ -4879,7 +4833,7 @@ dependencies = [
  "gdal",
  "geo",
  "geo-types",
- "geozero 0.14.0",
+ "geozero",
  "image",
  "inf",
  "log",
@@ -5800,18 +5754,6 @@ dependencies = [
 
 [[package]]
 name = "wkt"
-version = "0.11.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54f7f1ff4ea4c18936d6cd26a6fd24f0003af37e951a8e0e8b9e9a2d0bd0a46d"
-dependencies = [
- "geo-types",
- "log",
- "num-traits",
- "thiserror 1.0.69",
-]
-
-[[package]]
-name = "wkt"
 version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efb2b923ccc882312e559ffaa832a055ba9d1ac0cc8e86b3e25453247e4b81d7"
@@ -6022,3 +5964,8 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
+
+[[patch.unused]]
+name = "geozero"
+version = "0.14.0"
+source = "git+https://github.com/georust/geozero.git?rev=e52422b54ab469ce8de6e33f859d4321be63d657#e52422b54ab469ce8de6e33f859d4321be63d657"

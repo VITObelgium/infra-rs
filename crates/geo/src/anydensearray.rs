@@ -359,6 +359,17 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 }
 
+impl<'a, Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
+    /// This will panic if the type does not match, so make sure to check `data_type()` first.
+    pub fn as_densearray_ref<T: ArrayNum>(&'a self) -> &'a DenseArray<T, Metadata> {
+        if self.data_type() != T::TYPE {
+            panic!("Type mismatch: {} != {}", T::TYPE, self.data_type());
+        }
+
+        self.try_into().unwrap()
+    }
+}
+
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     #[cfg(feature = "gdal")]
     #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]

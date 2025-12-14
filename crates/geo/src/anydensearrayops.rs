@@ -20,18 +20,26 @@ macro_rules! any_dense_raster_op {
             type Output = AnyDenseArray<Metadata>;
 
             fn $op_fn(self, other: AnyDenseArray<Metadata>) -> AnyDenseArray<Metadata> {
-                assert_same_data_type(&self, &other);
-                match self {
-                    AnyDenseArray::U8(raster) => AnyDenseArray::U8((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::U16(raster) => AnyDenseArray::U16((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::U32(raster) => AnyDenseArray::U32((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::U64(raster) => AnyDenseArray::U64((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::I8(raster) => AnyDenseArray::I8((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::I16(raster) => AnyDenseArray::I16((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::I32(raster) => AnyDenseArray::I32((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::I64(raster) => AnyDenseArray::I64((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::F32(raster) => AnyDenseArray::F32((&raster).$op_fn(&other.try_into().unwrap())),
-                    AnyDenseArray::F64(raster) => AnyDenseArray::F64((&raster).$op_fn(&other.try_into().unwrap())),
+                let output_type = if stringify!($op_fn) == "div" {
+                    output_type_for_inputs_division(self.data_type(), other.data_type())
+                } else {
+                    output_type_for_inputs(self.data_type(), other.data_type())
+                };
+
+                let lhs = self.cast(output_type);
+                let rhs = other.cast(output_type);
+
+                match output_type {
+                    ArrayDataType::Uint8 => AnyDenseArray::U8(lhs.as_densearray_ref::<u8>().$op_fn(rhs.as_densearray_ref::<u8>())),
+                    ArrayDataType::Uint16 => AnyDenseArray::U16(lhs.as_densearray_ref::<u16>().$op_fn(rhs.as_densearray_ref::<u16>())),
+                    ArrayDataType::Uint32 => AnyDenseArray::U32(lhs.as_densearray_ref::<u32>().$op_fn(rhs.as_densearray_ref::<u32>())),
+                    ArrayDataType::Uint64 => AnyDenseArray::U64(lhs.as_densearray_ref::<u64>().$op_fn(rhs.as_densearray_ref::<u64>())),
+                    ArrayDataType::Int8 => AnyDenseArray::I8(lhs.as_densearray_ref::<i8>().$op_fn(rhs.as_densearray_ref::<i8>())),
+                    ArrayDataType::Int16 => AnyDenseArray::I16(lhs.as_densearray_ref::<i16>().$op_fn(rhs.as_densearray_ref::<i16>())),
+                    ArrayDataType::Int32 => AnyDenseArray::I32(lhs.as_densearray_ref::<i32>().$op_fn(rhs.as_densearray_ref::<i32>())),
+                    ArrayDataType::Int64 => AnyDenseArray::I64(lhs.as_densearray_ref::<i64>().$op_fn(rhs.as_densearray_ref::<i64>())),
+                    ArrayDataType::Float32 => AnyDenseArray::F32(lhs.as_densearray_ref::<f32>().$op_fn(rhs.as_densearray_ref::<f32>())),
+                    ArrayDataType::Float64 => AnyDenseArray::F64(lhs.as_densearray_ref::<f64>().$op_fn(rhs.as_densearray_ref::<f64>())),
                 }
             }
         }
@@ -236,6 +244,17 @@ fn output_type_for_inputs(data_type_1: ArrayDataType, data_type_2: ArrayDataType
     }
 }
 
+fn output_type_for_inputs_division(data_type_1: ArrayDataType, data_type_2: ArrayDataType) -> ArrayDataType {
+    if (data_type_1 != ArrayDataType::Float64 || data_type_2 != ArrayDataType::Float64)
+        && (data_type_1 == ArrayDataType::Float32 || data_type_2 == ArrayDataType::Float32)
+    {
+        // don't upgrade to float64 if one of the inputs is float32 and no float64 inputs are present
+        return ArrayDataType::Float32;
+    }
+
+    ArrayDataType::Float64
+}
+
 fn combined_output_signed(other: ArrayDataType, wide: bool) -> ArrayDataType {
     match other {
         ArrayDataType::Int8
@@ -363,7 +382,21 @@ mod tests {
             .unwrap(),
         );
 
-        let result = int_raster1.clone() / int_raster2.clone();
-        assert_eq!(result.data_type(), ArrayDataType::Float32);
+        let float32_raster = int_raster1.cast(ArrayDataType::Float32);
+
+        {
+            let result = int_raster1.clone() / int_raster2.clone();
+            assert_eq!(result.data_type(), ArrayDataType::Float64);
+        }
+
+        {
+            let result = int_raster1.clone() / float32_raster.clone();
+            assert_eq!(result.data_type(), ArrayDataType::Float32);
+        }
+
+        {
+            let result = float32_raster.clone() / int_raster1.clone();
+            assert_eq!(result.data_type(), ArrayDataType::Float32);
+        }
     }
 }
