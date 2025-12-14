@@ -354,6 +354,8 @@ any_dense_raster_op!(
 #[cfg(test)]
 mod tests {
 
+    use inf::allocate;
+
     use crate::{
         Array, ArrayDataType, RasterMetadata, RasterSize,
         array::{Columns, Rows},
@@ -369,7 +371,7 @@ mod tests {
         let int_raster1 = AnyDenseArray::U32(
             DenseArray::new(
                 RasterMetadata::sized_for_type::<u32>(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH)),
-                (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
+                allocate::aligned_vec_from_iter::<u32, _>(0..(TILE_WIDTH * TILE_HEIGHT) as u32),
             )
             .unwrap(),
         );
@@ -377,7 +379,7 @@ mod tests {
         let int_raster2 = AnyDenseArray::U32(
             DenseArray::new(
                 RasterMetadata::sized_for_type::<u32>(RasterSize::with_rows_cols(TILE_HEIGHT, TILE_WIDTH)),
-                (0..(TILE_WIDTH * TILE_HEIGHT) as u32).collect::<Vec<u32>>(),
+                allocate::aligned_vec_from_iter::<u32, _>(0..(TILE_WIDTH * TILE_HEIGHT) as u32),
             )
             .unwrap(),
         );

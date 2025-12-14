@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "simd", feature(portable_simd, vec_into_raw_parts, allocator_api))]
+#![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate approx;
