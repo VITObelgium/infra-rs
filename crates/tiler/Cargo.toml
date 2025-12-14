@@ -12,7 +12,7 @@ x86_64-unknown-linux-gnu = { dependencies = ["hdf5[core, threadsafe]"] }
 gdal = "0.18"
 geo = { features = ["gdal", "serde", "raster-io-geotiff"], path = "../geo" }
 geo-types = "0.7"
-geozero = { version = "0.14", optional = true }
+geozero = { version = "0.15", optional = true }
 inf = { features = ["serde"], path = "../inf" }
 log = "0.4"
 mvt = { version = "0.10", optional = true }
