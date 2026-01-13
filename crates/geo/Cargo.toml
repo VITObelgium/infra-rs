@@ -49,7 +49,6 @@ glob = "0.3"
 gdal-sys = { version = "0.12", optional = true }
 geo-types = { version = "0.7", features = ["approx"] }
 geos = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
-geozero = { version = "0.15" }
 inf = { path = "../inf" }
 itertools = "0.14"
 log = "0.4"
@@ -95,14 +94,7 @@ wasm-bindgen = { version = "0.2", features = ["serde"] }
 arrow = ["dep:arrow"]
 default = ["derive"]
 derive = ["dep:vector_derive"]
-gdal = [
-    "dep:bon",
-    "dep:gdal",
-    "dep:gdal-sys",
-    "proj",
-    "vector-io",
-    "geozero/with-gdal",
-]
+gdal = ["dep:bon", "dep:gdal", "dep:gdal-sys", "proj", "vector-io"]
 gdal-static = ["gdal"]
 polars = ["dep:polars", "vector-io"]
 proj = ["dep:proj"]
@@ -116,4 +108,4 @@ specta = ["dep:specta"]
 vector-io = ["dep:chrono"]
 vector-io-csv = ["vector-io", "dep:csv"]
 vector-io-xlsx = ["vector-io", "dep:calamine"]
-vector-processing = ["dep:gdal", "dep:geos", "dep:rayon", "geozero/with-geos"]
+vector-processing = ["dep:gdal", "dep:geos", "dep:rayon"]
