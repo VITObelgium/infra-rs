@@ -99,9 +99,9 @@ gdal = [
     "dep:bon",
     "dep:gdal",
     "dep:gdal-sys",
-    "geozero/with-gdal",
     "proj",
     "vector-io",
+    "geozero/with-gdal",
 ]
 gdal-static = ["gdal"]
 polars = ["dep:polars", "vector-io"]

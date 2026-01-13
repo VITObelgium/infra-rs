@@ -73,7 +73,6 @@ crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev 
 proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
 # https://github.com/image-rs/image-tiff/issues/253
 tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "47811747dda727073d6d48be918ce5831e124174" }
-geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "45d83658d1c13f81fd330b71868610b5bdac6160" }
 
 # [profile.dev]
 # debug = "line-tables-only"
