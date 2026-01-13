@@ -69,14 +69,11 @@ simd = ["geo/simd"]
 tui = ["tileserver/tui"]
 
 [patch.crates-io]
-# more recent geozero to avoid multiple gdal copies
-geozero = { git = "https://github.com/georust/geozero.git", rev = "e52422b54ab469ce8de6e33f859d4321be63d657" }
-crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev = "9d01fb7993537a3ba632bf60899b884434a1d453" }
+crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev = "1f09b345ed8947fbf3d8f556972799036923aae8" }
 proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
 # https://github.com/image-rs/image-tiff/issues/253
 tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "47811747dda727073d6d48be918ce5831e124174" }
-gdal = { git = "https://github.com/georust/gdal.git", rev = "2c76f92489e7ac868f776b6c7224ce05efdbefaf" }
-gdal-sys = { git = "https://github.com/georust/gdal.git", rev = "2c76f92489e7ac868f776b6c7224ce05efdbefaf" }
+geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "45d83658d1c13f81fd330b71868610b5bdac6160" }
 
 # [profile.dev]
 # debug = "line-tables-only"
