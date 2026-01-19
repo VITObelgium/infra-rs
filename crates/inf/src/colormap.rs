@@ -126,6 +126,7 @@ pub enum ColorMapPreset {
     Tab20,
     Tab20B,
     Tab20C,
+    Binary,
 }
 
 pub enum ColorMap {
@@ -248,6 +249,7 @@ impl ProcessedColorMap {
             ColorMapPreset::Autumn => ProcessedColorMap::new(&cmap::autumn(), direction),
             ColorMapPreset::Winter => ProcessedColorMap::new(&cmap::winter(), direction),
             ColorMapPreset::Wistia => ProcessedColorMap::new(&cmap::wistia(), direction),
+            ColorMapPreset::Binary => ProcessedColorMap::new(&cmap::binary(), direction),
             ColorMapPreset::NipySpectral => ProcessedColorMap::new(&cmap::nipy_spectral(), direction),
             ColorMapPreset::GistEarth => ProcessedColorMap::new(&cmap::gist_earth(), direction),
             ColorMapPreset::GistNcar => ProcessedColorMap::new(&cmap::gist_ncar(), direction),
@@ -1740,6 +1742,23 @@ mod cmap {
             blue: vec![
                 ColorDictEntry { x: 0.0, y0: 0.4, y1: 0.4 },
                 ColorDictEntry { x: 1.0, y0: 0.4, y1: 0.4 },
+            ],
+        }
+    }
+
+    pub fn binary() -> ColorDict {
+        ColorDict {
+            red: vec![
+                ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 },
+            ],
+            green: vec![
+                ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 },
+            ],
+            blue: vec![
+                ColorDictEntry { x: 0.0, y0: 1.0, y1: 1.0 },
+                ColorDictEntry { x: 1.0, y0: 0.0, y1: 0.0 },
             ],
         }
     }
