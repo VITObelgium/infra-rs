@@ -53,7 +53,7 @@ test_release_py: bootstrap_py
     mise exec -E vcpkg pixi -- pixi run test_release
 
 test_integration:
-    cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon
+    cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
 
 test_all: test_release test_release_py test_integration test_simd
 

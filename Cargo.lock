@@ -1214,13 +1214,7 @@ dependencies = [
 [[package]]
 name = "crs-definitions"
 version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "36aeb03b9e8d31aa9e8796d6d78957647761e96ee53935520cdda23cd19aa98b"
-
-[[package]]
-name = "crs-definitions"
-version = "0.4.0"
-source = "git+https://github.com/dirkvdb/crs-definitions.git?rev=1f09b345ed8947fbf3d8f556972799036923aae8#1f09b345ed8947fbf3d8f556972799036923aae8"
+source = "git+https://github.com/dirkvdb/crs-definitions.git?rev=9d01fb7993537a3ba632bf60899b884434a1d453#9d01fb7993537a3ba632bf60899b884434a1d453"
 
 [[package]]
 name = "crunchy"
@@ -1746,7 +1740,7 @@ dependencies = [
  "cfg-if",
  "chrono",
  "criterion",
- "crs-definitions 0.4.0",
+ "crs-definitions",
  "csv",
  "ctor",
  "env_logger",
@@ -3626,7 +3620,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a3c4a66ce46a8b4514d0dce1e7a39b3d2b3a6125f7968093020f96a8a5ad09b"
 dependencies = [
  "console_log",
- "crs-definitions 0.3.1",
+ "crs-definitions",
  "geo-types",
  "js-sys",
  "lazy_static",

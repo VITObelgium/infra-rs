@@ -4,6 +4,8 @@
   ...
 }:
 {
+  cachix.pull = [ "geo-overlay" ];
+
   overlays = [
     (inputs.pkgs-mod.lib.mkOverlay {
       static = true;
