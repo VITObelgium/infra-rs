@@ -49,6 +49,7 @@ glob = "0.3"
 gdal-sys = { version = "0.12", optional = true }
 geo-types = { version = "0.7", features = ["approx"] }
 geos = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
+geozero = { version = "0.15", optional = true }
 inf = { path = "../inf" }
 itertools = "0.14"
 log = "0.4"
@@ -108,4 +109,10 @@ specta = ["dep:specta"]
 vector-io = ["dep:chrono"]
 vector-io-csv = ["vector-io", "dep:csv"]
 vector-io-xlsx = ["vector-io", "dep:calamine"]
-vector-processing = ["dep:gdal", "dep:geos", "dep:rayon"]
+vector-processing = [
+    "dep:gdal",
+    "dep:geos",
+    "dep:rayon",
+    "geozero/with-geos",
+    "geozero/with-gdal",
+]

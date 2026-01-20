@@ -1755,6 +1755,7 @@ dependencies = [
  "generic-tests",
  "geo-types",
  "geos",
+ "geozero",
  "glob",
  "inf",
  "itertools 0.14.0",
@@ -1844,11 +1845,13 @@ dependencies = [
 [[package]]
 name = "geozero"
 version = "0.15.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "db5eda63aa99ac06160fd53328ed75c34f14e3196d3f56a3649e247ed796e54b"
+source = "git+https://github.com/dirkvdb/geozero.git?rev=45d83658d1c13f81fd330b71868610b5bdac6160#45d83658d1c13f81fd330b71868610b5bdac6160"
 dependencies = [
+ "gdal",
+ "gdal-sys",
  "geo-types",
  "geojson",
+ "geos",
  "log",
  "serde_json",
  "thiserror 2.0.18",

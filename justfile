@@ -26,15 +26,16 @@ build_nofeatures:
     cargo build --workspace --release --no-default-features
 
 build_allfeatures:
-    cargo build --workspace --release --features=serde,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs,tui
+    cargo build --workspace --release --features=serde,gdal-static,arrow,derive,vector,vector-processing,vector-io-xlsx,vector-io-csv,polars,proj4rs,tui
 
 build: build_release
 
 test_debug $RUST_LOG="debug":
     cargo nextest run -p geo --features=gdal-static
 
+# The vector processing feature is currently broken, the geozero dependency should be removed
 test_release:
-    cargo nextest run -p geo --release --features=serde,gdal-static,arrow,derive,vector-io-xlsx,vector-io-csv,polars
+    cargo nextest run -p geo --release --features=serde,gdal-static,arrow,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon
 
 test_debug_simd:
     mise -E vcpkg run test_simd
@@ -52,15 +53,17 @@ test_release_py: bootstrap_py
     mise exec -E vcpkg pixi -- pixi run test_release
 
 test_integration:
-    mise -E vcpkg run test_integration --release
+    cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
 
 test_all: test_release test_release_py test_integration test_simd
 
 test: test_debug
 
-test_ci: test_release
-
 test_simd: test_release_simd
+
+build_ci: build_allfeatures
+
+test_ci: test_release
 
 miri:
     cargo +nightly miri test --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs
