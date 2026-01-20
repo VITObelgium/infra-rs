@@ -1,9 +1,3 @@
-bootstrap:
-    mise -E vcpkg run bootstrap
-
-bootstrap_py:
-    mise -E vcpkg run bootstrap_py
-
 serve_tiles dir:
     cargo run -p tileserver --release -- --gis-dir {{ dir }}
 
@@ -44,13 +38,13 @@ test_warp:
     mise -E vcpkg run test_warp --release
 
 test_release_simd:
-    mise -E simd run test_simd --release
+    @devenv --profile nightly shell -- bash -euc 'set -o pipefail; cargo nextest run --profile ci --release --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv'
 
-test_debug_py: bootstrap_py
-    mise exec -E vcpkg pixi -- pixi run test_debug
+test_debug_py:
+    @devenv --profile nightly shell -- bash -euc 'set -o pipefail; cargo nextest run --profile ci --workspace --all-features'
 
-test_release_py: bootstrap_py
-    mise exec -E vcpkg pixi -- pixi run test_release
+test_release_py:
+    cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,rayon,python --release
 
 test_integration:
     cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
