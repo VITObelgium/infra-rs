@@ -15,7 +15,7 @@ rayon = "1.11"
 thiserror = "2.0"
 indicatif = "0.18"
 indicatif-log-bridge = "0.2"
-reqwest = { version = "0.12" }
+reqwest = { version = "0.13" }
 tokio = { version = "1", features = ["full"] }
 comfy-table = { version = "7" }
 

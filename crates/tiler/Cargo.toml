@@ -9,7 +9,7 @@ x86_64-apple-darwin = { dependencies = ["hdf5[core, threadsafe]"] }
 x86_64-unknown-linux-gnu = { dependencies = ["hdf5[core, threadsafe]"] }
 
 [dependencies]
-gdal = "0.18"
+gdal = "0.19"
 geo = { features = ["gdal", "serde", "raster-io-geotiff"], path = "../geo" }
 geo-types = "0.7"
 geozero = { version = "0.15", optional = true }

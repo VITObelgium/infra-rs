@@ -1,6 +1,5 @@
 target
 .DS_Store
-.cargo/config.toml
 .pixi
 .direnv
 .devenv*

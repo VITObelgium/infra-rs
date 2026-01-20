@@ -10,6 +10,13 @@
     })
   ];
 
+  profiles = {
+    nightly.module = {
+      languages.rust.channel = "nightly";
+      env.ENVIRONMENT = "nightly";
+    };
+  };
+
   packages = with pkgs; [
     just
     lld
@@ -19,6 +26,7 @@
     pkg-config
     python313
     python313Packages.pyarrow
+    pkg-mod-openssl
     pkg-mod-gdal
     pkg-mod-proj
   ];

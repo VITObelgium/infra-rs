@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "simd", feature(portable_simd, vec_into_raw_parts, allocator_api))]
+#![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
 
 #[cfg(feature = "simd")]
 mod bench {
@@ -76,7 +76,7 @@ mod bench {
 }
 
 #[cfg(feature = "simd")]
-criterion::criterion_main!(cmap_benches_f32);
+criterion::criterion_main!(crate::bench::cmap_benches_f32);
 
 #[cfg(not(feature = "simd"))]
 fn main() {
