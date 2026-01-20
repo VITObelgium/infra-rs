@@ -50,10 +50,32 @@
         "type": "github"
       }
     },
+    "pkgs-mod": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1768296909,
+        "narHash": "sha256-NjRYF48jLiCoz9TfBKlChFS0pej9k/7dLnj2hOd1RyQ=",
+        "owner": "VITO-RMA",
+        "repo": "nix-pkgs",
+        "rev": "23b533e7cfaa5e410d42cd9b4f4d7e2a9cc53653",
+        "type": "github"
+      },
+      "original": {
+        "owner": "VITO-RMA",
+        "ref": "main",
+        "repo": "nix-pkgs",
+        "type": "github"
+      }
+    },
     "root": {
       "inputs": {
         "flake-utils": "flake-utils",
         "nixpkgs": "nixpkgs",
+        "pkgs-mod": "pkgs-mod",
         "rust-overlay": "rust-overlay"
       }
     },

@@ -3,6 +3,7 @@ target
 .cargo/config.toml
 .pixi
 .direnv
+.devenv*
 *.aux.xml
 **/__pycache__
 .idea

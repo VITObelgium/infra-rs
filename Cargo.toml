@@ -70,7 +70,6 @@ tui = ["tileserver/tui"]
 
 [patch.crates-io]
 # more recent geozero to avoid multiple gdal copies
-geozero = { git = "https://github.com/georust/geozero.git", rev = "e52422b54ab469ce8de6e33f859d4321be63d657" }
 crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev = "9d01fb7993537a3ba632bf60899b884434a1d453" }
 proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
 # https://github.com/image-rs/image-tiff/issues/253

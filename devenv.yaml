@@ -1,0 +1,11 @@
+inputs:
+    pkgs-mod:
+        url: github:VITO-RMA/nix-pkgs/main
+        inputs:
+            nixpkgs:
+                follows: nixpkgs
+    rust-overlay:
+        url: github:oxalica/rust-overlay
+        inputs:
+            nixpkgs:
+                follows: nixpkgs

@@ -5,6 +5,8 @@
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
     rust-overlay.url = "github:oxalica/rust-overlay/stable";
     flake-utils.url = "github:numtide/flake-utils";
+    pkgs-mod.url = "github:VITO-RMA/nix-pkgs/main";
+    pkgs-mod.inputs.nixpkgs.follows = "nixpkgs";
   };
 
   outputs =
@@ -38,13 +40,11 @@
               buildInputs = [
                 stdenv.cc.cc.lib
                 cargo-nextest
-                nil
-                nixfmt-rfc-style
-                mise
                 just
                 rustAnalyzer
                 rustToolchain
-                codex-acp
+                python313
+                python313Packages.pyarrow
               ];
 
               shellHook = ''

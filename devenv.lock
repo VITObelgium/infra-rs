@@ -1,0 +1,144 @@
+{
+  "nodes": {
+    "devenv": {
+      "locked": {
+        "dir": "src/modules",
+        "lastModified": 1768846984,
+        "owner": "cachix",
+        "repo": "devenv",
+        "rev": "26c5ae81aa2d6c622b885104884ca5421293c534",
+        "type": "github"
+      },
+      "original": {
+        "dir": "src/modules",
+        "owner": "cachix",
+        "repo": "devenv",
+        "type": "github"
+      }
+    },
+    "flake-compat": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1767039857,
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "rev": "5edf11c44bc78a0d334f6334cdaf7d60d732daab",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "repo": "flake-compat",
+        "type": "github"
+      }
+    },
+    "git-hooks": {
+      "inputs": {
+        "flake-compat": "flake-compat",
+        "gitignore": "gitignore",
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1768834646,
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "rev": "2f927757d32bcd2b11e5017bdb9f11fd9719af53",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "repo": "git-hooks.nix",
+        "type": "github"
+      }
+    },
+    "gitignore": {
+      "inputs": {
+        "nixpkgs": [
+          "git-hooks",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1762808025,
+        "owner": "hercules-ci",
+        "repo": "gitignore.nix",
+        "rev": "cb5e3fdca1de58ccbc3ef53de65bd372b48f567c",
+        "type": "github"
+      },
+      "original": {
+        "owner": "hercules-ci",
+        "repo": "gitignore.nix",
+        "type": "github"
+      }
+    },
+    "nixpkgs": {
+      "locked": {
+        "lastModified": 1767052823,
+        "owner": "cachix",
+        "repo": "devenv-nixpkgs",
+        "rev": "538a5124359f0b3d466e1160378c87887e3b51a4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "cachix",
+        "ref": "rolling",
+        "repo": "devenv-nixpkgs",
+        "type": "github"
+      }
+    },
+    "pkgs-mod": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1768296909,
+        "owner": "VITO-RMA",
+        "repo": "nix-pkgs",
+        "rev": "23b533e7cfaa5e410d42cd9b4f4d7e2a9cc53653",
+        "type": "github"
+      },
+      "original": {
+        "owner": "VITO-RMA",
+        "ref": "main",
+        "repo": "nix-pkgs",
+        "type": "github"
+      }
+    },
+    "root": {
+      "inputs": {
+        "devenv": "devenv",
+        "git-hooks": "git-hooks",
+        "nixpkgs": "nixpkgs",
+        "pkgs-mod": "pkgs-mod",
+        "pre-commit-hooks": [
+          "git-hooks"
+        ],
+        "rust-overlay": "rust-overlay"
+      }
+    },
+    "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1768791178,
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "3941028eccc4d981f75c933786e1fd95b71024f1",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    }
+  },
+  "root": "root",
+  "version": 7
+}
