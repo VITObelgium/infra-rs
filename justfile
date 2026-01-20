@@ -11,7 +11,7 @@ serve_tiles_tui dir:
     cargo run -p tileserver --features=tui --release -- --tui --gis-dir {{ dir }}
 
 doc:
-    mise -E vcpkg run doc
+    cargo doc --workspace --exclude=infra-rs --exclude=vector_derive --no-deps --all-features
 
 docdeps:
     cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features

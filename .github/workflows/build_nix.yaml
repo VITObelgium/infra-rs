@@ -28,7 +28,7 @@ jobs:
                   name: geo-overlay
                   authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
             - name: Install devenv.sh
-              run: nix profile install nixpkgs#devenv
+              run: nix profile add nixpkgs#devenv
             - name: Build the project
               shell: devenv shell bash -- -e {0}
               run: just build_ci
@@ -40,8 +40,9 @@ jobs:
             # - name: Run the unit tests with python feature enabled
             #   if: matrix.cfg.id != 'mac-intel'
             #   run: mise -E vcpkg run test_py
-            # - name: Run the unit tests with simd feature enabled
-            #   run: mise -E simd run test_ci --release --target ${{ matrix.cfg.target }}
-            # - name: Build the docs
-            #   if: matrix.cfg.id != 'mac-intel'
-            #   run: mise -E vcpkg doc
+            - name: Run the unit tests with simd feature enabled
+              shell: devenv --profile nightly shell bash -- -e {0}
+              run: just test_ci
+            - name: Build the docs
+              shell: devenv --profile nightly shell bash -- -e {0}
+              run: just doc
