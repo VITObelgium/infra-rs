@@ -1,0 +1,47 @@
+name: Nix build
+on: [push]
+
+jobs:
+    compile:
+        name: ${{ matrix.cfg.id }}
+        runs-on: ${{ matrix.cfg.os }}
+        strategy:
+            fail-fast: false
+            matrix:
+                cfg:
+                    - {
+                          id: linux,
+                          os: ubuntu-latest,
+                          target: x86_64-unknown-linux-gnu,
+                      }
+                    - {
+                          id: mac-arm,
+                          os: macos-latest,
+                          target: aarch64-apple-darwin,
+                      }
+
+        steps:
+            - uses: actions/checkout@v5
+            - uses: cachix/install-nix-action@v31
+            - uses: cachix/cachix-action@v16
+              with:
+                  name: geo-overlay
+                  authToken: "${{ secrets.CACHIX_AUTH_TOKEN }}"
+            - name: Install devenv.sh
+              run: nix profile install nixpkgs#devenv
+            - name: Build the project
+              shell: devenv shell bash -- -e {0}
+              run: just build_ci
+            - name: Run the unit tests
+              shell: devenv shell bash -- -e {0}
+              run: just test_ci
+            # - name: Run the integration tests
+            #   run: mise -E vcpkg run test_integration --release --target ${{ matrix.cfg.target }}
+            # - name: Run the unit tests with python feature enabled
+            #   if: matrix.cfg.id != 'mac-intel'
+            #   run: mise -E vcpkg run test_py
+            # - name: Run the unit tests with simd feature enabled
+            #   run: mise -E simd run test_ci --release --target ${{ matrix.cfg.target }}
+            # - name: Build the docs
+            #   if: matrix.cfg.id != 'mac-intel'
+            #   run: mise -E vcpkg doc

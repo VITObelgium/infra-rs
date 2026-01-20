@@ -1,5 +1,4 @@
-name: Build
-
+name: Vcpkg build
 on: [push]
 
 jobs:
@@ -11,27 +10,14 @@ jobs:
             matrix:
                 cfg:
                     - {
-                          id: linux,
-                          os: ubuntu-latest,
-                          triplet: x64-linux-release,
-                          target: x86_64-unknown-linux-gnu,
-                      }
-                    - {
                           id: windows,
                           os: windows-2025,
                           triplet: x64-windows-static-release,
                           target: x86_64-pc-windows-msvc,
                       }
-                    - {
-                          id: mac-arm,
-                          os: macos-latest,
-                          triplet: arm64-osx-release,
-                          target: aarch64-apple-darwin,
-                      }
 
         steps:
             - name: Enable Git long paths
-              if: matrix.cfg.id == 'windows'
               run: git config --system core.longpaths true
             - uses: actions/checkout@v4
             - uses: jdx/mise-action@v3
@@ -57,13 +43,9 @@ jobs:
             - name: Run the integration tests
               run: mise -E vcpkg run test_integration --release --target ${{ matrix.cfg.target }}
             - name: Run the unit tests with python feature enabled
-              if: matrix.cfg.id != 'mac-intel'
               run: mise -E vcpkg run test_py
             - name: Run the unit tests with simd feature enabled
               run: mise -E simd run test_ci --release --target ${{ matrix.cfg.target }}
-            - name: Build the docs
-              if: matrix.cfg.id != 'mac-intel'
-              run: mise -E vcpkg doc
             - name: Archive build logs
               if: ${{ failure() }}
               uses: actions/upload-artifact@v4

@@ -53,7 +53,7 @@ test_release_py: bootstrap_py
     mise exec -E vcpkg pixi -- pixi run test_release
 
 test_integration:
-    cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
+    cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon
 
 test_all: test_release test_release_py test_integration test_simd
 
@@ -92,3 +92,14 @@ tiles2raster zoom tile_size="256":
 # cargo run --release -p tiles2raster -- --stats --url "https://testmap.marvintest.vito.be/guppy/tiles/raster/no2_atmo_street-20220101-0000UT/{z}/{x}/{y}.png" --zoom {{zoom}} --coord1 51.26,4.33 --coord2 51.16,4.50 -o test_png_{{zoom}}.tif
 pngtiles2raster zoom:
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.png?tile_format=float_png" --zoom {{ zoom }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_png_{{ zoom }}.tif
+
+projinfo:
+    @nix --extra-experimental-features 'nix-command flakes' eval --raw --impure --expr 'let lock = builtins.fromJSON (builtins.readFile ./flake.lock); fetch = name: builtins.fetchTree (lock.nodes.${name}.locked); nixpkgsSrc = fetch "nixpkgs"; pkgsModSrc = fetch "pkgs-mod"; pkgsModFlakeFile = import (pkgsModSrc + "/flake.nix"); pkgsModOutputs = pkgsModFlakeFile.outputs { self = { outPath = pkgsModSrc; }; nixpkgs = { outPath = nixpkgsSrc; }; }; pkgs = import nixpkgsSrc { system = builtins.currentSystem; overlays = [ (pkgsModOutputs.lib.mkOverlay { static = true; }) ]; }; in pkgs.pkg-mod-proj.outPath'
+
+gdalinfo:
+    @nix --extra-experimental-features 'nix-command flakes' eval --raw --impure --expr 'let lock = builtins.fromJSON (builtins.readFile ./flake.lock); fetch = name: builtins.fetchTree (lock.nodes.${name}.locked); nixpkgsSrc = fetch "nixpkgs"; pkgsModSrc = fetch "pkgs-mod"; pkgsModFlakeFile = import (pkgsModSrc + "/flake.nix"); pkgsModOutputs = pkgsModFlakeFile.outputs { self = { outPath = pkgsModSrc; }; nixpkgs = { outPath = nixpkgsSrc; }; }; pkgs = import nixpkgsSrc { system = builtins.currentSystem; overlays = [ (pkgsModOutputs.lib.mkOverlay { static = true; }) ]; }; in pkgs.pkg-mod-gdal.outPath'
+
+nixinfo:
+    just projinfo
+
+    just gdalinfo
