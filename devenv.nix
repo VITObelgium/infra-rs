@@ -18,21 +18,42 @@ let
   # Use pkgsStatic.rustPlatform which has musl target built-in
   rustPlatformMusl = pkgs.pkgsStatic.rustPlatform;
 
+  # Cross-compilation setup for MinGW
+  pkgsCross = pkgsMingw.pkgsCross.mingwW64;
+  rustPlatformMingw = pkgsCross.rustPlatform;
+
   mkRustTool =
     {
       pname,
       useMusl ? false,
+      useMingw ? false,
     }:
     let
-      rustPlatform = if useMusl then rustPlatformMusl else pkgs.rustPlatform;
-      buildInputsPkgs = if useMusl then pkgsMusl else pkgs;
-      descriptionSuffix = if useMusl then " (static musl)" else "";
-      finalPname = if useMusl then "${pname}-musl" else pname;
+      rustPlatform =
+        if useMusl then
+          rustPlatformMusl
+        else if useMingw then
+          rustPlatformMingw
+        else
+          pkgs.rustPlatform;
+      buildInputsPkgs =
+        if useMusl then
+          pkgsMusl
+        else if useMingw then
+          pkgsMingw
+        else
+          pkgs;
+      targetTriple =
+        if useMusl then
+          "x86_64-unknown-linux-musl"
+        else if useMingw then
+          "x86_64-pc-windows-gnu"
+        else
+          null;
 
     in
     rustPlatform.buildRustPackage {
-      pname = finalPname;
-      inherit version;
+      inherit pname version;
       src = ./.;
 
       cargoLock = {
@@ -55,43 +76,69 @@ let
         pkg-mod-proj
       ];
 
-      # Override RUSTFLAGS for musl
-      RUSTFLAGS = lib.optionalString useMusl (
-        lib.concatStringsSep " " [
-          "-Crelocation-model=static"
-        ]
-      );
+      # Fix .lib extension issue in proj's pkg-config for MinGW
+      # TODO fix this in pkg-mod-proj itself
+      postPatch = lib.optionalString useMingw ''
+        # Create a wrapper for pkg-config that filters out .lib extensions
+        mkdir -p $TMPDIR/bin
+        cat > $TMPDIR/bin/pkg-config << 'EOF'
+        #!/bin/sh
+        ${pkgs.pkg-config}/bin/pkg-config "$@" | sed 's/-lshell32\.lib/-lshell32/g; s/-lole32\.lib/-lole32/g'
+        EOF
+        chmod +x $TMPDIR/bin/pkg-config
+        export PATH=$TMPDIR/bin:$PATH
+      '';
+
+      # Override RUSTFLAGS for musl and mingw
+      RUSTFLAGS =
+        if useMusl then
+          lib.concatStringsSep " " [
+            "-Crelocation-model=static"
+          ]
+        else if useMingw then
+          lib.concatStringsSep " " [
+            "-Clink-arg=-L${pkgsCross.stdenv.cc.cc}/x86_64-w64-mingw32/lib"
+            "-Clink-arg=-static"
+            "-Clink-arg=-Wl,-Bstatic"
+            "-Clink-arg=-lmcfgthread"
+            "-Clink-arg=-Wl,-Bdynamic"
+            "-Clink-arg=-lkernel32"
+            "-Clink-arg=-lntdll"
+            "-Clink-arg=-ladvapi32"
+          ]
+        else
+          "";
 
       cargoBuildFlags = [
         "-p"
         pname
       ]
-      ++ lib.optionals useMusl [
+      ++ lib.optionals (targetTriple != null) [
         "--target"
-        "x86_64-unknown-linux-musl"
+        targetTriple
       ];
 
       cargoTestFlags = [
         "-p"
         pname
       ]
-      ++ lib.optionals useMusl [
+      ++ lib.optionals (targetTriple != null) [
         "--target"
-        "x86_64-unknown-linux-musl"
+        targetTriple
       ];
 
       # Only install the specific binary we're building
       postInstall = ''
         # Remove any binaries that aren't the one we want
         for bin in $out/bin/*; do
-          if [ "$(basename $bin)" != "${pname}" ]; then
+          if [ "$(basename $bin)" != "${pname}" ]${lib.optionalString useMingw " && [ \"$(basename $bin)\" != \"${pname}.exe\" ]"}; then
             rm "$bin"
           fi
         done
       '';
 
       meta = with lib; {
-        description = "Workspace tool: ${pname}${descriptionSuffix}";
+        description = "Workspace tool: ${pname}";
         homepage = "https://github.com/VITO-RMA/infra-rs";
         license = licenses.mit;
       };
@@ -139,6 +186,24 @@ in
         stdenv.cc
       ];
     };
+
+    mingw.module = {
+      languages.rust = {
+        channel = "nightly";
+        targets = [ "x86_64-pc-windows-gnu" ];
+      };
+
+      env = {
+        ENVIRONMENT = "mingw";
+        CARGO_BUILD_TARGET = "x86_64-pc-windows-gnu";
+        CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER = "x86_64-w64-mingw32-gcc";
+      };
+
+      packages = [
+        pkgsCross.stdenv.cc
+        pkgsCross.windows.pthreads
+      ];
+    };
   };
 
   languages.rust = {
@@ -182,6 +247,24 @@ in
     tileserver-musl = mkRustTool {
       pname = "tileserver";
       useMusl = true;
+    };
+
+    # MinGW binaries for Windows
+    createcog-mingw = mkRustTool {
+      pname = "createcog";
+      useMingw = true;
+    };
+    creatembtiles-mingw = mkRustTool {
+      pname = "creatembtiles";
+      useMingw = true;
+    };
+    tiles2raster-mingw = mkRustTool {
+      pname = "tiles2raster";
+      useMingw = true;
+    };
+    tileserver-mingw = mkRustTool {
+      pname = "tileserver";
+      useMingw = true;
     };
   };
 

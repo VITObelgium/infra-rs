@@ -1,15 +1,26 @@
 [target.x86_64-pc-windows-msvc]
 rustflags = ["-Ctarget-feature=+crt-static,+avx2"]
 
+[target.x86_64-pc-windows-gnu]
+rustflags = [
+    "-Ctarget-feature=+crt-static,+avx2",
+    "-Clink-arg=-static-libstdc++",
+    "-Clink-arg=-static-libgcc",
+    "-Clink-arg=-Wl,-Bstatic",
+    "-Clink-arg=-lmcfgthread",
+    "-Clink-arg=-Wl,-Bdynamic",
+    "-Clink-arg=-lkernel32",
+    "-Clink-arg=-lntdll",
+    "-Clink-arg=-ladvapi32"
+]
+
 [target.x86_64-unknown-linux-gnu]
 rustflags = ["-Ctarget-feature=+avx2"]
 
 [target.x86_64-unknown-linux-musl]
 rustflags = [
     "-Ctarget-feature=+avx2",
-    "-Crelocation-model=static",
-    "-Clink-arg=-lgcc_s",
-    "-Clink-arg=-lgcc",
+    "-Crelocation-model=static"
 ]
 
 [target.x86_64-apple-darwin]
