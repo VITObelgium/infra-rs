@@ -3,10 +3,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1768954892,
+        "lastModified": 1769011019,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "c6267b9343bbc96c88038765d02e2a2ad2a3b8a0",
+        "rev": "e4c0fb64efda6ffa563a97a98c8c75c336f6bff1",
         "type": "github"
       },
       "original": {
@@ -94,10 +94,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1769006505,
+        "lastModified": 1769028337,
         "owner": "VITO-RMA",
         "repo": "nix-pkgs",
-        "rev": "8ea12060e6933ad3078609409984cb354670c260",
+        "rev": "b8916f1c79f285290fea0ca8d278c1ff2762af2a",
         "type": "github"
       },
       "original": {
