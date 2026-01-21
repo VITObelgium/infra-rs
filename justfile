@@ -1,3 +1,5 @@
+devenv_nightly := "devenv --option devenv.warnOnNewVersion:bool false --profile nightly shell -- bash -euc"
+
 serve_tiles dir:
     cargo run -p tileserver --release -- --gis-dir {{ dir }}
 
@@ -38,10 +40,10 @@ test_warp:
     mise -E vcpkg run test_warp --release
 
 test_release_simd:
-    @devenv --profile nightly shell -- bash -euc 'set -o pipefail; cargo nextest run --profile ci --release --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv'
+    @ {{ devenv_nightly }} 'set -o pipefail; cargo nextest run --profile ci --release --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv'
 
 test_debug_py:
-    @devenv --profile nightly shell -- bash -euc 'set -o pipefail; cargo nextest run --profile ci --workspace --all-features'
+    @ {{ devenv_nightly }} 'set -o pipefail; cargo nextest run --profile ci --workspace --all-features'
 
 test_release_py:
     cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,rayon,python --release
@@ -60,7 +62,7 @@ build_ci: build_allfeatures
 test_ci: test_release
 
 miri:
-    cargo +nightly miri test --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs
+    @ {{ devenv_nightly }} 'set -o pipefail; cargo miri test --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs'
 
 rasterbench:
     cargo bench --bench rasterops --package=geo
@@ -69,10 +71,7 @@ cmapbench:
     cargo bench --bench colormapping --package=inf --features=simd
 
 simdbench:
-    cargo bench --bench simd --package=geo --features=simd,gdal-static,gdal
-
-nosimdbench:
-    cargo +nightly bench --bench simd --package=geo  --features=gdal-static,gdal
+    @ {{ devenv_nightly }} 'cargo bench --bench simd --package=geo --features=simd,gdal-static,gdal'
 
 rasterbenchbaseline name:
     cargo bench --bench rasterops --package=geo -- --save-baseline {{ name }}
@@ -83,17 +82,5 @@ create_tiles input output:
 tiles2raster zoom tile_size="256":
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.vrt?tile_format=vrt&tile_size={{ tile_size }}" --zoom {{ zoom }} --tile-size={{ tile_size }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_{{ zoom }}_{{ tile_size }}.tif
 
-# cargo run --release -p tiles2raster -- --stats --url "https://testmap.marvintest.vito.be/guppy/tiles/raster/no2_atmo_street-20220101-0000UT/{z}/{x}/{y}.png" --zoom {{zoom}} --coord1 51.26,4.33 --coord2 51.16,4.50 -o test_png_{{zoom}}.tif
 pngtiles2raster zoom:
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.png?tile_format=float_png" --zoom {{ zoom }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_png_{{ zoom }}.tif
-
-projinfo:
-    @nix --extra-experimental-features 'nix-command flakes' eval --raw --impure --expr 'let lock = builtins.fromJSON (builtins.readFile ./flake.lock); fetch = name: builtins.fetchTree (lock.nodes.${name}.locked); nixpkgsSrc = fetch "nixpkgs"; pkgsModSrc = fetch "pkgs-mod"; pkgsModFlakeFile = import (pkgsModSrc + "/flake.nix"); pkgsModOutputs = pkgsModFlakeFile.outputs { self = { outPath = pkgsModSrc; }; nixpkgs = { outPath = nixpkgsSrc; }; }; pkgs = import nixpkgsSrc { system = builtins.currentSystem; overlays = [ (pkgsModOutputs.lib.mkOverlay { static = true; }) ]; }; in pkgs.pkg-mod-proj.outPath'
-
-gdalinfo:
-    @nix --extra-experimental-features 'nix-command flakes' eval --raw --impure --expr 'let lock = builtins.fromJSON (builtins.readFile ./flake.lock); fetch = name: builtins.fetchTree (lock.nodes.${name}.locked); nixpkgsSrc = fetch "nixpkgs"; pkgsModSrc = fetch "pkgs-mod"; pkgsModFlakeFile = import (pkgsModSrc + "/flake.nix"); pkgsModOutputs = pkgsModFlakeFile.outputs { self = { outPath = pkgsModSrc; }; nixpkgs = { outPath = nixpkgsSrc; }; }; pkgs = import nixpkgsSrc { system = builtins.currentSystem; overlays = [ (pkgsModOutputs.lib.mkOverlay { static = true; }) ]; }; in pkgs.pkg-mod-gdal.outPath'
-
-nixinfo:
-    just projinfo
-
-    just gdalinfo

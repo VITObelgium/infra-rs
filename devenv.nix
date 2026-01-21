@@ -14,9 +14,25 @@
 
   profiles = {
     nightly.module = {
-      languages.rust.channel = "nightly";
+      languages.rust = {
+        channel = "nightly";
+        components = [
+          "rustc"
+          "cargo"
+          "rust-src"
+          "rust-std"
+          "rustfmt"
+          "clippy"
+          "miri"
+        ];
+      };
       env.ENVIRONMENT = "nightly";
     };
+  };
+
+  languages.rust = {
+    enable = true;
+    channel = "stable";
   };
 
   packages = with pkgs; [
@@ -33,8 +49,4 @@
     pkg-mod-proj
   ];
 
-  languages.rust = {
-    enable = true;
-    channel = "stable";
-  };
 }
