@@ -59,7 +59,7 @@ test_simd: test_release_simd
 
 build_ci: build_allfeatures
 
-test_ci: test_release
+test_ci: test_all
 
 miri:
     @ {{ devenv_nightly }} 'set -o pipefail; cargo miri test --workspace --features=serde,gdal,gdal-static,arrow,derive,vector,vector-io-xlsx,vector-io-csv,polars,proj4rs'

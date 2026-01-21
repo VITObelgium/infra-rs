@@ -21,18 +21,10 @@ jobs:
                       core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
                       core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
             - name: Checkout repository
-              uses: actions/checkout@v4
-            - uses: jdx/mise-action@v3
-              with:
-                  cache_key: "mise-{{platform}}-{{file_hash}}"
-            - name: Cache vcpkg packages
-              id: cache-vcpkg
-              uses: actions/cache@v4
-              with:
-                  path: |
-                      ~/.cache/vcpkg
-                      ~/AppData/Local/vcpkg/archives
-                  key: ${{ matrix.cfg.os }}-${{ hashFiles('**/Cargo.toml') }}
+              uses: actions/checkout@v5
+            - uses: cachix/install-nix-action@v31
+            - name: Install devenv.sh
+              run: nix profile add nixpkgs#devenv
             - name: Configure cache
               uses: Swatinem/rust-cache@v2
             - name: Setup pages
@@ -43,9 +35,11 @@ jobs:
             - name: Install the pixi environment
               run: mise -E vcpkg run bootstrap_py
             - name: Clean docs folder
+              shell: devenv --profile nightly shell bash -- -e {0}
               run: cargo clean --doc
-            - name: Build docs
-              run: mise -E vcpkg doc
+            - name: Build the docs
+              shell: devenv --profile nightly shell bash -- -e {0}
+              run: just doc
             - name: Force correct file permissions
               run: |
                   chmod -c +rX "target/doc/.lock" &

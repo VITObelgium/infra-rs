@@ -31,14 +31,6 @@ jobs:
             - name: Run the unit tests
               shell: devenv shell bash -- -e {0}
               run: just test_ci
-            # - name: Run the integration tests
-            #   run: mise -E vcpkg run test_integration --release --target ${{ matrix.cfg.target }}
-            # - name: Run the unit tests with python feature enabled
-            #   if: matrix.cfg.id != 'mac-intel'
-            #   run: mise -E vcpkg run test_py
-            - name: Run the unit tests with simd feature enabled
-              shell: devenv --profile nightly shell bash -- -e {0}
-              run: just test_ci
             - name: Build the docs
               shell: devenv --profile nightly shell bash -- -e {0}
               run: just doc
