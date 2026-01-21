@@ -26,6 +26,13 @@ build_allfeatures:
 
 build: build_release
 
+# Build mingw executable and create result symlink
+build-mingw output="createcog":
+    #!/usr/bin/env bash
+    OUTPUT=$(devenv build outputs.{{ output }}-mingw 2>&1 | grep "^/nix/store")
+    ln -sfn "$OUTPUT" result-{{ output }}-mingw
+    echo "Created symlink: result-{{ output }}-mingw -> $OUTPUT"
+
 test_debug $RUST_LOG="debug":
     cargo nextest run -p geo --features=gdal-static
 

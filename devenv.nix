@@ -227,17 +227,12 @@ in
 
   outputs = {
     createcog = mkRustTool { pname = "createcog"; };
-    creatembtiles = mkRustTool { pname = "creatembtiles"; };
     tiles2raster = mkRustTool { pname = "tiles2raster"; };
     tileserver = mkRustTool { pname = "tileserver"; };
 
     # Static musl binaries
     createcog-musl = mkRustTool {
       pname = "createcog";
-      useMusl = true;
-    };
-    creatembtiles-musl = mkRustTool {
-      pname = "creatembtiles";
       useMusl = true;
     };
     tiles2raster-musl = mkRustTool {
@@ -252,10 +247,6 @@ in
     # MinGW binaries for Windows
     createcog-mingw = mkRustTool {
       pname = "createcog";
-      useMingw = true;
-    };
-    creatembtiles-mingw = mkRustTool {
-      pname = "creatembtiles";
       useMingw = true;
     };
     tiles2raster-mingw = mkRustTool {
