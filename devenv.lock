@@ -3,10 +3,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1768937129,
+        "lastModified": 1768954892,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "c18346f4c50dd40aa20590ce9a05daaec12b6b70",
+        "rev": "c6267b9343bbc96c88038765d02e2a2ad2a3b8a0",
         "type": "github"
       },
       "original": {
@@ -94,10 +94,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1768950584,
+        "lastModified": 1768995089,
         "owner": "VITO-RMA",
         "repo": "nix-pkgs",
-        "rev": "17c87f62169a7896e27cb4dff728efef3d6c0170",
+        "rev": "f102c9dbb60a62b44f0decb02daac3651b3a6df9",
         "type": "github"
       },
       "original": {
@@ -126,10 +126,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1768877311,
+        "lastModified": 1768963622,
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "59e4ab96304585fde3890025fd59bd2717985cc1",
+        "rev": "2ef5b3362af585a83bafd34e7fc9b1f388c2e5e2",
         "type": "github"
       },
       "original": {

@@ -1,7 +1,6 @@
 {
   pkgs,
   inputs,
-  config,
   lib,
   ...
 }:
@@ -9,10 +8,31 @@ let
   cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
   version = cargoToml.workspace.package.version;
 
+  # Use pkgs-mod's mkBuildEnv to get properly configured musl/mingw packages
+  buildEnv = inputs.pkgs-mod.lib.mkBuildEnv pkgs.system;
+  mingwBuildEnv = inputs.pkgs-mod.lib.mkBuildEnvMingwCross pkgs.system { };
+
+  pkgsMusl = buildEnv.pkgsStaticMusl;
+  pkgsMingw = mingwBuildEnv.pkgsMingw;
+
+  # Use pkgsStatic.rustPlatform which has musl target built-in
+  rustPlatformMusl = pkgs.pkgsStatic.rustPlatform;
+
   mkRustTool =
-    pname:
-    pkgs.rustPlatform.buildRustPackage {
-      inherit pname version;
+    {
+      pname,
+      useMusl ? false,
+    }:
+    let
+      rustPlatform = if useMusl then rustPlatformMusl else pkgs.rustPlatform;
+      buildInputsPkgs = if useMusl then pkgsMusl else pkgs;
+      descriptionSuffix = if useMusl then " (static musl)" else "";
+      finalPname = if useMusl then "${pname}-musl" else pname;
+
+    in
+    rustPlatform.buildRustPackage {
+      pname = finalPname;
+      inherit version;
       src = ./.;
 
       cargoLock = {
@@ -29,20 +49,35 @@ let
         pkg-config
       ];
 
-      buildInputs = with pkgs; [
+      buildInputs = with buildInputsPkgs; [
         pkg-mod-openssl
         pkg-mod-gdal
         pkg-mod-proj
       ];
 
+      # Override RUSTFLAGS for musl
+      RUSTFLAGS = lib.optionalString useMusl (
+        lib.concatStringsSep " " [
+          "-Crelocation-model=static"
+        ]
+      );
+
       cargoBuildFlags = [
         "-p"
         pname
+      ]
+      ++ lib.optionals useMusl [
+        "--target"
+        "x86_64-unknown-linux-musl"
       ];
 
       cargoTestFlags = [
         "-p"
         pname
+      ]
+      ++ lib.optionals useMusl [
+        "--target"
+        "x86_64-unknown-linux-musl"
       ];
 
       # Only install the specific binary we're building
@@ -56,7 +91,7 @@ let
       '';
 
       meta = with lib; {
-        description = "Workspace tool: ${pname}";
+        description = "Workspace tool: ${pname}${descriptionSuffix}";
         homepage = "https://github.com/VITO-RMA/infra-rs";
         license = licenses.mit;
       };
@@ -87,6 +122,23 @@ in
       };
       env.ENVIRONMENT = "nightly";
     };
+
+    musl.module = {
+      languages.rust = {
+        channel = "nightly";
+        targets = [ "x86_64-unknown-linux-musl" ];
+      };
+
+      env = {
+        ENVIRONMENT = "musl";
+        CARGO_BUILD_TARGET = "x86_64-unknown-linux-musl";
+        CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER = "x86_64-unknown-linux-musl-gcc";
+      };
+
+      packages = with pkgs.pkgsStatic; [
+        stdenv.cc
+      ];
+    };
   };
 
   languages.rust = {
@@ -109,9 +161,28 @@ in
   ];
 
   outputs = {
-    createcog = mkRustTool "createcog";
-    tiles2raster = mkRustTool "tiles2raster";
-    tileserver = mkRustTool "tileserver";
+    createcog = mkRustTool { pname = "createcog"; };
+    creatembtiles = mkRustTool { pname = "creatembtiles"; };
+    tiles2raster = mkRustTool { pname = "tiles2raster"; };
+    tileserver = mkRustTool { pname = "tileserver"; };
+
+    # Static musl binaries
+    createcog-musl = mkRustTool {
+      pname = "createcog";
+      useMusl = true;
+    };
+    creatembtiles-musl = mkRustTool {
+      pname = "creatembtiles";
+      useMusl = true;
+    };
+    tiles2raster-musl = mkRustTool {
+      pname = "tiles2raster";
+      useMusl = true;
+    };
+    tileserver-musl = mkRustTool {
+      pname = "tileserver";
+      useMusl = true;
+    };
   };
 
 }
