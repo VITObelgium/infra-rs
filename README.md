@@ -7,7 +7,7 @@ This repo contains the shared crates for building geo applications
 Add this repository as a git submodule into your project
 
 When the gdal feature is required, vcpkg needs to be configured
-```
+
 In your main Cargo.toml specify the vcpkg version you wish to use
 ```
 [package.metadata.vcpkg]
@@ -33,28 +33,17 @@ It is recommended to also add the crates to your workspace when you expect to ma
 members = ["infra-rs/crates/inf", "infra-rs/crates/vector"]
 ```
 
-# Setup development tools
-To build infra-rs as a standalone project
+## Setup development tools
+A nix devenv configuration is provided for setting up a reproducible development environment.
+This is the recommended way to setup the development environment on Linux and MacOS.
+Use direnv to automatically load the nix environment when entering the repository or manuelly enter a nix shell with `devenv shell`.
 
-## Windows
-Install the msvc compiler
-download and run `https://win.rustup.rs/x86_64`
+On Windows or if you don't want to use nix, you can use the mise config to setup the development environment.
+Check https://mise.jdx.dev/getting-started.html for installing mise.
 
-## Linux
-run `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`
-
-And follow onscreen instructions.
-
-## Mac
-Install the developer tools
-`xcode-select --install`
-
-If the bootstrap fails make sure to use m4 from homebrew
-`brew link m4 --force`
-
-### Additional tooling
-`cargo install cargo-binstall`
-`cargo binstall sd fd-find just cargo-vcpkg cargo-nextest`
-
-### Compile the C++ dependencies
+When using mise you can compile the C++ dependencies with:
 `just bootstrap`
+
+## Building the code and run tests
+`just build`
+`just test_all`
