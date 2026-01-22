@@ -30,10 +30,6 @@ jobs:
             - name: Setup pages
               id: pages
               uses: actions/configure-pages@v5
-            - name: Build the C++ dependencies using vcpkg
-              run: mise -E vcpkg run bootstrap
-            - name: Install the pixi environment
-              run: mise -E vcpkg run bootstrap_py
             - name: Clean docs folder
               shell: devenv --profile nightly shell bash -- -e {0}
               run: cargo clean --doc
