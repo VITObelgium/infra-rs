@@ -7,7 +7,7 @@ This repo contains the shared crates for building geo applications
 Add this repository as a git submodule into your project
 
 When the gdal feature is required, vcpkg needs to be configured
-```
+
 In your main Cargo.toml specify the vcpkg version you wish to use
 ```
 [package.metadata.vcpkg]
