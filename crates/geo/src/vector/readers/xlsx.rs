@@ -161,7 +161,15 @@ impl Iterator for XlsxRowIterator {
                     Self::convert_data_to_field(data, field_type)
                 })
                 .collect();
+
             self.current += 1;
+
+            // Skip empty rows when we are reading multiple columns
+            let all_empty = fields.len() > 1 && fields.iter().all(|f| matches!(f, Ok(None)));
+            if all_empty {
+                return self.next();
+            }
+
             Some(DataFrameRow { fields })
         }
     }

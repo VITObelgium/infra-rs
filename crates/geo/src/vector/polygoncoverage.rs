@@ -2,7 +2,7 @@ use crate::RasterSize;
 use crate::{Cell, CellIterator};
 use gdal::vector::{LayerAccess, ToGdal};
 use geos::Geom;
-use geozero::ToGeos;
+use geozero::ToGeos as _;
 use inf::duration;
 use inf::progressinfo::AsyncProgressNotification;
 use rayon::prelude::*;
