@@ -26,13 +26,6 @@ build_allfeatures:
 
 build: build_release
 
-# Build mingw executable and create result symlink
-build-mingw output="createcog":
-    #!/usr/bin/env bash
-    OUTPUT=$(devenv build outputs.{{ output }}-mingw 2>&1 | grep "^/nix/store")
-    ln -sfn "$OUTPUT" result-{{ output }}-mingw
-    echo "Created symlink: result-{{ output }}-mingw -> $OUTPUT"
-
 test_debug $RUST_LOG="debug":
     cargo nextest run -p geo --features=gdal-static
 
@@ -91,3 +84,38 @@ tiles2raster zoom tile_size="256":
 
 pngtiles2raster zoom:
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.png?tile_format=float_png" --zoom {{ zoom }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_png_{{ zoom }}.tif
+
+[unix]
+create_release_tarball tool build_type="":
+    #!/usr/bin/env bash
+    if [ -z "{{ build_type }}" ]; then
+        suffix=""
+    else
+        suffix="-{{ build_type }}"
+    fi
+
+    profile_arg=""
+    if [ "{{ build_type }}" = "musl" ]; then
+        profile_arg="--profile musl"
+    elif [ "{{ build_type }}" = "mingw" ]; then
+        profile_arg="--profile mingw"
+    fi
+
+    TARGET={{ tool }}${suffix}
+    RELEASE_DIR=${TARGET}-release-temp
+    echo "Building devenv output: ${TARGET}"
+    OUTPUT=$(devenv ${profile_arg} build outputs.${TARGET} 2>&1 | grep "^/nix/store")
+    if [ -z "${OUTPUT}" ]; then
+        echo "Error: Devenv output could not be detected"
+        exit 1
+    fi
+
+    echo "Devenv output located at: ${OUTPUT}"
+
+    # Create archive
+    mkdir -p ${RELEASE_DIR}
+    cp ${OUTPUT}/bin/* ${RELEASE_DIR}/ 2>/dev/null
+
+    (cd ${RELEASE_DIR} && tar -czf ../${TARGET}.tar.gz *)
+    rm -rf ${RELEASE_DIR}
+    echo "Release tarball created ${TARGET}.tar.gz"
