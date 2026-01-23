@@ -6,7 +6,7 @@ sd = "latest"
 fd = { version = "latest", os = ["windows"] }
 
 [tools.rust]
-version = "1.90.0"
+version = "1.91.0"
 profile = "default"
 targets = "wasm32-unknown-unknown{% if os() == 'macos' %},x86_64-apple-darwin{% endif %}"
 

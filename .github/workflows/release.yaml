@@ -54,18 +54,26 @@ jobs:
             - name: Install devenv.sh
               run: nix profile install nixpkgs#devenv
 
-            - name: Build release binaries
-              run: |
-                  for output in ${{ matrix.outputs }}; do
-                    echo "Building $output..."
-                    nix build .#$output
-                  done
-
             - name: Create archives and upload
+              if: matrix.os == 'ubuntu-latest'
+              shell: devenv shell bash -- -e {0}
               run: |
                   for tool in ${{ matrix.outputs }}; do
                     just create_release_tarball $tool musl
-                    gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-musl.tar.gz
+                    mv ${tool}-musl.tar.gz ${tool}-linux-x86_64.tar.gz
+                    gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-linux-x86_64.tar.gz
+                  done
+              env:
+                  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Create archives and upload
+              if: matrix.os == 'macos-latest'
+              shell: devenv shell bash -- -e {0}
+              run: |
+                  for tool in ${{ matrix.outputs }}; do
+                    just create_release_tarball $tool
+                    mv ${tool}.tar.gz ${tool}-macos-arm64.tar.gz
+                    gh release upload ${{ needs.create-release.outputs.tag_name }} ${tool}-macos-arm64.tar.gz
                   done
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
