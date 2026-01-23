@@ -33,6 +33,26 @@ impl From<ArrayDataType> for GdalDataType {
     }
 }
 
+impl TryFrom<gdal::raster::GdalDataType> for ArrayDataType {
+    type Error = Error;
+
+    fn try_from(value: gdal::raster::GdalDataType) -> std::result::Result<Self, Self::Error> {
+        match value {
+            gdal::raster::GdalDataType::UInt8 => Ok(ArrayDataType::Uint8),
+            gdal::raster::GdalDataType::UInt16 => Ok(ArrayDataType::Uint16),
+            gdal::raster::GdalDataType::UInt32 => Ok(ArrayDataType::Uint32),
+            gdal::raster::GdalDataType::UInt64 => Ok(ArrayDataType::Uint64),
+            gdal::raster::GdalDataType::Int8 => Ok(ArrayDataType::Int8),
+            gdal::raster::GdalDataType::Int16 => Ok(ArrayDataType::Int16),
+            gdal::raster::GdalDataType::Int32 => Ok(ArrayDataType::Int32),
+            gdal::raster::GdalDataType::Int64 => Ok(ArrayDataType::Int64),
+            gdal::raster::GdalDataType::Float32 => Ok(ArrayDataType::Float32),
+            gdal::raster::GdalDataType::Float64 => Ok(ArrayDataType::Float64),
+            gdal::raster::GdalDataType::Unknown => Err(Error::Runtime(format!("Unknown GDAL data type: {:?}", value))),
+        }
+    }
+}
+
 pub fn gdal_ordinal_for_data_type(data_type: ArrayDataType) -> u32 {
     match data_type {
         ArrayDataType::Int8 => <i8 as GdalType>::gdal_ordinal(),

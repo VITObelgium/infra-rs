@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{ffi::CString, path::Path};
 
 use crate::{
     ArrayDataType, GeoReference, Result, Tile, ZoomLevelStrategy, crs,
@@ -22,6 +22,21 @@ pub struct CogCreationOptions {
     pub allow_sparse: bool,
     pub output_data_type: Option<ArrayDataType>,
     pub aligned_levels: Option<i32>,
+}
+
+impl Default for CogCreationOptions {
+    fn default() -> Self {
+        Self {
+            min_zoom: None,
+            zoom_level_strategy: ZoomLevelStrategy::Closest,
+            tile_size: 512,
+            compression: Some(Compression::Lzw),
+            predictor: Some(PredictorSelection::Automatic),
+            allow_sparse: true,
+            output_data_type: None,
+            aligned_levels: None,
+        }
+    }
 }
 
 fn gdal_bool_name(value: bool) -> &'static str {
@@ -111,6 +126,13 @@ pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<St
         }
     }
 
+    let georef = GeoReference::from_file(input)?.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
+    if georef.nodata().is_none() {
+        let data_type = raster::io::detect_data_type(input, 1)?;
+        options.push("-dstnodata".to_string());
+        options.push(format!("{}", data_type.default_nodata_value()));
+    }
+
     if let Some(min_zoom) = opts.min_zoom {
         let georef = GeoReference::from_file(input)?.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
         let tile_size_offset = (opts.tile_size / 256 - 1) as i32;
@@ -147,9 +169,116 @@ pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<St
     Ok(options)
 }
 
+/// RAII wrapper for a virtual dataset file in GDAL's `/vsimem/` file system.
+/// Automatically cleans up the virtual file when dropped.
+struct VirtualDataset {
+    path: String,
+}
+
+impl VirtualDataset {
+    /// Creates a new `VirtualDataset` that will clean up the given path on drop
+    fn new(path: String) -> Self {
+        Self { path }
+    }
+}
+
+impl Drop for VirtualDataset {
+    fn drop(&mut self) {
+        // Clean up the virtual file from /vsimem/
+        if let Ok(path_cstr) = CString::new(self.path.as_str()) {
+            unsafe {
+                gdal_sys::VSIUnlink(path_cstr.as_ptr());
+            }
+        }
+    }
+}
+
+/// Creates a VRT (Virtual Dataset) wrapper around a source dataset that adds a nodata value.
+/// This allows setting nodata metadata without modifying the original read-only file.
+/// Uses GDAL's in-memory virtual file system (`/vsimem/`) to avoid creating temporary files on disk.
+///
+/// Returns either the original dataset (if it already has nodata) or a `VirtualDataset` wrapper
+/// that will automatically clean up when dropped.
+fn create_vrt_with_nodata(input: &Path, src_ds: gdal::Dataset) -> Result<(gdal::Dataset, Option<VirtualDataset>)> {
+    let band_nr = 1;
+    let band = src_ds.rasterband(band_nr)?;
+
+    if band.no_data_value().is_some() {
+        return Ok((src_ds, None));
+    }
+
+    // Source lacks nodata value, create an in-memory VRT wrapper
+    let data_type = ArrayDataType::try_from(band.band_type())?;
+    let nodata_value = data_type.default_nodata_value();
+
+    // Create a VRT in GDAL's in-memory virtual file system with a unique path per thread
+    let vrt_path = format!("/vsimem/cog_create_with_nodata_{:?}.vrt", std::thread::current().id());
+
+    // Build VRT XML
+    let input_path = input.to_string_lossy();
+    let (width, height) = (src_ds.raster_size().0, src_ds.raster_size().1);
+    let geo_transform = src_ds.geo_transform()?;
+    let projection = src_ds.projection();
+    let data_type_name = gdal_data_type_name(data_type);
+
+    let vrt_content = format!(
+        r#"<VRTDataset rasterXSize="{}" rasterYSize="{}">
+  <GeoTransform>{}, {}, {}, {}, {}, {}</GeoTransform>
+  <SRS>{}</SRS>
+  <VRTRasterBand dataType="{}" band="1">
+    <NoDataValue>{}</NoDataValue>
+    <SimpleSource>
+      <SourceFilename relativeToVRT="0">{}</SourceFilename>
+      <SourceBand>{}</SourceBand>
+    </SimpleSource>
+  </VRTRasterBand>
+</VRTDataset>"#,
+        width,
+        height,
+        geo_transform[0],
+        geo_transform[1],
+        geo_transform[2],
+        geo_transform[3],
+        geo_transform[4],
+        geo_transform[5],
+        projection,
+        data_type_name,
+        nodata_value,
+        input_path,
+        band_nr
+    );
+
+    // Write VRT content to GDAL's in-memory file system using direct VSI functions
+    let path_cstr = CString::new(vrt_path.as_str())?;
+    let mode_cstr = CString::new("wb")?;
+    let vrt_bytes = vrt_content.as_bytes();
+
+    unsafe {
+        let file_handle = gdal_sys::VSIFOpenL(path_cstr.as_ptr(), mode_cstr.as_ptr());
+        if file_handle.is_null() {
+            return Err(crate::Error::Runtime("Failed to open /vsimem/ file for writing".to_string()));
+        }
+
+        let bytes_written = gdal_sys::VSIFWriteL(vrt_bytes.as_ptr().cast::<std::ffi::c_void>(), 1, vrt_bytes.len(), file_handle);
+        gdal_sys::VSIFCloseL(file_handle);
+
+        if bytes_written != vrt_bytes.len() {
+            return Err(crate::Error::Runtime("Failed to write VRT content to /vsimem/".to_string()));
+        }
+    }
+
+    let virt_ds = VirtualDataset::new(vrt_path.clone());
+    let dataset = raster::formats::gdal::open_dataset_read_only(Path::new(&vrt_path))?;
+    Ok((dataset, Some(virt_ds)))
+}
+
 pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -> Result<()> {
     let options = create_gdal_args(input, opts)?;
     let src_ds = raster::formats::gdal::open_dataset_read_only(input)?;
+    // If the source doesn't have a nodata value, create a VRT wrapper that adds it
+    // This way we don't modify the read-only source dataset, _virtds owns the VRT and cleans up on drop
+    let (src_ds, _virt_ds) = create_vrt_with_nodata(input, src_ds)?;
+
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
 
     Ok(())
@@ -157,7 +286,12 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
 
 #[cfg(test)]
 mod tests {
-    use crate::{geotiff::GeoTiffReader, raster::Predictor, testutils};
+    use crate::{
+        Array, Cell,
+        geotiff::GeoTiffReader,
+        raster::{DenseRaster, Predictor, RasterReadWrite},
+        testutils,
+    };
     use approx::assert_relative_eq;
 
     use super::*;
@@ -396,6 +530,34 @@ mod tests {
             assert_eq!(meta.overviews.len(), 2); // from 7 to 8
             assert_eq!(meta.chunk_row_length(), TILE_SIZE);
         }
+
+        Ok(())
+    }
+
+    #[test]
+    fn cog_creation_source_has_no_nodata() -> Result<()> {
+        // test case for source datasets that have no nodata value defined
+        // This used to create invalid output COGs where the nodata at the edges due to the rotation of the warp
+        // contained 0 values that were not marked as nodata in the output COG, since it has no nodata value
+
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let mut meta = GeoReference::from_file(&testutils::workspace_test_data_dir().join("landusebyte.tif"))?;
+        meta.set_nodata(None);
+        let input = tmp.path().join("input.tif");
+        let output = tmp.path().join("cog.tif");
+
+        {
+            let mut raster = DenseRaster::<f32>::filled_with(Some(1.0), meta);
+            raster.write(&input)?;
+        }
+
+        create_cog_tiles(&input, &output, CogCreationOptions::default())?;
+
+        let cog_raster = DenseRaster::<f32>::read(&output)?;
+        assert_eq!(None, cog_raster.cell_value(Cell::from_row_col(0, 0)));
+
+        // Verify the we didn't modify the input dataset
+        assert_eq!(None, DenseRaster::<f32>::read(&input)?.metadata().nodata());
 
         Ok(())
     }
