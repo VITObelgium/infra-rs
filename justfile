@@ -1,5 +1,9 @@
 devenv_nightly := "devenv --option devenv.warnOnNewVersion:bool false --profile nightly shell -- bash -euc"
 
+[windows]
+bootstrap:
+    mise -E vcpkg bootstrap
+
 serve_tiles dir:
     cargo run -p tileserver --release -- --gis-dir {{ dir }}
 
@@ -12,9 +16,19 @@ doc:
 docdeps:
     cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features
 
+[windows]
+build_debug:
+    mise -E vcpkg build
+
+[unix]
 build_debug:
     cargo build -p geo --features=gdal-static
 
+[windows]
+build_release:
+    mise -E vcpkg build --release
+
+[unix]
 build_release:
     cargo build -p geo --release
 
@@ -26,6 +40,11 @@ build_allfeatures:
 
 build: build_release
 
+[windows]
+test_debug $RUST_LOG="debug":
+    mise -E vcpkg run test
+
+[unix]
 test_debug $RUST_LOG="debug":
     cargo nextest run -p geo --features=gdal-static
 
