@@ -1,4 +1,5 @@
-[![Build](https://github.com/VITObelgium/infra-rs/actions/workflows/build.yaml/badge.svg)](https://github.com/VITObelgium/infra-rs/actions/workflows/build.yaml)
+[![Nix build](https://github.com/VITObelgium/infra-rs/actions/workflows/nix_build.yaml/badge.svg)](https://github.com/VITObelgium/infra-rs/actions/workflows/nix_build.yaml)
+[![Vcpkg bBuild](https://github.com/VITObelgium/infra-rs/actions/workflows/vcpkg_build.yaml/badge.svg)](https://github.com/VITObelgium/infra-rs/actions/workflows/vcpkg_build.yaml)
 [![Docs](https://github.com/VITObelgium/infra-rs/actions/workflows/docs.yaml/badge.svg?branch=main)](https://vitobelgium.github.io/infra-rs)
 
 This repo contains the shared crates for building geo applications
