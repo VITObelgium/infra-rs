@@ -93,7 +93,13 @@ wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
 arrow = ["dep:arrow"]
-default = ["derive"]
+default = [
+    "derive",
+    "gdal-static",
+    "vector-io",
+    "vector-processing",
+    "raster-io-geotiff",
+]
 derive = ["dep:vector_derive"]
 gdal = ["dep:bon", "dep:gdal", "dep:gdal-sys", "proj", "vector-io"]
 gdal-static = ["gdal"]

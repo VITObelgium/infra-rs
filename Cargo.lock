@@ -752,9 +752,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.2.53"
+version = "1.2.54"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "755d2fce177175ffca841e9a06afdb2c4ab0f593d53b4dee48147dfaade85932"
+checksum = "6354c81bbfd62d9cfa9cb3c773c2b7b2a3a482d569de977fd0e961f6e7c00583"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1058,7 +1058,7 @@ dependencies = [
 
 [[package]]
 name = "createcog"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "anyhow",
  "clap",
@@ -1074,7 +1074,7 @@ dependencies = [
 
 [[package]]
 name = "creatembtiles"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "clap",
  "env_logger",
@@ -1730,7 +1730,7 @@ dependencies = [
 
 [[package]]
 name = "geo"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "approx",
  "arrow",
@@ -2270,7 +2270,7 @@ dependencies = [
 
 [[package]]
 name = "inf"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "approx",
  "bytemuck",
@@ -2868,9 +2868,9 @@ checksum = "d6790f58c7ff633d8771f42965289203411a5e5c68388703c06e14f24770b41e"
 
 [[package]]
 name = "openssl-probe"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f50d9b3dabb09ecd771ad0aa242ca6894994c130308ca3d7684634df8037391"
+checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 
 [[package]]
 name = "page_size"
@@ -3579,9 +3579,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.105"
+version = "1.0.106"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "535d180e0ecab6268a3e718bb9fd44db66bbbc256257165fc699dadf70d16fe7"
+checksum = "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934"
 dependencies = [
  "unicode-ident",
 ]
@@ -3817,9 +3817,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.43"
+version = "1.0.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc74d9a594b72ae6656596548f56f667211f8a97b3d4c3d467150794690dc40a"
+checksum = "21b2ebcf727b7760c461f091f9f0f539b77b8e87f2fd88131e7f1b433b3cece4"
 dependencies = [
  "proc-macro2",
 ]
@@ -3871,7 +3871,7 @@ dependencies = [
 
 [[package]]
 name = "raster-tile"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "futures",
  "geo",
@@ -4472,7 +4472,7 @@ checksum = "e320a6c5ad31d271ad523dcf3ad13e2767ad8b1cb8f047f75a8aeaf8da139da2"
 
 [[package]]
 name = "simd_macro"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -4514,9 +4514,9 @@ checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
 
 [[package]]
 name = "socket2"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "17129e116933cf371d018bb80ae557e889637989d8638274fb25622827b03881"
+checksum = "86f4aa3ad99f2088c990dfa82d367e19cb29268ed67c574d10d0a4bfe71f07e0"
 dependencies = [
  "libc",
  "windows-sys 0.60.2",
@@ -4546,7 +4546,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "inf",
  "libsqlite3-sys",
@@ -4827,7 +4827,7 @@ dependencies = [
 
 [[package]]
 name = "tiler"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "approx",
  "ctor",
@@ -4854,7 +4854,7 @@ dependencies = [
 
 [[package]]
 name = "tiles2raster"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "clap",
  "comfy-table",
@@ -4874,7 +4874,7 @@ dependencies = [
 
 [[package]]
 name = "tileserver"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "axum",
  "clap",
@@ -5283,7 +5283,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vector_derive"
-version = "2025.10.24"
+version = "2026.1.23"
 dependencies = [
  "inf",
  "proc-macro2",
