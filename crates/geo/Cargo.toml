@@ -55,7 +55,9 @@ itertools = "0.14"
 log = "0.4"
 num = "0.4"
 paste = "1.0"
-polars = { version = "0.52", optional = true }
+polars = { version = "0.52", features = [
+    "timezones",
+], default-features = false, optional = true } # crate dependencies should decide which features to use to avoid unnecessary long compile times
 proj = { version = "0.31", optional = true }
 proj4rs = { version = "0.1", features = [
     "crs-definitions",
