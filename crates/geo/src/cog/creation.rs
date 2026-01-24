@@ -1,4 +1,4 @@
-use std::{ffi::CString, path::Path};
+use std::path::Path;
 
 use crate::{
     ArrayDataType, GeoReference, Result, Tile, ZoomLevelStrategy, crs,
@@ -169,115 +169,32 @@ pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<St
     Ok(options)
 }
 
-/// RAII wrapper for a virtual dataset file in GDAL's `/vsimem/` file system.
-/// Automatically cleans up the virtual file when dropped.
-struct VirtualDataset {
-    path: String,
-}
-
-impl VirtualDataset {
-    /// Creates a new `VirtualDataset` that will clean up the given path on drop
-    fn new(path: String) -> Self {
-        Self { path }
-    }
-}
-
-impl Drop for VirtualDataset {
-    fn drop(&mut self) {
-        // Clean up the virtual file from /vsimem/
-        if let Ok(path_cstr) = CString::new(self.path.as_str()) {
-            unsafe {
-                gdal_sys::VSIUnlink(path_cstr.as_ptr());
-            }
-        }
-    }
-}
-
-/// Creates a VRT (Virtual Dataset) wrapper around a source dataset that adds a nodata value.
+/// Creates a VRT wrapper around a source dataset that adds a nodata value if it doesn't have one already.
 /// This allows setting nodata metadata without modifying the original read-only file.
-/// Uses GDAL's in-memory virtual file system (`/vsimem/`) to avoid creating temporary files on disk.
-///
-/// Returns either the original dataset (if it already has nodata) or a `VirtualDataset` wrapper
-/// that will automatically clean up when dropped.
-fn create_vrt_with_nodata(input: &Path, src_ds: gdal::Dataset) -> Result<(gdal::Dataset, Option<VirtualDataset>)> {
+fn create_vrt_with_nodata(src_ds: gdal::Dataset) -> Result<gdal::Dataset> {
     let band_nr = 1;
     let band = src_ds.rasterband(band_nr)?;
 
     if band.no_data_value().is_some() {
-        return Ok((src_ds, None));
+        return Ok(src_ds);
     }
 
-    // Source lacks nodata value, create an in-memory VRT wrapper
     let data_type = ArrayDataType::try_from(band.band_type())?;
     let nodata_value = data_type.default_nodata_value();
 
-    // Create a VRT in GDAL's in-memory virtual file system with a unique path per thread
-    let vrt_path = format!("/vsimem/cog_create_with_nodata_{:?}.vrt", std::thread::current().id());
+    // Build a single-source in-memory VRT dataset with a band-level nodata override.
+    let vrt_opts = gdal::programs::raster::BuildVRTOptions::new(vec!["-vrtnodata".to_string(), nodata_value.to_string()])?;
 
-    // Build VRT XML
-    let input_path = input.to_string_lossy();
-    let (width, height) = (src_ds.raster_size().0, src_ds.raster_size().1);
-    let geo_transform = src_ds.geo_transform()?;
-    let projection = src_ds.projection();
-    let data_type_name = gdal_data_type_name(data_type);
-
-    let vrt_content = format!(
-        r#"<VRTDataset rasterXSize="{}" rasterYSize="{}">
-  <GeoTransform>{}, {}, {}, {}, {}, {}</GeoTransform>
-  <SRS>{}</SRS>
-  <VRTRasterBand dataType="{}" band="1">
-    <NoDataValue>{}</NoDataValue>
-    <SimpleSource>
-      <SourceFilename relativeToVRT="0">{}</SourceFilename>
-      <SourceBand>{}</SourceBand>
-    </SimpleSource>
-  </VRTRasterBand>
-</VRTDataset>"#,
-        width,
-        height,
-        geo_transform[0],
-        geo_transform[1],
-        geo_transform[2],
-        geo_transform[3],
-        geo_transform[4],
-        geo_transform[5],
-        projection,
-        data_type_name,
-        nodata_value,
-        input_path,
-        band_nr
-    );
-
-    // Write VRT content to GDAL's in-memory file system using direct VSI functions
-    let path_cstr = CString::new(vrt_path.as_str())?;
-    let mode_cstr = CString::new("wb")?;
-    let vrt_bytes = vrt_content.as_bytes();
-
-    unsafe {
-        let file_handle = gdal_sys::VSIFOpenL(path_cstr.as_ptr(), mode_cstr.as_ptr());
-        if file_handle.is_null() {
-            return Err(crate::Error::Runtime("Failed to open /vsimem/ file for writing".to_string()));
-        }
-
-        let bytes_written = gdal_sys::VSIFWriteL(vrt_bytes.as_ptr().cast::<std::ffi::c_void>(), 1, vrt_bytes.len(), file_handle);
-        gdal_sys::VSIFCloseL(file_handle);
-
-        if bytes_written != vrt_bytes.len() {
-            return Err(crate::Error::Runtime("Failed to write VRT content to /vsimem/".to_string()));
-        }
-    }
-
-    let virt_ds = VirtualDataset::new(vrt_path.clone());
-    let dataset = raster::formats::gdal::open_dataset_read_only(Path::new(&vrt_path))?;
-    Ok((dataset, Some(virt_ds)))
+    let datasets = vec![src_ds];
+    Ok(gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_opts))?)
 }
 
 pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -> Result<()> {
     let options = create_gdal_args(input, opts)?;
     let src_ds = raster::formats::gdal::open_dataset_read_only(input)?;
     // If the source doesn't have a nodata value, create a VRT wrapper that adds it
-    // This way we don't modify the read-only source dataset, _virtds owns the VRT and cleans up on drop
-    let (src_ds, _virt_ds) = create_vrt_with_nodata(input, src_ds)?;
+    // This way we don't modify the read-only source dataset.
+    let src_ds = create_vrt_with_nodata(src_ds)?;
 
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
 
