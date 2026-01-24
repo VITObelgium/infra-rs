@@ -10,8 +10,6 @@ mod arraydatatype;
 mod arraynum;
 pub mod arrayops;
 mod cell;
-#[cfg(feature = "raster-io-geotiff")]
-#[cfg_attr(docsrs, doc(cfg(feature = "raster-io-geotiff")))]
 pub mod cog;
 pub mod constants;
 mod coordinate;
