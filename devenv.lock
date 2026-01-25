@@ -3,10 +3,10 @@
     "devenv": {
       "locked": {
         "dir": "src/modules",
-        "lastModified": 1769011019,
+        "lastModified": 1769263214,
         "owner": "cachix",
         "repo": "devenv",
-        "rev": "e4c0fb64efda6ffa563a97a98c8c75c336f6bff1",
+        "rev": "328752c05f1745c7f613689a9df0bd1ffc8f3922",
         "type": "github"
       },
       "original": {
@@ -40,10 +40,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1768935149,
+        "lastModified": 1769069492,
         "owner": "cachix",
         "repo": "git-hooks.nix",
-        "rev": "18cbede9ff6da05b911c5c4802a397c2686ac8fa",
+        "rev": "a1ef738813b15cf8ec759bdff5761b027e3e1d23",
         "type": "github"
       },
       "original": {
@@ -94,10 +94,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1769028337,
+        "lastModified": 1769334244,
         "owner": "VITO-RMA",
         "repo": "nix-pkgs",
-        "rev": "b8916f1c79f285290fea0ca8d278c1ff2762af2a",
+        "rev": "26eabe407d547358bf92b985c8a7e87a4dda914e",
         "type": "github"
       },
       "original": {
@@ -126,10 +126,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1768963622,
+        "lastModified": 1769309768,
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "2ef5b3362af585a83bafd34e7fc9b1f388c2e5e2",
+        "rev": "140c9dc582cb73ada2d63a2180524fcaa744fad5",
         "type": "github"
       },
       "original": {

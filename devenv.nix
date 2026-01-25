@@ -76,19 +76,6 @@ let
         pkg-mod-proj
       ];
 
-      # Fix .lib extension issue in proj's pkg-config for MinGW
-      # TODO fix this in pkg-mod-proj itself
-      postPatch = lib.optionalString useMingw ''
-        # Create a wrapper for pkg-config that filters out .lib extensions
-        mkdir -p $TMPDIR/bin
-        cat > $TMPDIR/bin/pkg-config << 'EOF'
-        #!/bin/sh
-        ${pkgs.pkg-config}/bin/pkg-config "$@" | sed 's/-lshell32\.lib/-lshell32/g; s/-lole32\.lib/-lole32/g'
-        EOF
-        chmod +x $TMPDIR/bin/pkg-config
-        export PATH=$TMPDIR/bin:$PATH
-      '';
-
       # Override RUSTFLAGS for musl and mingw
       RUSTFLAGS =
         if useMusl then
