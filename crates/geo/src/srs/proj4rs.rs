@@ -67,8 +67,10 @@ impl SpatialReference {
     }
 
     pub fn to_wkt(&self) -> Result<String> {
-        if self.is_geographic() && self.epsg_geo.is_some() {
-            return crs_definitions::from_code(self.epsg_geo.unwrap().into())
+        if self.is_geographic()
+            && let Some(epsg) = self.epsg_geo
+        {
+            return crs_definitions::from_code(epsg.into())
                 .map(|def| def.wkt.to_string())
                 .ok_or_else(|| {
                     Error::Runtime(format!(
