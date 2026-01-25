@@ -94,10 +94,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1769334244,
+        "lastModified": 1769367743,
         "owner": "VITO-RMA",
         "repo": "nix-pkgs",
-        "rev": "26eabe407d547358bf92b985c8a7e87a4dda914e",
+        "rev": "7358637d79a766d53e64a2ae42befb883bb9d07f",
         "type": "github"
       },
       "original": {

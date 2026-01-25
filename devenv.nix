@@ -86,9 +86,7 @@ let
           lib.concatStringsSep " " [
             "-Clink-arg=-L${pkgsCross.stdenv.cc.cc}/x86_64-w64-mingw32/lib"
             "-Clink-arg=-static"
-            "-Clink-arg=-Wl,-Bstatic"
             "-Clink-arg=-lmcfgthread"
-            "-Clink-arg=-Wl,-Bdynamic"
             "-Clink-arg=-lkernel32"
             "-Clink-arg=-lntdll"
             "-Clink-arg=-ladvapi32"
