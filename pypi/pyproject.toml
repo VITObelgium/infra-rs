@@ -1,0 +1,41 @@
+[project]
+name = "vito-sas-createcog"
+requires-python = ">=3.10"
+description = "A command line tool for easy cog creation"
+readme = {file = "../tools/createcog/README.md", content-type = "text/markdown"}
+license-files = ["LICENSE-MIT"]
+dynamic = ["version"]
+classifiers=[
+    "Intended Audience :: Developers",
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Operating System :: MacOS :: MacOS X",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+]
+keywords = ["geospatial", "cog", "raster"]
+
+[project.urls]
+issues = "https://github.com/VITObelgium/infra-rs/issues"
+source = "https://github.com/VITObelgium/infra-rs"
+documentation ="https://vitobelgium.github.io/infra-rs/geo/index.html"
+
+[[project.authors]]
+name = "Dirk Vanden Boer"
+email = "dirk.vanden.boer@vito.be"
+
+[build-system]
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
+
+[tool.maturin]
+bindings = "bin"
+manifest-path = "../tools/createcog/Cargo.toml"
+module-name = "createcog"
+locked = true
+
+[dependency-groups]
+dev = [
+    "maturin>=1.9,<2 ; python_full_version >= '3.12'",
+]

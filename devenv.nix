@@ -13,7 +13,53 @@ let
   mingwBuildEnv = inputs.pkgs-mod.lib.mkBuildEnvMingwCross pkgs.system { };
 
   pkgsMusl = buildEnv.pkgsStaticMusl;
+
+  pkgsMuslAarch64 =
+    if pkgs.stdenv.hostPlatform.isAarch64 then
+      buildEnv.pkgsStaticMusl
+    else
+      pkgs.pkgsCross.aarch64-multiplatform.pkgsStatic;
+
+  pkgsMuslX86_64 =
+    if pkgs.stdenv.hostPlatform.isx86_64 then buildEnv.pkgsStaticMusl else pkgs.pkgsCross.musl64;
   pkgsMingw = mingwBuildEnv.pkgsMingw;
+
+  muslTarget =
+    if pkgs.stdenv.hostPlatform.system == "aarch64-linux" then
+      "aarch64-unknown-linux-musl"
+    else
+      "x86_64-unknown-linux-musl";
+
+  rustToolchainMusl = pkgs.rust-bin.stable.latest.default.override {
+    targets = [
+      "aarch64-unknown-linux-musl"
+      "x86_64-unknown-linux-musl"
+    ];
+    extensions = [ "rust-src" ];
+  };
+
+  pkgModDeps =
+    p: with p; [
+      pkg-mod-openssl
+      pkg-mod-gdal
+      pkg-mod-proj
+    ];
+
+  getAllPropagated =
+    p: lib.unique (lib.flatten (map (x: [ x ] ++ getAllPropagated (x.propagatedBuildInputs or [ ])) p));
+
+  commonPackages = with pkgs; [
+    just
+    lld
+    cargo-nextest
+    cargo-zigbuild
+    zig
+    trivy
+    uv
+    pkg-config
+    python313
+    python313Packages.pyarrow
+  ];
 
   # Use pkgsStatic.rustPlatform which has musl target built-in
   rustPlatformMusl = pkgs.pkgsStatic.rustPlatform;
@@ -45,7 +91,7 @@ let
           pkgs;
       targetTriple =
         if useMusl then
-          "x86_64-unknown-linux-musl"
+          muslTarget
         else if useMingw then
           "x86_64-pc-windows-gnu"
         else
@@ -70,11 +116,7 @@ let
         pkg-config
       ];
 
-      buildInputs = with buildInputsPkgs; [
-        pkg-mod-openssl
-        pkg-mod-gdal
-        pkg-mod-proj
-      ];
+      buildInputs = pkgModDeps buildInputsPkgs;
 
       # Override RUSTFLAGS for musl and mingw
       RUSTFLAGS =
@@ -128,11 +170,53 @@ let
         license = licenses.mit;
       };
     };
+
+  mkMuslProfile =
+    {
+      systemName,
+      pkgsStatic,
+      targetTriple,
+      includeCompiler ? false,
+    }:
+    {
+      languages.rust = {
+        targets = [ targetTriple ];
+      };
+
+      env =
+        let
+          rustFlagsEnv =
+            "CARGO_TARGET_"
+            + (lib.strings.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] targetTriple))
+            + "_RUSTFLAGS";
+        in
+        {
+          ENVIRONMENT = "musl-${systemName}";
+          "${rustFlagsEnv}" =
+            let
+              libs =
+                getAllPropagated (pkgModDeps pkgsStatic) ++ lib.optional includeCompiler pkgsStatic.stdenv.cc.cc;
+              getPaths = p: if p ? outputs then map (o: p.${o}) p.outputs else [ p ];
+              allPaths = lib.flatten (map getPaths libs);
+            in
+            builtins.concatStringsSep " " (map (p: "-L${p}/lib") allPaths) + " -Crelocation-model=static";
+        };
+
+      packages = lib.mkForce (
+        commonPackages
+        ++ [ rustToolchainMusl ]
+        ++ (with pkgsStatic; [
+          stdenv.cc
+        ])
+        ++ (pkgModDeps pkgsStatic)
+      );
+    };
 in
 {
   cachix.pull = [ "geo-overlay" ];
 
   overlays = [
+    (import inputs.rust-overlay)
     (inputs.pkgs-mod.lib.mkOverlay {
       static = true;
     })
@@ -155,21 +239,34 @@ in
       env.ENVIRONMENT = "nightly";
     };
 
-    musl.module = {
-      languages.rust = {
-        channel = "nightly";
-        targets = [ "x86_64-unknown-linux-musl" ];
-      };
+    musl.module =
+      if muslTarget == "aarch64-unknown-linux-musl" then
+        mkMuslProfile {
+          systemName = "aarch64";
+          pkgsStatic = pkgsMuslAarch64;
+          targetTriple = muslTarget;
+          includeCompiler = true;
+        }
+      else
+        mkMuslProfile {
+          systemName = "x86_64";
+          pkgsStatic = pkgsMuslX86_64;
+          targetTriple = muslTarget;
+          includeCompiler = true;
+        };
 
-      env = {
-        ENVIRONMENT = "musl";
-        CARGO_BUILD_TARGET = "x86_64-unknown-linux-musl";
-        CARGO_TARGET_X86_64_UNKNOWN_LINUX_MUSL_LINKER = "x86_64-unknown-linux-musl-gcc";
-      };
+    musl-aarch64.module = mkMuslProfile {
+      systemName = "aarch64";
+      pkgsStatic = pkgsMuslAarch64;
+      targetTriple = "aarch64-unknown-linux-musl";
+      includeCompiler = true;
+    };
 
-      packages = with pkgs.pkgsStatic; [
-        stdenv.cc
-      ];
+    musl-x86_64.module = mkMuslProfile {
+      systemName = "x86_64";
+      pkgsStatic = pkgsMuslX86_64;
+      targetTriple = "x86_64-unknown-linux-musl";
+      includeCompiler = true;
     };
 
     mingw.module = {
@@ -196,19 +293,7 @@ in
     channel = "stable";
   };
 
-  packages = with pkgs; [
-    just
-    lld
-    cargo-nextest
-    trivy
-    just
-    pkg-config
-    python313
-    python313Packages.pyarrow
-    pkg-mod-openssl
-    pkg-mod-gdal
-    pkg-mod-proj
-  ];
+  packages = commonPackages ++ (pkgModDeps pkgs);
 
   scripts.createcog.exec = ''
     cargo run -p createcog -- "$@"
