@@ -210,6 +210,10 @@ in
     pkg-mod-proj
   ];
 
+  scripts.createcog.exec = ''
+    cargo run -p createcog -- "$@"
+  '';
+
   outputs = {
     createcog = mkRustTool { pname = "createcog"; };
     tiles2raster = mkRustTool { pname = "tiles2raster"; };
