@@ -1,4 +1,5 @@
 target
+pypi/dist
 .DS_Store
 .pixi
 .direnv

@@ -1,7 +1,9 @@
 devenv_nightly := "devenv --option devenv.warnOnNewVersion:bool false --profile nightly shell -- bash -euc"
-devenv_musl := "devenv --option devenv.warnOnNewVersion:bool false --profile musl shell -- bash -euc"
 devenv_musl_aarch64 := "devenv --option devenv.warnOnNewVersion:bool false --profile musl-aarch64 shell -- bash -euc"
 devenv_musl_x86_64 := "devenv --option devenv.warnOnNewVersion:bool false --profile musl-x86_64 shell -- bash -euc"
+
+default:
+    @just --choose
 
 [windows]
 bootstrap:
@@ -107,9 +109,13 @@ tiles2raster zoom tile_size="256":
 pngtiles2raster zoom:
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.png?tile_format=float_png" --zoom {{ zoom }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_png_{{ zoom }}.tif
 
+[linux]
 wheel:
-    @ {{ devenv_musl_aarch64 }} 'cd pypi; uvx --from maturin==1.11.5 maturin build --zig --target aarch64-unknown-linux-musl --release --out dist'
-    @ {{ devenv_musl_x86_64 }} 'cd pypi; uvx --from maturin==1.11.5 maturin build --zig --target x86_64-unknown-linux-musl --release --out dist'
+    {{ devenv_musl_aarch64 }} 'cd pypi; uvx --from maturin==1.11.5 maturin build --target aarch64-unknown-linux-musl --compatibility musllinux_1_2 --release --out dist'
+    {{ devenv_musl_x86_64 }} 'cd pypi; uvx --from maturin==1.11.5 maturin build --target x86_64-unknown-linux-musl --compatibility musllinux_1_2 --release --out dist'
+
+wheel_publish:
+    uv publish --trusted-publishing always pypi/dist/*.whl
 
 [unix]
 create_release_tarball tool build_type="":

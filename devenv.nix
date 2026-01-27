@@ -18,7 +18,7 @@ let
     if pkgs.stdenv.hostPlatform.isAarch64 then
       buildEnv.pkgsStaticMusl
     else
-      pkgs.pkgsCross.aarch64-multiplatform.pkgsStatic;
+      pkgs.pkgsCross.aarch64-multiplatform-musl.pkgsStatic;
 
   pkgsMuslX86_64 =
     if pkgs.stdenv.hostPlatform.isx86_64 then buildEnv.pkgsStaticMusl else pkgs.pkgsCross.musl64;
@@ -52,8 +52,6 @@ let
     just
     lld
     cargo-nextest
-    cargo-zigbuild
-    zig
     trivy
     uv
     pkg-config
@@ -178,6 +176,12 @@ let
       targetTriple,
       includeCompiler ? false,
     }:
+    let
+      uvxWrapper = pkgs.writeShellScriptBin "uvx" ''
+        unset _PYTHON_HOST_PLATFORM
+        exec ${pkgs.uv}/bin/uvx "$@"
+      '';
+    in
     {
       languages.rust = {
         targets = [ targetTriple ];
@@ -189,21 +193,40 @@ let
             "CARGO_TARGET_"
             + (lib.strings.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] targetTriple))
             + "_RUSTFLAGS";
+          linkerEnv =
+            "CARGO_TARGET_"
+            + (lib.strings.toUpper (builtins.replaceStrings [ "-" ] [ "_" ] targetTriple))
+            + "_LINKER";
+          targetPrefix = pkgsStatic.stdenv.cc.targetPrefix;
+          targetCc = "${pkgsStatic.stdenv.cc}/bin/${targetPrefix}cc";
         in
         {
           ENVIRONMENT = "musl-${systemName}";
+          "${linkerEnv}" = targetCc;
           "${rustFlagsEnv}" =
             let
               libs =
-                getAllPropagated (pkgModDeps pkgsStatic) ++ lib.optional includeCompiler pkgsStatic.stdenv.cc.cc;
+                getAllPropagated (pkgModDeps pkgsStatic)
+                ++ [ pkgsStatic.musl ]
+                ++ lib.optional includeCompiler pkgsStatic.stdenv.cc.cc;
               getPaths = p: if p ? outputs then map (o: p.${o}) p.outputs else [ p ];
               allPaths = lib.flatten (map getPaths libs);
+              extraLinkArgs = [
+                "-Clink-arg=-static"
+                "-Clink-arg=-L${pkgsStatic.stdenv.cc.cc.lib}/lib"
+                "-Clink-arg=-L${pkgsStatic.stdenv.cc.cc}/lib/gcc/${targetTriple}/${pkgsStatic.stdenv.cc.cc.version}"
+                "-Clink-arg=-lgcc"
+                "-Clink-arg=-latomic"
+              ];
             in
-            builtins.concatStringsSep " " (map (p: "-L${p}/lib") allPaths) + " -Crelocation-model=static";
+            #iterate over libs to dependencies and add their lib output paths to the link args
+            builtins.concatStringsSep " " (map (p: "-L${p}/lib") allPaths ++ extraLinkArgs)
+            + " -Crelocation-model=static";
         };
 
       packages = lib.mkForce (
-        commonPackages
+        [ uvxWrapper ]
+        ++ commonPackages
         ++ [ rustToolchainMusl ]
         ++ (with pkgsStatic; [
           stdenv.cc
