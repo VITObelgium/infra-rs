@@ -1,0 +1,19 @@
+[package]
+name = "lerc-decoder"
+version = "0.1.0"
+edition = "2024"
+description = "Pure Rust implementation of LERC (Limited Error Raster Compression) decoder"
+license = "Apache-2.0"
+repository = "https://github.com/Esri/lerc"
+keywords = ["lerc", "compression", "raster", "geospatial"]
+categories = ["compression", "encoding"]
+
+[dependencies]
+
+[dev-dependencies]
+lerc = "0.2"
+rand = "0.9"
+
+[lib]
+name = "lerc_decoder"
+path = "src/lib.rs"

@@ -196,9 +196,12 @@ in
     channel = "stable";
   };
 
+  env.LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+
   packages = with pkgs; [
     just
     lld
+    libclang
     cargo-nextest
     trivy
     just
