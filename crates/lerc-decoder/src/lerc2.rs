@@ -31,6 +31,7 @@ pub enum DataType {
 
 impl DataType {
     /// Create DataType from integer value
+    #[inline]
     pub fn from_i32(val: i32) -> Option<Self> {
         match val {
             0 => Some(DataType::Char),
@@ -46,6 +47,7 @@ impl DataType {
     }
 
     /// Get the size in bytes for this data type
+    #[inline]
     pub fn size(&self) -> usize {
         match self {
             DataType::Char | DataType::Byte => 1,
@@ -67,6 +69,7 @@ enum ImageEncodeMode {
 }
 
 impl ImageEncodeMode {
+    #[inline]
     fn from_u8(val: u8) -> Option<Self> {
         match val {
             0 => Some(ImageEncodeMode::Tiling),
@@ -151,120 +154,152 @@ pub trait LercDataType: Copy + Clone + Default + std::fmt::Debug {
 }
 
 impl LercDataType for i8 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val as i8
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::Char
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self.wrapping_add(other)
     }
 }
 
 impl LercDataType for u8 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val as u8
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::Byte
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self.wrapping_add(other)
     }
 }
 
 impl LercDataType for i16 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val as i16
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::Short
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self.wrapping_add(other)
     }
 }
 
 impl LercDataType for u16 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val as u16
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::UShort
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self.wrapping_add(other)
     }
 }
 
 impl LercDataType for i32 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val as i32
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::Int
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self.wrapping_add(other)
     }
 }
 
 impl LercDataType for u32 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val as u32
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::UInt
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self.wrapping_add(other)
     }
 }
 
 impl LercDataType for f32 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val as f32
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self as f64
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::Float
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self + other
     }
 }
 
 impl LercDataType for f64 {
+    #[inline(always)]
     fn from_f64(val: f64) -> Self {
         val
     }
+    #[inline(always)]
     fn to_f64(self) -> f64 {
         self
     }
+    #[inline(always)]
     fn data_type() -> DataType {
         DataType::Double
     }
+    #[inline(always)]
     fn wrapping_add(self, other: Self) -> Self {
         self + other
     }
@@ -831,11 +866,13 @@ impl Lerc2Decoder {
     }
 
     /// Read a typed value from the data stream
+    #[inline(always)]
     fn read_typed_value<T: LercDataType>(&self, data: &[u8], pos: usize) -> T {
         T::from_f64(self.read_value_as_f64::<T>(data, pos))
     }
 
     /// Read and decode tiles
+    #[inline]
     fn read_tiles<T: LercDataType>(&mut self, data: &[u8], pos: &mut usize, bytes_remaining: &mut usize, output: &mut [T]) -> Result<()> {
         let mb_size = self.header_info.micro_block_size;
         let n_depth = self.header_info.n_depth;
@@ -888,6 +925,7 @@ impl Lerc2Decoder {
     }
 
     /// Read and decode a single tile
+    #[inline]
     fn read_tile<T: LercDataType>(
         &mut self,
         data: &[u8],
@@ -1004,27 +1042,60 @@ impl Lerc2Decoder {
 
         if compr_flag == 3 {
             // Entire tile is constant (offset value)
-            for i in i0..i1 {
-                let mut k = i * n_cols + j0;
-                let mut m = (k as usize) * n_depth + i_depth as usize;
+            let n_depth_usize = n_depth as usize;
+            let n_cols_usize = n_cols as usize;
+            let n_rows = self.header_info.n_rows;
+            let j0_usize = j0 as usize;
+            let tile_width = (j1 - j0) as usize;
+            let all_valid = self.header_info.num_valid_pixel == n_rows * n_cols;
 
+            if all_valid {
+                // Optimized path when all pixels are valid - no is_valid checks needed
                 if !b_diff_enc {
                     let val = T::from_f64(offset);
-                    for _j in j0..j1 {
-                        if self.bit_mask.is_valid(k) {
+                    for i in i0..i1 {
+                        let row_start = (i as usize) * n_cols_usize;
+                        let mut m = (row_start + j0_usize) * n_depth_usize + i_depth as usize;
+                        for _ in 0..tile_width {
                             output[m] = val;
+                            m += n_depth_usize;
                         }
-                        k += 1;
-                        m += n_depth;
                     }
                 } else {
-                    for _j in j0..j1 {
-                        if self.bit_mask.is_valid(k) {
+                    for i in i0..i1 {
+                        let row_start = (i as usize) * n_cols_usize;
+                        let mut m = (row_start + j0_usize) * n_depth_usize + i_depth as usize;
+                        for _ in 0..tile_width {
                             let z = offset + output[m - 1].to_f64();
                             output[m] = T::from_f64(z.min(z_max));
+                            m += n_depth_usize;
                         }
-                        k += 1;
-                        m += n_depth;
+                    }
+                }
+            } else {
+                // Path with validity checks
+                for i in i0..i1 {
+                    let mut k = i * n_cols + j0;
+                    let mut m = (k as usize) * n_depth_usize + i_depth as usize;
+
+                    if !b_diff_enc {
+                        let val = T::from_f64(offset);
+                        for _j in j0..j1 {
+                            if self.bit_mask.is_valid(k) {
+                                output[m] = val;
+                            }
+                            k += 1;
+                            m += n_depth_usize;
+                        }
+                    } else {
+                        for _j in j0..j1 {
+                            if self.bit_mask.is_valid(k) {
+                                let z = offset + output[m - 1].to_f64();
+                                output[m] = T::from_f64(z.min(z_max));
+                            }
+                            k += 1;
+                            m += n_depth_usize;
+                        }
                     }
                 }
             }
@@ -1038,62 +1109,96 @@ impl Lerc2Decoder {
         let inv_scale = 2.0 * self.header_info.max_z_error;
 
         if buffer_vec.len() == max_element_count {
-            // All valid
-            let mut src_idx = 0;
+            // All valid - optimized path without bounds checking
+            let n_depth_usize = n_depth as usize;
+            let i_depth_usize = i_depth as usize;
+            let n_cols_usize = n_cols as usize;
+            let j0_usize = j0 as usize;
+            let tile_width = (j1 - j0) as usize;
 
-            for i in i0..i1 {
-                let k = i * n_cols + j0;
-                let mut m = (k as usize) * n_depth + i_depth as usize;
+            if !b_diff_enc {
+                // Non-differential encoding - use unsafe for maximum performance
+                let mut src_idx = 0usize;
+                for i in i0..i1 {
+                    let row_start = (i as usize) * n_cols_usize;
+                    let mut m = (row_start + j0_usize) * n_depth_usize + i_depth_usize;
 
-                if !b_diff_enc {
-                    for _j in j0..j1 {
-                        let z = offset + (buffer_vec[src_idx] as f64) * inv_scale;
-                        output[m] = T::from_f64(z.min(z_max));
-                        src_idx += 1;
-                        m += n_depth;
+                    // SAFETY: We know buffer_vec.len() == max_element_count and
+                    // we iterate exactly tile_width * (i1-i0) times which equals max_element_count
+                    unsafe {
+                        for _ in 0..tile_width {
+                            let z = offset + (*buffer_vec.get_unchecked(src_idx) as f64) * inv_scale;
+                            let clamped = z.min(z_max);
+                            *output.get_unchecked_mut(m) = T::from_f64(clamped);
+                            src_idx += 1;
+                            m += n_depth_usize;
+                        }
                     }
-                } else {
-                    for _j in j0..j1 {
-                        let z = offset + (buffer_vec[src_idx] as f64) * inv_scale + output[m - 1].to_f64();
-                        output[m] = T::from_f64(z.min(z_max));
-                        src_idx += 1;
-                        m += n_depth;
+                }
+            } else {
+                // Differential encoding
+                let mut src_idx = 0usize;
+                for i in i0..i1 {
+                    let row_start = (i as usize) * n_cols_usize;
+                    let mut m = (row_start + j0_usize) * n_depth_usize + i_depth_usize;
+
+                    // SAFETY: Same as above, plus m-1 is valid because differential
+                    // encoding guarantees previous value exists
+                    unsafe {
+                        for _ in 0..tile_width {
+                            let prev = output.get_unchecked(m - 1).to_f64();
+                            let z = offset + (*buffer_vec.get_unchecked(src_idx) as f64) * inv_scale + prev;
+                            let clamped = z.min(z_max);
+                            *output.get_unchecked_mut(m) = T::from_f64(clamped);
+                            src_idx += 1;
+                            m += n_depth_usize;
+                        }
                     }
                 }
             }
         } else {
             // Not all valid
+            let n_depth_usize = n_depth as usize;
+            let buf_len = buffer_vec.len();
             let mut src_idx = 0;
 
-            for i in i0..i1 {
-                let mut k = i * n_cols + j0;
-                let mut m = (k as usize) * n_depth + i_depth as usize;
+            if !b_diff_enc {
+                for i in i0..i1 {
+                    let mut k = i * n_cols + j0;
+                    let mut m = (k as usize) * n_depth_usize + i_depth as usize;
 
-                if !b_diff_enc {
                     for _j in j0..j1 {
                         if self.bit_mask.is_valid(k) {
-                            if src_idx >= buffer_vec.len() {
+                            if src_idx >= buf_len {
                                 return Err(LercError::InvalidData("Buffer underrun".into()));
                             }
                             let z = offset + (buffer_vec[src_idx] as f64) * inv_scale;
-                            output[m] = T::from_f64(z.min(z_max));
+                            let clamped = z.min(z_max);
+                            output[m] = T::from_f64(clamped);
                             src_idx += 1;
                         }
                         k += 1;
-                        m += n_depth;
+                        m += n_depth_usize;
                     }
-                } else {
+                }
+            } else {
+                for i in i0..i1 {
+                    let mut k = i * n_cols + j0;
+                    let mut m = (k as usize) * n_depth_usize + i_depth as usize;
+
                     for _j in j0..j1 {
                         if self.bit_mask.is_valid(k) {
-                            if src_idx >= buffer_vec.len() {
+                            if src_idx >= buf_len {
                                 return Err(LercError::InvalidData("Buffer underrun".into()));
                             }
-                            let z = offset + (buffer_vec[src_idx] as f64) * inv_scale + output[m - 1].to_f64();
-                            output[m] = T::from_f64(z.min(z_max));
+                            let prev = output[m - 1].to_f64();
+                            let z = offset + (buffer_vec[src_idx] as f64) * inv_scale + prev;
+                            let clamped = z.min(z_max);
+                            output[m] = T::from_f64(clamped);
                             src_idx += 1;
                         }
                         k += 1;
-                        m += n_depth;
+                        m += n_depth_usize;
                     }
                 }
             }
@@ -1141,6 +1246,7 @@ impl Lerc2Decoder {
     }
 
     /// Read a variable-sized value from the data stream
+    #[inline(always)]
     fn read_variable_data_type(&self, data: &[u8], pos: usize, dt: DataType) -> f64 {
         match dt {
             DataType::Char => data[pos] as i8 as f64,

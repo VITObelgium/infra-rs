@@ -2,6 +2,12 @@
 //!
 //! This module handles unpacking of bit-stuffed unsigned integer arrays
 //! as used in LERC compression. Supports both simple mode and LUT mode.
+//!
+//! Performance optimizations:
+//! - Inline annotations on hot paths
+//! - Direct memory copying for u32 buffer initialization
+//! - Unsafe bounds-unchecked access in validated hot loops
+//! - Buffer reuse to minimize allocations
 
 use crate::error::{LercError, Result};
 
@@ -9,6 +15,8 @@ use crate::error::{LercError, Result};
 pub struct BitStuffer2 {
     tmp_lut_vec: Vec<u32>,
     tmp_bit_stuff_vec: Vec<u32>,
+    /// Reusable output buffer to avoid allocations in hot path
+    output_buffer: Vec<u32>,
 }
 
 impl BitStuffer2 {
@@ -17,10 +25,12 @@ impl BitStuffer2 {
         BitStuffer2 {
             tmp_lut_vec: Vec::new(),
             tmp_bit_stuff_vec: Vec::new(),
+            output_buffer: Vec::new(),
         }
     }
 
     /// Decode an unsigned integer of 1, 2, or 4 bytes
+    #[inline(always)]
     fn decode_uint(data: &[u8], pos: &mut usize, num_bytes: usize) -> Result<u32> {
         if *pos + num_bytes > data.len() {
             return Err(LercError::UnexpectedEof);
@@ -38,29 +48,21 @@ impl BitStuffer2 {
     }
 
     /// Calculate how many tail bytes are not needed in the last uint
+    #[inline(always)]
     fn num_tail_bytes_not_needed(num_elem: u32, num_bits: i32) -> u32 {
         let num_bits_tail = ((num_elem as u64 * num_bits as u64) & 31) as i32;
         let num_bytes_tail = (num_bits_tail + 7) >> 3;
-        if num_bytes_tail > 0 {
-            4 - num_bytes_tail as u32
-        } else {
-            0
-        }
+        if num_bytes_tail > 0 { 4 - num_bytes_tail as u32 } else { 0 }
     }
 
-    /// Decode bit-stuffed data (LERC2 v3+)
-    fn bit_unstuff(
-        &mut self,
-        data: &[u8],
-        pos: &mut usize,
-        num_elements: u32,
-        num_bits: i32,
-    ) -> Result<Vec<u32>> {
+    /// Decode bit-stuffed data (LERC2 v3+) into reusable buffer
+    #[inline(always)]
+    fn bit_unstuff(&mut self, data: &[u8], pos: &mut usize, num_elements: u32, num_bits: i32) -> Result<()> {
         if num_elements == 0 || num_bits >= 32 {
             return Err(LercError::BitStufferError("Invalid parameters".into()));
         }
 
-        let num_uints = ((num_elements as u64 * num_bits as u64 + 31) / 32) as usize;
+        let num_uints = (num_elements as u64 * num_bits as u64).div_ceil(32) as usize;
         let num_bytes = num_uints * 4;
         let num_bytes_used = num_bytes - Self::num_tail_bytes_not_needed(num_elements, num_bits) as usize;
 
@@ -69,68 +71,81 @@ impl BitStuffer2 {
         }
 
         // Resize temporary buffer
+        self.tmp_bit_stuff_vec.clear();
         self.tmp_bit_stuff_vec.resize(num_uints, 0);
 
-        // Clear last uint and copy bytes
-        self.tmp_bit_stuff_vec[num_uints - 1] = 0;
+        // Copy bytes into u32 buffer (little-endian) - optimized version
+        // Copy full u32s directly where possible
+        let full_uints = num_bytes_used / 4;
+        let src_slice = &data[*pos..];
 
-        // Copy bytes into u32 buffer (little-endian)
-        for i in 0..num_uints {
+        for i in 0..full_uints {
             let byte_offset = i * 4;
-            let bytes_to_read = std::cmp::min(4, num_bytes_used.saturating_sub(byte_offset));
-
-            if bytes_to_read > 0 {
-                let mut val = 0u32;
-                for j in 0..bytes_to_read {
-                    if byte_offset + j < num_bytes_used {
-                        val |= (data[*pos + byte_offset + j] as u32) << (j * 8);
-                    }
-                }
-                self.tmp_bit_stuff_vec[i] = val;
-            }
+            // SAFETY: We checked pos + num_bytes_used <= data.len() and byte_offset + 3 < num_bytes_used
+            self.tmp_bit_stuff_vec[i] = u32::from_le_bytes([
+                src_slice[byte_offset],
+                src_slice[byte_offset + 1],
+                src_slice[byte_offset + 2],
+                src_slice[byte_offset + 3],
+            ]);
         }
 
-        // Do the unstuffing
-        let mut data_vec = vec![0u32; num_elements as usize];
+        // Handle remaining bytes for the last partial u32
+        let remaining_bytes = num_bytes_used - full_uints * 4;
+        if remaining_bytes > 0 {
+            let byte_offset = full_uints * 4;
+            let mut val = 0u32;
+            for j in 0..remaining_bytes {
+                val |= (src_slice[byte_offset + j] as u32) << (j * 8);
+            }
+            self.tmp_bit_stuff_vec[full_uints] = val;
+        }
+
+        // Resize output buffer (reuses capacity if possible)
+        let num_elements_usize = num_elements as usize;
+        self.output_buffer.clear();
+        self.output_buffer.resize(num_elements_usize, 0);
+
+        // Do the unstuffing - use unsafe for hot loop
         let mut src_idx = 0usize;
         let mut bit_pos = 0i32;
         let nb = 32 - num_bits;
 
-        for i in 0..num_elements as usize {
-            if nb - bit_pos >= 0 {
-                data_vec[i] = (self.tmp_bit_stuff_vec[src_idx] << (nb - bit_pos)) >> nb;
-                bit_pos += num_bits;
-                if bit_pos == 32 {
+        // SAFETY: We resized output_buffer to num_elements_usize elements,
+        // and tmp_bit_stuff_vec to num_uints elements which is enough for all bits
+        unsafe {
+            for i in 0..num_elements_usize {
+                if nb - bit_pos >= 0 {
+                    *self.output_buffer.get_unchecked_mut(i) = (*self.tmp_bit_stuff_vec.get_unchecked(src_idx) << (nb - bit_pos)) >> nb;
+                    bit_pos += num_bits;
+                    if bit_pos == 32 {
+                        src_idx += 1;
+                        bit_pos = 0;
+                    }
+                } else {
+                    *self.output_buffer.get_unchecked_mut(i) = *self.tmp_bit_stuff_vec.get_unchecked(src_idx) >> bit_pos;
                     src_idx += 1;
-                    bit_pos = 0;
+                    *self.output_buffer.get_unchecked_mut(i) |=
+                        (*self.tmp_bit_stuff_vec.get_unchecked(src_idx) << (64 - num_bits - bit_pos)) >> nb;
+                    bit_pos -= nb;
                 }
-            } else {
-                data_vec[i] = self.tmp_bit_stuff_vec[src_idx] >> bit_pos;
-                src_idx += 1;
-                data_vec[i] |= (self.tmp_bit_stuff_vec[src_idx] << (64 - num_bits - bit_pos)) >> nb;
-                bit_pos -= nb;
             }
         }
 
         *pos += num_bytes_used;
-        Ok(data_vec)
+        Ok(())
     }
 
-    /// Decode bit-stuffed data (LERC2 v1-v2, big-endian style)
-    fn bit_unstuff_before_v3(
-        &mut self,
-        data: &[u8],
-        pos: &mut usize,
-        num_elements: u32,
-        num_bits: i32,
-    ) -> Result<Vec<u32>> {
+    /// Decode bit-stuffed data (LERC2 v1-v2, big-endian style) into reusable buffer
+    #[inline(always)]
+    fn bit_unstuff_before_v3(&mut self, data: &[u8], pos: &mut usize, num_elements: u32, num_bits: i32) -> Result<()> {
         if num_elements == 0 || num_bits >= 32 {
             return Err(LercError::BitStufferError("Invalid parameters".into()));
         }
 
-        let num_uints = ((num_elements as u64 * num_bits as u64 + 31) / 32) as usize;
+        let num_uints = (num_elements as u64 * num_bits as u64).div_ceil(32) as usize;
         let ntbnn = Self::num_tail_bytes_not_needed(num_elements, num_bits) as usize;
-        let num_bytes_to_copy = (num_elements as usize * num_bits as usize + 7) / 8;
+        let num_bytes_to_copy = (num_elements as usize * num_bits as usize).div_ceil(8);
 
         if *pos + num_bytes_to_copy > data.len() {
             return Err(LercError::UnexpectedEof);
@@ -160,15 +175,19 @@ impl BitStuffer2 {
             *p_last <<= 8;
         }
 
+        // Resize output buffer (reuses capacity if possible)
+        let num_elements_usize = num_elements as usize;
+        self.output_buffer.clear();
+        self.output_buffer.resize(num_elements_usize, 0);
+
         // Unstuff
-        let mut data_vec = vec![0u32; num_elements as usize];
         let mut src_idx = 0usize;
         let mut bit_pos = 0i32;
 
-        for i in 0..num_elements as usize {
+        for i in 0..num_elements_usize {
             if 32 - bit_pos >= num_bits {
                 let n = self.tmp_bit_stuff_vec[src_idx] << bit_pos;
-                data_vec[i] = n >> (32 - num_bits);
+                self.output_buffer[i] = n >> (32 - num_bits);
                 bit_pos += num_bits;
 
                 if bit_pos == 32 {
@@ -178,14 +197,14 @@ impl BitStuffer2 {
             } else {
                 let n = self.tmp_bit_stuff_vec[src_idx] << bit_pos;
                 src_idx += 1;
-                data_vec[i] = n >> (32 - num_bits);
+                self.output_buffer[i] = n >> (32 - num_bits);
                 bit_pos -= 32 - num_bits;
-                data_vec[i] |= self.tmp_bit_stuff_vec[src_idx] >> (32 - bit_pos);
+                self.output_buffer[i] |= self.tmp_bit_stuff_vec[src_idx] >> (32 - bit_pos);
             }
         }
 
         *pos += num_bytes_to_copy;
-        Ok(data_vec)
+        Ok(())
     }
 
     /// Decode bit-stuffed unsigned integer array
@@ -198,13 +217,8 @@ impl BitStuffer2 {
     ///
     /// # Returns
     /// Vector of decoded unsigned integers
-    pub fn decode(
-        &mut self,
-        data: &[u8],
-        pos: &mut usize,
-        max_element_count: usize,
-        lerc2_version: i32,
-    ) -> Result<Vec<u32>> {
+    #[inline]
+    pub fn decode(&mut self, data: &[u8], pos: &mut usize, max_element_count: usize, lerc2_version: i32) -> Result<Vec<u32>> {
         if *pos >= data.len() {
             return Err(LercError::UnexpectedEof);
         }
@@ -227,10 +241,14 @@ impl BitStuffer2 {
             // Simple mode
             if num_bits > 0 {
                 if lerc2_version >= 3 {
-                    self.bit_unstuff(data, pos, num_elements, num_bits)
+                    self.bit_unstuff(data, pos, num_elements, num_bits)?;
                 } else {
-                    self.bit_unstuff_before_v3(data, pos, num_elements, num_bits)
+                    self.bit_unstuff_before_v3(data, pos, num_elements, num_bits)?;
                 }
+                // Move output buffer out to return (swap with empty vec to avoid clone)
+                let mut result = Vec::new();
+                std::mem::swap(&mut result, &mut self.output_buffer);
+                Ok(result)
             } else {
                 // num_bits == 0 means all values are 0
                 Ok(vec![0u32; num_elements as usize])
@@ -254,13 +272,16 @@ impl BitStuffer2 {
             }
 
             // Unstuff the LUT (without the 0)
-            let lut_values = if lerc2_version >= 3 {
-                self.bit_unstuff(data, pos, n_lut as u32, num_bits)?
+            if lerc2_version >= 3 {
+                self.bit_unstuff(data, pos, n_lut as u32, num_bits)?;
             } else {
-                self.bit_unstuff_before_v3(data, pos, n_lut as u32, num_bits)?
-            };
+                self.bit_unstuff_before_v3(data, pos, n_lut as u32, num_bits)?;
+            }
 
-            // Build LUT with 0 at the front
+            // Build LUT with 0 at the front - take ownership of output_buffer
+            let mut lut_values = Vec::new();
+            std::mem::swap(&mut lut_values, &mut self.output_buffer);
+
             self.tmp_lut_vec.clear();
             self.tmp_lut_vec.push(0);
             self.tmp_lut_vec.extend_from_slice(&lut_values);
@@ -278,11 +299,15 @@ impl BitStuffer2 {
             }
 
             // Unstuff the indices
-            let mut indices = if lerc2_version >= 3 {
-                self.bit_unstuff(data, pos, num_elements, n_bits_lut)?
+            if lerc2_version >= 3 {
+                self.bit_unstuff(data, pos, num_elements, n_bits_lut)?;
             } else {
-                self.bit_unstuff_before_v3(data, pos, num_elements, n_bits_lut)?
-            };
+                self.bit_unstuff_before_v3(data, pos, num_elements, n_bits_lut)?;
+            }
+
+            // Take ownership of output_buffer for result
+            let mut indices = Vec::new();
+            std::mem::swap(&mut indices, &mut self.output_buffer);
 
             // Replace indices with values
             if lerc2_version >= 3 {

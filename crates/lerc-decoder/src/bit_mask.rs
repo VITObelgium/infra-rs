@@ -71,13 +71,13 @@ impl BitMask {
     }
 
     /// Get the bit pattern for position k (which bit within a byte)
-    #[inline]
+    #[inline(always)]
     fn bit(k: i32) -> u8 {
         (1 << 7) >> (k & 7)
     }
 
     /// Check if pixel at linear index k is valid
-    #[inline]
+    #[inline(always)]
     pub fn is_valid(&self, k: i32) -> bool {
         let byte_idx = (k >> 3) as usize;
         if byte_idx >= self.bits.len() {
@@ -87,13 +87,13 @@ impl BitMask {
     }
 
     /// Check if pixel at (row, col) is valid
-    #[inline]
+    #[inline(always)]
     pub fn is_valid_at(&self, row: i32, col: i32) -> bool {
         self.is_valid(row * self.n_cols + col)
     }
 
     /// Set pixel at linear index k as valid
-    #[inline]
+    #[inline(always)]
     pub fn set_valid(&mut self, k: i32) {
         let byte_idx = (k >> 3) as usize;
         if byte_idx < self.bits.len() {
@@ -102,13 +102,13 @@ impl BitMask {
     }
 
     /// Set pixel at (row, col) as valid
-    #[inline]
+    #[inline(always)]
     pub fn set_valid_at(&mut self, row: i32, col: i32) {
         self.set_valid(row * self.n_cols + col);
     }
 
     /// Set pixel at linear index k as invalid
-    #[inline]
+    #[inline(always)]
     pub fn set_invalid(&mut self, k: i32) {
         let byte_idx = (k >> 3) as usize;
         if byte_idx < self.bits.len() {
@@ -117,7 +117,7 @@ impl BitMask {
     }
 
     /// Set pixel at (row, col) as invalid
-    #[inline]
+    #[inline(always)]
     pub fn set_invalid_at(&mut self, row: i32, col: i32) {
         self.set_invalid(row * self.n_cols + col);
     }

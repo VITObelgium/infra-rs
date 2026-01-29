@@ -2,6 +2,12 @@
 //!
 //! This module implements Huffman decoding as used in LERC2 for
 //! compressing 8-bit data types (Byte, Char).
+//!
+//! Performance optimizations:
+//! - Flat array-based tree (no Box pointer chasing)
+//! - 64-bit bit buffer for efficient bit reading
+//! - Lookup table for short codes (≤12 bits)
+//! - Unsafe bounds-unchecked access in hot paths
 
 use crate::bit_stuffer::BitStuffer2;
 use crate::error::{LercError, Result};
@@ -12,45 +18,51 @@ const MAX_NUM_BITS_LUT: i32 = 12;
 /// Maximum histogram size (2^15)
 const MAX_HISTO_SIZE: usize = 1 << 15;
 
-/// A Huffman decoder node for building the decode tree
-#[derive(Clone)]
-struct Node {
+/// Invalid node index sentinel value
+const INVALID_NODE: u32 = u32::MAX;
+
+/// A flat tree node using indices instead of Box pointers
+#[derive(Clone, Copy)]
+struct FlatNode {
+    /// Decoded value (-1 for internal nodes, >= 0 for leaves)
     value: i16,
-    child0: Option<Box<Node>>,
-    child1: Option<Box<Node>>,
+    /// Index of child0 in the flat tree array (INVALID_NODE if none)
+    child0: u32,
+    /// Index of child1 in the flat tree array (INVALID_NODE if none)
+    child1: u32,
 }
 
-impl Node {
-    #[allow(dead_code)]
-    fn new_leaf(value: i16) -> Self {
-        Node {
-            value,
-            child0: None,
-            child1: None,
-        }
-    }
-
-    fn new_internal() -> Self {
-        Node {
+impl FlatNode {
+    #[inline(always)]
+    const fn new_internal() -> Self {
+        FlatNode {
             value: -1,
-            child0: None,
-            child1: None,
+            child0: INVALID_NODE,
+            child1: INVALID_NODE,
         }
+    }
+
+    #[inline(always)]
+    const fn is_leaf(&self) -> bool {
+        self.value >= 0
     }
 }
 
-/// Huffman decoder for LERC
+/// Huffman decoder for LERC with optimized flat tree and bit buffer
 pub struct Huffman {
     /// Code table: (code_length, code_value) for each symbol
     code_table: Vec<(u16, u32)>,
     /// Decode lookup table for fast decoding of short codes
-    decode_lut: Vec<(i16, i16)>, // (length, value)
+    /// Entry format: (length, value) - if length >= 0, it's valid
+    decode_lut: Vec<(i16, i16)>,
     /// Number of bits used by the LUT
     num_bits_lut: i32,
     /// Number of leading zero bits to skip before entering the tree
     num_bits_to_skip_in_tree: i32,
-    /// Root of the Huffman tree for codes longer than LUT
-    root: Option<Box<Node>>,
+    /// Flat array representation of the Huffman tree
+    flat_tree: Vec<FlatNode>,
+    /// Whether a tree is needed (codes longer than LUT)
+    need_tree: bool,
 }
 
 impl Huffman {
@@ -61,12 +73,13 @@ impl Huffman {
             decode_lut: Vec::new(),
             num_bits_lut: 0,
             num_bits_to_skip_in_tree: 0,
-            root: None,
+            flat_tree: Vec::new(),
+            need_tree: false,
         }
     }
 
     /// Get index with wrap-around for handling code ranges that wrap
-    #[inline]
+    #[inline(always)]
     fn get_index_wrap_around(i: i32, size: i32) -> i32 {
         if i < size { i } else { i - size }
     }
@@ -98,9 +111,7 @@ impl Huffman {
             return Err(LercError::HuffmanError("Invalid code table parameters".into()));
         }
 
-        if Self::get_index_wrap_around(i0, size) >= size
-            || Self::get_index_wrap_around(i1 - 1, size) >= size
-        {
+        if Self::get_index_wrap_around(i0, size) >= size || Self::get_index_wrap_around(i1 - 1, size) >= size {
             return Err(LercError::HuffmanError("Invalid code range".into()));
         }
 
@@ -140,12 +151,7 @@ impl Huffman {
                 }
 
                 // Read current uint32
-                let mut temp = u32::from_le_bytes([
-                    data[*pos],
-                    data[*pos + 1],
-                    data[*pos + 2],
-                    data[*pos + 3],
-                ]);
+                let mut temp = u32::from_le_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
 
                 let code = (temp << bit_pos) >> (32 - len);
 
@@ -163,12 +169,7 @@ impl Huffman {
                         return Err(LercError::UnexpectedEof);
                     }
 
-                    temp = u32::from_le_bytes([
-                        data[*pos],
-                        data[*pos + 1],
-                        data[*pos + 2],
-                        data[*pos + 3],
-                    ]);
+                    temp = u32::from_le_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
 
                     self.code_table[k].1 = code | (temp >> (32 - bit_pos));
                     continue;
@@ -185,14 +186,14 @@ impl Huffman {
         Ok(())
     }
 
-    /// Build the decode tree from the code table
+    /// Build the decode tree from the code table (flat array version)
     pub fn build_tree_from_codes(&mut self) -> Result<i32> {
         let (i0, i1, max_len) = self.get_range()?;
 
         let size = self.code_table.len() as i32;
         let mut min_num_zero_bits = 32i32;
 
-        let need_tree = max_len > MAX_NUM_BITS_LUT;
+        self.need_tree = max_len > MAX_NUM_BITS_LUT;
         self.num_bits_lut = std::cmp::min(max_len, MAX_NUM_BITS_LUT);
 
         let size_lut = 1usize << self.num_bits_lut;
@@ -231,14 +232,17 @@ impl Huffman {
             }
         }
 
-        self.num_bits_to_skip_in_tree = if need_tree { min_num_zero_bits } else { 0 };
+        self.num_bits_to_skip_in_tree = if self.need_tree { min_num_zero_bits } else { 0 };
 
-        if !need_tree {
+        if !self.need_tree {
+            self.flat_tree.clear();
             return Ok(self.num_bits_lut);
         }
 
-        // Build the tree for codes longer than LUT
-        self.root = Some(Box::new(Node::new_internal()));
+        // Build the flat tree for codes longer than LUT
+        // Pre-allocate with a reasonable size estimate
+        self.flat_tree.clear();
+        self.flat_tree.push(FlatNode::new_internal()); // Root at index 0
 
         for i in i0..i1 {
             let k = Self::get_index_wrap_around(i, size) as usize;
@@ -246,27 +250,39 @@ impl Huffman {
 
             if len > 0 && len > self.num_bits_lut {
                 let code = self.code_table[k].1;
-                let mut node = self.root.as_mut().unwrap();
+                let mut node_idx = 0u32; // Start at root
                 let mut j = len - self.num_bits_to_skip_in_tree;
 
                 while j > 0 {
                     j -= 1;
                     let bit = (code >> j) & 1;
 
-                    if bit == 1 {
-                        if node.child1.is_none() {
-                            node.child1 = Some(Box::new(Node::new_internal()));
+                    let next_idx = if bit == 1 {
+                        let child_idx = self.flat_tree[node_idx as usize].child1;
+                        if child_idx == INVALID_NODE {
+                            let new_idx = self.flat_tree.len() as u32;
+                            self.flat_tree.push(FlatNode::new_internal());
+                            self.flat_tree[node_idx as usize].child1 = new_idx;
+                            new_idx
+                        } else {
+                            child_idx
                         }
-                        node = node.child1.as_mut().unwrap();
                     } else {
-                        if node.child0.is_none() {
-                            node.child0 = Some(Box::new(Node::new_internal()));
+                        let child_idx = self.flat_tree[node_idx as usize].child0;
+                        if child_idx == INVALID_NODE {
+                            let new_idx = self.flat_tree.len() as u32;
+                            self.flat_tree.push(FlatNode::new_internal());
+                            self.flat_tree[node_idx as usize].child0 = new_idx;
+                            new_idx
+                        } else {
+                            child_idx
                         }
-                        node = node.child0.as_mut().unwrap();
-                    }
+                    };
+
+                    node_idx = next_idx;
 
                     if j == 0 {
-                        node.value = k as i16;
+                        self.flat_tree[node_idx as usize].value = k as i16;
                     }
                 }
             }
@@ -343,7 +359,34 @@ impl Huffman {
         Ok((i0, i1, max_len))
     }
 
-    /// Decode a single Huffman-coded value
+    /// Read a u32 from the data buffer at the given position (little-endian)
+    #[inline(always)]
+    unsafe fn read_u32_unchecked(data: &[u8], pos: usize) -> u32 {
+        // SAFETY: Caller must ensure pos + 3 < data.len()
+        unsafe {
+            u32::from_le_bytes([
+                *data.get_unchecked(pos),
+                *data.get_unchecked(pos + 1),
+                *data.get_unchecked(pos + 2),
+                *data.get_unchecked(pos + 3),
+            ])
+        }
+    }
+
+    /// Read a u64 from the data buffer at the given position (for bit window)
+    #[inline(always)]
+    unsafe fn read_u64_window_unchecked(data: &[u8], pos: usize) -> u64 {
+        // SAFETY: Caller must ensure pos + 7 < data.len()
+        // Read two u32s and combine them into a 64-bit window
+        // First u32 is the high bits, second is the low bits
+        unsafe {
+            let hi = Self::read_u32_unchecked(data, pos) as u64;
+            let lo = Self::read_u32_unchecked(data, pos + 4) as u64;
+            (hi << 32) | lo
+        }
+    }
+
+    /// Decode a single Huffman-coded value (optimized version)
     ///
     /// # Arguments
     /// * `data` - Input byte buffer
@@ -352,23 +395,95 @@ impl Huffman {
     ///
     /// # Returns
     /// The decoded symbol value
-    pub fn decode_one_value(
-        &self,
-        data: &[u8],
-        pos: &mut usize,
-        bit_pos: &mut i32,
-    ) -> Result<i32> {
+    #[inline(always)]
+    pub fn decode_one_value(&self, data: &[u8], pos: &mut usize, bit_pos: &mut i32) -> Result<i32> {
+        // Bounds check once at the start - need at least 8 bytes for the 64-bit window
+        if *pos + 8 > data.len() {
+            return self.decode_one_value_safe(data, pos, bit_pos);
+        }
+
+        // SAFETY: We just checked that pos + 8 <= data.len()
+        unsafe { self.decode_one_value_fast(data, pos, bit_pos) }
+    }
+
+    /// Fast path for decode_one_value when we know we have enough bytes
+    #[inline(always)]
+    unsafe fn decode_one_value_fast(&self, data: &[u8], pos: &mut usize, bit_pos: &mut i32) -> Result<i32> {
+        // SAFETY: Caller must ensure pos + 8 <= data.len()
+        unsafe {
+            // Read 64-bit window starting at current position
+            let window = Self::read_u64_window_unchecked(data, *pos);
+
+            // Extract bits for LUT lookup (top num_bits_lut bits after shifting by bit_pos)
+            let val_tmp = ((window << *bit_pos) >> (64 - self.num_bits_lut)) as usize;
+
+            // Try LUT first (most common case)
+            let (len, value) = *self.decode_lut.get_unchecked(val_tmp);
+
+            if len >= 0 {
+                // LUT hit - update position and return
+                *bit_pos += len as i32;
+                if *bit_pos >= 32 {
+                    *bit_pos -= 32;
+                    *pos += 4;
+                }
+                return Ok(value as i32);
+            }
+
+            // Fall back to tree traversal for longer codes
+            if !self.need_tree || self.flat_tree.is_empty() {
+                return Err(LercError::HuffmanError("No decode tree".into()));
+            }
+
+            // Skip leading zero bits
+            *bit_pos += self.num_bits_to_skip_in_tree;
+            if *bit_pos >= 32 {
+                *bit_pos -= 32;
+                *pos += 4;
+            }
+
+            // Traverse the flat tree
+            let mut node_idx = 0u32;
+
+            loop {
+                // Check bounds for tree traversal (may need to read more data)
+                if *pos + 8 > data.len() {
+                    return self.decode_tree_safe(data, pos, bit_pos, node_idx);
+                }
+
+                let window = Self::read_u64_window_unchecked(data, *pos);
+                let bit = ((window << *bit_pos) >> 63) as u32;
+
+                *bit_pos += 1;
+                if *bit_pos == 32 {
+                    *bit_pos = 0;
+                    *pos += 4;
+                }
+
+                let node = self.flat_tree.get_unchecked(node_idx as usize);
+                node_idx = if bit != 0 { node.child1 } else { node.child0 };
+
+                if node_idx == INVALID_NODE {
+                    return Err(LercError::HuffmanError("Invalid tree".into()));
+                }
+
+                let node = self.flat_tree.get_unchecked(node_idx as usize);
+                if node.is_leaf() {
+                    return Ok(node.value as i32);
+                }
+            }
+        }
+    }
+
+    /// Safe (bounds-checked) version for when we're near the end of data
+    #[inline(never)]
+    fn decode_one_value_safe(&self, data: &[u8], pos: &mut usize, bit_pos: &mut i32) -> Result<i32> {
         if *bit_pos < 0 || *bit_pos >= 32 || *pos + 4 > data.len() {
             return Err(LercError::UnexpectedEof);
         }
 
         // Read current uint32
-        let temp = u32::from_le_bytes([
-            data[*pos],
-            data[*pos + 1],
-            data[*pos + 2],
-            data[*pos + 3],
-        ]);
+        let temp = u32::from_le_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
 
         let val_tmp = ((temp << *bit_pos) >> (32 - self.num_bits_lut)) as usize;
 
@@ -377,12 +492,7 @@ impl Huffman {
             if *pos + 8 > data.len() {
                 return Err(LercError::UnexpectedEof);
             }
-            let temp2 = u32::from_le_bytes([
-                data[*pos + 4],
-                data[*pos + 5],
-                data[*pos + 6],
-                data[*pos + 7],
-            ]);
+            let temp2 = u32::from_le_bytes([data[*pos + 4], data[*pos + 5], data[*pos + 6], data[*pos + 7]]);
             val_tmp | ((temp2 >> (64 - *bit_pos - self.num_bits_lut)) as usize)
         } else {
             val_tmp
@@ -400,7 +510,7 @@ impl Huffman {
         }
 
         // Fall back to tree traversal
-        if self.root.is_none() {
+        if !self.need_tree || self.flat_tree.is_empty() {
             return Err(LercError::HuffmanError("No decode tree".into()));
         }
 
@@ -411,20 +521,20 @@ impl Huffman {
             *pos += 4;
         }
 
-        let mut node = self.root.as_ref().unwrap();
-        let mut value = -1i32;
+        self.decode_tree_safe(data, pos, bit_pos, 0)
+    }
 
-        while value < 0 {
+    /// Safe tree traversal for when we're near end of data
+    #[inline(never)]
+    fn decode_tree_safe(&self, data: &[u8], pos: &mut usize, bit_pos: &mut i32, start_node: u32) -> Result<i32> {
+        let mut node_idx = start_node;
+
+        loop {
             if *pos + 4 > data.len() {
                 return Err(LercError::UnexpectedEof);
             }
 
-            let temp = u32::from_le_bytes([
-                data[*pos],
-                data[*pos + 1],
-                data[*pos + 2],
-                data[*pos + 3],
-            ]);
+            let temp = u32::from_le_bytes([data[*pos], data[*pos + 1], data[*pos + 2], data[*pos + 3]]);
 
             let bit = ((temp << *bit_pos) >> 31) as i32;
             *bit_pos += 1;
@@ -433,33 +543,28 @@ impl Huffman {
                 *pos += 4;
             }
 
-            node = if bit != 0 {
-                match &node.child1 {
-                    Some(child) => child,
-                    None => return Err(LercError::HuffmanError("Invalid tree".into())),
-                }
-            } else {
-                match &node.child0 {
-                    Some(child) => child,
-                    None => return Err(LercError::HuffmanError("Invalid tree".into())),
-                }
-            };
+            let node = &self.flat_tree[node_idx as usize];
+            node_idx = if bit != 0 { node.child1 } else { node.child0 };
 
-            if node.value >= 0 {
-                value = node.value as i32;
+            if node_idx == INVALID_NODE {
+                return Err(LercError::HuffmanError("Invalid tree".into()));
+            }
+
+            let node = &self.flat_tree[node_idx as usize];
+            if node.is_leaf() {
+                return Ok(node.value as i32);
             }
         }
-
-        Ok(value)
     }
 
     /// Clear the decoder state
     pub fn clear(&mut self) {
         self.code_table.clear();
         self.decode_lut.clear();
-        self.root = None;
+        self.flat_tree.clear();
         self.num_bits_lut = 0;
         self.num_bits_to_skip_in_tree = 0;
+        self.need_tree = false;
     }
 }
 
@@ -485,6 +590,19 @@ mod tests {
         let h = Huffman::new();
         assert!(h.code_table.is_empty());
         assert!(h.decode_lut.is_empty());
-        assert!(h.root.is_none());
+        assert!(h.flat_tree.is_empty());
+    }
+
+    #[test]
+    fn test_flat_node() {
+        let internal = FlatNode::new_internal();
+        assert!(!internal.is_leaf());
+        assert_eq!(internal.value, -1);
+        assert_eq!(internal.child0, INVALID_NODE);
+        assert_eq!(internal.child1, INVALID_NODE);
+
+        let mut leaf = FlatNode::new_internal();
+        leaf.value = 42;
+        assert!(leaf.is_leaf());
     }
 }
