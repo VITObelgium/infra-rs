@@ -25,6 +25,7 @@ pub mod simd {
 
     use super::*;
     use crate::densearrayutil;
+    use std::simd::Select;
     use std::simd::prelude::*;
 
     const LANES: usize = inf::simd::LANES;

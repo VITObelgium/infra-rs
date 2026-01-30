@@ -4,11 +4,23 @@ use std::path::Path;
 
 use crate::geotiff::{
     ChunkDataLayout, TiffStats, decoder,
+    gdalghostdata::GdalGhostData,
     io::{self, CogHeaderReader},
     reader::TiffOverview,
 };
 use crate::raster::{Compression, Predictor};
 use crate::{ArrayDataType, Error, GeoReference, Result};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Interleave {
+    /// One tiff chunk/strip contains the data for one band, chunks of band 1 are followed by the chunks of band 2 etc.
+    Band,
+    /// One tiff chunk/strip contains data for all bands interleaved per pixel
+    Pixel,
+    /// One tiff chunk/tile contains data for a single band but they are interleaved per band.
+    /// So with one read the chunks for all the bands can be loaded
+    Tile,
+}
 
 #[derive(Debug, Clone)]
 pub struct GeoTiffMetadata {
@@ -20,6 +32,8 @@ pub struct GeoTiffMetadata {
     pub statistics: Option<TiffStats>,
     pub geo_reference: GeoReference,
     pub overviews: Vec<TiffOverview>,
+    pub interleave: Interleave,
+    pub gdal_ghost_data: Option<GdalGhostData>, // Additional GDAL ghost metadata if the file was created with GDAL
 }
 
 pub enum ParseFromBufferError {
@@ -30,8 +44,14 @@ pub enum ParseFromBufferError {
 impl GeoTiffMetadata {
     pub fn from_file(path: &Path) -> Result<Self> {
         let mut file_reader = File::open(path)?;
+
+        let mut buffer = Vec::with_capacity(io::COG_HEADER_SIZE);
+        io::append_from_stream_to_buffer(&mut buffer, &mut file_reader, io::COG_HEADER_SIZE)?;
+        let ghost_data = GdalGhostData::from_tiff_header_buffer(&buffer);
+        file_reader.seek(std::io::SeekFrom::Start(0))?;
+
         let mut cog_buffer_reader = CogHeaderReader::from_stream(&mut file_reader, io::COG_HEADER_SIZE)?;
-        if io::stream_is_cog(&mut cog_buffer_reader) {
+        if ghost_data.as_ref().is_some_and(|ghost| ghost.is_cog()) {
             cog_buffer_reader.seek(std::io::SeekFrom::Start(0))?;
 
             // This is a COG, try to read the tiff metadata with as litte io calls as possible by using the `CogHeaderReader`.
@@ -49,7 +69,10 @@ impl GeoTiffMetadata {
                         cog_buffer_reader.increase_buffer_size(&mut file_reader)?;
                         log::debug!("Cog header dit not fit in default header size, retry with increased buffer size");
                     }
-                    Ok(meta) => return Ok(meta),
+                    Ok(mut meta) => {
+                        meta.gdal_ghost_data = ghost_data;
+                        return Ok(meta);
+                    }
                     Err(e) => return Err(e),
                 }
             }

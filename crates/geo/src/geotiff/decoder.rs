@@ -8,7 +8,10 @@ use tiff::{
 
 use crate::{
     ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows, crs,
-    geotiff::{ChunkDataLayout, GeoTiffMetadata, TiffChunkLocation, TiffStats, projectioninfo::ModelType, reader::TiffOverview, stats},
+    geotiff::{
+        ChunkDataLayout, GeoTiffMetadata, TiffChunkLocation, gdalmetadata, metadata::Interleave, projectioninfo::ModelType,
+        reader::TiffOverview,
+    },
     raster::{Compression, Predictor},
 };
 
@@ -77,9 +80,9 @@ fn read_model_transformation<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result
     }
 }
 
-fn read_gdal_metadata<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<Option<TiffStats>> {
+fn read_gdal_metadata<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<Option<gdalmetadata::GdalMetadata>> {
     if let Ok(gdal_metadata) = decoder.get_tag_ascii_string(Tag::Unknown(42112)) {
-        return Ok(Some(stats::parse_statistics(&gdal_metadata)?));
+        return Ok(Some(gdalmetadata::parse_gdal_metadata(&gdal_metadata)?));
     }
 
     Ok(None)
@@ -268,7 +271,9 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         _ => None,
     };
 
-    let statistics = read_gdal_metadata(decoder)?;
+    let gdal_metadata = read_gdal_metadata(decoder)?;
+    let statistics = gdal_metadata.as_ref().and_then(|m| m.statistics.clone());
+    let interleave = gdal_metadata.as_ref().and_then(|m| m.interleave).unwrap_or(Interleave::Band);
     let geo_transform = read_geo_transform(decoder)?;
     let raster_size = read_raster_size(decoder)?;
     let nodata = read_nodata_value(decoder)?;
@@ -341,5 +346,7 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         geo_reference: GeoReference::new(epsg, raster_size, geo_transform.into(), nodata),
         statistics,
         overviews,
+        interleave,
+        gdal_ghost_data: None,
     })
 }

@@ -77,22 +77,28 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_tiled_raster_as<T: ArrayNum, M: ArrayMetadata>(&mut self, overview: &TiffOverview, tile_size: u32) -> Result<DenseArray<T, M>> {
+    fn read_tiled_raster_band_as<T: ArrayNum, M: ArrayMetadata>(
+        &mut self,
+        overview: &TiffOverview,
+        band_index: usize,
+        tile_size: u32,
+    ) -> Result<DenseArray<T, M>> {
         let nodata = cast::option::<T>(self.geo_ref().nodata()).unwrap_or(T::NODATA);
         let mut data = allocate::aligned_vec_filled_with(nodata, overview.raster_size.cell_count());
-        let georef = Self::read_tiled_raster_into_buffer(&self.meta, overview, tile_size, &mut self.tiff_file, &mut data)?;
+        let georef = Self::read_tiled_raster_band_into_buffer(&self.meta, overview, band_index, tile_size, &mut self.tiff_file, &mut data)?;
         DenseArray::new_init_nodata(M::with_geo_reference(georef), data)
     }
 
     #[simd_bounds]
-    fn read_tiled_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+    fn read_tiled_raster_band_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         meta: &GeoTiffMetadata,
         overview: &TiffOverview,
+        band_index: usize,
         tile_size: u32,
         tiff_file: &mut File,
         buffer: &mut [T],
     ) -> Result<M> {
-        io::merge_overview_into_buffer(meta, overview, tile_size, buffer, |chunk| {
+        io::merge_overview_into_buffer(meta, overview, band_index, tile_size, buffer, |chunk| {
             let mut buf = vec![0; chunk.size as usize];
             io::read_chunk(&chunk, tiff_file, &mut buf)?;
             Ok(buf)
@@ -100,24 +106,34 @@ impl GeoTiffReader {
     }
 
     #[simd_bounds]
-    fn read_striped_raster_as<T: ArrayNum, M: ArrayMetadata>(
+    fn read_striped_raster_band_as<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
+        band_index: usize,
         chunks: &[TiffChunkLocation],
         rows_per_strip: u32,
     ) -> Result<DenseArray<T, M>> {
         let raster_size = self.meta.geo_reference.raster_size();
         let mut data = allocate::AlignedVecUnderConstruction::new(raster_size.cell_count());
-        let georef = self.read_striped_raster_into_buffer::<T, M>(chunks, rows_per_strip, unsafe { data.as_slice_mut() })?;
+        let georef =
+            self.read_striped_raster_band_into_buffer::<T, M>(band_index, chunks, rows_per_strip, unsafe { data.as_slice_mut() })?;
         DenseArray::new_init_nodata(georef, unsafe { data.assume_init() })
     }
 
     #[simd_bounds]
-    fn read_striped_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+    fn read_striped_raster_band_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
+        band_index: usize,
         chunks: &[TiffChunkLocation],
         rows_per_strip: u32,
         buffer: &mut [T],
     ) -> Result<M> {
+        if band_index > 1 {
+            return Err(Error::Runtime(format!(
+                "Multiband GeoTIFF with striped layout not implemented. Requested band index: {}",
+                band_index
+            )));
+        }
+
         let geo_ref = self.meta.geo_reference.clone();
         let strip_size = geo_ref.columns().count() as usize * rows_per_strip as usize;
         for (stripe_offset, stripe_buf) in chunks.iter().zip(buffer.chunks_mut(strip_size)) {
@@ -129,31 +145,39 @@ impl GeoTiffReader {
 
     #[simd_bounds]
     pub fn read_raster_as<T: ArrayNum, M: ArrayMetadata>(&mut self) -> Result<DenseArray<T, M>> {
-        self.read_overview_as(0)
+        self.read_overview_band_as(0, 1)
+    }
+
+    #[simd_bounds]
+    pub fn read_raster_band_as<T: ArrayNum, M: ArrayMetadata>(&mut self, band_index: usize) -> Result<DenseArray<T, M>> {
+        self.read_overview_band_as(0, band_index)
     }
 
     #[simd_bounds]
     pub fn read_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(&mut self, dst_data: &mut [std::mem::MaybeUninit<T>]) -> Result<M> {
-        self.read_overview_into_buffer::<T, M>(0, dst_data)
+        self.read_overview_band_into_buffer::<T, M>(0, 1, dst_data)
     }
 
-    /// Reads an overview raster at the specified index
+    /// Reads a band from an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
+    /// `band_index` is 1 based.
     #[simd_bounds]
-    pub fn read_overview_as<T: ArrayNum, M: ArrayMetadata>(&mut self, overview_index: usize) -> Result<DenseArray<T, M>> {
+    pub fn read_overview_band_as<T: ArrayNum, M: ArrayMetadata>(
+        &mut self,
+        overview_index: usize,
+        band_index: usize,
+    ) -> Result<DenseArray<T, M>> {
         if let Some(overview) = self.meta.overviews.get(overview_index).cloned() {
             if overview.chunk_locations.is_empty() {
                 return Err(Error::Runtime("No tiles available in the geotiff".into()));
             }
 
-            dbg!(overview.chunk_locations.len());
-
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    return self.read_tiled_raster_as::<T, M>(&overview, tile_size);
+                    return self.read_tiled_raster_band_as::<T, M>(&overview, band_index, tile_size);
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
-                    return self.read_striped_raster_as::<T, M>(&overview.chunk_locations, rows_per_strip);
+                    return self.read_striped_raster_band_as::<T, M>(band_index, &overview.chunk_locations, rows_per_strip);
                 }
             }
         }
@@ -176,9 +200,10 @@ impl GeoTiffReader {
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
     #[simd_bounds]
-    pub fn read_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
+    pub fn read_overview_band_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview_index: usize,
+        band_index: usize,
         buffer: &mut [MaybeUninit<T>],
     ) -> Result<M> {
         if let Some(overview) = self.meta.overviews.get(overview_index).cloned() {
@@ -191,10 +216,17 @@ impl GeoTiffReader {
 
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    return Self::read_tiled_raster_into_buffer(&self.meta, &overview, tile_size, &mut self.tiff_file, buffer);
+                    return Self::read_tiled_raster_band_into_buffer(
+                        &self.meta,
+                        &overview,
+                        band_index,
+                        tile_size,
+                        &mut self.tiff_file,
+                        buffer,
+                    );
                 }
                 ChunkDataLayout::Striped(rows_per_strip) => {
-                    return self.read_striped_raster_into_buffer(&overview.chunk_locations, rows_per_strip, buffer);
+                    return self.read_striped_raster_band_into_buffer(band_index, &overview.chunk_locations, rows_per_strip, buffer);
                 }
             }
         }
@@ -413,6 +445,7 @@ mod tests {
     use crate::{
         ArrayDataType, GeoReference, RasterMetadata, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles},
+        geotiff::gdalghostdata::Interleave,
         raster::{Compression, DenseRaster, GeoTiffWriteOptions, Predictor, RasterReadWrite, TiffChunkType, WriteRasterOptions},
         testutils,
     };
@@ -518,16 +551,37 @@ mod tests {
     }
 
     #[test_log::test]
-    fn read_multiband_raster() -> Result<()> {
-        let input = testutils::workspace_test_data_dir().join("multiband.tif");
+    fn read_multiband_raster_tiled_interleave_band() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_band.tif");
 
         let mut geotiff = GeoTiffReader::from_file(&input)?;
+        assert_eq!(5, geotiff.metadata().band_count);
         assert_eq!(geotiff.metadata().data_layout, ChunkDataLayout::Tiled(512));
+        assert_eq!(geotiff.metadata().interleave, Interleave::Band);
 
-        let raster = geotiff.read_raster_as::<f32, GeoReference>()?;
-        let gdal_raster = DenseRaster::<f32>::read(input)?;
+        for band_index in 1..=5 {
+            let raster_band = geotiff.read_raster_band_as::<u8, GeoReference>(band_index)?;
+            let gdal_band = DenseRaster::<u8>::read_band(&input, band_index)?;
+            assert_eq!(raster_band, gdal_band);
+        }
 
-        assert_eq!(raster, gdal_raster);
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_multiband_raster_tiled_interleave_tile() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile.tif");
+
+        let mut geotiff = GeoTiffReader::from_file(&input)?;
+        assert_eq!(5, geotiff.metadata().band_count);
+        assert_eq!(geotiff.metadata().data_layout, ChunkDataLayout::Tiled(512));
+        assert_eq!(geotiff.metadata().interleave, Interleave::Tile);
+
+        for band_index in 1..=5 {
+            let raster_band = geotiff.read_raster_band_as::<u8, GeoReference>(band_index)?;
+            let gdal_band = DenseRaster::<u8>::read_band(&input, band_index)?;
+            assert_eq!(raster_band, gdal_band);
+        }
 
         Ok(())
     }
@@ -566,10 +620,11 @@ mod tests {
         let mut cog_lzw_compression = GeoTiffReader::from_file(&lzw_compression_output)?;
         let mut cog_zstd_compression = GeoTiffReader::from_file(&zstd_compression_output)?;
 
+        let band_index = 1;
         for overview_index in 0..cog_no_compression.metadata().overviews.len() {
-            let overview_no_compression = cog_no_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
-            let overview_lzw = cog_lzw_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
-            let overview_zstd = cog_zstd_compression.read_overview_as::<u8, RasterMetadata>(overview_index)?;
+            let overview_no_compression = cog_no_compression.read_overview_band_as::<u8, RasterMetadata>(overview_index, band_index)?;
+            let overview_lzw = cog_lzw_compression.read_overview_band_as::<u8, RasterMetadata>(overview_index, band_index)?;
+            let overview_zstd = cog_zstd_compression.read_overview_band_as::<u8, RasterMetadata>(overview_index, band_index)?;
 
             assert_eq!(overview_no_compression, overview_lzw);
             assert_eq!(overview_no_compression, overview_zstd);

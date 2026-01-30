@@ -1,4 +1,4 @@
-use std::simd::{LaneCount, SimdCast, SupportedLaneCount, prelude::*};
+use std::simd::{SimdCast, prelude::*};
 
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 pub const LANES: usize = 4; // wasm SIMD128 (4 x f32 lanes)
@@ -25,19 +25,13 @@ pub const LANES: usize = 4; // NEON 128-bit (4 x f32 lanes)
 )))]
 pub const LANES: usize = 1; // scalar fallback
 
-pub trait SimdCastPl<const N: usize>
-where
-    LaneCount<N>: SupportedLaneCount,
-{
+pub trait SimdCastPl<const N: usize> {
     fn simd_cast<U: SimdCast>(self) -> Simd<U, N>;
 }
 
 macro_rules! impl_cast_custom {
     ($_type:ty, $_trait:ident) => {
-        impl<const N: usize> SimdCastPl<N> for Simd<$_type, N>
-        where
-            std::simd::LaneCount<N>: SupportedLaneCount,
-        {
+        impl<const N: usize> SimdCastPl<N> for Simd<$_type, N> {
             fn simd_cast<U: SimdCast>(self) -> Simd<U, N> {
                 use std::simd::num::$_trait;
                 self.cast::<U>()

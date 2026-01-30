@@ -46,7 +46,7 @@ test_debug $RUST_LOG="debug":
 
 [unix]
 test_debug $RUST_LOG="debug":
-    cargo nextest run -p geo --features=serde,gdal-static,arrow,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon
+    cargo nextest run -p geo --features=serde,gdal-static,arrow,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon --no-capture -- read_multiband_raster
 
 # The vector processing feature is currently broken, the geozero dependency should be removed
 test_release:
@@ -59,7 +59,7 @@ test_warp:
     mise -E vcpkg run test_warp --release
 
 test_release_simd:
-    @ {{ devenv_nightly }} 'set -o pipefail; cargo nextest run --profile ci --release --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv'
+    @ {{ devenv_nightly }} 'set -o pipefail; rustc --version;cargo nextest run --profile ci --release --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv'
 
 test_debug_py:
     @ {{ devenv_nightly }} 'set -o pipefail; cargo nextest run --profile ci --workspace --all-features'
@@ -96,10 +96,10 @@ rasterbenchbaseline name:
     cargo bench --bench rasterops --package=geo -- --save-baseline {{ name }}
 
 createcog input output:
-    mise -E vcpkg run createcog --input "{{input}}" --output {{output}}
+    mise -E vcpkg run createcog --input "{{ input }}" --output {{ output }}
 
 createmultibandcog input output:
-    mise -E vcpkg run createcog --input "{{input}}" --output {{output}} --multi-band
+    mise -E vcpkg run createcog --input "{{ input }}" --output {{ output }} --multi-band
 
 tiles2raster zoom tile_size="256":
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.vrt?tile_format=vrt&tile_size={{ tile_size }}" --zoom {{ zoom }} --tile-size={{ tile_size }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_{{ zoom }}_{{ tile_size }}.tif

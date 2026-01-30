@@ -10,6 +10,9 @@ use super::UnmappableColors;
 use super::UnmappableColorsSimd;
 
 #[cfg(feature = "simd")]
+use std::simd::Select;
+
+#[cfg(feature = "simd")]
 const LANES: usize = crate::simd::LANES;
 
 /// Linear color mapper

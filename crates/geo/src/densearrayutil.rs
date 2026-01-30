@@ -60,10 +60,7 @@ pub mod simd {
 
     use crate::ArrayNum;
 
-    pub fn unary_simd<T: SimdElement>(data: &[T], mut cb_scalar: impl FnMut(&T), cb_simd: impl FnMut(&Simd<T, LANES>))
-    where
-        std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
-    {
+    pub fn unary_simd<T: SimdElement>(data: &[T], mut cb_scalar: impl FnMut(&T), cb_simd: impl FnMut(&Simd<T, LANES>)) {
         let (head, simd_vals, tail) = data.as_simd();
 
         debug_assert!(head.is_empty(), "Data alignment error");
@@ -73,10 +70,7 @@ pub mod simd {
         tail.iter().for_each(cb_scalar);
     }
 
-    pub fn unary_simd_mut<T: SimdElement>(data: &mut [T], cb_scalar: impl Fn(&mut T), cb_simd: impl Fn(&mut Simd<T, LANES>))
-    where
-        std::simd::LaneCount<LANES>: std::simd::SupportedLaneCount,
-    {
+    pub fn unary_simd_mut<T: SimdElement>(data: &mut [T], cb_scalar: impl Fn(&mut T), cb_simd: impl Fn(&mut Simd<T, LANES>)) {
         let (head, simd_vals, tail) = data.as_simd_mut();
 
         debug_assert!(head.is_empty(), "Data alignment error");

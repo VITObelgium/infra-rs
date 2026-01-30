@@ -57,7 +57,8 @@ tileserver = { optional = true, path = "./tools/tileserver" }
 
 [features]
 arrow = ["geo/arrow"]
-default = ["gdal-static", "serde", "sqlite"]
+cog = ["geo/raster-io-geotiff"]
+default = ["gdal-static", "serde", "sqlite", "cog"]
 gdal = ["geo/gdal"]
 gdal-static = ["gdal", "geo/gdal-static"]
 vector = ["geo/vector-io", "geo/vector-io-xlsx", "geo/vector-io-csv"]

@@ -1,5 +1,8 @@
 use num::{Float, Num, NumCast, One, ToPrimitive, Zero};
 
+#[cfg(feature = "simd")]
+use std::simd::Select;
+
 #[inline]
 pub fn linear_map_to_float<T, TFloat>(value: T, min: T, max: T) -> TFloat
 where
@@ -24,10 +27,7 @@ where
 
 #[cfg(feature = "simd")]
 #[inline]
-pub fn linear_map_to_float_simd<const N: usize>(value: std::simd::Simd<f32, N>, min: f32, max: f32) -> std::simd::Simd<f32, N>
-where
-    std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
-{
+pub fn linear_map_to_float_simd<const N: usize>(value: std::simd::Simd<f32, N>, min: f32, max: f32) -> std::simd::Simd<f32, N> {
     use std::simd::cmp::SimdPartialOrd;
     use std::simd::prelude::*;
 

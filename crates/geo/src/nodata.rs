@@ -99,9 +99,10 @@ impl_nodata_floating_point!(f64);
 pub mod simd {
 
     use super::*;
+    use std::simd::Select;
     use std::simd::num::SimdInt;
     use std::simd::num::SimdUint;
-    use std::simd::{LaneCount, SupportedLaneCount, prelude::*};
+    use std::simd::prelude::*;
 
     const LANES: usize = inf::simd::LANES;
 
@@ -143,10 +144,7 @@ pub mod simd {
 
     macro_rules! impl_nodata_simd {
         ( $t:ident, $numtrait:ident, $lanes: ident ) => {
-            impl NodataSimd for Simd<$t, $lanes>
-            where
-                LaneCount<$lanes>: SupportedLaneCount,
-            {
+            impl NodataSimd for Simd<$t, $lanes> {
                 type Scalar = $t;
                 type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, $lanes>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);
@@ -243,10 +241,7 @@ pub mod simd {
 
     macro_rules! impl_nodata_simd_fp {
         ( $t:ident, $lanes: ident ) => {
-            impl NodataSimd for Simd<$t, $lanes>
-            where
-                LaneCount<$lanes>: SupportedLaneCount,
-            {
+            impl NodataSimd for Simd<$t, $lanes> {
                 type Scalar = $t;
                 type NodataMask = std::simd::Mask<<$t as std::simd::SimdElement>::Mask, $lanes>;
                 const NODATA_SIMD: Self = Simd::splat($t::NODATA);

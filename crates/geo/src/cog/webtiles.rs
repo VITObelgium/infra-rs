@@ -406,19 +406,20 @@ impl WebTilesReader {
     pub fn read_overview(
         &self,
         overview: &TiffOverview,
+        band_index: usize,
         chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
     ) -> Result<AnyDenseArray> {
         Ok(match self.data_type() {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_overview_as::<u8>(overview, chunk_cb)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_overview_as::<u16>(overview, chunk_cb)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_overview_as::<u32>(overview, chunk_cb)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_overview_as::<u64>(overview, chunk_cb)?),
-            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_overview_as::<i8>(overview, chunk_cb)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_overview_as::<i16>(overview, chunk_cb)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_overview_as::<i32>(overview, chunk_cb)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_overview_as::<i64>(overview, chunk_cb)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_overview_as::<f32>(overview, chunk_cb)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_overview_as::<f64>(overview, chunk_cb)?),
+            ArrayDataType::Uint8 => AnyDenseArray::U8(self.read_overview_as::<u8>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Uint16 => AnyDenseArray::U16(self.read_overview_as::<u16>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Uint32 => AnyDenseArray::U32(self.read_overview_as::<u32>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Uint64 => AnyDenseArray::U64(self.read_overview_as::<u64>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Int8 => AnyDenseArray::I8(self.read_overview_as::<i8>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Int16 => AnyDenseArray::I16(self.read_overview_as::<i16>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Int32 => AnyDenseArray::I32(self.read_overview_as::<i32>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Int64 => AnyDenseArray::I64(self.read_overview_as::<i64>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Float32 => AnyDenseArray::F32(self.read_overview_as::<f32>(overview, band_index, chunk_cb)?),
+            ArrayDataType::Float64 => AnyDenseArray::F64(self.read_overview_as::<f64>(overview, band_index, chunk_cb)?),
         })
     }
 
@@ -426,6 +427,7 @@ impl WebTilesReader {
     pub fn read_overview_as<T: ArrayNum>(
         &self,
         overview: &TiffOverview,
+        band_index: usize,
         chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.cog_meta.data_type {
@@ -440,6 +442,7 @@ impl WebTilesReader {
         io::merge_overview_into_buffer::<T, RasterMetadata>(
             &self.cog_meta,
             overview,
+            band_index,
             self.cog_meta.chunk_row_length(),
             unsafe { buffer.as_slice_mut() },
             chunk_cb,
@@ -1157,8 +1160,9 @@ mod tests {
         let overview = cog.overview_for_display_size(512).unwrap();
 
         let mut reader = File::open(&cog_path)?;
+        let band_index = 1;
         assert_eq!(RasterSize::with_rows_cols(Rows(512), Columns(1024)), overview.raster_size);
-        let actual = cog.read_overview_as::<u8>(overview, |chunk: TiffChunkLocation| {
+        let actual = cog.read_overview_as::<u8>(overview, band_index, |chunk: TiffChunkLocation| {
             let mut buf = vec![0; chunk.size as usize];
             reader.seek(std::io::SeekFrom::Start(chunk.offset)).unwrap();
             reader.read_exact(&mut buf)?;

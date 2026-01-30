@@ -3,7 +3,11 @@
 /// Normal clients should use higher-level functions in `cog` module for reading COGs.
 use crate::{
     ArrayDataType, ArrayMetadata, ArrayNum,
-    geotiff::{GeoTiffMetadata, TiffChunkLocation, TiffOverview, gdalghostdata::GdalGhostData, utils},
+    geotiff::{
+        GeoTiffMetadata, TiffChunkLocation, TiffOverview,
+        gdalghostdata::{GdalGhostData, Interleave},
+        utils,
+    },
     raster::{Compression, Predictor},
 };
 use inf::cast;
@@ -38,6 +42,27 @@ pub fn stream_is_cog(stream: &mut impl Read) -> bool {
     GdalGhostData::from_tiff_header_buffer(&header).is_some_and(|ghost| ghost.is_cog())
 }
 
+pub fn append_from_stream_to_buffer(buffer: &mut Vec<u8>, stream: &mut impl Read, size: usize) -> Result<()> {
+    let initial_buf_len = buffer.len();
+    buffer.resize(initial_buf_len + size, 0);
+
+    let mut total_bytes_read = 0;
+
+    while total_bytes_read < size {
+        let bytes_read = stream.read(&mut buffer[initial_buf_len + total_bytes_read..])?;
+        if bytes_read == 0 {
+            // EOF reached before filling the buffer
+            break;
+        }
+
+        total_bytes_read += bytes_read;
+    }
+
+    buffer.truncate(initial_buf_len + total_bytes_read);
+
+    Ok(())
+}
+
 /// This reader buffers the first x bytes of the source stream, which is usually sufficient for reading the COG header.
 /// This way multiple io calls are avoided when reading the header.
 /// Read operations outside of the header will cause `UnexpectedEof` error.
@@ -50,36 +75,15 @@ impl CogHeaderReader {
     pub fn from_stream(stream: &mut impl Read, header_size: usize) -> Result<Self> {
         // Read up to header_size bytes, handling partial reads
         let mut buffer = Vec::default();
-        Self::append_from_stream_to_buffer(&mut buffer, stream, header_size)?;
+        append_from_stream_to_buffer(&mut buffer, stream, header_size)?;
         Ok(Self::from_buffer(buffer))
-    }
-
-    fn append_from_stream_to_buffer(buffer: &mut Vec<u8>, stream: &mut impl Read, size: usize) -> Result<()> {
-        let initial_buf_len = buffer.len();
-        buffer.resize(initial_buf_len + size, 0);
-
-        let mut total_bytes_read = 0;
-
-        while total_bytes_read < size {
-            let bytes_read = stream.read(&mut buffer[initial_buf_len + total_bytes_read..])?;
-            if bytes_read == 0 {
-                // EOF reached before filling the buffer
-                break;
-            }
-
-            total_bytes_read += bytes_read;
-        }
-
-        buffer.truncate(initial_buf_len + total_bytes_read);
-
-        Ok(())
     }
 
     /// Increases the current buffer size by a factor of 2, resets the read position to 0,
     pub fn increase_buffer_size(&mut self, stream: &mut (impl Read + Seek)) -> Result<()> {
         let current_size = self.buffer.len();
         stream.seek(SeekFrom::Start(current_size as u64))?;
-        Self::append_from_stream_to_buffer(&mut self.buffer, stream, current_size)?;
+        append_from_stream_to_buffer(&mut self.buffer, stream, current_size)?;
 
         // Reset position to the start of the buffer
         self.pos = 0;
@@ -292,6 +296,7 @@ fn read_chunk_data_into_buffer_cb_as<T: ArrayNum>(
 pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     meta: &GeoTiffMetadata,
     overview: &TiffOverview,
+    band_index: usize,
     tile_size: u32,
     buffer: &mut [T],
     mut read_chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
@@ -307,16 +312,25 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     };
 
     let tiles_per_row = (raster_size.cols.count() as usize).div_ceil(tile_size as usize);
+    let tiles_per_column = (raster_size.rows.count() as usize).div_ceil(tile_size as usize);
+    let tile_count = tiles_per_row * tiles_per_column;
+
+    // Iteration depends on the interleave mode
+    // The orderinge of the chunks does not depend on the intreleave, they are always stored in row-major order
+    let chunks = &overview.chunk_locations;
+    if meta.interleave == Interleave::Pixel {
+        unimplemented!("Pixel interleave tiff reading not implemented yet");
+    }
+    let chunk_iter = chunks.iter().skip((band_index - 1) * tile_count).take(tile_count).enumerate();
 
     let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
-    for (chunk_index, chunk_offset) in overview.chunk_locations.iter().enumerate() {
+    for (chunk_index, chunk_offset) in chunk_iter {
         let col_index = (chunk_index % tiles_per_row) * tile_size as usize;
         let chunk_row_index = chunk_index / tiles_per_row;
         let is_right_edge = (chunk_index + 1) % tiles_per_row == 0;
         let row_size = if is_right_edge { right_edge_cols } else { tile_size as usize };
 
         read_chunk_data_into_buffer_cb_as(meta, chunk_offset, &mut read_chunk_cb, &mut tile_buf)?;
-
         for (tile_row_index, tile_row_data) in tile_buf.chunks_mut(tile_size as usize).enumerate() {
             let start_row = chunk_row_index * tile_size as usize + tile_row_index;
             if start_row >= raster_size.rows.count() as usize {

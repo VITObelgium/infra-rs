@@ -11,6 +11,9 @@ use super::UnmappableColorsSimd;
 use super::{ColorMapper, UnmappableColors};
 
 #[cfg(feature = "simd")]
+use std::simd::Select;
+
+#[cfg(feature = "simd")]
 const LANES: usize = crate::simd::LANES;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]

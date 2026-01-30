@@ -1,3 +1,5 @@
+pub use super::metadata::Interleave;
+
 // TIFF header offsets where ghost data begins
 const CLASSIC_TIFF_GHOST_DATA_OFFSET: usize = 8;
 const BIGTIFF_GHOST_DATA_OFFSET: usize = 16;
@@ -32,6 +34,7 @@ pub struct GdalGhostData {
     pub block_order: Option<CogBlockOrder>,
     pub block_leader: Option<BlockLeader>,
     pub block_trailer: Option<BlockTrailer>,
+    pub interleave: Option<Interleave>,
 }
 
 impl GdalGhostData {
@@ -86,6 +89,28 @@ impl GdalGhostData {
     }
 }
 
+/// Parse an interleave mode string into an Interleave enum variant.
+///
+/// The GDAL interleave modes are:
+/// - "BAND": One tiff chunk/strip contains the data for one band
+/// - "PIXEL": One tiff chunk/strip contains data for all bands interleaved per pixel
+/// - "TILE": One tiff chunk/tile contains data for a single band but they are interleaved per band
+///
+/// # Arguments
+/// * `value` - The string value to parse (e.g., "BAND", "PIXEL", "TILE")
+///
+/// # Returns
+/// * `Some(Interleave)` if the value matches a known mode
+/// * `None` if the value is not recognized
+pub fn parse_interleave_mode(value: &str) -> Option<Interleave> {
+    match value.trim() {
+        "BAND" => Some(Interleave::Band),
+        "PIXEL" => Some(Interleave::Pixel),
+        "TILE" => Some(Interleave::Tile),
+        _ => None,
+    }
+}
+
 fn parse_ghost_metadata(header_str: &str) -> Option<GdalGhostData> {
     let mut ghost_data = GdalGhostData::default();
 
@@ -125,6 +150,9 @@ fn parse_ghost_metadata(header_str: &str) -> Option<GdalGhostData> {
                     "LAST_4_BYTES_REPEATED" => Some(BlockTrailer::Last4BytesRepeated),
                     _ => None,
                 };
+            }
+            "INTERLEAVE" => {
+                ghost_data.interleave = parse_interleave_mode(value);
             }
             _ => {}
         });

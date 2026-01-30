@@ -324,10 +324,7 @@ impl ProcessedColorMap {
 
     #[cfg(feature = "simd")]
     #[inline]
-    pub fn get_color_simd<const N: usize>(&self, value: std::simd::Simd<f32, N>) -> std::simd::Simd<u32, N>
-    where
-        std::simd::LaneCount<N>: std::simd::SupportedLaneCount,
-    {
+    pub fn get_color_simd<const N: usize>(&self, value: std::simd::Simd<f32, N>) -> std::simd::Simd<u32, N> {
         use std::simd::StdFloat;
         use std::simd::prelude::*;
 

@@ -16,7 +16,7 @@ use std::{
 };
 
 #[cfg(feature = "simd")]
-use std::simd::{LaneCount, Simd, SimdCast, SimdElement, SupportedLaneCount, cmp::SimdPartialEq, num::SimdFloat};
+use std::simd::{Select, Simd, SimdCast, SimdElement, cmp::SimdPartialEq, num::SimdFloat};
 
 #[cfg(feature = "simd")]
 pub const LANES: usize = crate::simd::LANES;
@@ -83,10 +83,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         &self,
         value: Simd<f32, N>,
         nodata: Option<f32>,
-    ) -> <std::simd::Simd<f32, N> as std::simd::cmp::SimdPartialEq>::Mask
-    where
-        LaneCount<N>: SupportedLaneCount,
-    {
+    ) -> <std::simd::Simd<f32, N> as std::simd::cmp::SimdPartialEq>::Mask {
         let mut mask = value.is_nan();
         if let Some(nodata) = nodata {
             mask |= value.simd_eq(Simd::splat(nodata));
