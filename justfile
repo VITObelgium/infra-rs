@@ -46,7 +46,7 @@ test_debug $RUST_LOG="debug":
 
 [unix]
 test_debug $RUST_LOG="debug":
-    cargo nextest run -p geo --features=serde,gdal-static,arrow,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon --no-capture -- read_multiband_raster
+    cargo nextest run -p geo --features=serde,gdal-static,arrow,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon --no-capture
 
 # The vector processing feature is currently broken, the geozero dependency should be removed
 test_release:

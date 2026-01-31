@@ -38,7 +38,7 @@ name = "simd"
 approx = "0.5"
 arrow = { version = "57", optional = true }
 bon = { version = "3.8", optional = true }
-bytemuck = { version = "1.24" }
+bytemuck = { version = "1.25" }
 calamine = { version = "0.32", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }

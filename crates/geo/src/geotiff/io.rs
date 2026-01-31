@@ -315,7 +315,6 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     let tiles_per_column = (raster_size.rows.count() as usize).div_ceil(tile_size as usize);
     let tile_count = tiles_per_row * tiles_per_column;
 
-    // Iteration depends on the interleave mode
     // The orderinge of the chunks does not depend on the intreleave, they are always stored in row-major order
     let chunks = &overview.chunk_locations;
     if meta.interleave == Interleave::Pixel {

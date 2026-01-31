@@ -15,8 +15,6 @@ pub struct TiffStats {
     pub mean: f64,
     pub standard_deviation: f64,
     pub valid_pixel_percentage: f64,
-    #[cfg_attr(target_arch = "wasm32", serde(skip))]
-    pub max_zoom: Option<i32>,
 }
 
 /// Band-specific metadata including offset and scale values
@@ -37,8 +35,10 @@ pub struct GdalMetadata {
     pub statistics: Option<TiffStats>,
     /// Per-band metadata (offset, scale)
     pub band_metadata: Vec<BandMetadata>,
-    /// Interleave mode from IMAGE_STRUCTURE domain
+    /// Interleave mode from `IMAGE_STRUCTURE` domain
     pub interleave: Option<Interleave>,
+    /// Maximum zoom level from `TILING_SCHEME` domain
+    pub max_zoom: Option<i32>,
 }
 
 // GDAL metadata can have various formats:
@@ -86,10 +86,10 @@ pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
 
                 for attr in attributes {
                     match attr.name.local_name.as_str() {
-                        "name" => current_name = Some(attr.value.clone()),
-                        "domain" => current_domain = Some(attr.value.clone()),
+                        "name" => current_name = Some(attr.value),
+                        "domain" => current_domain = Some(attr.value),
                         "sample" => current_sample = attr.value.parse::<u32>().ok(),
-                        "role" => current_role = Some(attr.value.clone()),
+                        "role" => current_role = Some(attr.value),
                         _ => {}
                     }
                 }
@@ -129,8 +129,7 @@ pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
                             if let Some(ref domain) = current_domain
                                 && domain == "TILING_SCHEME"
                             {
-                                stats.max_zoom = data.parse::<i32>().ok();
-                                has_statistics = true;
+                                metadata.max_zoom = data.parse::<i32>().ok();
                             }
                         }
                         "OFFSET" => {
@@ -228,7 +227,7 @@ mod tests {
         assert_abs_diff_eq!(stats.mean, 119.11901635438, epsilon = 1e-10);
         assert_abs_diff_eq!(stats.standard_deviation, 58.60474035626, epsilon = 1e-10);
         assert_abs_diff_eq!(stats.valid_pixel_percentage, 45.34, epsilon = 1e-10);
-        assert_eq!(stats.max_zoom, Some(10));
+        assert_eq!(metadata.max_zoom, Some(10));
     }
 
     #[test]
@@ -236,11 +235,11 @@ mod tests {
         let xml = r#"
 <GDALMetadata>
   <Item name="OFFSET" sample="0" role="offset">0</Item>
-  <Item name="SCALE" sample="0" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="0" role="scale">0.0313725490196</Item>
   <Item name="OFFSET" sample="1" role="offset">0</Item>
-  <Item name="SCALE" sample="1" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="1" role="scale">0.0313725490196</Item>
   <Item name="OFFSET" sample="2" role="offset">0</Item>
-  <Item name="SCALE" sample="2" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="2" role="scale">0.0313725490196</Item>
 </GDALMetadata>
         "#;
         let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
@@ -250,7 +249,7 @@ mod tests {
         for (i, band) in metadata.band_metadata.iter().enumerate() {
             assert_eq!(band.sample, i as u32);
             assert_eq!(band.offset, Some(0.0));
-            assert_abs_diff_eq!(band.scale.unwrap(), 0.031372549019600002, epsilon = 1e-15);
+            assert_abs_diff_eq!(band.scale.unwrap(), 0.0313725490196);
         }
     }
 
@@ -271,15 +270,15 @@ mod tests {
         let xml = r#"
 <GDALMetadata>
   <Item name="OFFSET" sample="0" role="offset">0</Item>
-  <Item name="SCALE" sample="0" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="0" role="scale">0.0313725490196</Item>
   <Item name="OFFSET" sample="1" role="offset">0</Item>
-  <Item name="SCALE" sample="1" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="1" role="scale">0.0313725490196</Item>
   <Item name="OFFSET" sample="2" role="offset">0</Item>
-  <Item name="SCALE" sample="2" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="2" role="scale">0.0313725490196</Item>
   <Item name="OFFSET" sample="3" role="offset">0</Item>
-  <Item name="SCALE" sample="3" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="3" role="scale">0.0313725490196</Item>
   <Item name="OFFSET" sample="4" role="offset">0</Item>
-  <Item name="SCALE" sample="4" role="scale">0.031372549019600002</Item>
+  <Item name="SCALE" sample="4" role="scale">0.0313725490196</Item>
   <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">TILE</Item>
 </GDALMetadata>
         "#;
@@ -291,7 +290,7 @@ mod tests {
         for (i, band) in metadata.band_metadata.iter().enumerate() {
             assert_eq!(band.sample, i as u32);
             assert_eq!(band.offset, Some(0.0));
-            assert_abs_diff_eq!(band.scale.unwrap(), 0.031372549019600002, epsilon = 1e-15);
+            assert_abs_diff_eq!(band.scale.unwrap(), 0.0313725490196);
         }
     }
 
