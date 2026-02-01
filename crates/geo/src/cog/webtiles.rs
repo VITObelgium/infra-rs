@@ -40,6 +40,19 @@ pub struct WebTiles {
     zoom_levels: Vec<ZoomLevelInfo>,
 }
 
+/// Iterates over a slice in stride-based groups.
+///
+/// Each group yields elements starting at an offset and
+/// stepping by `stride` (i.e. grouped by index modulo `stride`).
+///
+/// Example with `stride = 3`:
+/// Input slice: `[a, b, c, d, e, f, g, h, i]`
+/// Output tuples: `(a, d, g)`, `(b, e, h)`, `(c, f, i)`
+pub fn stride_groups<T>(slice: &[T], stride: usize) -> impl Iterator<Item = impl Iterator<Item = &T>> {
+    debug_assert!(slice.len().is_multiple_of(stride));
+    (0..stride).map(move |offset| slice.iter().skip(offset).step_by(stride))
+}
+
 impl WebTiles {
     pub fn from_cog_metadata(meta: &GeoTiffMetadata) -> Result<Self> {
         let mut zoom_levels = vec![ZoomLevelInfo::default(); 22];
@@ -81,12 +94,26 @@ impl WebTiles {
 
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
-                dbg!(overview, tiles.len(), overview.chunk_locations.len());
-                tiles.into_iter().zip(&overview.chunk_locations).for_each(|(web_tile, cog_tile)| {
-                    zoom_levels[web_tile.z as usize]
-                        .tiles
-                        .insert(web_tile, TileSource::Aligned(*cog_tile));
-                });
+                if meta.band_count == 1 {
+                    tiles.into_iter().zip(&overview.chunk_locations).for_each(|(web_tile, cog_tile)| {
+                        zoom_levels[web_tile.z as usize]
+                            .tiles
+                            .insert(web_tile, TileSource::Aligned(*cog_tile));
+                    });
+                } else {
+                    // The chunk_locations list is always ordered by band first: tile0_band0, tile1_band0, ..., tile0_band1, tile1_band1, ...
+                    // So we iterate strided to combine the chunks of all the bands per tile
+                    debug_assert!(overview.chunk_locations.len().is_multiple_of(meta.band_count as usize));
+                    let chunks_per_band = overview.chunk_locations.len() / meta.band_count as usize;
+                    tiles
+                        .into_iter()
+                        .zip(stride_groups(&overview.chunk_locations, chunks_per_band))
+                        .for_each(|(web_tile, cog_tiles)| {
+                            zoom_levels[web_tile.z as usize]
+                                .tiles
+                                .insert(web_tile, TileSource::MultiBandAligned(cog_tiles.copied().collect()));
+                        });
+                }
             } else {
                 let overview_geo_ref = GeoReference::with_bottom_left_origin(
                     "EPSG:3857",
@@ -97,24 +124,32 @@ impl WebTiles {
                 );
 
                 let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level, tile_size);
-                dbg!(overview, tiles.len(), overview.chunk_locations.len());
-                if let Ok(cog_tile_bounds) = create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size) {
+                if let Ok(cog_tile_bounds) =
+                    create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size, meta.band_count)
+                {
                     for tile in &tiles {
                         let mut tile_sources = Vec::new();
                         let web_tile_georef = GeoReference::from_tile(tile, tile_size as usize, 1);
 
-                        for (cog_tile, bounds) in &cog_tile_bounds {
+                        for (cog_tiles, bounds) in &cog_tile_bounds {
                             if web_tile_georef.intersects(bounds)?
                                 && let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef)
                             {
-                                tile_sources.push((*cog_tile, cutout));
+                                tile_sources.push((cog_tiles.clone(), cutout));
                             }
                         }
 
                         if !tile_sources.is_empty() {
-                            zoom_levels[tile.z as usize]
-                                .tiles
-                                .insert(*tile, TileSource::Unaligned(tile_sources));
+                            if meta.band_count == 1 {
+                                let tile_sources = tile_sources.into_iter().map(|(ts, cutout)| (ts[0], cutout)).collect();
+                                zoom_levels[tile.z as usize]
+                                    .tiles
+                                    .insert(*tile, TileSource::Unaligned(tile_sources));
+                            } else {
+                                zoom_levels[tile.z as usize]
+                                    .tiles
+                                    .insert(*tile, TileSource::MultiBandUnaligned(tile_sources));
+                            }
                         }
                     }
                 }
@@ -275,7 +310,8 @@ fn create_cog_tile_web_mercator_bounds(
     geo_reference: &GeoReference, // georeference of the full cog image
     zoom_level: i32,
     tile_size: u32,
-) -> Result<Vec<(TiffChunkLocation, GeoReference)>> {
+    band_count: u32,
+) -> Result<Vec<(Vec<TiffChunkLocation>, GeoReference)>> {
     let mut web_tiles = Vec::with_capacity(overview.chunk_locations.len());
 
     let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(zoom_level, tile_size));
@@ -284,14 +320,15 @@ fn create_cog_tile_web_mercator_bounds(
     let tiles_wide = (overview.raster_size.cols.count() as u32).div_ceil(tile_size) as usize;
     let tiles_high = (overview.raster_size.rows.count() as u32).div_ceil(tile_size) as usize;
 
-    if tiles_wide * tiles_high != overview.chunk_locations.len() {
+    if tiles_wide * tiles_high * band_count as usize != overview.chunk_locations.len() {
         return Err(Error::InvalidArgument(format!(
             "Expected {} tiles, but got {}",
-            tiles_wide * tiles_high,
+            tiles_wide * tiles_high * band_count as usize,
             overview.chunk_locations.len()
         )));
     }
 
+    let chunks_per_band = overview.chunk_locations.len() / band_count as usize;
     let tile_size = tile_size as i32;
     for ty in 0..tiles_high {
         let mut current_source_cell = Cell::from_row_col(ty as i32 * tile_size, 0);
@@ -321,8 +358,12 @@ fn create_cog_tile_web_mercator_bounds(
                 Option::<f64>::None,
             );
 
-            let cog_tile = &overview.chunk_locations[ty * tiles_wide + tx];
-            web_tiles.push((*cog_tile, cog_tile_geo_ref));
+            let mut cog_tiles = Vec::with_capacity(band_count as usize);
+            for band in 0..band_count {
+                cog_tiles.push(overview.chunk_locations[(ty * tiles_wide + tx) + (band as usize * chunks_per_band)]);
+            }
+
+            web_tiles.push((cog_tiles, cog_tile_geo_ref));
         }
     }
 
@@ -334,6 +375,7 @@ pub struct WebTileInfo {
     pub min_zoom: i32,
     pub max_zoom: i32,
     pub tile_size: u32,
+    pub band_count: u32,
     pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
     pub statistics: Option<TiffStats>,
@@ -361,6 +403,7 @@ impl WebTilesReader {
             min_zoom: self.web_tiles.min_zoom(),
             max_zoom: self.web_tiles.max_zoom(),
             tile_size: self.cog_meta.chunk_row_length(),
+            band_count: self.cog_meta.band_count,
             data_type: self.data_type(),
             bounds: self.data_bounds(),
             statistics: self.cog_meta.statistics.clone(),
@@ -1048,19 +1091,20 @@ mod tests {
             &cog.cog_metadata().geo_reference,
             8,
             cog.cog_metadata().chunk_row_length(),
+            meta.band_count,
         )?;
 
         {
             // Top right tile
             let (cog_tile_location, geo_ref) = &bounds[2];
-            assert_eq!(cog_tile_location.offset, cog_tiles[2].offset);
+            assert_eq!(cog_tile_location[0].offset, cog_tiles[2].offset);
             assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6731350.458905762), epsilon = 1e-6);
         }
 
         {
             // Bottom right tile
             let (cog_tile_location, geo_ref) = &bounds[5];
-            assert_eq!(cog_tile_location.offset, cog_tiles[5].offset);
+            assert_eq!(cog_tile_location[0].offset, cog_tiles[5].offset);
             assert_relative_eq!(geo_ref.top_left(), Point::new(547900.6187481433, 6574807.424977721), epsilon = 1e-6);
         }
 
@@ -1251,5 +1295,58 @@ mod tests {
         create_cog_tiles(&input, &output, opts)?;
 
         Ok(output)
+    }
+
+    #[test_log::test]
+    fn read_multiband_unaligned_cog() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile.tif");
+        let meta = GeoTiffMetadata::from_file(&input)?;
+        let web_tiles = WebTiles::from_cog_metadata(&meta)?;
+
+        assert_eq!(web_tiles.min_zoom(), 14);
+        assert_eq!(web_tiles.max_zoom(), 16);
+        assert_eq!(web_tiles.zoom_levels.len(), 17);
+
+        for tile_source in web_tiles.zoom_levels[16].tiles.values() {
+            assert!(
+                matches!(tile_source, TileSource::MultiBandUnaligned(_)),
+                "Expected MultiBandUnaligned tile source"
+            );
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_multiband_cog_aligned() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
+        let meta = GeoTiffMetadata::from_file(&input)?;
+        let web_tiles = WebTiles::from_cog_metadata(&meta)?;
+
+        assert_eq!(web_tiles.min_zoom(), 15);
+        assert_eq!(web_tiles.max_zoom(), 17);
+        assert_eq!(web_tiles.zoom_levels.len(), 18);
+
+        for zoom_level in 0..=14 {
+            assert_eq!(web_tiles.zoom_levels[zoom_level].tiles.len(), 0);
+        }
+
+        assert!(!web_tiles.zoom_levels[15].tile_aligned);
+        assert!(!web_tiles.zoom_levels[16].tile_aligned);
+        assert!(web_tiles.zoom_levels[17].tile_aligned);
+
+        for tile_source in web_tiles.zoom_levels[15].tiles.values() {
+            assert!(
+                matches!(tile_source, TileSource::MultiBandUnaligned(_)),
+                "Expected MultiBandUnaligned tile source"
+            );
+        }
+        for tile_source in web_tiles.zoom_levels[17].tiles.values() {
+            assert!(
+                matches!(tile_source, TileSource::MultiBandAligned(_)),
+                "Expected MultiBandUnaligned tile source"
+            );
+        }
+        Ok(())
     }
 }
