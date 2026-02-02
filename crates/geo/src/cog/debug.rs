@@ -1,4 +1,3 @@
-use num::NumCast;
 use simd_macro::simd_bounds;
 
 use crate::{

@@ -131,7 +131,6 @@ impl WebTiles {
                 if let Ok(cog_tile_bounds) =
                     create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size, meta.band_count)
                 {
-                    dbg!(zoom_level, &cog_tile_bounds, &tiles);
                     for tile in &tiles {
                         let mut tile_sources = Vec::new();
                         let web_tile_georef = GeoReference::from_tile(tile, tile_size as usize, 1);
@@ -328,7 +327,6 @@ fn create_cog_tile_web_mercator_bounds(
 
     let tiles_wide = (overview.raster_size.cols.count() as u32).div_ceil(tile_size) as usize;
     let tiles_high = (overview.raster_size.rows.count() as u32).div_ceil(tile_size) as usize;
-    log::error!("Overview: {tiles_wide}x{tiles_high} tiles");
 
     if tiles_wide * tiles_high * band_count as usize != overview.chunk_locations.len() {
         return Err(Error::InvalidArgument(format!(
