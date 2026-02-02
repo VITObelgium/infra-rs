@@ -40,9 +40,8 @@ fn read_tile_data<T: ArrayNum>(
     )
 }
 
-pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
+pub fn dump_tiff_tiles(cog_path: &Path, band_index: usize, zoom_level: i32, output_dir: &Path) -> Result<()> {
     let meta = GeoTiffMetadata::from_file(cog_path)?;
-
     let tile_size = meta.chunk_row_length();
     let cell_size = meta.geo_reference.cell_size_x();
 
@@ -59,7 +58,6 @@ pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> R
         .unwrap_or_else(|| panic!("Zoom level not available: {zoom_level}"));
 
     let tiles_wide = (overview.raster_size.cols.count() as usize).div_ceil(tile_size as usize);
-
     let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level, tile_size);
     let mut current_ll = meta.geo_reference.top_left();
     let mut reader = std::fs::File::open(cog_path)?;
@@ -103,21 +101,21 @@ pub fn dump_tiff_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> R
     Ok(())
 }
 
-pub fn dump_web_tiles(cog_path: &Path, zoom_level: i32, output_dir: &Path) -> Result<()> {
+pub fn dump_web_tiles(cog_path: &Path, band_index: usize, zoom_level: i32, output_dir: &Path) -> Result<()> {
     let cog = WebTilesReader::new(GeoTiffMetadata::from_file(cog_path)?)?;
     let mut reader = std::fs::File::open(cog_path)?;
 
     let tile_size = cog.cog_metadata().chunk_row_length();
-
     for tile in cog
         .zoom_level_tile_sources(zoom_level)
         .ok_or_else(|| Error::Runtime(format!("Zoom level {zoom_level} not available")))?
         .keys()
     {
-        if let Some(tile_data) = cog.read_tile_data(tile, &mut reader)?
+        if let Some(tile_data) = cog.read_tile_data(tile, band_index, &mut reader)?
             && !tile_data.is_empty()
         {
-            let geo_ref = GeoReference::from_tile(tile, tile_size as usize, 1).with_nodata(NumCast::from(u8::NODATA));
+            let nodata = cog.data_type().default_nodata_value();
+            let geo_ref = GeoReference::from_tile(tile, tile_size as usize, 1).with_nodata(Some(nodata));
             let mut tile_data = tile_data.with_metadata(geo_ref)?;
 
             let filename = output_dir

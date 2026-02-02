@@ -301,6 +301,7 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     buffer: &mut [T],
     mut read_chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
 ) -> Result<M> {
+    assert!(band_index >= 1 && band_index <= meta.band_count as usize);
     debug_assert_eq!(buffer.len(), overview.raster_size.cell_count());
     let raster_size = &overview.raster_size;
     let mut geo_reference = meta.geo_reference.clone();

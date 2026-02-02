@@ -58,7 +58,7 @@ impl CogTileProvider {
             source_format: LayerSourceType::CloudOptimizedGeoTiff,
             scheme: "xyz".into(),
             additional_data: HashMap::new(),
-            band_nr: None,
+            band_nr: Some(1), // Default to band 1 for single-band COGs
             tileprovider_data: Some(Box::new(Arc::new(cog))),
         };
 
@@ -82,11 +82,12 @@ impl CogTileProvider {
             return Err(Error::InvalidArgument("Invalid COG tile size requested".to_string()));
         }
 
+        let band = meta.band_nr.unwrap_or(1);
         let tile = meta
             .tileprovider_data
             .as_ref()
             .and_then(|data| data.downcast_ref::<WebTilesReader>())
-            .map(|cog| cog.read_tile_data_as::<T>(tile, &mut std::fs::File::open(&meta.path)?));
+            .map(|cog| cog.read_tile_data_as::<T>(tile, band, &mut std::fs::File::open(&meta.path)?));
 
         match tile {
             Some(Ok(Some(tile_data))) => Ok(tile_data),
