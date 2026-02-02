@@ -1,7 +1,11 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error,
     GeoReference, GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
-    geotiff::{self, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io, tileio, utils},
+    geotiff::{
+        self, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
+        tileio::{self},
+        utils,
+    },
     raster::intersection::{CutOut, intersect_georeference},
 };
 use std::{
@@ -544,6 +548,30 @@ impl WebTilesReader {
             TileSource::MultiBandAligned(_) | TileSource::MultiBandUnaligned(_) => {
                 Err(Error::InvalidArgument("Single tile request on multi band raster".into()))
             }
+        }
+    }
+
+    pub fn parse_multi_band_tile_data(&self, tile_source: &TileSource, cog_chunks: &[&[u8]]) -> Result<Vec<AnyDenseArray>> {
+        match tile_source {
+            TileSource::MultiBandAligned(cog_tiles) => {
+                let tiles = cog_tiles
+                    .iter()
+                    .zip(cog_chunks.iter())
+                    .map(|(chunk, chunk_bytes)| self.parse_tile_data(&TileSource::Aligned(*chunk), &[chunk_bytes]))
+                    .collect::<Result<Vec<AnyDenseArray>>>()?;
+                Ok(tiles)
+            }
+            TileSource::MultiBandUnaligned(tile_sources) => {
+                let tiles = tile_sources
+                    .iter()
+                    .zip(cog_chunks.iter())
+                    .map(|((chunks, cutout), chunk_bytes)| {
+                        self.parse_tile_data(&TileSource::Unaligned(vec![(chunks[0], cutout.clone())]), &[chunk_bytes])
+                    })
+                    .collect::<Result<Vec<AnyDenseArray>>>()?;
+                Ok(tiles)
+            }
+            _ => Err(Error::InvalidArgument("Multi band tile request on single band raster".into())),
         }
     }
 
