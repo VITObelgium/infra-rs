@@ -612,7 +612,7 @@ impl WebTilesReader {
                 let tiles = cog_tiles
                     .iter()
                     .zip(cog_chunks.iter())
-                    .map(|(chunk, chunk_bytes)| self.parse_tile_data(&TileSource::Aligned(*chunk), &[chunk_bytes]))
+                    .map(|(chunk, chunk_bytes)| self.parse_tile_data(&TileSource::Aligned(*chunk), 1, &[chunk_bytes]))
                     .collect::<Result<Vec<AnyDenseArray>>>()?;
                 Ok(tiles)
             }
@@ -621,7 +621,7 @@ impl WebTilesReader {
                     .iter()
                     .zip(cog_chunks.iter())
                     .map(|((chunks, cutout), chunk_bytes)| {
-                        self.parse_tile_data(&TileSource::Unaligned(vec![(chunks[0], cutout.clone())]), &[chunk_bytes])
+                        self.parse_tile_data(&TileSource::Unaligned(vec![(chunks[0], cutout.clone())]), 1, &[chunk_bytes])
                     })
                     .collect::<Result<Vec<AnyDenseArray>>>()?;
                 Ok(tiles)
