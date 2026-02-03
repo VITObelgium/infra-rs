@@ -98,10 +98,13 @@ impl WebTiles {
             zoom_levels[zoom_level as usize].tile_aligned = tile_aligned;
 
             if tile_aligned {
+                if overview.chunk_locations.len() % (meta.band_count as usize) != 0 {
+                    return Err(Error::Runtime("Only cogs with band interleaved chunks are supported".to_string()));
+                }
+
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
                 // The chunk_locations list is always ordered by band first: tile0_band0, tile1_band0, ..., tile0_band1, tile1_band1, ...
                 // So we iterate strided to combine the chunks of all the bands per tile
-                debug_assert!(overview.chunk_locations.len().is_multiple_of(meta.band_count as usize));
                 let chunks_per_band = overview.chunk_locations.len() / meta.band_count as usize;
                 tiles
                     .into_iter()
