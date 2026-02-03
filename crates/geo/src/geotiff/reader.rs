@@ -620,7 +620,7 @@ mod tests {
             true,
         )?;
 
-        let zstd_compression_output = tmp.path().join("cog_lzw_compression.tif");
+        let zstd_compression_output = tmp.path().join("cog_zstd_compression.tif");
         create_test_cog(
             &input,
             &zstd_compression_output,
@@ -631,9 +631,24 @@ mod tests {
             true,
         )?;
 
+        #[cfg(feature = "deflate")]
+        let deflate_compression_output = tmp.path().join("cog_deflate_compression.tif");
+        #[cfg(feature = "deflate")]
+        create_test_cog(
+            &input,
+            &deflate_compression_output,
+            COG_TILE_SIZE,
+            Some(Compression::Deflate),
+            None,
+            None,
+            true,
+        )?;
+
         let mut cog_no_compression = GeoTiffReader::from_file(&no_compression_output)?;
         let mut cog_lzw_compression = GeoTiffReader::from_file(&lzw_compression_output)?;
         let mut cog_zstd_compression = GeoTiffReader::from_file(&zstd_compression_output)?;
+        #[cfg(feature = "deflate")]
+        let mut cog_deflate_compression = GeoTiffReader::from_file(&deflate_compression_output)?;
 
         let band_index = FIRST_BAND;
         for overview_index in 0..cog_no_compression.metadata().overviews.len() {
@@ -643,6 +658,12 @@ mod tests {
 
             assert_eq!(overview_no_compression, overview_lzw);
             assert_eq!(overview_no_compression, overview_zstd);
+
+            #[cfg(feature = "deflate")]
+            {
+                let overview_deflate = cog_deflate_compression.read_overview_band_as::<u8, RasterMetadata>(overview_index, band_index)?;
+                assert_eq!(overview_no_compression, overview_deflate);
+            }
         }
 
         Ok(())

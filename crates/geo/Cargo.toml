@@ -39,6 +39,9 @@ approx = "0.5"
 arrow = { version = "57", optional = true }
 bon = { version = "3.8", optional = true }
 bytemuck = { version = "1.25" }
+flate2 = { version = "1.1", default-features = false, features = [
+    "rust_backend",
+], optional = true }
 calamine = { version = "0.32", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
@@ -95,6 +98,7 @@ wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
 arrow = ["dep:arrow"]
+deflate = ["dep:flate2"]
 default = [
     "derive",
     "gdal-static",

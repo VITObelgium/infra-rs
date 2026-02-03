@@ -51,6 +51,7 @@ pub enum TiffChunkType {
 pub enum Compression {
     Lzw,
     Zstd,
+    Deflate,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]

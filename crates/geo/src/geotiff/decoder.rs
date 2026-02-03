@@ -245,17 +245,10 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
     };
 
     let samples_per_pixel = decoder.get_tag_u32(Tag::SamplesPerPixel)?;
-    // if samples_per_pixel != 1 {
-    //     // When we will support multi-band COGs, the unpredict functions will need to be adjusted accordingly
-    //     // or we will need to use a different approach to handle multi-band data (e.g vec of DenseArray)
-    //     return Err(Error::InvalidArgument(format!(
-    //         "Only single band COGs are supported ({samples_per_pixel} bands found)",
-    //     )));
-    // }
-
     let compression = match decoder.get_tag_u32(Tag::Compression)? {
         1 => None,
         5 => Some(Compression::Lzw),
+        8 => Some(Compression::Deflate),
         50000 => Some(Compression::Zstd),
         _ => {
             return Err(Error::InvalidArgument(format!(

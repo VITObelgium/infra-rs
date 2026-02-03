@@ -1035,6 +1035,117 @@ mod tests {
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
         }
 
+        #[cfg(feature = "deflate")]
+        {
+            // Create a test COG file with Deflate compression and no predictor
+            create_test_cog(&input, &output, COG_TILE_SIZE, Some(Compression::Deflate), None, None, true)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+            assert_eq!(cog.cog_metadata().compression, Some(Compression::Deflate));
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog
+                .read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)
+                .expect("Deflate_u8")
+                .unwrap();
+            assert_eq!(tile_data, reference_tile_data);
+        }
+
+        #[cfg(feature = "deflate")]
+        {
+            // Create a test COG file with Deflate compression and horizontal predictor
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Deflate),
+                Some(PredictorSelection::Automatic),
+                None,
+                true,
+            )?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+            assert_eq!(cog.cog_metadata().predictor, Some(Predictor::Horizontal));
+            assert_eq!(cog.cog_metadata().compression, Some(Compression::Deflate));
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog
+                .read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)
+                .expect("Deflate_u8_predictor")
+                .unwrap();
+            assert_eq!(tile_data, reference_tile_data);
+        }
+
+        #[cfg(feature = "deflate")]
+        {
+            // Create a test COG file as i32 with Deflate compression and horizontal predictor
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Deflate),
+                Some(PredictorSelection::Automatic),
+                Some(ArrayDataType::Int32),
+                true,
+            )?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+            assert_eq!(cog.cog_metadata().predictor, Some(Predictor::Horizontal));
+            assert_eq!(cog.cog_metadata().compression, Some(Compression::Deflate));
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog
+                .read_tile_data_as::<i32>(&reference_tile, FIRST_BAND, &mut reader)
+                .expect("Deflate_i32_predictor")
+                .unwrap();
+            assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
+        #[cfg(feature = "deflate")]
+        {
+            // Create a test COG file as f32 with Deflate compression and float predictor
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Deflate),
+                Some(PredictorSelection::Automatic),
+                Some(ArrayDataType::Float32),
+                true,
+            )?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+            assert_eq!(cog.cog_metadata().predictor, Some(Predictor::FloatingPoint));
+            assert_eq!(cog.cog_metadata().compression, Some(Compression::Deflate));
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog
+                .read_tile_data_as::<f32>(&reference_tile, FIRST_BAND, &mut reader)
+                .expect("Deflate_f32_predictor")
+                .unwrap();
+            assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
+        #[cfg(feature = "deflate")]
+        {
+            // Create a test COG file as f64 with Deflate compression and float predictor
+            create_test_cog(
+                &input,
+                &output,
+                COG_TILE_SIZE,
+                Some(Compression::Deflate),
+                Some(PredictorSelection::Automatic),
+                Some(ArrayDataType::Float64),
+                true,
+            )?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+            assert_eq!(cog.cog_metadata().predictor, Some(Predictor::FloatingPoint));
+            assert_eq!(cog.cog_metadata().compression, Some(Compression::Deflate));
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog
+                .read_tile_data_as::<f64>(&reference_tile, FIRST_BAND, &mut reader)
+                .expect("Deflate_f64_predictor")
+                .unwrap();
+            assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
         Ok(())
     }
 

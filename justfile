@@ -36,7 +36,7 @@ build_nofeatures:
     cargo build --workspace --release --no-default-features
 
 build_allfeatures:
-    cargo build --workspace --release --features=serde,gdal-static,arrow,derive,vector,vector-processing,vector-io-xlsx,vector-io-csv,polars,proj4rs,tui
+    cargo build --workspace --release --features=serde,gdal-static,arrow,derive,vector,vector-processing,vector-io-xlsx,vector-io-csv,polars,proj4rs,tui,deflate
 
 build: build_release
 
@@ -50,7 +50,7 @@ test_debug $RUST_LOG="debug":
 
 # The vector processing feature is currently broken, the geozero dependency should be removed
 test_release:
-    cargo nextest run -p geo --release --features=serde,gdal-static,arrow,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon
+    cargo nextest run -p geo --release --features=serde,gdal-static,arrow,derive,vector-processing,vector-io-xlsx,vector-io-csv,polars,rayon,deflate
 
 test_debug_simd:
     mise -E vcpkg run test_simd
@@ -68,7 +68,7 @@ test_release_py:
     cargo nextest run --profile ci --workspace --features=serde,gdal,gdal-static,derive,vector,vector-io-xlsx,rayon,python --release
 
 test_integration:
-    cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs
+    cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs,deflate
 
 test_all: test_release test_release_py test_integration test_simd
 

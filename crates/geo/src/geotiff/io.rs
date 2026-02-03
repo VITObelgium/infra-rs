@@ -10,6 +10,8 @@ use crate::{
     },
     raster::{Compression, Predictor},
 };
+#[cfg(feature = "deflate")]
+use flate2::read::ZlibDecoder;
 use inf::cast;
 use ruzstd::decoding::StreamingDecoder;
 use simd_macro::simd_bounds;
@@ -229,6 +231,14 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
     match compression {
         Some(Compression::Lzw) => lzw_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
         Some(Compression::Zstd) => zstd_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
+        #[cfg(feature = "deflate")]
+        Some(Compression::Deflate) => deflate_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
+        #[cfg(not(feature = "deflate"))]
+        Some(Compression::Deflate) => {
+            return Err(Error::Runtime(
+                "Deflate decompression requires the 'deflate' feature to be enabled".into(),
+            ));
+        }
         None => {
             if chunk_data.len() != std::mem::size_of_val(decoded_chunk_data) {
                 return Err(Error::Runtime(format!(
@@ -382,6 +392,19 @@ fn zstd_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<
     } else {
         return Err(Error::Runtime("Failed to create Zstd decoder".into()));
     }
+
+    Ok(())
+}
+
+#[cfg(feature = "deflate")]
+fn deflate_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<()> {
+    use std::io::Read;
+
+    let decode_buf_byte: &mut [u8] = bytemuck::cast_slice_mut(decode_buf);
+
+    // TIFF deflate uses zlib wrapper (RFC 1950), not raw deflate (RFC 1951)
+    let mut decoder = ZlibDecoder::new(data);
+    decoder.read_exact(decode_buf_byte)?;
 
     Ok(())
 }
