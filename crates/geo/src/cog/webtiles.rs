@@ -98,26 +98,18 @@ impl WebTiles {
 
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
-                if meta.band_count == 1 {
-                    tiles.into_iter().zip(&overview.chunk_locations).for_each(|(web_tile, cog_tile)| {
+                // The chunk_locations list is always ordered by band first: tile0_band0, tile1_band0, ..., tile0_band1, tile1_band1, ...
+                // So we iterate strided to combine the chunks of all the bands per tile
+                debug_assert!(overview.chunk_locations.len().is_multiple_of(meta.band_count as usize));
+                let chunks_per_band = overview.chunk_locations.len() / meta.band_count as usize;
+                tiles
+                    .into_iter()
+                    .zip(stride_groups(&overview.chunk_locations, chunks_per_band))
+                    .for_each(|(web_tile, cog_tiles)| {
                         zoom_levels[web_tile.z as usize]
                             .tiles
-                            .insert(web_tile, TileSource::Aligned(*cog_tile));
+                            .insert(web_tile, TileSource::MultiBandAligned(cog_tiles.copied().collect()));
                     });
-                } else {
-                    // The chunk_locations list is always ordered by band first: tile0_band0, tile1_band0, ..., tile0_band1, tile1_band1, ...
-                    // So we iterate strided to combine the chunks of all the bands per tile
-                    debug_assert!(overview.chunk_locations.len().is_multiple_of(meta.band_count as usize));
-                    let chunks_per_band = overview.chunk_locations.len() / meta.band_count as usize;
-                    tiles
-                        .into_iter()
-                        .zip(stride_groups(&overview.chunk_locations, chunks_per_band))
-                        .for_each(|(web_tile, cog_tiles)| {
-                            zoom_levels[web_tile.z as usize]
-                                .tiles
-                                .insert(web_tile, TileSource::MultiBandAligned(cog_tiles.copied().collect()));
-                        });
-                }
             } else {
                 let overview_geo_ref = GeoReference::with_bottom_left_origin(
                     "EPSG:3857",
@@ -366,10 +358,9 @@ fn create_cog_tile_web_mercator_bounds(
                 Option::<f64>::None,
             );
 
-            let mut cog_tiles = Vec::with_capacity(band_count as usize);
-            for band in 0..band_count {
-                cog_tiles.push(overview.chunk_locations[(ty * tiles_wide + tx) + (band as usize * chunks_per_band)]);
-            }
+            let cog_tiles: Vec<_> = (0..band_count as usize)
+                .map(|band| overview.chunk_locations[(ty * tiles_wide + tx) + (band * chunks_per_band)])
+                .collect();
 
             web_tiles.push((cog_tiles, cog_tile_geo_ref));
         }
