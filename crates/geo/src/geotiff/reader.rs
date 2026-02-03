@@ -190,11 +190,11 @@ impl GeoTiffReader {
     #[simd_bounds]
     pub fn read_band_region_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
-        _band_index: usize,
+        band_index: usize,
         region: &GeoReference,
         buffer: &mut [MaybeUninit<T>],
     ) -> Result<M> {
-        self.read_overview_region_into_buffer(0, region, buffer)
+        self.read_overview_region_into_buffer(0, band_index, region, buffer)
     }
 
     /// Reads an overview raster at the specified index
@@ -240,6 +240,7 @@ impl GeoTiffReader {
     pub fn read_overview_region_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview_index: usize,
+        band_index: usize,
         extent: &crate::GeoReference,
         buffer: &mut [MaybeUninit<T>],
     ) -> Result<M> {
@@ -265,7 +266,15 @@ impl GeoTiffReader {
             let buffer = raster::utils::cast_away_uninit_mut(buffer);
             match self.meta.data_layout {
                 ChunkDataLayout::Tiled(tile_size) => {
-                    let chunk_tiles = Self::calculate_chunk_tiles_for_extent(&overview, overview_index, self.geo_ref(), extent, tile_size)?;
+                    let chunk_tiles = Self::calculate_chunk_tiles_for_extent(
+                        &overview,
+                        overview_index,
+                        band_index,
+                        self.meta.band_count as usize,
+                        self.geo_ref(),
+                        extent,
+                        tile_size,
+                    )?;
                     utils::merge_tile_chunks_into_buffer(&self.meta, extent, tile_size, &chunk_tiles, &mut self.tiff_file, buffer)?;
                     return Ok(M::with_geo_reference(extent.clone()));
                 }
@@ -316,7 +325,9 @@ impl GeoTiffReader {
     /// Calculates the chunks needed and their location in the cutout area
     fn calculate_chunk_tiles_for_extent(
         overview: &TiffOverview,
-        overview_index: usize,        // index of the overview to use, 0 is full resolution
+        overview_index: usize, // index of the overview to use, 0 is full resolution
+        band_index: usize,
+        band_count: usize,
         geo_reference: &GeoReference, // georeference of the full cog image
         cutout: &GeoReference,        // georeference of the cutout area
         block_size: u32,
@@ -335,7 +346,8 @@ impl GeoTiffReader {
             overview.chunk_locations.len()
         );
 
-        //- Point::new(cell_size.x() / 2.0, cell_size.y() / 2.0)
+        assert!(overview.chunk_locations.len().is_multiple_of(band_count));
+        let chunks_per_band = overview.chunk_locations.len() / band_count;
 
         let top_left_cell = geo_reference.point_to_cell(cutout.top_left());
         let bottom_right_cell = geo_reference.point_to_cell(cutout.bottom_right());
@@ -375,7 +387,7 @@ impl GeoTiffReader {
                     Option::<f64>::None,
                 );
 
-                let tiff_chunk = &overview.chunk_locations[ty * tiles_wide + tx];
+                let tiff_chunk = &overview.chunk_locations[(ty * tiles_wide + tx) + ((band_index - 1) * chunks_per_band)];
                 let cutout_offsets = intersect_georeference(&chunk_geo_ref, cutout)?;
                 debug_assert!(cutout_offsets.cols > 0 && cutout_offsets.rows > 0);
 
