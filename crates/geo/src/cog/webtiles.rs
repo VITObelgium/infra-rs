@@ -1498,7 +1498,7 @@ mod tests {
         let meta = GeoTiffMetadata::from_file(&input)?;
         let web_tiles = WebTiles::from_cog_metadata(&meta)?;
 
-        assert_eq!(meta.data_type, ArrayDataType::Float32);
+        assert_eq!(meta.data_type, ArrayDataType::Uint8);
         assert_eq!(web_tiles.min_zoom(), 15);
         assert_eq!(web_tiles.max_zoom(), 17);
         assert_eq!(web_tiles.zoom_levels.len(), 18);
