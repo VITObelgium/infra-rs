@@ -4,7 +4,7 @@ use crate::{
     AnyDenseArray, ArrayDataType, ArrayNum, CellSize, DenseArray, Error, GeoReference, Point, RasterSize, Result, Tile,
     cog::WebTilesReader,
     crs,
-    geotiff::{GeoTiffMetadata, TiffChunkLocation, tileio},
+    geotiff::{BandIndex, GeoTiffMetadata, TiffChunkLocation, tileio},
     nodata::Nodata as _,
 };
 use std::{
@@ -39,7 +39,7 @@ fn read_tile_data<T: ArrayNum>(
     )
 }
 
-pub fn dump_tiff_tiles(cog_path: &Path, band_index: usize, zoom_level: i32, output_dir: &Path) -> Result<()> {
+pub fn dump_tiff_tiles(cog_path: &Path, _band_index: BandIndex, zoom_level: i32, output_dir: &Path) -> Result<()> {
     let meta = GeoTiffMetadata::from_file(cog_path)?;
     let tile_size = meta.chunk_row_length();
     let cell_size = meta.geo_reference.cell_size_x();
@@ -100,7 +100,7 @@ pub fn dump_tiff_tiles(cog_path: &Path, band_index: usize, zoom_level: i32, outp
     Ok(())
 }
 
-pub fn dump_web_tiles(cog_path: &Path, band_index: usize, zoom_level: i32, output_dir: &Path) -> Result<()> {
+pub fn dump_web_tiles(cog_path: &Path, band_index: BandIndex, zoom_level: i32, output_dir: &Path) -> Result<()> {
     let cog = WebTilesReader::new(GeoTiffMetadata::from_file(cog_path)?)?;
     let mut reader = std::fs::File::open(cog_path)?;
 

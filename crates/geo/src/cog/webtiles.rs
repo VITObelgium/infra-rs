@@ -2,7 +2,7 @@ use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error,
     GeoReference, GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
     geotiff::{
-        self, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
+        self, BandIndex, FIRST_BAND, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
         tileio::{self},
         utils,
     },
@@ -457,7 +457,7 @@ impl WebTilesReader {
     pub fn read_overview(
         &self,
         overview: &TiffOverview,
-        band_index: usize,
+        band_index: BandIndex,
         chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
     ) -> Result<AnyDenseArray> {
         Ok(match self.data_type() {
@@ -478,7 +478,7 @@ impl WebTilesReader {
     pub fn read_overview_as<T: ArrayNum>(
         &self,
         overview: &TiffOverview,
-        band_index: usize,
+        band_index: BandIndex,
         chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
     ) -> Result<DenseArray<T>> {
         if T::TYPE != self.cog_meta.data_type {
@@ -508,7 +508,7 @@ impl WebTilesReader {
     /// Read the tile data for the given tile using the provided reader.
     /// This method will return an error if the tile does not exist in the COG index
     /// If this is a COG with sparse tile support, for sparse tiles an empty array will be returned
-    pub fn read_tile_data(&self, tile: &Tile, band: usize, mut reader: impl Read + Seek) -> Result<Option<AnyDenseArray>> {
+    pub fn read_tile_data(&self, tile: &Tile, band: BandIndex, mut reader: impl Read + Seek) -> Result<Option<AnyDenseArray>> {
         Ok(match self.data_type() {
             ArrayDataType::Uint8 => self.read_tile_data_as::<u8>(tile, band, &mut reader)?.map(AnyDenseArray::U8),
             ArrayDataType::Uint16 => self.read_tile_data_as::<u16>(tile, band, &mut reader)?.map(AnyDenseArray::U16),
@@ -523,14 +523,15 @@ impl WebTilesReader {
         })
     }
 
-    pub fn parse_tile_data(&self, tile_source: &TileSource, band: usize, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
-        if band < 1 || band > self.cog_meta.band_count as usize {
+    pub fn parse_tile_data(&self, tile_source: &TileSource, band: BandIndex, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
+        if band.get() > self.cog_meta.band_count as usize {
             return Err(Error::InvalidArgument(format!(
                 "Band index out of range: requested band {}, but COG has {} bands (bands are 1-indexed)",
-                band, self.cog_meta.band_count
+                band.get(),
+                self.cog_meta.band_count
             )));
         }
-        assert!(band <= cog_chunks.len());
+        debug_assert!(band.get() <= cog_chunks.len());
 
         match tile_source {
             TileSource::Aligned(_) => Ok(match self.data_type() {
@@ -558,7 +559,7 @@ impl WebTilesReader {
                 ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
             }),
             TileSource::MultiBandAligned(_) => {
-                let band_index = band - 1; // to 0-based index
+                let band_index = band.get() - 1; // to 0-based index
                 Ok(match self.data_type() {
                     ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(cog_chunks[band_index])?),
                     ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(cog_chunks[band_index])?),
@@ -574,7 +575,7 @@ impl WebTilesReader {
             }
             TileSource::MultiBandUnaligned(band_tile_sources) => {
                 // For unaligned multiband tiles, we need to find the tile sources for the requested band
-                let band_index = band - 1;
+                let band_index = band.get() - 1;
 
                 // Extract the tile sources for this specific band
                 let (tile_sources_for_band, _cutout) = &band_tile_sources[band_index];
@@ -610,7 +611,7 @@ impl WebTilesReader {
                 let tiles = cog_tiles
                     .iter()
                     .zip(cog_chunks.iter())
-                    .map(|(chunk, chunk_bytes)| self.parse_tile_data(&TileSource::Aligned(*chunk), 1, &[chunk_bytes]))
+                    .map(|(chunk, chunk_bytes)| self.parse_tile_data(&TileSource::Aligned(*chunk), FIRST_BAND, &[chunk_bytes]))
                     .collect::<Result<Vec<AnyDenseArray>>>()?;
                 Ok(tiles)
             }
@@ -619,7 +620,11 @@ impl WebTilesReader {
                     .iter()
                     .zip(cog_chunks.iter())
                     .map(|((chunks, cutout), chunk_bytes)| {
-                        self.parse_tile_data(&TileSource::Unaligned(vec![(chunks[0], cutout.clone())]), 1, &[chunk_bytes])
+                        self.parse_tile_data(
+                            &TileSource::Unaligned(vec![(chunks[0], cutout.clone())]),
+                            FIRST_BAND,
+                            &[chunk_bytes],
+                        )
                     })
                     .collect::<Result<Vec<AnyDenseArray>>>()?;
                 Ok(tiles)
@@ -632,7 +637,7 @@ impl WebTilesReader {
     pub fn read_tile_data_as<T: ArrayNum>(
         &self,
         tile: &Tile,
-        band: usize,
+        band: BandIndex,
         reader: &mut (impl Read + Seek),
     ) -> Result<Option<DenseArray<T>>> {
         if T::TYPE != self.cog_meta.data_type {
@@ -643,10 +648,11 @@ impl WebTilesReader {
             )));
         }
 
-        if band < 1 || band > self.cog_meta.band_count as usize {
+        if band.get() > self.cog_meta.band_count as usize {
             return Err(Error::InvalidArgument(format!(
                 "Band index out of range: requested band {}, but COG has {} bands (bands are 1-indexed)",
-                band, self.cog_meta.band_count
+                band.get(),
+                self.cog_meta.band_count
             )));
         }
 
@@ -678,11 +684,11 @@ impl WebTilesReader {
                     Ok(Some(self.merge_tile_sources(tile_sources, &cog_chunk_refs)?))
                 }
                 TileSource::MultiBandAligned(band_locations) => {
-                    let band_index = band - 1;
+                    let band_index = band.get() - 1; // to 0-based index
                     if band_index >= band_locations.len() {
                         return Err(Error::InvalidArgument(format!(
                             "Band index out of range: requested band {}, but only {} bands available",
-                            band,
+                            band.get(),
                             band_locations.len()
                         )));
                     }
@@ -698,7 +704,7 @@ impl WebTilesReader {
                     )?))
                 }
                 TileSource::MultiBandUnaligned(band_tile_sources) => {
-                    let band_index = band - 1;
+                    let band_index = band.get() - 1; // to 0-based index
                     let tile_sources = band_tile_sources
                         .iter()
                         .map(|(band_chunks, cutout)| (band_chunks[band_index], cutout.clone()))
@@ -871,7 +877,7 @@ mod tests {
             let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
 
             let mut reader = File::open(&output)?;
-            cog.read_tile_data_as::<u8>(&reference_tile, 1, &mut reader)
+            cog.read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("None_u8")
                 .unwrap()
         };
@@ -883,7 +889,7 @@ mod tests {
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
-                .read_tile_data_as::<u8>(&reference_tile, 1, &mut reader)
+                .read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("LZW_u8")
                 .unwrap();
             assert_eq!(tile_data, reference_tile_data);
@@ -905,7 +911,7 @@ mod tests {
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
-                .read_tile_data_as::<u8>(&reference_tile, 1, &mut reader)
+                .read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("LZW_u8_predictor")
                 .unwrap();
             assert_eq!(tile_data, reference_tile_data);
@@ -927,7 +933,7 @@ mod tests {
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
-                .read_tile_data_as::<i32>(&reference_tile, 1, &mut reader)
+                .read_tile_data_as::<i32>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("LZW_i32_predictor")
                 .unwrap();
 
@@ -950,9 +956,9 @@ mod tests {
             assert_eq!(cog.tile_info().max_zoom, 10);
 
             let mut reader = File::open(&output)?;
-            assert!(cog.read_tile_data_as::<f64>(&reference_tile, 1, &mut reader).is_err());
+            assert!(cog.read_tile_data_as::<f64>(&reference_tile, FIRST_BAND, &mut reader).is_err());
             let tile_data = cog
-                .read_tile_data_as::<f32>(&reference_tile, 1, &mut reader)
+                .read_tile_data_as::<f32>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("LZW_f32")
                 .unwrap();
 
@@ -975,7 +981,7 @@ mod tests {
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
-                .read_tile_data_as::<f32>(&reference_tile, 1, &mut reader)
+                .read_tile_data_as::<f32>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("LZW_f32_predictor")
                 .unwrap();
 
@@ -998,7 +1004,7 @@ mod tests {
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
-                .read_tile_data_as::<f64>(&reference_tile, 1, &mut reader)
+                .read_tile_data_as::<f64>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("LZW_f64_predictor")
                 .unwrap();
 
@@ -1022,7 +1028,7 @@ mod tests {
 
             let mut reader = File::open(&output)?;
             let tile_data = cog
-                .read_tile_data_as::<f64>(&reference_tile, 1, &mut reader)
+                .read_tile_data_as::<f64>(&reference_tile, FIRST_BAND, &mut reader)
                 .expect("ZSTD_f64_predictor")
                 .unwrap();
 
@@ -1058,7 +1064,7 @@ mod tests {
                 }
             }
 
-            let tile_data = cog.read_tile_data_as::<u8>(&tile, 1, &mut reader).unwrap().unwrap();
+            let tile_data = cog.read_tile_data_as::<u8>(&tile, FIRST_BAND, &mut reader).unwrap().unwrap();
             let mut first_row_value_count = 0;
             for row in 0..tile_data.rows().count() {
                 // This tile only contains a bit of data in the lower left corner, the rest is nodata
@@ -1101,7 +1107,7 @@ mod tests {
                 }
             }
 
-            let tile_data = cog.read_tile_data_as::<u8>(&tile, 1, &mut reader).unwrap().unwrap();
+            let tile_data = cog.read_tile_data_as::<u8>(&tile, FIRST_BAND, &mut reader).unwrap().unwrap();
             assert!(
                 !tile_data.as_slice()
                     [COG_TILE_SIZE as usize * (COG_TILE_SIZE as usize - 1)..COG_TILE_SIZE as usize * COG_TILE_SIZE as usize]
@@ -1111,7 +1117,7 @@ mod tests {
         }
 
         for tile in cog.zoom_level_tile_sources(7).unwrap().keys() {
-            if let Some(tile_data) = cog.read_tile_data(tile, 1, &mut reader)? {
+            if let Some(tile_data) = cog.read_tile_data(tile, FIRST_BAND, &mut reader)? {
                 if tile_data.is_empty() {
                     continue; // Skip empty tiles
                 }
@@ -1119,7 +1125,7 @@ mod tests {
                 assert_eq!(tile_data.len(), RasterSize::square(COG_TILE_SIZE as i32).cell_count());
                 assert_eq!(tile_data.data_type(), meta.data_type);
 
-                let tile_data = cog.read_tile_data_as::<u8>(tile, 1, &mut reader)?.unwrap();
+                let tile_data = cog.read_tile_data_as::<u8>(tile, FIRST_BAND, &mut reader)?.unwrap();
                 assert_eq!(tile_data.size(), RasterSize::square(COG_TILE_SIZE as i32));
             }
         }
@@ -1152,7 +1158,7 @@ mod tests {
             assert_eq!(cog.tile_info().max_zoom, 9);
 
             let mut reader = File::open(&output)?;
-            cog.read_tile_data_as::<u8>(&reference_tile, 1, &mut reader)?
+            cog.read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)?
         };
 
         {
@@ -1161,7 +1167,7 @@ mod tests {
             let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
 
             let mut reader = File::open(&output)?;
-            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, 1, &mut reader)?;
+            let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)?;
             assert_eq!(tile_data, reference_tile_data);
         }
 
@@ -1342,7 +1348,7 @@ mod tests {
         let overview = cog.overview_for_display_size(512).unwrap();
 
         let mut reader = File::open(&cog_path)?;
-        let band_index = 1;
+        let band_index = FIRST_BAND;
         assert_eq!(RasterSize::with_rows_cols(Rows(512), Columns(1024)), overview.raster_size);
         let actual = cog.read_overview_as::<u8>(overview, band_index, |chunk: TiffChunkLocation| {
             let mut buf = vec![0; chunk.size as usize];
@@ -1390,7 +1396,9 @@ mod tests {
         //assert_eq!(cog.cog_metadata().overviews[2]., 8);
 
         let mut reader = File::open(&output)?;
-        let tile = cog.read_tile_data_as::<u8>(&Tile { z: 6, x: 33, y: 21 }, 1, &mut reader)?.unwrap();
+        let tile = cog
+            .read_tile_data_as::<u8>(&Tile { z: 6, x: 33, y: 21 }, FIRST_BAND, &mut reader)?
+            .unwrap();
 
         // The upper right corner of this tile is padding outside of the geotiff raster bounds, should be nodata
         assert!(tile.cell_is_nodata(Cell::from_row_col(0, tile_size as i32 - 1)));
@@ -1410,13 +1418,13 @@ mod tests {
             for zoom_level in 7..=8 {
                 debug::dump_tiff_tiles(
                     &cog_path,
-                    1,
+                    FIRST_BAND,
                     zoom_level,
                     &output_dir.join("cog_tile").join(format!("{tile_size}px")),
                 )?;
                 debug::dump_web_tiles(
                     &cog_path,
-                    1,
+                    FIRST_BAND,
                     zoom_level,
                     &output_dir.join("web_tile").join(format!("{tile_size}px")),
                 )?;
@@ -1435,15 +1443,16 @@ mod tests {
         let cog_path = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
         for zoom_level in 15..=17 {
             for band in 1..=5 {
+                let band_index = BandIndex::new(band).expect("band indices are 1-based");
                 debug::dump_tiff_tiles(
                     &cog_path,
-                    band,
+                    band_index,
                     zoom_level,
                     &output_dir.join("cog_tile").join(format!("band_{band}")),
                 )?;
                 debug::dump_web_tiles(
                     &cog_path,
-                    band,
+                    band_index,
                     zoom_level,
                     &output_dir.join("web_tile").join(format!("band_{band}")),
                 )?;

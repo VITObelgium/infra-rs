@@ -10,6 +10,8 @@ mod reader;
 pub mod tileio;
 pub(crate) mod utils;
 
+pub use crate::bandindex::{BandIndex, FIRST_BAND};
+
 use projectioninfo::ProjectionInfo;
 
 pub use gdalmetadata::{BandMetadata, GdalMetadata, TiffStats};

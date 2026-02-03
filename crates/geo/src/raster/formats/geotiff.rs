@@ -13,7 +13,7 @@ use crate::{
     },
 };
 
-use crate::geotiff::GeoTiffReader;
+use crate::geotiff::{FIRST_BAND, GeoTiffReader};
 
 pub struct GeotiffRasterIO {
     reader: GeoTiffReader,
@@ -143,6 +143,6 @@ impl GeotiffRasterIO {
             "Geotiff format currently does not support on-the-fly data type conversion"
         );
 
-        self.reader.read_band_region_into_buffer(band_index, region, dst_data)
+        self.reader.read_band_region_into_buffer(FIRST_BAND, region, dst_data)
     }
 }

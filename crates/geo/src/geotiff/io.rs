@@ -4,7 +4,7 @@
 use crate::{
     ArrayDataType, ArrayMetadata, ArrayNum,
     geotiff::{
-        GeoTiffMetadata, TiffChunkLocation, TiffOverview,
+        BandIndex, GeoTiffMetadata, TiffChunkLocation, TiffOverview,
         gdalghostdata::{GdalGhostData, Interleave},
         utils,
     },
@@ -296,12 +296,12 @@ fn read_chunk_data_into_buffer_cb_as<T: ArrayNum>(
 pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     meta: &GeoTiffMetadata,
     overview: &TiffOverview,
-    band_index: usize,
+    band_index: BandIndex,
     tile_size: u32,
     buffer: &mut [T],
     mut read_chunk_cb: impl FnMut(TiffChunkLocation) -> Result<Vec<u8>>,
 ) -> Result<M> {
-    assert!(band_index >= 1 && band_index <= meta.band_count as usize);
+    assert!(band_index.get() <= meta.band_count as usize);
     debug_assert_eq!(buffer.len(), overview.raster_size.cell_count());
     let raster_size = &overview.raster_size;
     let mut geo_reference = meta.geo_reference.clone();
@@ -321,7 +321,8 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     if meta.interleave == Interleave::Pixel {
         unimplemented!("Pixel interleave tiff reading not implemented yet");
     }
-    let chunk_iter = chunks.iter().skip((band_index - 1) * tile_count).take(tile_count).enumerate();
+    let band_index0 = band_index.get() - 1; // to 0-based index
+    let chunk_iter = chunks.iter().skip(band_index0 * tile_count).take(tile_count).enumerate();
 
     let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];
     for (chunk_index, chunk_offset) in chunk_iter {

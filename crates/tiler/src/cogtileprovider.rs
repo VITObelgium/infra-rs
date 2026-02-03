@@ -83,6 +83,8 @@ impl CogTileProvider {
         }
 
         let band = meta.band_nr.unwrap_or(1);
+        let band =
+            geotiff::BandIndex::new(band).ok_or_else(|| Error::InvalidArgument("Band index is 1-based and must be >= 1".to_string()))?;
         let tile = meta
             .tileprovider_data
             .as_ref()

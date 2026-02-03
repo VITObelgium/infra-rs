@@ -9,6 +9,7 @@ mod array;
 mod arraydatatype;
 mod arraynum;
 pub mod arrayops;
+pub mod bandindex;
 mod cell;
 pub mod cog;
 pub mod constants;
@@ -57,6 +58,9 @@ use thiserror::Error;
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 #[doc(inline)]
 pub use runtimeconfiguration::RuntimeConfiguration;
+
+#[doc(inline)]
+pub use bandindex::{BandIndex, FIRST_BAND};
 
 #[doc(inline)]
 pub use {
