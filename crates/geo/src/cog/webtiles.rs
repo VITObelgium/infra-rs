@@ -26,6 +26,7 @@ const LANES: usize = inf::simd::LANES;
 pub enum TileSource {
     Aligned(TiffChunkLocation),
     Unaligned(Vec<(TiffChunkLocation, CutOut)>),
+    // Each element of the vector corresponds to the chunk offset of that band
     MultiBandAligned(Vec<TiffChunkLocation>),
     MultiBandUnaligned(Vec<(Vec<TiffChunkLocation>, CutOut)>),
 }
@@ -514,6 +515,11 @@ impl WebTilesReader {
         })
     }
 
+    // The cog_chunks are the prefetched data slices for the chunks that make up the tile
+    // In case of single band aligned tiles, this is an array of len 1 with a single data slice
+    // In case of single band unaligned tiles, this is an array with len of the number of tiles
+    // In case of multiband aligned tiles, this is an array with len of the number of bands
+    // In case of multiband unaligned tiles, this is an array with len of tile_count * band_count first the slices of tile 1 in band order and so on
     pub fn parse_tile_data(&self, tile_source: &TileSource, band: BandIndex, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
         if band.get() > self.cog_meta.band_count as usize {
             return Err(Error::InvalidArgument(format!(
@@ -567,18 +573,25 @@ impl WebTilesReader {
             TileSource::MultiBandUnaligned(band_tile_sources) => {
                 // For unaligned multiband tiles, we need to find the tile sources for the requested band
                 let band_index = band.get() - 1;
+                let band_count = self.cog_meta.band_count as usize;
 
-                // Extract the tile sources for this specific band
-                let (tile_sources_for_band, _cutout) = &band_tile_sources[band_index];
+                // cog_chunks is organized as: [tile1_band1, tile1_band2, ..., tile1_bandN, tile2_band1, tile2_band2, ..., tile2_bandN, ...]
+                // We need to extract the chunks for the requested band from each tile
 
-                // Calculate the offset into cog_chunks for this band's chunks
-                let chunks_before: usize = band_tile_sources[..band_index].iter().map(|(sources, _)| sources.len()).sum();
+                // Build the tile sources and chunk refs for this specific band
+                let mut band_cog_chunks: Vec<(TiffChunkLocation, CutOut)> = Vec::new();
+                let mut band_chunk_refs: Vec<&[u8]> = Vec::new();
 
-                let chunks_for_band = tile_sources_for_band.len();
-                let band_cog_chunks: Vec<(TiffChunkLocation, CutOut)> =
-                    tile_sources_for_band.iter().map(|loc| (*loc, _cutout.clone())).collect();
+                for (tile_idx, (tile_band_locations, cutout)) in band_tile_sources.iter().enumerate() {
+                    // For each tile, get the chunk location for the requested band
+                    let chunk_location = tile_band_locations[band_index];
+                    band_cog_chunks.push((chunk_location, cutout.clone()));
 
-                let band_chunk_refs: Vec<&[u8]> = cog_chunks[chunks_before..chunks_before + chunks_for_band].to_vec();
+                    // Calculate the index in cog_chunks for this tile's band
+                    // Each tile has band_count chunks, and we want the band_index-th chunk of this tile
+                    let chunk_index = tile_idx * band_count + band_index;
+                    band_chunk_refs.push(cog_chunks[chunk_index]);
+                }
 
                 Ok(match self.data_type() {
                     ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
@@ -596,6 +609,9 @@ impl WebTilesReader {
         }
     }
 
+    // cog_chunks are prefetched databuffers for all the bands
+    // MultiBandAligned: cog_chunks contains one chunk per band in order in the order of the bands
+    // MultiBandUnaligned: cog_chunks contains all chunks in order of the tiles: first all chunks for tile 1 in order of the bands and so on
     pub fn parse_multi_band_tile_data(&self, tile_source: &TileSource, cog_chunks: &[&[u8]]) -> Result<Vec<AnyDenseArray>> {
         match tile_source {
             TileSource::MultiBandAligned(cog_tiles) => {
@@ -606,20 +622,13 @@ impl WebTilesReader {
                     .collect::<Result<Vec<AnyDenseArray>>>()?;
                 Ok(tiles)
             }
-            TileSource::MultiBandUnaligned(tile_sources) => {
-                let tiles = tile_sources
-                    .iter()
-                    .zip(cog_chunks.iter())
-                    .map(|((chunks, cutout), chunk_bytes)| {
-                        self.parse_tile_data(
-                            &TileSource::Unaligned(vec![(chunks[0], cutout.clone())]),
-                            FIRST_BAND,
-                            &[chunk_bytes],
-                        )
-                    })
-                    .collect::<Result<Vec<AnyDenseArray>>>()?;
-                Ok(tiles)
-            }
+            TileSource::MultiBandUnaligned(_tile_sources) => (1..=self.cog_meta.band_count as usize)
+                .map(|band| {
+                    // cog_chunks is organized as: [tile1_band1, tile1_band2, ..., tile1_bandN, tile2_band1, tile2_band2, ..., tile2_bandN, ...]
+                    // parse_tile_data will extract the correct chunks for this band from each tile
+                    self.parse_tile_data(tile_source, BandIndex::new(band).unwrap(), cog_chunks)
+                })
+                .collect::<Result<Vec<_>>>(),
             _ => Err(Error::InvalidArgument("Multi band tile request on single band raster".into())),
         }
     }
