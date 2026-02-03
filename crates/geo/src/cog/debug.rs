@@ -39,7 +39,7 @@ fn read_tile_data<T: ArrayNum>(
     )
 }
 
-pub fn dump_tiff_tiles(cog_path: &Path, _band_index: BandIndex, zoom_level: i32, output_dir: &Path) -> Result<()> {
+pub fn dump_tiff_tiles(cog_path: &Path, band_index: BandIndex, zoom_level: i32, output_dir: &Path) -> Result<()> {
     let meta = GeoTiffMetadata::from_file(cog_path)?;
     let tile_size = meta.chunk_row_length();
     let cell_size = meta.geo_reference.cell_size_x();
@@ -60,8 +60,16 @@ pub fn dump_tiff_tiles(cog_path: &Path, _band_index: BandIndex, zoom_level: i32,
     let pixel_size = Tile::pixel_size_at_zoom_level(zoom_level, tile_size);
     let mut current_ll = meta.geo_reference.top_left();
     let mut reader = std::fs::File::open(cog_path)?;
+    let chunks_per_band = overview.chunk_locations.len() / meta.band_count as usize;
 
-    for (index, cog_tile) in overview.chunk_locations.clone().iter().enumerate() {
+    for (index, cog_tile) in overview
+        .chunk_locations
+        .clone()
+        .iter()
+        .skip(chunks_per_band * (band_index.get() - 1))
+        .take(chunks_per_band)
+        .enumerate()
+    {
         let tile_data = match meta.data_type {
             ArrayDataType::Uint8 => AnyDenseArray::U8(read_tile_data::<u8>(cog_tile, &meta, &mut reader)?),
             ArrayDataType::Uint16 => AnyDenseArray::U16(read_tile_data::<u16>(cog_tile, &meta, &mut reader)?),

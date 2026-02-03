@@ -9,7 +9,7 @@ name = "colormapping"
 
 [dependencies]
 approx = "0.5"
-bytemuck = { version = "1.24", features = ["extern_crate_alloc", "derive"] }
+bytemuck = { version = "1.25", features = ["extern_crate_alloc", "derive"] }
 log = "0.4"
 num = "0.4"
 serde = { version = "1.0", features = ["derive"], optional = true }
