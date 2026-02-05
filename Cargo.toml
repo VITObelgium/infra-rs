@@ -32,6 +32,7 @@ members = [
     "crates/raster-tile",
     "crates/sqlite",
     "crates/tiler",
+    "tools/cog-analyzer",
     "tools/creatembtiles",
     "tools/createcog",
     "tools/tiles2raster",

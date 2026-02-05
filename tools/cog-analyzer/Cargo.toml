@@ -1,0 +1,23 @@
+[package]
+name = "cog-analyzer"
+version.workspace = true
+edition.workspace = true
+description = "TUI tool to analyze and visualize Cloud Optimized GeoTIFF files"
+
+[dependencies]
+geo = { path = "../../crates/geo", features = [
+    "gdal-static",
+    "raster-io-geotiff",
+] }
+inf = { path = "../../crates/inf" }
+ratatui = { version = "0.30", features = ["crossterm"] }
+ratatui-image = { version = "10.0", default-features = false, features = [
+    "crossterm",
+    "image-defaults",
+] }
+image = "0.25"
+crossterm = { version = "0.29" }
+clap = { version = "4.5", features = ["derive"] }
+anyhow = "1.0"
+log = "0.4"
+env_logger = "0.11"
