@@ -2,7 +2,7 @@ use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error,
     GeoReference, GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
     geotiff::{
-        self, BandIndex, FIRST_BAND, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
+        self, BandIndex, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
         tileio::{self},
         utils,
     },
@@ -624,24 +624,9 @@ impl WebTilesReader {
     // MultiBandAligned: cog_chunks contains one chunk per band in order in the order of the bands
     // MultiBandUnaligned: cog_chunks contains all chunks in order of the tiles: first all chunks for tile 1 in order of the bands and so on
     pub fn parse_multi_band_tile_data(&self, tile_source: &TileSource, cog_chunks: &[&[u8]]) -> Result<Vec<AnyDenseArray>> {
-        match tile_source {
-            TileSource::MultiBandAligned(cog_tiles) => {
-                let tiles = cog_tiles
-                    .iter()
-                    .zip(cog_chunks.iter())
-                    .map(|(chunk, chunk_bytes)| self.parse_tile_data(&TileSource::Aligned(*chunk), FIRST_BAND, &[chunk_bytes]))
-                    .collect::<Result<Vec<AnyDenseArray>>>()?;
-                Ok(tiles)
-            }
-            TileSource::MultiBandUnaligned(_tile_sources) => (1..=self.cog_meta.band_count as usize)
-                .map(|band| {
-                    // cog_chunks is organized as: [tile1_band1, tile1_band2, ..., tile1_bandN, tile2_band1, tile2_band2, ..., tile2_bandN, ...]
-                    // parse_tile_data will extract the correct chunks for this band from each tile
-                    self.parse_tile_data(tile_source, BandIndex::new(band).unwrap(), cog_chunks)
-                })
-                .collect::<Result<Vec<_>>>(),
-            _ => Err(Error::InvalidArgument("Multi band tile request on single band raster".into())),
-        }
+        (1..=self.cog_meta.band_count as usize)
+            .map(|band| self.parse_tile_data(tile_source, BandIndex::new(band).unwrap(), cog_chunks))
+            .collect::<Result<Vec<_>>>()
     }
 
     #[simd_bounds]
@@ -810,7 +795,7 @@ mod tests {
     use path_macro::path;
 
     use crate::{
-        Array, Nodata as _, Point, ZoomLevelStrategy,
+        Array, FIRST_BAND, Nodata as _, Point, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles, debug},
         raster::{Compression, Predictor, RasterReadWrite},
         testutils,
