@@ -862,9 +862,30 @@ fn render_colormap_image(pixels: &[u8], width: u32, height: u32, is_sparse: bool
     // Get the Turbo colormap
     let colormap = turbo_colormap();
 
-    // Calculate scaling factors
-    let scale_x = width as f64 / term_width as f64;
-    let scale_y = height as f64 / (term_height * 2) as f64; // *2 because we use half-block characters
+    // Calculate aspect ratios to maintain image proportions
+    let image_aspect = width as f64 / height as f64;
+    let term_aspect = term_width as f64 / (term_height * 2) as f64; // *2 because we use half-block characters
+
+    // Determine render dimensions that maintain aspect ratio
+    let (render_width, render_height) = if image_aspect > term_aspect {
+        // Image is wider - fit to width
+        let render_width = term_width;
+        let render_height = ((term_width as f64 / image_aspect) / 2.0).round() as usize;
+        (render_width, render_height)
+    } else {
+        // Image is taller - fit to height
+        let render_height = term_height;
+        let render_width = (term_height as f64 * 2.0 * image_aspect).round() as usize;
+        (render_width, render_height)
+    };
+
+    // Left-align the image (top-left)
+    let offset_x = 0;
+    let offset_y = 0;
+
+    // Calculate uniform scaling factors
+    let scale_x = width as f64 / render_width as f64;
+    let scale_y = height as f64 / (render_height * 2) as f64; // *2 because we use half-block characters
 
     // Unicode block characters for colormap rendering
     // Using half-block characters for better vertical resolution
@@ -874,10 +895,21 @@ fn render_colormap_image(pixels: &[u8], width: u32, height: u32, is_sparse: bool
         let mut spans: Vec<Span> = Vec::new();
 
         for col in 0..term_width {
+            // Check if we're within the image bounds
+            if row < offset_y || row >= offset_y + render_height || col < offset_x || col >= offset_x + render_width {
+                // Outside image area - render blank space
+                spans.push(Span::raw(" "));
+                continue;
+            }
+
+            // Adjust for offset
+            let img_row = row - offset_y;
+            let img_col = col - offset_x;
+
             // Sample top and bottom pixels for this character cell
-            let top_y = ((row * 2) as f64 * scale_y) as usize;
-            let bottom_y = ((row * 2 + 1) as f64 * scale_y) as usize;
-            let x = (col as f64 * scale_x) as usize;
+            let top_y = ((img_row * 2) as f64 * scale_y) as usize;
+            let bottom_y = ((img_row * 2 + 1) as f64 * scale_y) as usize;
+            let x = (img_col as f64 * scale_x) as usize;
 
             let top_y = top_y.min(height as usize - 1);
             let bottom_y = bottom_y.min(height as usize - 1);
