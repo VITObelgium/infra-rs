@@ -179,7 +179,7 @@ pub fn warp_to_disk_cli(
 
     gdalinterop::create_output_directory_if_needed(dest_path)?;
 
-    let path_str = CString::new(dest_path.to_string_lossy().as_ref())?;
+    let path_str = CString::new(dest_path.to_string_lossy().to_string())?;
 
     unsafe {
         let mut user_error: c_int = 0;

@@ -42,7 +42,7 @@ bytemuck = { version = "1.25" }
 flate2 = { version = "1.1", default-features = false, features = [
     "rust_backend",
 ], optional = true }
-calamine = { version = "0.32", features = ["dates"], optional = true }
+calamine = { version = "0.33", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.3.1", optional = true }
@@ -74,7 +74,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 simd_macro = { path = "simd_macro" }
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 thiserror = "2.0"
-tiff = { version = "0.10.3", default-features = false, optional = true }
+tiff = { version = "0.11.2", optional = true, default-features = false }
 vector_derive = { optional = true, path = "vector_derive" }
 weezl = { version = "0.1", optional = true }
 xml-rs = { version = "1.0", optional = true }

@@ -416,7 +416,7 @@ fn write_to_disk(
     }
 
     let path_str = path.to_string_lossy();
-    let path_str = CString::new(path_str.as_ref())?;
+    let path_str = CString::new(path_str.to_string())?;
 
     let ds_handle = check_pointer(
         unsafe {

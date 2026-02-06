@@ -43,7 +43,7 @@ pub fn translate_cli_opts(ds: &gdal::Dataset, options: &[String]) -> Result<gdal
 /// The dataset is returned in case the user wants to continue working with it but can also be ignored
 pub fn translate_ds_to_disk(ds: &gdal::Dataset, path: &Path, options: &[String]) -> Result<gdal::Dataset> {
     gdalinterop::create_output_directory_if_needed(path)?;
-    let path_str = std::ffi::CString::new(path.to_string_lossy().as_ref())?;
+    let path_str = std::ffi::CString::new(path.to_string_lossy().to_string())?;
     let mut opts = VectorTranslateOptionsWrapper::new(options)?;
     let mut usage_error: std::ffi::c_int = 0;
 

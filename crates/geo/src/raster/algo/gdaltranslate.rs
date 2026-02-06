@@ -35,7 +35,7 @@ pub fn translate(ds: &gdal::Dataset, output_path: &std::path::Path, options: &[S
     let opts = TranslateOptionsWrapper::new(options)?;
     let mut user_error: c_int = 0;
     let ds = unsafe {
-        let path_str = CString::new(output_path.to_string_lossy().as_ref())?;
+        let path_str = CString::new(output_path.to_string_lossy().to_string())?;
         gdal::Dataset::from_c_dataset(gdalinterop::check_pointer(
             gdal_sys::GDALTranslate(path_str.as_ptr(), ds.c_dataset(), opts.options, &mut user_error),
             "GDALTranslate",

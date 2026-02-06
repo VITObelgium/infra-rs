@@ -186,7 +186,7 @@ pub struct MemoryFile {
 impl MemoryFile {
     #[allow(dead_code)]
     pub fn with_data(path: &Path, data: &[u8]) -> Result<Self> {
-        let path_str = CString::new(path.to_string_lossy().as_ref())?;
+        let path_str = CString::new(path.to_string_lossy().to_string())?;
         let file_ptr = unsafe {
             gdal_sys::VSIFileFromMemBuffer(
                 path_str.as_ptr(),
@@ -203,7 +203,7 @@ impl MemoryFile {
     }
 
     pub fn empty(path: &Path) -> Result<Self> {
-        let path_str = CString::new(path.to_string_lossy().as_ref())?;
+        let path_str = CString::new(path.to_string_lossy().to_string())?;
         let mode = CString::new("w")?;
         let file_ptr = check_pointer(unsafe { gdal_sys::VSIFOpenL(path_str.as_ptr(), mode.as_ptr()) }, "Open memory file")?;
 
@@ -219,7 +219,7 @@ impl MemoryFile {
 
     pub fn as_slice(&self) -> Result<&[u8]> {
         let mut len: gdal_sys::vsi_l_offset = 0;
-        let path_str = CString::new(self.path.to_string_lossy().as_ref())?;
+        let path_str = CString::new(self.path.to_string_lossy().to_string())?;
         unsafe {
             let data = check_pointer(
                 gdal_sys::VSIGetMemFileBuffer(path_str.as_ptr(), &mut len, FALSE /*do not take ownership*/),
