@@ -211,7 +211,7 @@ impl WebTiles {
             for (tile, _) in last_zoom_level.tiles.iter().filter(|(_, loc)| match loc {
                 TileSource::Aligned(loc) => loc.size > 0,
                 TileSource::Unaligned(_) | TileSource::MultiBandUnaligned(_) => false, // Max zoom level should be aligned
-                TileSource::MultiBandAligned(locs) => locs.iter().all(|loc| loc.size > 0),
+                TileSource::MultiBandAligned(locs) => locs.iter().any(|loc| loc.size > 0),
             }) {
                 min_tile_x = min_tile_x.min(tile.x);
                 max_tile_x = max_tile_x.max(tile.x);
@@ -542,30 +542,7 @@ impl WebTilesReader {
         debug_assert!(band.get() <= cog_chunks.len());
 
         match tile_source {
-            TileSource::Aligned(_) => Ok(match self.data_type() {
-                ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(cog_chunks[0])?),
-                ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(cog_chunks[0])?),
-                ArrayDataType::Uint32 => AnyDenseArray::U32(self.parse_tile_data_as::<u32>(cog_chunks[0])?),
-                ArrayDataType::Uint64 => AnyDenseArray::U64(self.parse_tile_data_as::<u64>(cog_chunks[0])?),
-                ArrayDataType::Int8 => AnyDenseArray::I8(self.parse_tile_data_as::<i8>(cog_chunks[0])?),
-                ArrayDataType::Int16 => AnyDenseArray::I16(self.parse_tile_data_as::<i16>(cog_chunks[0])?),
-                ArrayDataType::Int32 => AnyDenseArray::I32(self.parse_tile_data_as::<i32>(cog_chunks[0])?),
-                ArrayDataType::Int64 => AnyDenseArray::I64(self.parse_tile_data_as::<i64>(cog_chunks[0])?),
-                ArrayDataType::Float32 => AnyDenseArray::F32(self.parse_tile_data_as::<f32>(cog_chunks[0])?),
-                ArrayDataType::Float64 => AnyDenseArray::F64(self.parse_tile_data_as::<f64>(cog_chunks[0])?),
-            }),
-            TileSource::Unaligned(tile_sources) => Ok(match self.data_type() {
-                ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-            }),
+            TileSource::Aligned(_) |
             TileSource::MultiBandAligned(_) => {
                 let band_index = band.get() - 1; // to 0-based index
                 Ok(match self.data_type() {
@@ -581,6 +558,18 @@ impl WebTilesReader {
                     ArrayDataType::Float64 => AnyDenseArray::F64(self.parse_tile_data_as::<f64>(cog_chunks[band_index])?),
                 })
             }
+            TileSource::Unaligned(tile_sources) => Ok(match self.data_type() {
+                ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+            }),
             TileSource::MultiBandUnaligned(band_tile_sources) => {
                 // For unaligned multiband tiles, we need to find the tile sources for the requested band
                 let band_index = band.get() - 1;
