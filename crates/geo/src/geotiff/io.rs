@@ -326,11 +326,30 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     let tiles_per_column = (raster_size.rows.count() as usize).div_ceil(tile_size as usize);
     let tile_count = tiles_per_row * tiles_per_column;
 
-    // The orderinge of the chunks does not depend on the intreleave, they are always stored in row-major order
+    // The orderinge of the chunks does not depend on the interleave, they are always stored in row-major order
     let chunks = &overview.chunk_locations;
     if meta.interleave == Interleave::Pixel {
         unimplemented!("Pixel interleave tiff reading not implemented yet");
     }
+
+    // BAND Interleave
+    // - **Physical layout**: `[Band0_Tile0, Band0_Tile1, Band0_Tile2, ..., Band1_Tile0, Band1_Tile1, ...]`
+    // - **TileOffsets array**: `[Band0_Tile0_offset, Band0_Tile1_offset, ..., Band1_Tile0_offset, ...]` (sequential offsets within each band)
+    // - **Optimized for**: Reading one band at a time (sequential I/O for single band)
+    // - **Use case**: When you typically analyze one band independently (e.g., reading just the Red channel)
+
+    // ### TILE Interleave
+    // - **Physical layout**: `[Tile0_Band0, Tile0_Band1, Tile0_Band2, ..., Tile1_Band0, Tile1_Band1, ...]`
+    // - **TileOffsets array**: Still indexed as `[Band0_tiles..., Band1_tiles...]` BUT the offsets jump around
+    // - **Optimized for**: Reading all bands for a spatial region (sequential I/O for multi-band tile)
+    // - **Use case**: When you typically need RGB data together (e.g., displaying true color images)
+
+    // The **TileOffsets array is always logically organized in BAND order** in both modes. The TIFF format allows the TileOffsets array to point to any physical locations in the file. So:
+
+    // - The `chunk_locations` array (which comes from TileOffsets) is always indexed as: `[Band0_tiles..., Band1_tiles..., Band2_tiles...]`
+    // - The current code using `.skip(band_index * tile_count).take(tile_count)` is correct for BOTH interleave modes
+    // - The INTERLEAVE metadata tells you about file I/O performance characteristics, not about how to index the arrays
+
     let band_index0 = band_index.get() - 1; // to 0-based index
     let chunk_iter = chunks.iter().skip(band_index0 * tile_count).take(tile_count).enumerate();
 
