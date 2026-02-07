@@ -42,6 +42,7 @@ struct ZoomLevelInfo {
 /// It is constructed from the metadata of a COG file, which contains information about the tiff tile layout and the locations of the tiff tiles in the COG.
 /// Tiff tiles don't always have a one-to-one mapping to web tiles, so this structure contains the necessary information to create web tiles from 1 or more tiff tiles.
 pub struct WebTiles {
+    geo_reference: GeoReference,
     zoom_levels: Vec<ZoomLevelInfo>,
 }
 
@@ -56,6 +57,13 @@ pub struct WebTiles {
 pub fn stride_groups<T>(slice: &[T], stride: usize) -> impl Iterator<Item = impl Iterator<Item = &T>> {
     debug_assert!(slice.len().is_multiple_of(stride));
     (0..stride).map(move |offset| slice.iter().skip(offset).step_by(stride))
+}
+
+fn warp_web_mercator_bounds_to_lat_lon(bounds: &GeoReference) -> LatLonBounds {
+    let top_left = crs::web_mercator_to_lat_lon(bounds.top_left());
+    let bottom_right = crs::web_mercator_to_lat_lon(bounds.bottom_right());
+
+    LatLonBounds::hull(top_left, bottom_right)
 }
 
 impl WebTiles {
@@ -168,7 +176,10 @@ impl WebTiles {
 
         trim_empty_zoom_levels(&mut zoom_levels);
 
-        Ok(WebTiles { zoom_levels })
+        Ok(WebTiles {
+            zoom_levels,
+            geo_reference: meta.geo_reference.clone(),
+        })
     }
 
     pub fn tile_source(&self, tile: &Tile) -> Option<&TileSource> {
@@ -219,7 +230,6 @@ impl WebTiles {
                 max_tile_y = max_tile_y.max(tile.y);
             }
         }
-
         let max_zoom = self.max_zoom();
 
         let min_tile = Tile {
@@ -235,8 +245,9 @@ impl WebTiles {
         };
 
         if min_tile_x == i32::MAX {
-            // No tiles with data at the maximum zoom level
-            return LatLonBounds::world();
+            // No tiles with aligned data at the maximum zoom level
+            // Fall back to the tiff georeference
+            return warp_web_mercator_bounds_to_lat_lon(&self.geo_reference);
         }
 
         LatLonBounds::hull(min_tile.upper_left(), max_tile.lower_right())
@@ -542,8 +553,7 @@ impl WebTilesReader {
         debug_assert!(band.get() <= cog_chunks.len());
 
         match tile_source {
-            TileSource::Aligned(_) |
-            TileSource::MultiBandAligned(_) => {
+            TileSource::Aligned(_) | TileSource::MultiBandAligned(_) => {
                 let band_index = band.get() - 1; // to 0-based index
                 Ok(match self.data_type() {
                     ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(cog_chunks[band_index])?),
