@@ -402,6 +402,17 @@ impl Legend {
             Legend::CategoricString(legend) => legend.legend_entries(),
         }
     }
+
+    /// Get an array of 256 colors representing the colors of the legend, in order from lowest to highest value
+    pub fn color_list(&self) -> Vec<Color> {
+        let mut colors = Vec::with_capacity(256);
+        for i in 0..256 {
+            let value =
+                self.total_value_range().start() + (self.total_value_range().end() - self.total_value_range().start()) * (i as f32 / 255.0);
+            colors.push(self.color_for_value(value, None));
+        }
+        colors
+    }
 }
 
 /// Create a legend with linear color mapping
