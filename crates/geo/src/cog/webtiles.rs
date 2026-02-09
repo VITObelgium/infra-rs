@@ -537,11 +537,11 @@ impl WebTilesReader {
         })
     }
 
-    // The cog_chunks are the prefetched data slices for the chunks that make up the tile
-    // In case of single band aligned tiles, this is an array of len 1 with a single data slice
-    // In case of single band unaligned tiles, this is an array with len of the number of tiles
-    // In case of multiband aligned tiles, this is an array with len of the number of bands
-    // In case of multiband unaligned tiles, this is an array with len of tile_count * band_count first the slices of tile 1 in band order and so on
+    // Version of the tiledata parsing that takes pre-fetched cog chunks as input
+    // Used for contexts where only asynchronous chunk fetching is possible
+    // `cog_chunks` must contain only the chunks needed to reconstruct the requested `band` for this tile:
+    // - `TileSource::Aligned` and `TileSource::MultiBandAligned`: exactly one chunk (the selected band)
+    // - `TileSource::Unaligned` and `TileSource::MultiBandUnaligned`: one chunk per tile source for the selected band
     pub fn parse_tile_data(&self, tile_source: &TileSource, band: BandIndex, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
         if band.get() > self.cog_meta.band_count as usize {
             return Err(Error::InvalidArgument(format!(
@@ -550,82 +550,137 @@ impl WebTilesReader {
                 self.cog_meta.band_count
             )));
         }
-        debug_assert!(band.get() <= cog_chunks.len());
 
         match tile_source {
             TileSource::Aligned(_) | TileSource::MultiBandAligned(_) => {
-                let band_index = band.get() - 1; // to 0-based index
+                assert_eq!(
+                    cog_chunks.len(),
+                    1,
+                    "Aligned tile parsing requires exactly one selected-band chunk, got {}",
+                    cog_chunks.len()
+                );
                 Ok(match self.data_type() {
-                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(cog_chunks[band_index])?),
-                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(cog_chunks[band_index])?),
-                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.parse_tile_data_as::<u32>(cog_chunks[band_index])?),
-                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.parse_tile_data_as::<u64>(cog_chunks[band_index])?),
-                    ArrayDataType::Int8 => AnyDenseArray::I8(self.parse_tile_data_as::<i8>(cog_chunks[band_index])?),
-                    ArrayDataType::Int16 => AnyDenseArray::I16(self.parse_tile_data_as::<i16>(cog_chunks[band_index])?),
-                    ArrayDataType::Int32 => AnyDenseArray::I32(self.parse_tile_data_as::<i32>(cog_chunks[band_index])?),
-                    ArrayDataType::Int64 => AnyDenseArray::I64(self.parse_tile_data_as::<i64>(cog_chunks[band_index])?),
-                    ArrayDataType::Float32 => AnyDenseArray::F32(self.parse_tile_data_as::<f32>(cog_chunks[band_index])?),
-                    ArrayDataType::Float64 => AnyDenseArray::F64(self.parse_tile_data_as::<f64>(cog_chunks[band_index])?),
+                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(cog_chunks[0])?),
+                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(cog_chunks[0])?),
+                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.parse_tile_data_as::<u32>(cog_chunks[0])?),
+                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.parse_tile_data_as::<u64>(cog_chunks[0])?),
+                    ArrayDataType::Int8 => AnyDenseArray::I8(self.parse_tile_data_as::<i8>(cog_chunks[0])?),
+                    ArrayDataType::Int16 => AnyDenseArray::I16(self.parse_tile_data_as::<i16>(cog_chunks[0])?),
+                    ArrayDataType::Int32 => AnyDenseArray::I32(self.parse_tile_data_as::<i32>(cog_chunks[0])?),
+                    ArrayDataType::Int64 => AnyDenseArray::I64(self.parse_tile_data_as::<i64>(cog_chunks[0])?),
+                    ArrayDataType::Float32 => AnyDenseArray::F32(self.parse_tile_data_as::<f32>(cog_chunks[0])?),
+                    ArrayDataType::Float64 => AnyDenseArray::F64(self.parse_tile_data_as::<f64>(cog_chunks[0])?),
                 })
             }
-            TileSource::Unaligned(tile_sources) => Ok(match self.data_type() {
-                ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-            }),
+            TileSource::Unaligned(tile_sources) => {
+                assert_eq!(
+                    tile_sources.len(),
+                    cog_chunks.len(),
+                    "Unaligned tile parsing requires one chunk per tile source, expected {}, got {}",
+                    tile_sources.len(),
+                    cog_chunks.len()
+                );
+                Ok(match self.data_type() {
+                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                    ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
+                })
+            }
             TileSource::MultiBandUnaligned(band_tile_sources) => {
-                // For unaligned multiband tiles, we need to find the tile sources for the requested band
                 let band_index = band.get() - 1;
-                let band_count = self.cog_meta.band_count as usize;
+                assert_eq!(
+                    band_tile_sources.len(),
+                    cog_chunks.len(),
+                    "Unaligned multiband tile parsing requires one selected-band chunk per tile source, expected {}, got {}",
+                    band_tile_sources.len(),
+                    cog_chunks.len()
+                );
 
-                // cog_chunks is organized as: [tile1_band1, tile1_band2, ..., tile1_bandN, tile2_band1, tile2_band2, ..., tile2_bandN, ...]
-                // We need to extract the chunks for the requested band from each tile
-
-                // Build the tile sources and chunk refs for this specific band
                 let mut band_cog_chunks: Vec<(TiffChunkLocation, CutOut)> = Vec::new();
-                let mut band_chunk_refs: Vec<&[u8]> = Vec::new();
-
-                for (tile_idx, (tile_band_locations, cutout)) in band_tile_sources.iter().enumerate() {
-                    // For each tile, get the chunk location for the requested band
+                for (tile_band_locations, cutout) in band_tile_sources.iter() {
                     let chunk_location = tile_band_locations[band_index];
                     band_cog_chunks.push((chunk_location, cutout.clone()));
-
-                    // Calculate the index in cog_chunks for this tile's band
-                    // Each tile has band_count chunks, and we want the band_index-th chunk of this tile
-                    let chunk_index = tile_idx * band_count + band_index;
-                    band_chunk_refs.push(cog_chunks[chunk_index]);
                 }
 
                 Ok(match self.data_type() {
-                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
-                    ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(&band_cog_chunks, &band_chunk_refs)?),
+                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
+                    ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
                 })
             }
         }
     }
 
-    // cog_chunks are prefetched databuffers for all the bands
+    // cog_chunks are prefetched databuffers for the band range
     // MultiBandAligned: cog_chunks contains one chunk per band in order in the order of the bands
     // MultiBandUnaligned: cog_chunks contains all chunks in order of the tiles: first all chunks for tile 1 in order of the bands and so on
-    pub fn parse_multi_band_tile_data(&self, tile_source: &TileSource, cog_chunks: &[&[u8]]) -> Result<Vec<AnyDenseArray>> {
-        (1..=self.cog_meta.band_count as usize)
-            .map(|band| self.parse_tile_data(tile_source, BandIndex::new(band).unwrap(), cog_chunks))
-            .collect::<Result<Vec<_>>>()
+    pub fn parse_multi_band_tile_data(
+        &self,
+        band_range: std::ops::Range<usize>,
+        tile_source: &TileSource,
+        cog_chunks: &[&[u8]],
+    ) -> Result<Vec<AnyDenseArray>> {
+        let band_count = self.cog_meta.band_count as usize;
+        let band_range_valid = band_range.start >= 1 && band_range.end <= band_count + 1;
+        let chunks_valid = match tile_source {
+            TileSource::Aligned(_) | TileSource::MultiBandAligned(_) => cog_chunks.len() == band_range.len(),
+            TileSource::MultiBandUnaligned(band_tile_sources) => cog_chunks.len() >= band_tile_sources.len() * band_count,
+            TileSource::Unaligned(_) => true,
+        };
+        assert!(
+            band_range_valid && chunks_valid,
+            "Invalid multiband tile parse precondition: band_range={:?}, band_count={}, chunk_count={}",
+            band_range,
+            band_count,
+            cog_chunks.len()
+        );
+
+        match tile_source {
+            TileSource::Aligned(_) | TileSource::MultiBandAligned(_) => band_range
+                .zip(cog_chunks.iter())
+                .map(|(band, chunk)| {
+                    let band = BandIndex::new(band).unwrap();
+                    self.parse_tile_data(tile_source, band, &[*chunk])
+                })
+                .collect::<Result<Vec<_>>>(),
+            TileSource::MultiBandUnaligned(band_tile_sources) => {
+                let tile_count = band_tile_sources.len();
+                band_range
+                    .map(|band| {
+                        let band = BandIndex::new(band).unwrap();
+                        let band_index = band.get() - 1;
+                        let band_chunks = cog_chunks
+                            .iter()
+                            .skip(band_index)
+                            .step_by(band_count)
+                            .take(tile_count)
+                            .copied()
+                            .collect::<Vec<_>>();
+                        self.parse_tile_data(tile_source, band, &band_chunks)
+                    })
+                    .collect::<Result<Vec<_>>>()
+            }
+            TileSource::Unaligned(_) => band_range
+                .map(|band| {
+                    let band = BandIndex::new(band).unwrap();
+                    self.parse_tile_data(tile_source, band, cog_chunks)
+                })
+                .collect::<Result<Vec<_>>>(),
+        }
     }
 
     #[simd_bounds]
@@ -1665,6 +1720,116 @@ mod tests {
                 "Expected MultiBandUnaligned tile source"
             );
         }
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn parse_multi_band_tile_data() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&input)?)?;
+        let band_count = cog.cog_metadata().band_count as usize;
+
+        let (tile, tile_source) = cog
+            .zoom_level_tile_sources(17)
+            .expect("expected zoom level 17 to exist")
+            .iter()
+            .find(|(_, source)| matches!(source, TileSource::MultiBandAligned(_)))
+            .expect("expected at least one aligned multiband tile at zoom level 17");
+
+        let band_locations = match tile_source {
+            TileSource::MultiBandAligned(locations) => locations,
+            _ => unreachable!("tile source should be multiband aligned"),
+        };
+
+        let mut reader = File::open(&input)?;
+        let cog_chunks: Vec<Vec<u8>> = band_locations
+            .iter()
+            .map(|chunk_location| {
+                if chunk_location.is_sparse() {
+                    return Ok(vec![]);
+                }
+
+                let mut chunk = vec![0; chunk_location.size as usize];
+                io::read_chunk(chunk_location, &mut reader, &mut chunk)?;
+                Ok(chunk)
+            })
+            .collect::<Result<_>>()?;
+
+        let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
+        let parsed = cog.parse_multi_band_tile_data(1..(band_count + 1), tile_source, &cog_chunk_refs)?;
+
+        assert_eq!(parsed.len(), band_count);
+
+        std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0))?;
+        for band_nr in 1..=band_count {
+            let band = BandIndex::new(band_nr).expect("band indices are 1-based");
+            let expected = AnyDenseArray::U8(cog.read_tile_data_as::<u8>(tile, band, &mut reader)?.unwrap());
+            assert_eq!(parsed[band_nr - 1], expected);
+        }
+
+        let subset_range = 2..3;
+        let subset_chunk_refs = cog_chunk_refs[(subset_range.start - 1)..(subset_range.end - 1)].to_vec();
+        let parsed_subset = cog.parse_multi_band_tile_data(subset_range.clone(), tile_source, &subset_chunk_refs)?;
+
+        assert_eq!(parsed_subset.len(), subset_range.len());
+
+        std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0))?;
+        for (index, band_nr) in subset_range.enumerate() {
+            let band = BandIndex::new(band_nr).expect("band indices are 1-based");
+            let expected = AnyDenseArray::U8(cog.read_tile_data_as::<u8>(tile, band, &mut reader)?.unwrap());
+            assert_eq!(parsed_subset[index], expected);
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn parse_multi_band_tile_data_unaligned_multiband() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&input)?)?;
+        let band_count = cog.cog_metadata().band_count as usize;
+
+        let (tile, tile_source) = cog
+            .zoom_level_tile_sources(15)
+            .expect("expected zoom level 15 to exist")
+            .iter()
+            .find(|(_, source)| matches!(source, TileSource::MultiBandUnaligned(_)))
+            .expect("expected at least one unaligned multiband tile at zoom level 15");
+
+        let band_tile_sources = match tile_source {
+            TileSource::MultiBandUnaligned(sources) => sources,
+            _ => unreachable!("tile source should be unaligned multiband"),
+        };
+
+        let mut reader = File::open(&input)?;
+        let mut cog_chunks: Vec<Vec<u8>> = Vec::new();
+        for (tile_band_locations, _) in band_tile_sources {
+            for chunk_location in tile_band_locations {
+                if chunk_location.is_sparse() {
+                    cog_chunks.push(vec![]);
+                    continue;
+                }
+
+                let mut chunk = vec![0; chunk_location.size as usize];
+                io::read_chunk(chunk_location, &mut reader, &mut chunk)?;
+                cog_chunks.push(chunk);
+            }
+        }
+
+        let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
+        let parsed = cog.parse_multi_band_tile_data(1..(band_count + 1), tile_source, &cog_chunk_refs)?;
+
+        assert_eq!(parsed.len(), band_count);
+
+        std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0))?;
+        for band_nr in 1..=band_count {
+            let band = BandIndex::new(band_nr).expect("band indices are 1-based");
+            let expected = cog
+                .read_tile_data(tile, band, &mut reader)?
+                .expect("tile should be readable for all bands in this test");
+            assert_eq!(parsed[band_nr - 1], expected);
+        }
+
         Ok(())
     }
 }
