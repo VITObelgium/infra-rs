@@ -625,21 +625,40 @@ impl WebTilesReader {
         }
     }
 
-    // cog_chunks are prefetched databuffers for the band range
-    // MultiBandAligned: cog_chunks contains one chunk per band in order in the order of the bands
-    // MultiBandUnaligned: cog_chunks contains all chunks in order of the tiles: first all chunks for tile 1 in order of the bands and so on
-    pub fn parse_multi_band_tile_data(
+    // `band_range` supports all `RangeBounds<usize>` forms, including inclusive ranges.
+    // This API only accepts multiband tile sources.
+    // `cog_chunks` contains prefetched chunks for the selected bands:
+    // - `TileSource::Aligned` / `TileSource::MultiBandAligned`: one chunk per selected band
+    // - `TileSource::MultiBandUnaligned`: interleaved chunks for all selected bands across tile sources
+    pub fn parse_multi_band_tile_data<R: std::ops::RangeBounds<usize>>(
         &self,
-        band_range: std::ops::Range<usize>,
+        band_range: R,
         tile_source: &TileSource,
         cog_chunks: &[&[u8]],
     ) -> Result<Vec<AnyDenseArray>> {
+        if !matches!(tile_source, TileSource::MultiBandAligned(_) | TileSource::MultiBandUnaligned(_)) {
+            return Err(Error::InvalidArgument(
+                "parse_multi_band_tile_data requires a multiband tile source".to_string(),
+            ));
+        }
+
         let band_count = self.cog_meta.band_count as usize;
+        let band_start = match band_range.start_bound() {
+            std::ops::Bound::Included(&start) => start,
+            std::ops::Bound::Excluded(&start) => start.checked_add(1).unwrap(),
+            std::ops::Bound::Unbounded => 1,
+        };
+        let band_end = match band_range.end_bound() {
+            std::ops::Bound::Included(&end) => end.checked_add(1).unwrap(),
+            std::ops::Bound::Excluded(&end) => end,
+            std::ops::Bound::Unbounded => band_count + 1,
+        };
+        let band_range = band_start..band_end;
         let band_range_valid = band_range.start >= 1 && band_range.end <= band_count + 1;
         let chunks_valid = match tile_source {
-            TileSource::Aligned(_) | TileSource::MultiBandAligned(_) => cog_chunks.len() == band_range.len(),
+            TileSource::MultiBandAligned(_) => cog_chunks.len() == band_range.len(),
             TileSource::MultiBandUnaligned(band_tile_sources) => cog_chunks.len() >= band_tile_sources.len() * band_count,
-            TileSource::Unaligned(_) => true,
+            _ => unreachable!("non-multiband tile sources are rejected above"),
         };
         assert!(
             band_range_valid && chunks_valid,
@@ -650,7 +669,7 @@ impl WebTilesReader {
         );
 
         match tile_source {
-            TileSource::Aligned(_) | TileSource::MultiBandAligned(_) => band_range
+            TileSource::MultiBandAligned(_) => band_range
                 .zip(cog_chunks.iter())
                 .map(|(band, chunk)| {
                     let band = BandIndex::new(band).unwrap();
@@ -674,12 +693,7 @@ impl WebTilesReader {
                     })
                     .collect::<Result<Vec<_>>>()
             }
-            TileSource::Unaligned(_) => band_range
-                .map(|band| {
-                    let band = BandIndex::new(band).unwrap();
-                    self.parse_tile_data(tile_source, band, cog_chunks)
-                })
-                .collect::<Result<Vec<_>>>(),
+            _ => unreachable!("non-multiband tile sources are rejected above"),
         }
     }
 
@@ -1756,7 +1770,7 @@ mod tests {
             .collect::<Result<_>>()?;
 
         let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
-        let parsed = cog.parse_multi_band_tile_data(1..(band_count + 1), tile_source, &cog_chunk_refs)?;
+        let parsed = cog.parse_multi_band_tile_data(1..=band_count, tile_source, &cog_chunk_refs)?;
 
         assert_eq!(parsed.len(), band_count);
 
@@ -1779,6 +1793,15 @@ mod tests {
             let expected = AnyDenseArray::U8(cog.read_tile_data_as::<u8>(tile, band, &mut reader)?.unwrap());
             assert_eq!(parsed_subset[index], expected);
         }
+
+        let parsed_subset_inclusive = cog.parse_multi_band_tile_data(2..=2, tile_source, &cog_chunk_refs[1..2])?;
+        assert_eq!(parsed_subset_inclusive.len(), 1);
+        std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0))?;
+        let expected = AnyDenseArray::U8(
+            cog.read_tile_data_as::<u8>(tile, BandIndex::new(2).expect("band indices are 1-based"), &mut reader)?
+                .expect("tile should be readable for band 2"),
+        );
+        assert_eq!(parsed_subset_inclusive[0], expected);
 
         Ok(())
     }
@@ -1817,7 +1840,7 @@ mod tests {
         }
 
         let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
-        let parsed = cog.parse_multi_band_tile_data(1..(band_count + 1), tile_source, &cog_chunk_refs)?;
+        let parsed = cog.parse_multi_band_tile_data(1..=band_count, tile_source, &cog_chunk_refs)?;
 
         assert_eq!(parsed.len(), band_count);
 
@@ -1828,6 +1851,35 @@ mod tests {
                 .read_tile_data(tile, band, &mut reader)?
                 .expect("tile should be readable for all bands in this test");
             assert_eq!(parsed[band_nr - 1], expected);
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn parse_multi_band_tile_data_rejects_non_multiband_tile_source() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
+
+        let max_zoom = cog.tile_info().max_zoom;
+        let tile_source = cog
+            .zoom_level_tile_sources(max_zoom)
+            .expect("expected max zoom level to exist")
+            .values()
+            .next()
+            .expect("expected at least one tile source at max zoom");
+
+        assert!(
+            matches!(tile_source, TileSource::Aligned(_) | TileSource::Unaligned(_)),
+            "expected a non-multiband tile source for single-band COG"
+        );
+
+        match cog.parse_multi_band_tile_data(1..=1, tile_source, &[]) {
+            Err(Error::InvalidArgument(message)) => {
+                assert!(message.contains("multiband tile source"), "unexpected error message: {message}");
+            }
+            other => panic!("expected InvalidArgument for non-multiband tile source, got {other:?}"),
         }
 
         Ok(())
