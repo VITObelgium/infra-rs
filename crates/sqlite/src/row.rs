@@ -1,5 +1,5 @@
 use std::{
-    ffi::{c_char, c_double, c_int, c_longlong, CStr},
+    ffi::{CStr, c_char, c_double, c_int, c_longlong},
     slice,
 };
 

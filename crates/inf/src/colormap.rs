@@ -46,17 +46,124 @@ impl ColorInfo {
     }
 }
 
-#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
-pub struct ProcessedColorMap {
-    #[cfg_attr(feature = "serde", serde(with = "BigArray"))]
-    cmap: [Color; 256],
+pub struct ProcessedColorMap<const N: usize = 256> {
+    cmap: [Color; N],
 }
 
-impl Default for ProcessedColorMap {
-    fn default() -> ProcessedColorMap {
+#[cfg(feature = "serde")]
+struct BigArrayColor<const N: usize>([Color; N]);
+
+#[cfg(feature = "serde")]
+impl<const N: usize> serde::Serialize for BigArrayColor<N>
+where
+    [Color; N]: BigArray<'static>,
+{
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        <[Color; N] as BigArray<'static>>::serialize(&self.0, serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, const N: usize> serde::Deserialize<'de> for BigArrayColor<N>
+where
+    [Color; N]: BigArray<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        <[Color; N] as BigArray<'de>>::deserialize(deserializer).map(Self)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<const N: usize> serde::Serialize for ProcessedColorMap<N>
+where
+    [Color; N]: BigArray<'static>,
+{
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+
+        let mut s = serializer.serialize_struct("ProcessedColorMap", 1)?;
+        s.serialize_field("cmap", &BigArrayColor::<N>(self.cmap))?;
+        s.end()
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de, const N: usize> serde::Deserialize<'de> for ProcessedColorMap<N>
+where
+    [Color; N]: BigArray<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        use serde::de::{self, MapAccess, SeqAccess, Visitor};
+
+        #[derive(serde::Deserialize)]
+        #[serde(field_identifier, rename_all = "lowercase")]
+        enum Field {
+            Cmap,
+        }
+
+        struct ProcessedColorMapVisitor<const N: usize>;
+
+        impl<'de, const N: usize> Visitor<'de> for ProcessedColorMapVisitor<N>
+        where
+            [Color; N]: BigArray<'de>,
+        {
+            type Value = ProcessedColorMap<N>;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+                formatter.write_str("struct ProcessedColorMap")
+            }
+
+            fn visit_seq<A>(self, mut seq: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: SeqAccess<'de>,
+            {
+                let cmap: BigArrayColor<N> = seq.next_element()?.ok_or_else(|| de::Error::invalid_length(0, &self))?;
+                Ok(ProcessedColorMap { cmap: cmap.0 })
+            }
+
+            fn visit_map<A>(self, mut map: A) -> std::result::Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut cmap: Option<BigArrayColor<N>> = None;
+                while let Some(key) = map.next_key()? {
+                    match key {
+                        Field::Cmap => {
+                            if cmap.is_some() {
+                                return Err(de::Error::duplicate_field("cmap"));
+                            }
+                            cmap = Some(map.next_value()?);
+                        }
+                    }
+                }
+
+                let cmap = cmap.ok_or_else(|| de::Error::missing_field("cmap"))?;
+                Ok(ProcessedColorMap { cmap: cmap.0 })
+            }
+        }
+
+        const FIELDS: &[&str] = &["cmap"];
+        deserializer.deserialize_struct("ProcessedColorMap", FIELDS, ProcessedColorMapVisitor::<N>)
+    }
+}
+
+impl<const N: usize> Default for ProcessedColorMap<N> {
+    fn default() -> ProcessedColorMap<N> {
         ProcessedColorMap {
-            cmap: [Color::default(); 256],
+            cmap: [Color::default(); N],
         }
     }
 }
@@ -148,18 +255,25 @@ impl ColorMap {
     }
 }
 
-impl ProcessedColorMap {
-    fn new(cdict: &ColorDict, direction: ColorMapDirection) -> ProcessedColorMap {
+impl<const N: usize> ProcessedColorMap<N> {
+    #[inline(always)]
+    fn assert_n_gt_1() {
+        const { assert!(N > 1, "ProcessedColorMap requires N > 1") }
+    }
+
+    fn new(cdict: &ColorDict, direction: ColorMapDirection) -> ProcessedColorMap<N> {
+        Self::assert_n_gt_1();
+
         let map_value = |index: usize| -> Color {
-            let value = index as f64 / (256 - 1) as f64;
+            let value = index as f64 / (N - 1) as f64;
             Color::rgb(
-                ProcessedColorMap::process_band(value, &cdict.red),
-                ProcessedColorMap::process_band(value, &cdict.green),
-                ProcessedColorMap::process_band(value, &cdict.blue),
+                ProcessedColorMap::<N>::process_band(value, &cdict.red),
+                ProcessedColorMap::<N>::process_band(value, &cdict.green),
+                ProcessedColorMap::<N>::process_band(value, &cdict.blue),
             )
         };
 
-        let mut cmap = [Color::default(); 256];
+        let mut cmap = [Color::default(); N];
         let mut index = 0;
         match direction {
             ColorMapDirection::Regular => {
@@ -179,17 +293,19 @@ impl ProcessedColorMap {
         ProcessedColorMap { cmap }
     }
 
-    pub fn from_color_list(clist: &[Color], direction: ColorMapDirection) -> ProcessedColorMap {
+    pub fn from_color_list(clist: &[Color], direction: ColorMapDirection) -> ProcessedColorMap<N> {
         let cdict = color_list_to_dict(clist);
-        ProcessedColorMap::new(&cdict, direction)
+        ProcessedColorMap::<N>::new(&cdict, direction)
     }
 
-    fn from_color_info_list(clist: &[ColorInfo], direction: ColorMapDirection) -> ProcessedColorMap {
+    fn from_color_info_list(clist: &[ColorInfo], direction: ColorMapDirection) -> ProcessedColorMap<N> {
         let cdict = colorinfo_list_to_dict(clist);
-        ProcessedColorMap::new(&cdict, direction)
+        ProcessedColorMap::<N>::new(&cdict, direction)
     }
 
-    pub fn from_color_array(mut cmap: [Color; 256], direction: ColorMapDirection) -> ProcessedColorMap {
+    pub fn from_color_array(mut cmap: [Color; N], direction: ColorMapDirection) -> ProcessedColorMap<N> {
+        Self::assert_n_gt_1();
+
         if direction == ColorMapDirection::Reversed {
             cmap.reverse();
         }
@@ -197,10 +313,12 @@ impl ProcessedColorMap {
         ProcessedColorMap { cmap }
     }
 
-    fn from_color_mapper(cmap: &ColorMapper, direction: ColorMapDirection) -> ProcessedColorMap {
-        let mut cmap_values = [Color::default(); 256];
+    fn from_color_mapper(cmap: &ColorMapper, direction: ColorMapDirection) -> ProcessedColorMap<N> {
+        Self::assert_n_gt_1();
+
+        let mut cmap_values = [Color::default(); N];
         for (i, cmap_value) in cmap_values.iter_mut().enumerate() {
-            let map_val = i as f64 / 255.0;
+            let map_val = i as f64 / (N - 1) as f64;
             *cmap_value = Color::rgb((cmap.red)(map_val), (cmap.green)(map_val), (cmap.blue)(map_val));
         }
 
@@ -211,95 +329,97 @@ impl ProcessedColorMap {
         ProcessedColorMap { cmap: cmap_values }
     }
 
-    pub fn qualitative(clist: &[Color]) -> ProcessedColorMap {
-        let mut cmap = [Color::default(); 256];
+    pub fn qualitative(clist: &[Color]) -> ProcessedColorMap<N> {
+        Self::assert_n_gt_1();
+
+        let mut cmap = [Color::default(); N];
         for (i, color) in cmap.iter_mut().enumerate() {
-            let index = (i as f64 / 255.0 * (clist.len() - 1) as f64) as usize;
+            let index = (i as f64 / (N - 1) as f64 * (clist.len() - 1) as f64) as usize;
             *color = clist[index];
         }
 
         ProcessedColorMap { cmap }
     }
 
-    pub fn create(cmap: &ColorMap) -> Result<ProcessedColorMap> {
+    pub fn create(cmap: &ColorMap) -> Result<ProcessedColorMap<N>> {
         match cmap {
-            ColorMap::Named(name) => ProcessedColorMap::create_by_name(name),
-            ColorMap::Preset(preset, direction) => Ok(ProcessedColorMap::create_for_preset(*preset, *direction)),
+            ColorMap::Named(name) => ProcessedColorMap::<N>::create_by_name(name),
+            ColorMap::Preset(preset, direction) => Ok(ProcessedColorMap::<N>::create_for_preset(*preset, *direction)),
             ColorMap::ColorList(clist) => {
                 if clist.len() < 2 {
                     return Err(Error::InvalidArgument("Color list must contain at least 2 colors".to_string()));
                 }
-                Ok(ProcessedColorMap::from_color_list(clist, ColorMapDirection::Regular))
+                Ok(ProcessedColorMap::<N>::from_color_list(clist, ColorMapDirection::Regular))
             }
         }
     }
 
-    pub fn create_for_preset(preset: ColorMapPreset, direction: ColorMapDirection) -> ProcessedColorMap {
+    pub fn create_for_preset(preset: ColorMapPreset, direction: ColorMapDirection) -> ProcessedColorMap<N> {
         match preset {
-            ColorMapPreset::Bone => ProcessedColorMap::new(&cmap::bone(), direction),
-            ColorMapPreset::Cool => ProcessedColorMap::new(&cmap::cool(), direction),
-            ColorMapPreset::Copper => ProcessedColorMap::new(&cmap::copper(), direction),
-            ColorMapPreset::Gray => ProcessedColorMap::new(&cmap::gray(), direction),
-            ColorMapPreset::Hot => ProcessedColorMap::new(&cmap::hot(), direction),
-            ColorMapPreset::Hsv => ProcessedColorMap::new(&cmap::hsv(), direction),
-            ColorMapPreset::Pink => ProcessedColorMap::new(&cmap::pink(), direction),
-            ColorMapPreset::Jet => ProcessedColorMap::new(&cmap::jet(), direction),
-            ColorMapPreset::Spring => ProcessedColorMap::new(&cmap::spring(), direction),
-            ColorMapPreset::Summer => ProcessedColorMap::new(&cmap::summer(), direction),
-            ColorMapPreset::Autumn => ProcessedColorMap::new(&cmap::autumn(), direction),
-            ColorMapPreset::Winter => ProcessedColorMap::new(&cmap::winter(), direction),
-            ColorMapPreset::Wistia => ProcessedColorMap::new(&cmap::wistia(), direction),
-            ColorMapPreset::Binary => ProcessedColorMap::new(&cmap::binary(), direction),
-            ColorMapPreset::NipySpectral => ProcessedColorMap::new(&cmap::nipy_spectral(), direction),
-            ColorMapPreset::GistEarth => ProcessedColorMap::new(&cmap::gist_earth(), direction),
-            ColorMapPreset::GistNcar => ProcessedColorMap::new(&cmap::gist_ncar(), direction),
-            ColorMapPreset::GistStern => ProcessedColorMap::new(&cmap::gist_stern(), direction),
-            ColorMapPreset::Terrain => ProcessedColorMap::from_color_info_list(&cmap::TERRAIN, direction),
-            ColorMapPreset::Rainbow => ProcessedColorMap::from_color_mapper(&cmap::RAINBOW, direction),
-            ColorMapPreset::Blues => ProcessedColorMap::from_color_list(&cmap::BLUES, direction),
-            ColorMapPreset::BrBg => ProcessedColorMap::from_color_list(&cmap::BR_BG, direction),
-            ColorMapPreset::BuGn => ProcessedColorMap::from_color_list(&cmap::BU_GN, direction),
-            ColorMapPreset::BuPu => ProcessedColorMap::from_color_list(&cmap::BU_PU, direction),
-            ColorMapPreset::GnBu => ProcessedColorMap::from_color_list(&cmap::GN_BU, direction),
-            ColorMapPreset::Greens => ProcessedColorMap::from_color_list(&cmap::GREENS, direction),
-            ColorMapPreset::Greys => ProcessedColorMap::from_color_list(&cmap::GREYS, direction),
-            ColorMapPreset::Oranges => ProcessedColorMap::from_color_list(&cmap::ORANGES, direction),
-            ColorMapPreset::OrRd => ProcessedColorMap::from_color_list(&cmap::OR_RD, direction),
-            ColorMapPreset::PiYg => ProcessedColorMap::from_color_list(&cmap::PI_YG, direction),
-            ColorMapPreset::PrGn => ProcessedColorMap::from_color_list(&cmap::PR_GN, direction),
-            ColorMapPreset::PuBu => ProcessedColorMap::from_color_list(&cmap::PU_BU, direction),
-            ColorMapPreset::PuBuGn => ProcessedColorMap::from_color_list(&cmap::PU_BU_GN, direction),
-            ColorMapPreset::PuOr => ProcessedColorMap::from_color_list(&cmap::PU_OR, direction),
-            ColorMapPreset::PuRd => ProcessedColorMap::from_color_list(&cmap::PU_RD, direction),
-            ColorMapPreset::Purples => ProcessedColorMap::from_color_list(&cmap::PURPLES, direction),
-            ColorMapPreset::RdBu => ProcessedColorMap::from_color_list(&cmap::RD_BU, direction),
-            ColorMapPreset::RdGy => ProcessedColorMap::from_color_list(&cmap::RD_GY, direction),
-            ColorMapPreset::RdPu => ProcessedColorMap::from_color_list(&cmap::RD_PU, direction),
-            ColorMapPreset::RdYlBu => ProcessedColorMap::from_color_list(&cmap::RD_YL_BU, direction),
-            ColorMapPreset::RdYlGn => ProcessedColorMap::from_color_list(&cmap::RD_YL_GN, direction),
-            ColorMapPreset::Reds => ProcessedColorMap::from_color_list(&cmap::REDS, direction),
-            ColorMapPreset::Spectral => ProcessedColorMap::from_color_list(&cmap::SPECTRAL, direction),
-            ColorMapPreset::YlGn => ProcessedColorMap::from_color_list(&cmap::YL_GN, direction),
-            ColorMapPreset::YlGnBu => ProcessedColorMap::from_color_list(&cmap::YL_GN_BU, direction),
-            ColorMapPreset::YlOrBr => ProcessedColorMap::from_color_list(&cmap::YL_OR_BR, direction),
-            ColorMapPreset::YlOrRd => ProcessedColorMap::from_color_list(&cmap::YL_OR_RD, direction),
-            ColorMapPreset::Turbo => ProcessedColorMap::from_color_list(&cmap::TURBO, direction),
-            ColorMapPreset::Accent => ProcessedColorMap::from_color_list(&cmap::ACCENT, direction),
-            ColorMapPreset::Dark2 => ProcessedColorMap::from_color_list(&cmap::DARK2, direction),
-            ColorMapPreset::Paired => ProcessedColorMap::from_color_list(&cmap::PAIRED, direction),
-            ColorMapPreset::Pastel1 => ProcessedColorMap::from_color_list(&cmap::PASTEL1, direction),
-            ColorMapPreset::Pastel2 => ProcessedColorMap::from_color_list(&cmap::PASTEL2, direction),
-            ColorMapPreset::Set1 => ProcessedColorMap::from_color_list(&cmap::SET1, direction),
-            ColorMapPreset::Set2 => ProcessedColorMap::from_color_list(&cmap::SET2, direction),
-            ColorMapPreset::Set3 => ProcessedColorMap::from_color_list(&cmap::SET3, direction),
-            ColorMapPreset::Tab10 => ProcessedColorMap::from_color_list(&cmap::TAB10, direction),
-            ColorMapPreset::Tab20 => ProcessedColorMap::from_color_list(&cmap::TAB20, direction),
-            ColorMapPreset::Tab20B => ProcessedColorMap::from_color_list(&cmap::TAB20B, direction),
-            ColorMapPreset::Tab20C => ProcessedColorMap::from_color_list(&cmap::TAB20C, direction),
+            ColorMapPreset::Bone => ProcessedColorMap::<N>::new(&cmap::bone(), direction),
+            ColorMapPreset::Cool => ProcessedColorMap::<N>::new(&cmap::cool(), direction),
+            ColorMapPreset::Copper => ProcessedColorMap::<N>::new(&cmap::copper(), direction),
+            ColorMapPreset::Gray => ProcessedColorMap::<N>::new(&cmap::gray(), direction),
+            ColorMapPreset::Hot => ProcessedColorMap::<N>::new(&cmap::hot(), direction),
+            ColorMapPreset::Hsv => ProcessedColorMap::<N>::new(&cmap::hsv(), direction),
+            ColorMapPreset::Pink => ProcessedColorMap::<N>::new(&cmap::pink(), direction),
+            ColorMapPreset::Jet => ProcessedColorMap::<N>::new(&cmap::jet(), direction),
+            ColorMapPreset::Spring => ProcessedColorMap::<N>::new(&cmap::spring(), direction),
+            ColorMapPreset::Summer => ProcessedColorMap::<N>::new(&cmap::summer(), direction),
+            ColorMapPreset::Autumn => ProcessedColorMap::<N>::new(&cmap::autumn(), direction),
+            ColorMapPreset::Winter => ProcessedColorMap::<N>::new(&cmap::winter(), direction),
+            ColorMapPreset::Wistia => ProcessedColorMap::<N>::new(&cmap::wistia(), direction),
+            ColorMapPreset::Binary => ProcessedColorMap::<N>::new(&cmap::binary(), direction),
+            ColorMapPreset::NipySpectral => ProcessedColorMap::<N>::new(&cmap::nipy_spectral(), direction),
+            ColorMapPreset::GistEarth => ProcessedColorMap::<N>::new(&cmap::gist_earth(), direction),
+            ColorMapPreset::GistNcar => ProcessedColorMap::<N>::new(&cmap::gist_ncar(), direction),
+            ColorMapPreset::GistStern => ProcessedColorMap::<N>::new(&cmap::gist_stern(), direction),
+            ColorMapPreset::Terrain => ProcessedColorMap::<N>::from_color_info_list(&cmap::TERRAIN, direction),
+            ColorMapPreset::Rainbow => ProcessedColorMap::<N>::from_color_mapper(&cmap::RAINBOW, direction),
+            ColorMapPreset::Blues => ProcessedColorMap::<N>::from_color_list(&cmap::BLUES, direction),
+            ColorMapPreset::BrBg => ProcessedColorMap::<N>::from_color_list(&cmap::BR_BG, direction),
+            ColorMapPreset::BuGn => ProcessedColorMap::<N>::from_color_list(&cmap::BU_GN, direction),
+            ColorMapPreset::BuPu => ProcessedColorMap::<N>::from_color_list(&cmap::BU_PU, direction),
+            ColorMapPreset::GnBu => ProcessedColorMap::<N>::from_color_list(&cmap::GN_BU, direction),
+            ColorMapPreset::Greens => ProcessedColorMap::<N>::from_color_list(&cmap::GREENS, direction),
+            ColorMapPreset::Greys => ProcessedColorMap::<N>::from_color_list(&cmap::GREYS, direction),
+            ColorMapPreset::Oranges => ProcessedColorMap::<N>::from_color_list(&cmap::ORANGES, direction),
+            ColorMapPreset::OrRd => ProcessedColorMap::<N>::from_color_list(&cmap::OR_RD, direction),
+            ColorMapPreset::PiYg => ProcessedColorMap::<N>::from_color_list(&cmap::PI_YG, direction),
+            ColorMapPreset::PrGn => ProcessedColorMap::<N>::from_color_list(&cmap::PR_GN, direction),
+            ColorMapPreset::PuBu => ProcessedColorMap::<N>::from_color_list(&cmap::PU_BU, direction),
+            ColorMapPreset::PuBuGn => ProcessedColorMap::<N>::from_color_list(&cmap::PU_BU_GN, direction),
+            ColorMapPreset::PuOr => ProcessedColorMap::<N>::from_color_list(&cmap::PU_OR, direction),
+            ColorMapPreset::PuRd => ProcessedColorMap::<N>::from_color_list(&cmap::PU_RD, direction),
+            ColorMapPreset::Purples => ProcessedColorMap::<N>::from_color_list(&cmap::PURPLES, direction),
+            ColorMapPreset::RdBu => ProcessedColorMap::<N>::from_color_list(&cmap::RD_BU, direction),
+            ColorMapPreset::RdGy => ProcessedColorMap::<N>::from_color_list(&cmap::RD_GY, direction),
+            ColorMapPreset::RdPu => ProcessedColorMap::<N>::from_color_list(&cmap::RD_PU, direction),
+            ColorMapPreset::RdYlBu => ProcessedColorMap::<N>::from_color_list(&cmap::RD_YL_BU, direction),
+            ColorMapPreset::RdYlGn => ProcessedColorMap::<N>::from_color_list(&cmap::RD_YL_GN, direction),
+            ColorMapPreset::Reds => ProcessedColorMap::<N>::from_color_list(&cmap::REDS, direction),
+            ColorMapPreset::Spectral => ProcessedColorMap::<N>::from_color_list(&cmap::SPECTRAL, direction),
+            ColorMapPreset::YlGn => ProcessedColorMap::<N>::from_color_list(&cmap::YL_GN, direction),
+            ColorMapPreset::YlGnBu => ProcessedColorMap::<N>::from_color_list(&cmap::YL_GN_BU, direction),
+            ColorMapPreset::YlOrBr => ProcessedColorMap::<N>::from_color_list(&cmap::YL_OR_BR, direction),
+            ColorMapPreset::YlOrRd => ProcessedColorMap::<N>::from_color_list(&cmap::YL_OR_RD, direction),
+            ColorMapPreset::Turbo => ProcessedColorMap::<N>::from_color_list(&cmap::TURBO, direction),
+            ColorMapPreset::Accent => ProcessedColorMap::<N>::from_color_list(&cmap::ACCENT, direction),
+            ColorMapPreset::Dark2 => ProcessedColorMap::<N>::from_color_list(&cmap::DARK2, direction),
+            ColorMapPreset::Paired => ProcessedColorMap::<N>::from_color_list(&cmap::PAIRED, direction),
+            ColorMapPreset::Pastel1 => ProcessedColorMap::<N>::from_color_list(&cmap::PASTEL1, direction),
+            ColorMapPreset::Pastel2 => ProcessedColorMap::<N>::from_color_list(&cmap::PASTEL2, direction),
+            ColorMapPreset::Set1 => ProcessedColorMap::<N>::from_color_list(&cmap::SET1, direction),
+            ColorMapPreset::Set2 => ProcessedColorMap::<N>::from_color_list(&cmap::SET2, direction),
+            ColorMapPreset::Set3 => ProcessedColorMap::<N>::from_color_list(&cmap::SET3, direction),
+            ColorMapPreset::Tab10 => ProcessedColorMap::<N>::from_color_list(&cmap::TAB10, direction),
+            ColorMapPreset::Tab20 => ProcessedColorMap::<N>::from_color_list(&cmap::TAB20, direction),
+            ColorMapPreset::Tab20B => ProcessedColorMap::<N>::from_color_list(&cmap::TAB20B, direction),
+            ColorMapPreset::Tab20C => ProcessedColorMap::<N>::from_color_list(&cmap::TAB20C, direction),
         }
     }
 
-    pub fn create_by_name(name: &str) -> Result<ProcessedColorMap> {
+    pub fn create_by_name(name: &str) -> Result<ProcessedColorMap<N>> {
         let mut direction = ColorMapDirection::Regular;
         let mut lowername = name.to_lowercase();
         if lowername.ends_with("_r") {
@@ -308,7 +428,7 @@ impl ProcessedColorMap {
         }
 
         if let Ok(preset) = ColorMapPreset::from_str(&lowername) {
-            Ok(ProcessedColorMap::create_for_preset(preset, direction))
+            Ok(ProcessedColorMap::<N>::create_for_preset(preset, direction))
         } else {
             Err(Error::InvalidArgument(format!("Unsupported color map name: {name}")))
         }
@@ -316,21 +436,26 @@ impl ProcessedColorMap {
 
     #[inline]
     pub fn get_color(&self, value: f32) -> Color {
+        Self::assert_n_gt_1();
+
         if !(0.0..=1.0).contains(&value) {
             return color::TRANSPARENT;
         }
-        self.cmap[(value * 255.0).round() as usize]
+
+        self.cmap[(value * (N - 1) as f32).round() as usize]
     }
 
     #[cfg(feature = "simd")]
     #[inline]
-    pub fn get_color_simd<const N: usize>(&self, value: std::simd::Simd<f32, N>) -> std::simd::Simd<u32, N> {
+    pub fn get_color_simd<const LANES: usize>(&self, value: std::simd::Simd<f32, LANES>) -> std::simd::Simd<u32, LANES> {
+        Self::assert_n_gt_1();
+
         use std::simd::StdFloat;
         use std::simd::prelude::*;
 
         let transparent = Simd::splat(color::TRANSPARENT.to_bits());
         let in_range = value.simd_ge(Simd::splat(0.0)) | value.simd_le(Simd::splat(1.0));
-        let indexes = (value * Simd::splat(255.0)).round().cast::<usize>();
+        let indexes = (value * Simd::splat((self.cmap.len() - 1) as f32)).round().cast::<usize>();
 
         let cmap: &[u32] = unsafe { std::mem::transmute::<&[Color], &[u32]>(&self.cmap) };
 
@@ -338,7 +463,9 @@ impl ProcessedColorMap {
     }
 
     pub fn get_color_by_value(&self, value: u8) -> Color {
-        self.cmap[value as usize]
+        Self::assert_n_gt_1();
+
+        self.cmap[(value as usize).min(N - 1)]
     }
 
     pub fn apply_opacity_fade_in(&mut self, fade_stop: f64) {
@@ -3358,7 +3485,7 @@ mod tests {
 
     #[test]
     fn map_color() {
-        let cmap = ProcessedColorMap::create(&ColorMap::Preset(ColorMapPreset::Turbo, ColorMapDirection::Regular)).unwrap();
+        let cmap = ProcessedColorMap::<256>::create(&ColorMap::Preset(ColorMapPreset::Turbo, ColorMapDirection::Regular)).unwrap();
         assert_eq!(cmap.get_color(1.0), cmap::TURBO[255]);
     }
 }

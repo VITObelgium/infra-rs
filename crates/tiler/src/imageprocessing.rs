@@ -92,7 +92,7 @@ mod tests {
         const WIDTH: usize = 32;
         const HEIGHT: usize = 16;
 
-        let cmap = ProcessedColorMap::create_for_preset(ColorMapPreset::Jet, ColorMapDirection::Regular);
+        let cmap = ProcessedColorMap::<256>::create_for_preset(ColorMapPreset::Jet, ColorMapDirection::Regular);
 
         let mut data = Vec::new();
         for _r in 0..HEIGHT {

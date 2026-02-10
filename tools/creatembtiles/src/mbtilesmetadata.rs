@@ -20,12 +20,7 @@ impl From<Metadata> for Vec<(String, String)> {
             ("format".into(), value.format),
             (
                 "bounds".into(),
-                value
-                    .bounds
-                    .iter()
-                    .map(|b| b.to_string())
-                    .collect::<Vec<String>>()
-                    .join(","),
+                value.bounds.iter().map(|b| b.to_string()).collect::<Vec<String>>().join(","),
             ),
             ("minzoom".into(), value.min_zoom.to_string()),
             ("maxzoom".into(), value.max_zoom.to_string()),
@@ -49,12 +44,7 @@ impl From<Metadata> for Vec<(String, String)> {
 }
 
 impl Metadata {
-    pub fn new(
-        layer_meta: &LayerMetadata,
-        min_zoom: i32,
-        max_zoom: i32,
-        mut additional_data: Vec<(String, String)>,
-    ) -> Self {
+    pub fn new(layer_meta: &LayerMetadata, min_zoom: i32, max_zoom: i32, mut additional_data: Vec<(String, String)>) -> Self {
         if layer_meta.min_value.is_finite() && layer_meta.max_value.is_finite() {
             additional_data.push(("min_value".into(), layer_meta.min_value.to_string()));
             additional_data.push(("max_value".into(), layer_meta.max_value.to_string()));

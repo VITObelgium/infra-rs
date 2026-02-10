@@ -74,7 +74,7 @@ impl CategoricNumeric {
                 );
             }
         } else {
-            let processed_color_map = ProcessedColorMap::create(color_map)?;
+            let processed_color_map = ProcessedColorMap::<256>::create(color_map)?;
             let color_offset = if category_count == 1 {
                 0.0
             } else {
@@ -121,7 +121,7 @@ impl CategoricNumeric {
                 );
             }
         } else {
-            let processed_color_map = ProcessedColorMap::create(color_map)?;
+            let processed_color_map = ProcessedColorMap::<256>::create(color_map)?;
             let color_offset = if category_count == 1 {
                 0.0
             } else {

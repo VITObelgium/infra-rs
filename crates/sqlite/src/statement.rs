@@ -1,5 +1,5 @@
 use crate::{Error, Result, Row};
-use std::ffi::{c_double, c_int, c_longlong, CStr};
+use std::ffi::{CStr, c_double, c_int, c_longlong};
 
 pub struct Statement {
     stmt: *mut libsqlite3_sys::sqlite3_stmt,
@@ -102,10 +102,6 @@ impl Iterator for Statement {
     type Item = Row;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.advance() {
-            Some(Row::new(self.stmt))
-        } else {
-            None
-        }
+        if self.advance() { Some(Row::new(self.stmt)) } else { None }
     }
 }

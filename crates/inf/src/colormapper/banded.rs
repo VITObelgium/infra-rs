@@ -84,7 +84,7 @@ impl Banded {
                 band_pos += band_offset;
             }
         } else {
-            let cmap = ProcessedColorMap::create(color_map)?;
+            let cmap = ProcessedColorMap::<256>::create(color_map)?;
 
             let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f32 - 1.0) };
             let mut color_pos = 0.0;
@@ -129,7 +129,7 @@ impl Banded {
                 entries.push(LegendBand::new(range, *color, String::default()));
             }
         } else {
-            let cmap = ProcessedColorMap::create(color_map)?;
+            let cmap = ProcessedColorMap::<256>::create(color_map)?;
             let color_offset = if band_count == 1 { 0.0 } else { 1.0 / (band_count as f32 - 1.0) };
             let mut color_pos = 0.0;
 

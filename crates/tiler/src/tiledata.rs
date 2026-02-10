@@ -1,4 +1,4 @@
-use crate::{tileformat::TileFormat, PixelFormat};
+use crate::{PixelFormat, tileformat::TileFormat};
 
 #[derive(Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize))]
