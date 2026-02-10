@@ -18,7 +18,7 @@ where
         use arrow::array::Array as _;
         use arrow::pyarrow::FromPyArrow;
 
-        pyo3::Python::with_gil(|py| -> Result<Self> {
+        pyo3::Python::attach(|py| -> Result<Self> {
             let py_obj = py_obj.into_bound(py);
             match arrow::array::ArrayData::from_pyarrow_bound(&py_obj) {
                 Ok(array) => {
@@ -59,15 +59,14 @@ mod tests {
         array::{Columns, Rows},
     };
     use arrow::{array::Array as _, pyarrow::PyArrowType};
-    use pyo3::{IntoPyObject, PyObject};
+    use pyo3::{IntoPyObject, Py, PyAny};
 
     use crate::raster::DenseRaster;
 
     #[ctor::ctor]
     fn init() {
-        pyo3::prepare_freethreaded_python();
-        pyo3::Python::with_gil(|py| {
-            pyo3::prepare_freethreaded_python();
+        pyo3::Python::initialize();
+        pyo3::Python::attach(|py| {
             if py.import("pyarrow").is_err() {
                 panic!("PyArrow is not installed in the current python environment. Run 'pip install pyarrow' to install it.");
             }
@@ -77,7 +76,7 @@ mod tests {
     #[test]
     fn test_pyarrow_to_denseraster() {
         let array = arrow::array::Int32Array::from(vec![1, 10, 3, 20]);
-        let py_array = pyo3::Python::with_gil(|py| -> PyObject { PyArrowType(array.into_data()).into_pyobject(py).unwrap().into() });
+        let py_array = pyo3::Python::attach(|py| -> Py<PyAny> { PyArrowType(array.into_data()).into_pyobject(py).unwrap().into() });
 
         let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 
@@ -90,7 +89,7 @@ mod tests {
     #[test]
     fn test_pyarrow_with_mask_to_denseraster() {
         let array = arrow::array::Int32Array::from(vec![Some(1), Some(10), None, Some(20)]);
-        let py_array = pyo3::Python::with_gil(|py| -> PyObject { PyArrowType(array.into_data()).into_pyobject(py).unwrap().into() });
+        let py_array = pyo3::Python::attach(|py| -> Py<PyAny> { PyArrowType(array.into_data()).into_pyobject(py).unwrap().into() });
 
         let raster = DenseRaster::<i32>::try_from(py_array).expect("Arrow array conversion failed");
 

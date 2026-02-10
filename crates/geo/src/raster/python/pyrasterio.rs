@@ -1,11 +1,11 @@
-use crate::{io, ArrowRaster, Error, RasterIO, Result};
+use crate::{ArrowRaster, Error, RasterIO, Result, io};
 use inf::GeoMetadata;
-use pyo3::{pyfunction, PyObject, PyResult, Python};
+use pyo3::{Py, PyAny, PyResult, Python, pyfunction};
 
 use super::pyraster::{PyRaster, PyRasterMetadata};
 
-fn detect_gdal_type(data_type: PyObject) -> Result<gdal::raster::GdalDataType> {
-    Python::with_gil(|py| {
+fn detect_gdal_type(data_type: Py<PyAny>) -> Result<gdal::raster::GdalDataType> {
+    Python::attach(|py| {
         let data_type_str = {
             if let Ok(dtype) = data_type.extract::<String>(py) {
                 dtype
@@ -30,11 +30,7 @@ fn detect_gdal_type(data_type: PyObject) -> Result<gdal::raster::GdalDataType> {
     })
 }
 
-pub fn read_raster_typed(
-    dtype: gdal::raster::GdalDataType,
-    path: &std::path::Path,
-    bounds: Option<GeoMetadata>,
-) -> Result<PyRaster> {
+pub fn read_raster_typed(dtype: gdal::raster::GdalDataType, path: &std::path::Path, bounds: Option<GeoMetadata>) -> Result<PyRaster> {
     use gdal::raster::GdalDataType;
 
     let band_index = 1;
@@ -75,24 +71,16 @@ pub fn read_raster(path: std::path::PathBuf) -> Result<PyRaster> {
 }
 
 #[pyfunction]
-pub fn read_raster_as(data_type: PyObject, path: std::path::PathBuf) -> PyResult<PyRaster> {
+pub fn read_raster_as(data_type: Py<PyAny>, path: std::path::PathBuf) -> PyResult<PyRaster> {
     Ok(read_raster_typed(detect_gdal_type(data_type)?, path.as_path(), None)?)
 }
 
 #[pyfunction]
 pub fn read_raster_region(path: std::path::PathBuf, meta: &PyRasterMetadata) -> Result<PyRaster> {
-    read_raster_typed(
-        io::detect_raster_data_type(path.as_path(), 1)?,
-        path.as_path(),
-        Some(meta.into()),
-    )
+    read_raster_typed(io::detect_raster_data_type(path.as_path(), 1)?, path.as_path(), Some(meta.into()))
 }
 
 #[pyfunction]
-pub fn read_raster_region_as(
-    data_type: PyObject,
-    path: std::path::PathBuf,
-    meta: &PyRasterMetadata,
-) -> Result<PyRaster> {
+pub fn read_raster_region_as(data_type: Py<PyAny>, path: std::path::PathBuf, meta: &PyRasterMetadata) -> Result<PyRaster> {
     read_raster_typed(detect_gdal_type(data_type)?, path.as_path(), Some(meta.into()))
 }
