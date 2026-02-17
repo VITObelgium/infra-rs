@@ -255,6 +255,7 @@ pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<Ge
             raster_size,
             geotrans,
             georef.nodata(),
+            None,
         )),
     }
 }
@@ -653,6 +654,7 @@ mod tests {
             ]
             .into(),
             Some(255.0),
+            None,
         );
 
         let gdal_bbox = georef_gdal.bounding_box();
@@ -687,6 +689,7 @@ mod tests {
             RasterSize::with_rows_cols(Rows(1491), Columns(3800)),
             [281100.0, 100.0, 0.0, 6712800.0, 0.0, -100.0].into(),
             Some(255.0),
+            None
         );
 
         let gdal_bbox = georef_gdal.bounding_box();

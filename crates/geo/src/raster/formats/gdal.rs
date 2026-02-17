@@ -8,7 +8,7 @@ use std::{
 };
 
 use crate::{
-    ArrayDataType, ArrayNum, Columns, Error, GeoReference, Nodata, RasterSize, Result, Rows,
+    ArrayDataType, ArrayNum, Columns, Error, GeoReference, Nodata, RasterScale, RasterSize, Result, Rows,
     gdalinterop::{FALSE, check_pointer, check_rc, create_output_directory_if_needed},
     raster::{
         Compression, Predictor, TiffChunkType, WriteRasterOptions,
@@ -330,6 +330,15 @@ pub fn open_dataset_read_only_with_options(path: impl AsRef<Path>, open_options:
 pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoReference> {
     let rasterband = ds.rasterband(band_index)?;
 
+    let offset = rasterband.offset();
+    let scale = rasterband.scale();
+    let raster_scale = match (offset, scale) {
+        (Some(offset), Some(scale)) => Some(RasterScale { offset, scale }),
+        (Some(offset), None) => Some(RasterScale { offset, scale: 1.0 }),
+        (None, Some(scale)) => Some(RasterScale { offset: 0.0, scale }),
+        _ => None,
+    };
+
     let (width, height) = ds.raster_size();
     Ok(GeoReference::new(
         ds.projection(),
@@ -339,6 +348,7 @@ pub fn read_band_metadata(ds: &gdal::Dataset, band_index: usize) -> Result<GeoRe
         },
         ds.geo_transform()?.into(),
         rasterband.no_data_value(),
+        raster_scale,
     ))
 }
 
@@ -361,7 +371,13 @@ pub fn create_in_memory_dataset_with_data<T: GdalType + Nodata>(meta: &GeoRefere
 pub(crate) fn metadata_to_dataset_band(ds: &mut gdal::Dataset, meta: &GeoReference, band_index: usize) -> Result<()> {
     ds.set_geo_transform(&meta.geo_transform().into())?;
     ds.set_projection(meta.projection())?;
-    ds.rasterband(band_index)?.set_no_data_value(meta.nodata())?;
+    let mut band = ds.rasterband(band_index)?;
+    band.set_no_data_value(meta.nodata())?;
+    if let Some(scale) = meta.scale() {
+        band.set_offset(scale.offset)?;
+        band.set_scale(scale.scale)?;
+    }
+
     Ok(())
 }
 

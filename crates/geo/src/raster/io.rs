@@ -557,6 +557,7 @@ mod tests {
                 RasterSize::with_rows_cols(region_rows.into(), region_cols.into()),
                 shifted_geo_trans,
                 full_georef.nodata(),
+                full_georef.scale(),
             );
 
             compare_geotiff_vs_gdal_read(&input, band_index, Some(&region_georef), data_type)?;
@@ -586,6 +587,7 @@ mod tests {
                 RasterSize::with_rows_cols(region_rows.into(), region_cols.into()),
                 shifted_geo_trans,
                 full_georef.nodata(),
+                full_georef.scale(),
             );
 
             compare_geotiff_vs_gdal_read(&input, band_index, Some(&region_georef), data_type)?;
@@ -615,6 +617,7 @@ mod tests {
                 RasterSize::with_rows_cols(region_rows.into(), region_cols.into()),
                 shifted_geo_trans,
                 full_georef.nodata(),
+                full_georef.scale(),
             );
 
             compare_geotiff_vs_gdal_read(&input, band_index, Some(&region_georef), data_type)?;
@@ -643,6 +646,7 @@ mod tests {
                 RasterSize::with_rows_cols(region_rows.into(), region_cols.into()),
                 shifted_geo_trans,
                 full_georef.nodata(),
+                full_georef.scale(),
             );
 
             compare_geotiff_vs_gdal_read(&input, band_index, Some(&region_georef), data_type)?;

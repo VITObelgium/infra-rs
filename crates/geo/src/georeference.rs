@@ -1,5 +1,5 @@
 use crate::{
-    ArrayDataType, ArrayNum, Cell, Error, GeoTransform, LatLonBounds, Point, RasterSize, Rect, Result, Tile,
+    ArrayDataType, ArrayNum, Cell, Error, GeoTransform, LatLonBounds, Point, RasterScale, RasterSize, Rect, Result, Tile,
     array::{ArrayMetadata, Columns, Rows},
     crs::{self, Epsg},
     raster::{self},
@@ -91,15 +91,24 @@ pub struct GeoReference {
     geo_transform: GeoTransform,
     /// The nodata value.
     nodata: Option<f64>,
+    /// The scale and offset of the raster values. The value of a pixel can be calculated as `value * scale + offset`.
+    scale: Option<RasterScale>,
 }
 
 impl GeoReference {
-    pub fn new<S: Into<String>>(projection: S, size: RasterSize, geo_transform: GeoTransform, nodata: Option<f64>) -> Self {
+    pub fn new<S: Into<String>>(
+        projection: S,
+        size: RasterSize,
+        geo_transform: GeoTransform,
+        nodata: Option<f64>,
+        scale: Option<RasterScale>,
+    ) -> Self {
         GeoReference {
             projection: projection.into(),
             size,
             geo_transform,
             nodata,
+            scale,
         }
     }
 
@@ -117,6 +126,7 @@ impl GeoReference {
             size,
             geo_transform: GeoTransform::new([0.0; 6]),
             nodata,
+            scale: None,
         }
     }
 
@@ -139,6 +149,7 @@ impl GeoReference {
             size,
             geo_transform,
             nodata,
+            scale: None,
         }
     }
 
@@ -192,6 +203,7 @@ impl GeoReference {
             size: self.size,
             geo_transform: self.geo_transform,
             nodata: nodata.and_then(|x| x.to_f64()),
+            scale: self.scale,
         }
     }
 
@@ -406,6 +418,14 @@ impl GeoReference {
         {
             None
         }
+    }
+
+    pub fn set_scale(&mut self, offset: f64, scale: f64) {
+        self.scale = Some(RasterScale { scale, offset });
+    }
+
+    pub fn scale(&self) -> Option<RasterScale> {
+        self.scale
     }
 
     pub fn geographic_epsg(&self) -> Option<Epsg> {
@@ -709,6 +729,7 @@ mod tests {
             "EPSG:4326".to_string(),
             RasterSize::with_rows_cols(Rows(840), Columns(900)),
             TRANS.into(),
+            None,
             None,
         );
         let bbox = meta.bounding_box();

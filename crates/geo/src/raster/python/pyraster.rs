@@ -56,6 +56,7 @@ impl From<&PyRasterMetadata> for GeoReference {
             },
             val.geo_transform.into(),
             val.nodata,
+            None,
         )
     }
 }

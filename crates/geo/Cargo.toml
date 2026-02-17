@@ -37,7 +37,7 @@ name = "simd"
 [dependencies]
 approx = "0.5"
 arrow = { version = "57", optional = true }
-bon = { version = "3.8", optional = true }
+bon = { version = "3.9", optional = true }
 bytemuck = { version = "1.25" }
 flate2 = { version = "1.1", default-features = false, features = [
     "rust_backend",
@@ -58,7 +58,7 @@ itertools = "0.14"
 log = "0.4"
 num = "0.4"
 paste = "1.0"
-polars = { version = "0.52", features = [
+polars = { version = "0.53", features = [
     "timezones",
 ], default-features = false, optional = true } # crate dependencies should decide which features to use to avoid unnecessary long compile times
 proj = { version = "0.31", optional = true }
@@ -84,7 +84,7 @@ ctor = "0.6"
 env_logger = "0.11"
 generic-tests = "0.1"
 path_macro = "1.0"
-rand = "0.9"
+rand = "0.10"
 tempfile = "3"
 test-log = "0.2"
 

@@ -37,6 +37,7 @@ pub mod raster;
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 mod rasteriotests;
 mod rastermetadata;
+mod rasterscale;
 mod rastersize;
 mod rect;
 #[cfg(feature = "gdal")]
@@ -68,7 +69,7 @@ pub use {
     array::RasterWindow, array::Rows, arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell,
     cell::CellIterator, coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference,
     geotransform::GeoTransform, latlonbounds::LatLonBounds, nodata::Nodata, raster::RasterNodataCompatibility,
-    rastermetadata::RasterMetadata, rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
+    rastermetadata::RasterMetadata, rasterscale::RasterScale, rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };
 
 #[doc(inline)]

@@ -439,30 +439,30 @@ fn render_chunks_navigation(app: &mut App, frame: &mut Frame, area: Rect) {
         }
         ChunkViewState::BrowsingChunks | ChunkViewState::ViewingChunk => {
             // Show list of chunks for selected overview
-            if let Some(overview_idx) = app.chunks_tab.selected_overview {
-                if let Some(overview) = app.cog_metadata.overviews.get(overview_idx) {
-                    // Calculate width needed for chunk index alignment
-                    let max_idx = overview.chunk_locations.len().saturating_sub(1);
-                    let idx_width = max_idx.to_string().len();
+            if let Some(overview_idx) = app.chunks_tab.selected_overview
+                && let Some(overview) = app.cog_metadata.overviews.get(overview_idx)
+            {
+                // Calculate width needed for chunk index alignment
+                let max_idx = overview.chunk_locations.len().saturating_sub(1);
+                let idx_width = max_idx.to_string().len();
 
-                    let items: Vec<ListItem> = overview
-                        .chunk_locations
-                        .iter()
-                        .enumerate()
-                        .map(|(i, chunk_loc)| {
-                            let sparse_marker = if chunk_loc.is_sparse() { " [Sparse]" } else { "" };
-                            let size_kb = chunk_loc.size as f64 / 1024.0;
-                            let content = format!("Chunk {:>width$}  {:>8.1} KB{}", i, size_kb, sparse_marker, width = idx_width);
-                            ListItem::new(content)
-                        })
-                        .collect();
+                let items: Vec<ListItem> = overview
+                    .chunk_locations
+                    .iter()
+                    .enumerate()
+                    .map(|(i, chunk_loc)| {
+                        let sparse_marker = if chunk_loc.is_sparse() { " [Sparse]" } else { "" };
+                        let size_kb = chunk_loc.size as f64 / 1024.0;
+                        let content = format!("Chunk {:>width$}  {:>8.1} KB{}", i, size_kb, sparse_marker, width = idx_width);
+                        ListItem::new(content)
+                    })
+                    .collect();
 
-                    let list = List::new(items)
-                        .highlight_style(Style::default().bg(Color::DarkGray).fg(Color::Yellow).add_modifier(Modifier::BOLD))
-                        .highlight_symbol("▶ ");
+                let list = List::new(items)
+                    .highlight_style(Style::default().bg(Color::DarkGray).fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    .highlight_symbol("▶ ");
 
-                    frame.render_stateful_widget(list, inner_area, &mut app.chunks_tab.chunk_list_state);
-                }
+                frame.render_stateful_widget(list, inner_area, &mut app.chunks_tab.chunk_list_state);
             }
         }
     }
@@ -481,72 +481,71 @@ fn render_chunks_preview(app: &mut App, frame: &mut Frame, area: Rect) {
     match app.chunks_tab.view_state {
         ChunkViewState::BrowsingOverviews => {
             // Show overview info
-            if let Some(overview_idx) = app.chunks_tab.selected_overview {
-                if let Some(overview) = app.cog_metadata.overviews.get(overview_idx) {
-                    let info = vec![
-                        Line::from(vec![
-                            Span::styled("Overview ", Style::default().fg(Color::Yellow).bold()),
-                            Span::raw(format!("{}", overview_idx)),
-                        ]),
-                        Line::from(""),
-                        Line::from(vec![
-                            Span::styled("Size: ", Style::default().fg(Color::Cyan)),
-                            Span::raw(format!(
-                                "{}x{}",
-                                overview.raster_size.cols.count(),
-                                overview.raster_size.rows.count()
-                            )),
-                        ]),
-                        Line::from(vec![
-                            Span::styled("Total Chunks: ", Style::default().fg(Color::Cyan)),
-                            Span::raw(format!("{}", overview.chunk_locations.len())),
-                        ]),
-                        Line::from(""),
-                        Line::from(Span::styled(
-                            "Press Enter to browse chunks",
-                            Style::default().fg(Color::Gray).italic(),
+            if let Some(overview_idx) = app.chunks_tab.selected_overview
+                && let Some(overview) = app.cog_metadata.overviews.get(overview_idx)
+            {
+                let info = vec![
+                    Line::from(vec![
+                        Span::styled("Overview ", Style::default().fg(Color::Yellow).bold()),
+                        Span::raw(format!("{}", overview_idx)),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("Size: ", Style::default().fg(Color::Cyan)),
+                        Span::raw(format!(
+                            "{}x{}",
+                            overview.raster_size.cols.count(),
+                            overview.raster_size.rows.count()
                         )),
-                    ];
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Total Chunks: ", Style::default().fg(Color::Cyan)),
+                        Span::raw(format!("{}", overview.chunk_locations.len())),
+                    ]),
+                    Line::from(""),
+                    Line::from(Span::styled(
+                        "Press Enter to browse chunks",
+                        Style::default().fg(Color::Gray).italic(),
+                    )),
+                ];
 
-                    let paragraph = Paragraph::new(info);
-                    frame.render_widget(paragraph, inner_area);
-                }
+                let paragraph = Paragraph::new(info);
+                frame.render_widget(paragraph, inner_area);
             }
         }
         ChunkViewState::BrowsingChunks => {
             // Show chunk info
-            if let (Some(overview_idx), Some(chunk_idx)) = (app.chunks_tab.selected_overview, app.chunks_tab.selected_chunk) {
-                if let Some(overview) = app.cog_metadata.overviews.get(overview_idx) {
-                    if let Some(chunk_loc) = overview.chunk_locations.get(chunk_idx) {
-                        let info = vec![
-                            Line::from(vec![
-                                Span::styled("Chunk ", Style::default().fg(Color::Yellow).bold()),
-                                Span::raw(format!("{}", chunk_idx)),
-                            ]),
-                            Line::from(""),
-                            Line::from(vec![
-                                Span::styled("Offset: ", Style::default().fg(Color::Cyan)),
-                                Span::raw(format!("{}", chunk_loc.offset)),
-                            ]),
-                            Line::from(vec![
-                                Span::styled("Size: ", Style::default().fg(Color::Cyan)),
-                                Span::raw(format!("{} bytes", chunk_loc.size)),
-                            ]),
-                            Line::from(vec![
-                                Span::styled("Sparse: ", Style::default().fg(Color::Cyan)),
-                                Span::raw(if chunk_loc.is_sparse() { "Yes" } else { "No" }),
-                            ]),
-                            Line::from(""),
-                            Line::from(Span::styled(
-                                "Press Enter to view chunk data",
-                                Style::default().fg(Color::Gray).italic(),
-                            )),
-                        ];
+            if let (Some(overview_idx), Some(chunk_idx)) = (app.chunks_tab.selected_overview, app.chunks_tab.selected_chunk)
+                && let Some(overview) = app.cog_metadata.overviews.get(overview_idx)
+                && let Some(chunk_loc) = overview.chunk_locations.get(chunk_idx)
+            {
+                let info = vec![
+                    Line::from(vec![
+                        Span::styled("Chunk ", Style::default().fg(Color::Yellow).bold()),
+                        Span::raw(format!("{}", chunk_idx)),
+                    ]),
+                    Line::from(""),
+                    Line::from(vec![
+                        Span::styled("Offset: ", Style::default().fg(Color::Cyan)),
+                        Span::raw(format!("{}", chunk_loc.offset)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Size: ", Style::default().fg(Color::Cyan)),
+                        Span::raw(format!("{} bytes", chunk_loc.size)),
+                    ]),
+                    Line::from(vec![
+                        Span::styled("Sparse: ", Style::default().fg(Color::Cyan)),
+                        Span::raw(if chunk_loc.is_sparse() { "Yes" } else { "No" }),
+                    ]),
+                    Line::from(""),
+                    Line::from(Span::styled(
+                        "Press Enter to view chunk data",
+                        Style::default().fg(Color::Gray).italic(),
+                    )),
+                ];
 
-                        let paragraph = Paragraph::new(info);
-                        frame.render_widget(paragraph, inner_area);
-                    }
-                }
+                let paragraph = Paragraph::new(info);
+                frame.render_widget(paragraph, inner_area);
             }
         }
         ChunkViewState::ViewingChunk => {

@@ -289,6 +289,7 @@ pub fn warp_georeference(georef: &GeoReference, opts: &WarpOptions) -> Result<Ge
                 },
                 target_transform.into(),
                 georef.nodata(),
+                None,
             )),
             Err(e) => {
                 gdal_sys::GDALDestroyGenImgProjTransformer(transformer_arg);

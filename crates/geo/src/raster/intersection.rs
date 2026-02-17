@@ -104,6 +104,7 @@ mod tests {
             RasterSize::with_rows_cols(Rows(840), Columns(900)),
             TRANS,
             None,
+            None,
         );
         assert_relative_eq!(
             meta.cell_center(Cell::from_row_col(0, 0)),
@@ -137,6 +138,7 @@ mod tests {
             RasterSize::with_rows_cols(Rows(256), Columns(256)),
             [547900.6187481433, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141].into(),
             None,
+            None,
         );
 
         let meta2 = GeoReference::new(
@@ -144,6 +146,7 @@ mod tests {
             RasterSize::with_rows_cols(Rows(256), Columns(256)),
             [626172.1357121639, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141].into(),
             None,
+            None
         );
 
         assert!(meta1.intersects(&meta2).unwrap());
