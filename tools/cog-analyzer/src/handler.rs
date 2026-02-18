@@ -114,14 +114,14 @@ fn handle_chunks_keys(key_event: KeyEvent, app: &mut App) -> Result<()> {
                 }
                 // Drill down into chunks
                 KeyCode::Enter | KeyCode::Char('l') => {
-                    if let Some(overview_idx) = app.chunks_tab.selected_overview {
-                        if let Some(overview) = app.cog_metadata.overviews.get(overview_idx) {
-                            let chunk_count = overview.chunk_locations.len();
-                            app.chunks_tab.enter_chunks_view(chunk_count);
-                            // Automatically enter chunk view and load the first chunk
-                            app.chunks_tab.enter_chunk_view();
-                            load_chunk_data_if_needed(app);
-                        }
+                    if let Some(overview_idx) = app.chunks_tab.selected_overview
+                        && let Some(overview) = app.cog_metadata.overviews.get(overview_idx)
+                    {
+                        let chunk_count = overview.chunk_locations.len();
+                        app.chunks_tab.enter_chunks_view(chunk_count);
+                        // Automatically enter chunk view and load the first chunk
+                        app.chunks_tab.enter_chunk_view();
+                        load_chunk_data_if_needed(app);
                     }
                 }
                 _ => {}
@@ -187,16 +187,16 @@ fn handle_chunks_keys(key_event: KeyEvent, app: &mut App) -> Result<()> {
                 }
                 // Toggle hi-res rendering with Space
                 KeyCode::Char(' ') => {
-                    if let Some(ref mut chunk_data) = app.chunks_tab.chunk_data {
-                        if !chunk_data.show_hires {
-                            // Enable hi-res and create image_state if needed
-                            chunk_data.show_hires = true;
-                            if chunk_data.image_state.is_none() {
-                                if let (Some(picker), Some(image)) = (&app.image_picker, &chunk_data.image) {
-                                    let protocol = picker.new_resize_protocol(image.clone());
-                                    chunk_data.image_state = Some(protocol);
-                                }
-                            }
+                    if let Some(ref mut chunk_data) = app.chunks_tab.chunk_data
+                        && !chunk_data.show_hires
+                    {
+                        // Enable hi-res and create image_state if needed
+                        chunk_data.show_hires = true;
+                        if chunk_data.image_state.is_none()
+                            && let (Some(picker), Some(image)) = (&app.image_picker, &chunk_data.image)
+                        {
+                            let protocol = picker.new_resize_protocol(image.clone());
+                            chunk_data.image_state = Some(protocol);
                         }
                     }
                 }
@@ -242,18 +242,18 @@ fn handle_webtiles_keys(key_event: KeyEvent, app: &mut App) -> Result<()> {
                 }
                 // Drill down into tiles
                 KeyCode::Enter | KeyCode::Char('l') => {
-                    if let Some(zoom) = app.webtiles_tab.selected_zoom {
-                        if let Some(tile_sources) = reader.zoom_level_tile_sources(zoom) {
-                            // Collect tiles and sort them for consistent ordering
-                            let mut tiles: Vec<Tile> = tile_sources.keys().copied().collect();
-                            tiles.sort_by(|a, b| a.y().cmp(&b.y()).then_with(|| a.x().cmp(&b.x())));
-                            let tile_count = tiles.len();
-                            app.webtiles_tab.set_tiles_at_zoom(tiles);
-                            app.webtiles_tab.enter_tiles_view(tile_count);
-                            // Automatically enter tile view and load the first tile
-                            app.webtiles_tab.enter_tile_view();
-                            load_tile_data_if_needed(app);
-                        }
+                    if let Some(zoom) = app.webtiles_tab.selected_zoom
+                        && let Some(tile_sources) = reader.zoom_level_tile_sources(zoom)
+                    {
+                        // Collect tiles and sort them for consistent ordering
+                        let mut tiles: Vec<Tile> = tile_sources.keys().copied().collect();
+                        tiles.sort_by(|a, b| a.y().cmp(&b.y()).then_with(|| a.x().cmp(&b.x())));
+                        let tile_count = tiles.len();
+                        app.webtiles_tab.set_tiles_at_zoom(tiles);
+                        app.webtiles_tab.enter_tiles_view(tile_count);
+                        // Automatically enter tile view and load the first tile
+                        app.webtiles_tab.enter_tile_view();
+                        load_tile_data_if_needed(app);
                     }
                 }
                 // Go back (only for multiband)
@@ -325,16 +325,16 @@ fn handle_webtiles_keys(key_event: KeyEvent, app: &mut App) -> Result<()> {
                 }
                 // Toggle hi-res rendering with Space
                 KeyCode::Char(' ') => {
-                    if let Some(ref mut tile_data) = app.webtiles_tab.tile_data {
-                        if !tile_data.show_hires {
-                            // Enable hi-res and create image_state if needed
-                            tile_data.show_hires = true;
-                            if tile_data.image_state.is_none() {
-                                if let (Some(picker), Some(image)) = (&app.image_picker, &tile_data.image) {
-                                    let protocol = picker.new_resize_protocol(image.clone());
-                                    tile_data.image_state = Some(protocol);
-                                }
-                            }
+                    if let Some(ref mut tile_data) = app.webtiles_tab.tile_data
+                        && !tile_data.show_hires
+                    {
+                        // Enable hi-res and create image_state if needed
+                        tile_data.show_hires = true;
+                        if tile_data.image_state.is_none()
+                            && let (Some(picker), Some(image)) = (&app.image_picker, &tile_data.image)
+                        {
+                            let protocol = picker.new_resize_protocol(image.clone());
+                            tile_data.image_state = Some(protocol);
                         }
                     }
                 }

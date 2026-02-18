@@ -72,7 +72,7 @@ pub struct App {
     /// COG metadata.
     pub cog_metadata: GeoTiffMetadata,
 
-    /// WebTiles reader for tile access.
+    /// `WebTiles` reader for tile access.
     pub webtiles_reader: Option<WebTilesReader>,
 
     /// Currently selected band (1-based index, None means all bands or single-band COG).
@@ -252,7 +252,7 @@ impl App {
         Ok(File::open(&self.file_path)?)
     }
 
-    /// Create a GeoTiffReader for the file.
+    /// Create a `GeoTiffReader` for the file.
     pub fn create_reader(&self) -> Result<GeoTiffReader> {
         Ok(GeoTiffReader::from_file(&self.file_path)?)
     }

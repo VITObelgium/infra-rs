@@ -87,8 +87,7 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>, app: &mut App)
             Event::Key(key_event) => {
                 handle_key_events(key_event, app)?;
             }
-            Event::Tick => {}
-            Event::Resize(_, _) => {}
+            Event::Tick | Event::Resize(_, _) => {}
         }
     }
 
