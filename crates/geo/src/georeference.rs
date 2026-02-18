@@ -420,8 +420,8 @@ impl GeoReference {
         }
     }
 
-    pub fn set_scale(&mut self, offset: f64, scale: f64) {
-        self.scale = Some(RasterScale { scale, offset });
+    pub fn set_scale(&mut self, scale: Option<RasterScale>) {
+        self.scale = scale;
     }
 
     pub fn scale(&self) -> Option<RasterScale> {

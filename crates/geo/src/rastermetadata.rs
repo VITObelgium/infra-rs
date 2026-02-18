@@ -1,6 +1,6 @@
 use inf::cast;
 
-use crate::{ArrayDataType, ArrayMetadata, GeoReference, RasterSize};
+use crate::{ArrayDataType, ArrayMetadata, GeoReference, RasterScale, RasterSize};
 
 /// Simple raster metadata structure that contains the size of the raster and the optional Nodata value.
 /// Usefull for cases where complete georeferencing is not needed
@@ -8,6 +8,7 @@ use crate::{ArrayDataType, ArrayMetadata, GeoReference, RasterSize};
 pub struct RasterMetadata {
     pub raster_size: RasterSize,
     pub nodata: Option<f64>,
+    pub scale: Option<RasterScale>,
 }
 
 impl std::fmt::Display for RasterMetadata {
@@ -29,6 +30,7 @@ impl ArrayMetadata for RasterMetadata {
         Self {
             raster_size,
             nodata: Some(dtype.default_nodata_value()),
+            scale: None,
         }
     }
 
@@ -36,6 +38,7 @@ impl ArrayMetadata for RasterMetadata {
         Self {
             raster_size,
             nodata: cast::option(nodata),
+            scale: None,
         }
     }
 
@@ -43,12 +46,14 @@ impl ArrayMetadata for RasterMetadata {
         Self {
             raster_size: georef.size(),
             nodata: georef.nodata(),
+            scale: georef.scale(),
         }
     }
 
     fn geo_reference(&self) -> GeoReference {
         let mut georef = GeoReference::without_spatial_reference(self.raster_size, self.nodata);
         georef.set_square_cell_size_north_up(1.0); // Otherwise tools will not render anything
+        georef.set_scale(self.scale);
         georef
     }
 }
