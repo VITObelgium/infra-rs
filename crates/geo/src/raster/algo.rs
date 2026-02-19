@@ -71,7 +71,14 @@ pub use {
 
 #[cfg(feature = "simd")]
 pub mod simd {
-    pub use super::{filter::simd::filter, filter::simd::filter_value, limits::simd::max, limits::simd::min, limits::simd::min_max};
+    pub use super::{
+        filter::simd::filter,
+        filter::simd::filter_value,
+        limits::simd::max,
+        limits::simd::min,
+        limits::simd::min_max,
+        scale::simd::{SimdScale, scale_to_u8, scale_to_u16},
+    };
 }
 
 pub use {nodata::is_data, nodata::is_nodata, nodata::replace_nodata, nodata::replace_nodata_in_place, nodata::replace_value_by_nodata};

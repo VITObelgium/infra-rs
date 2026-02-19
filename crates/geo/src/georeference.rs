@@ -646,6 +646,13 @@ impl ArrayMetadata for GeoReference {
         georef
     }
 
+    fn with_scale(self, scale: RasterScale) -> Self {
+        GeoReference {
+            scale: Some(scale),
+            ..self
+        }
+    }
+
     fn geo_reference(&self) -> GeoReference {
         self.clone()
     }

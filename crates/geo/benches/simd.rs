@@ -164,9 +164,140 @@ mod bench {
         group.finish();
     }
 
+    pub fn scale(c: &mut Criterion) {
+        let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
+        let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(f64::NAN));
+
+        let create_f64_raster = || {
+            DenseRaster::<f64>::from_iter_opt(
+                geo_ref.clone(),
+                (0..RASTER_WIDTH * RASTER_HEIGHT).map(|x| if x % 100 == 0 { None } else { Some((x as f64) * 0.1 - 5000.0) }),
+            )
+            .unwrap()
+        };
+
+        let create_f32_raster = || {
+            DenseRaster::<f32>::from_iter_opt(
+                geo_ref.clone(),
+                (0..RASTER_WIDTH * RASTER_HEIGHT).map(|x| if x % 100 == 0 { None } else { Some((x as f32) * 0.1 - 5000.0) }),
+            )
+            .unwrap()
+        };
+
+        let mut group = c.benchmark_group("Scale");
+
+        // f64 -> u8 benchmarks
+        group.bench_function("scale_to_u8_f64_scalar", |b| {
+            b.iter_batched_ref(
+                create_f64_raster,
+                |raster| {
+                    let _ = algo::scale_to_u8(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        group.bench_function("scale_to_u8_f64_simd", |b| {
+            b.iter_batched_ref(
+                create_f64_raster,
+                |raster| {
+                    let _ = algo::simd::scale_to_u8(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        // f32 -> u8 benchmarks
+        group.bench_function("scale_to_u8_f32_scalar", |b| {
+            b.iter_batched_ref(
+                create_f32_raster,
+                |raster| {
+                    let _ = algo::scale_to_u8(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        let range = algo::min_max(&create_f32_raster());
+
+        group.bench_function("scale_to_u8_f32_rangeinput_scalar", |b| {
+            b.iter_batched_ref(
+                create_f32_raster,
+                |raster| {
+                    let _ = algo::scale_to_u8(raster, range.clone()).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        group.bench_function("scale_to_u8_f32_simd", |b| {
+            b.iter_batched_ref(
+                create_f32_raster,
+                |raster| {
+                    let _ = algo::simd::scale_to_u8(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        group.bench_function("scale_to_u8_f32_rangeinput_simd", |b| {
+            b.iter_batched_ref(
+                create_f32_raster,
+                |raster| {
+                    let _ = algo::simd::scale_to_u8(raster, range.clone()).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        // f64 -> u16 benchmarks
+        group.bench_function("scale_to_u16_f64_scalar", |b| {
+            b.iter_batched_ref(
+                create_f64_raster,
+                |raster| {
+                    let _ = algo::scale_to_u16(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        group.bench_function("scale_to_u16_f64_simd", |b| {
+            b.iter_batched_ref(
+                create_f64_raster,
+                |raster| {
+                    let _ = algo::simd::scale_to_u16(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        // f32 -> u16 benchmarks
+        group.bench_function("scale_to_u16_f32_scalar", |b| {
+            b.iter_batched_ref(
+                create_f32_raster,
+                |raster| {
+                    let _ = algo::scale_to_u16(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        group.bench_function("scale_to_u16_f32_simd", |b| {
+            b.iter_batched_ref(
+                create_f32_raster,
+                |raster| {
+                    let _ = algo::simd::scale_to_u16(raster, None).unwrap();
+                },
+                BatchSize::LargeInput,
+            );
+        });
+
+        group.finish();
+    }
+
     criterion::criterion_group!(benches_i32, simd<i32>);
     criterion::criterion_group!(benches_f32, simd<f32>);
-    criterion::criterion_group!(algobenches_f32, min_max, filter);
+    criterion::criterion_group!(algobenches_f32, min_max, filter, scale);
     criterion::criterion_main!(algobenches_f32);
 }
 

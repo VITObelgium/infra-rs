@@ -1,6 +1,6 @@
 use inf::{allocate::AlignedVec, cast};
 
-use crate::{ArrayDataType, Cell, Error, GeoReference, Nodata, RasterSize, Result, arraynum::ArrayNum};
+use crate::{ArrayDataType, Cell, Error, GeoReference, Nodata, RasterScale, RasterSize, Result, arraynum::ArrayNum};
 use std::fmt::Debug;
 
 pub trait ArrayMetadata: Clone + Debug {
@@ -19,6 +19,7 @@ pub trait ArrayMetadata: Clone + Debug {
     }
 
     fn with_geo_reference(georef: GeoReference) -> Self;
+    fn with_scale(self, scale: RasterScale) -> Self;
 
     fn cell_at_index(&self, index: usize) -> Cell {
         let col_count = self.size().cols.count() as usize;
