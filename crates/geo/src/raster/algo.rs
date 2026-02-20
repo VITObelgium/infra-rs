@@ -65,8 +65,8 @@ pub use {
     distance::sum_targets_within_travel_distance, distance::sum_within_travel_distance, distance::travel_distance,
     distance::travel_distances_up_to, distance::value_at_closest_less_than_travel_target, distance::value_at_closest_target,
     distance::value_at_closest_travel_target, filter::filter, filter::filter_value, limits::min_max, quantile::SplitQuantiles,
-    quantile::quantiles, quantile::quantiles_neg_pos, scale::descale, scale::scale_to_u8, scale::scale_to_u16, statistics::RasterStats,
-    statistics::statistics,
+    quantile::quantiles, quantile::quantiles_neg_pos, scale::Scale, scale::descale, scale::scale_to_u8, scale::scale_to_u16,
+    statistics::RasterStats, statistics::statistics,
 };
 
 #[cfg(feature = "simd")]
@@ -77,7 +77,7 @@ pub mod simd {
         limits::simd::max,
         limits::simd::min,
         limits::simd::min_max,
-        scale::simd::{SimdScale, scale_to_u8, scale_to_u16},
+        scale::simd::{scale_to_u8, scale_to_u16},
     };
 }
 

@@ -9,13 +9,13 @@
 //! - [`scale_to_u8`]: Scales raster values to u8 (0-254, with 255 reserved for nodata)
 //! - [`scale_to_u16`]: Scales raster values to u16 (0-65534, with 65535 reserved for nodata)
 //! - [`descale`]: Reverses scaling using stored scale/offset metadata
+//! - [`Scale`]: Trait providing scaling methods as extension methods on `DenseArray`
 //!
 //! # SIMD Acceleration
 //!
 //! When the `simd` feature is enabled, SIMD-optimized implementations are available:
 //! - [`simd::scale_to_u8`]: SIMD-accelerated scaling to u8 for `DenseArray<f32>` and `DenseArray<f64>`
 //! - [`simd::scale_to_u16`]: SIMD-accelerated scaling to u16 for `DenseArray<f32>` and `DenseArray<f64>`
-//! - [`simd::SimdScale`]: Trait providing scaling methods as extension methods on `DenseArray`
 //!
 //! ## Performance
 //!
@@ -28,14 +28,14 @@
 //! let result = simd::scale_to_u8(&my_raster, None)?;
 //!
 //! // Using trait methods
-//! use crate::raster::algo::simd::SimdScale;
+//! use crate::raster::algo::simd::Scale;
 //! let result = my_raster.scale_to_u8(None)?;
 //! ```
 //!
 //! The module-level `scale_to_u8` and `scale_to_u16` functions use the scalar implementation
 //! and work with any `Array` type.
 
-use crate::{Array, ArrayMetadata, ArrayNum, Error, RasterScale, Result, raster::algo};
+use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, Error, RasterScale, Result, raster::algo};
 use inf::cast;
 
 use std::ops::RangeInclusive;
@@ -48,6 +48,16 @@ struct ScaleParams {
     offset: f64,
     dest_min: f64,
     dest_max: f64,
+}
+
+/// Trait scaling operations.
+pub trait Scale<T> {
+    type Meta: ArrayMetadata;
+
+    // If the `input_range` is not provided, it will be calculated from the data.
+    // Providing it can save time if you already know the range or want to use a custom range
+    fn scale_to_u8(&self, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u8, Self::Meta>>;
+    fn scale_to_u16(&self, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u16, Self::Meta>>;
 }
 
 /// Calculate scale and offset parameters for mapping a value range to destination type range
@@ -195,17 +205,7 @@ pub mod simd {
         }};
     }
 
-    /// Trait for SIMD scaling operations.
-    pub trait SimdScale<T> {
-        type Meta: ArrayMetadata;
-
-        // If the `input_range` is not provided, it will be calculated from the data.
-        // Providing it can save time if you already know the range or want to use a custom range
-        fn scale_to_u8(&self, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u8, Self::Meta>>;
-        fn scale_to_u16(&self, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u16, Self::Meta>>;
-    }
-
-    impl<Meta: ArrayMetadata> SimdScale<f64> for DenseArray<f64, Meta> {
+    impl<Meta: ArrayMetadata> Scale<f64> for DenseArray<f64, Meta> {
         type Meta = Meta;
 
         fn scale_to_u8(&self, input_range: Option<RangeInclusive<f64>>) -> Result<DenseArray<u8, Meta>> {
@@ -217,7 +217,7 @@ pub mod simd {
         }
     }
 
-    impl<Meta: ArrayMetadata> SimdScale<f32> for DenseArray<f32, Meta> {
+    impl<Meta: ArrayMetadata> Scale<f32> for DenseArray<f32, Meta> {
         type Meta = Meta;
 
         fn scale_to_u8(&self, input_range: Option<RangeInclusive<f32>>) -> Result<DenseArray<u8, Meta>> {
@@ -232,7 +232,7 @@ pub mod simd {
     pub fn scale_to_u8<T, Meta>(src: &DenseArray<T, Meta>, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u8, Meta>>
     where
         T: ArrayNum,
-        DenseArray<T, Meta>: SimdScale<T, Meta = Meta>,
+        DenseArray<T, Meta>: Scale<T, Meta = Meta>,
         Meta: ArrayMetadata,
     {
         src.scale_to_u8(input_range)
@@ -241,12 +241,35 @@ pub mod simd {
     pub fn scale_to_u16<T, Meta>(src: &DenseArray<T, Meta>, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u16, Meta>>
     where
         T: ArrayNum,
-        DenseArray<T, Meta>: SimdScale<T, Meta = Meta>,
+        DenseArray<T, Meta>: Scale<T, Meta = Meta>,
         Meta: ArrayMetadata,
     {
         src.scale_to_u16(input_range)
     }
 }
+
+// Non-SIMD implementation of Scale trait for DenseArray
+#[cfg(not(feature = "simd"))]
+macro_rules! impl_scale {
+    ($($t:ty),*) => {
+        $(
+            impl<Meta: ArrayMetadata> Scale<$t> for DenseArray<$t, Meta> {
+                type Meta = Meta;
+
+                fn scale_to_u8(&self, input_range: Option<RangeInclusive<$t>>) -> Result<DenseArray<u8, Meta>> {
+                    scale_internal(self, input_range)
+                }
+
+                fn scale_to_u16(&self, input_range: Option<RangeInclusive<$t>>) -> Result<DenseArray<u16, Meta>> {
+                    scale_internal(self, input_range)
+                }
+            }
+        )*
+    };
+}
+
+#[cfg(not(feature = "simd"))]
+impl_scale!(f32, f64);
 
 /// Scales the raster values to fit the full range of u8 (0-255).
 ///
