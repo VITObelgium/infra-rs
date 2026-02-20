@@ -1,6 +1,6 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error,
-    GeoReference, GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
+    GeoReference, GeoTransform, Point, RasterMetadata, RasterScale, Result, Rows, ZoomLevelStrategy,
     geotiff::{
         self, BandIndex, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
         tileio::{self},
@@ -400,6 +400,7 @@ pub struct WebTileInfo {
     pub band_count: u32,
     pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
+    pub scale: Option<RasterScale>,
     pub statistics: Option<TiffStats>,
 }
 
@@ -427,6 +428,7 @@ impl WebTilesReader {
             tile_size: self.cog_meta.chunk_row_length(),
             band_count: self.cog_meta.band_count,
             data_type: self.data_type(),
+            scale: None, // TODO: extract scale info from the COG
             bounds: self.data_bounds(),
             statistics: self.cog_meta.statistics.clone(),
         }
