@@ -351,6 +351,19 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     // - The INTERLEAVE metadata tells you about file I/O performance characteristics, not about how to index the arrays
 
     let band_index0 = band_index.get() - 1; // to 0-based index
+
+    // Apply band-specific scale/offset if available
+    if let Some(band_meta) = meta.band_metadata.get(band_index0) {
+        let band_scale = match (band_meta.scale, band_meta.offset) {
+            (Some(scale), Some(offset)) => Some(crate::RasterScale { scale, offset }),
+            (Some(scale), None) => Some(crate::RasterScale { scale, offset: 0.0 }),
+            (None, Some(offset)) => Some(crate::RasterScale { scale: 1.0, offset }),
+            (None, None) => None,
+        };
+
+        geo_reference.set_scale(band_scale);
+    }
+
     let chunk_iter = chunks.iter().skip(band_index0 * tile_count).take(tile_count).enumerate();
 
     let mut tile_buf = vec![nodata; tile_size as usize * tile_size as usize];

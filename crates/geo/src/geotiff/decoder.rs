@@ -7,7 +7,7 @@ use tiff::{
 };
 
 use crate::{
-    ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows, crs,
+    ArrayDataType, Columns, Error, GeoReference, RasterScale, RasterSize, Result, Rows, crs,
     geotiff::{
         ChunkDataLayout, GeoTiffMetadata, TiffChunkLocation, gdalmetadata, metadata::Interleave, projectioninfo::ModelType,
         reader::TiffOverview,
@@ -330,16 +330,29 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         .and_then(|proj| proj.epsg().map(|epsg| epsg.to_string()))
         .unwrap_or_default();
 
+    // Extract scale/offset from GDAL metadata (use first band if available)
+    let raster_scale = gdal_metadata.as_ref().and_then(|m| {
+        m.band_metadata.first().and_then(|band| match (band.scale, band.offset) {
+            (Some(scale), Some(offset)) => Some(RasterScale { scale, offset }),
+            (Some(scale), None) => Some(RasterScale { scale, offset: 0.0 }),
+            (None, Some(offset)) => Some(RasterScale { scale: 1.0, offset }),
+            (None, None) => None,
+        })
+    });
+
+    let band_metadata = gdal_metadata.as_ref().map(|m| m.band_metadata.clone()).unwrap_or_default();
+
     Ok(GeoTiffMetadata {
         data_layout,
         data_type,
         band_count: samples_per_pixel,
         compression,
         predictor,
-        geo_reference: GeoReference::new(epsg, raster_size, geo_transform.into(), nodata, None),
+        geo_reference: GeoReference::new(epsg, raster_size, geo_transform.into(), nodata, raster_scale),
         statistics,
         overviews,
         interleave,
         gdal_ghost_data: None,
+        band_metadata,
     })
 }

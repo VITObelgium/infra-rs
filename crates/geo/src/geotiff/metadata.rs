@@ -5,6 +5,7 @@ use std::path::Path;
 use crate::geotiff::{
     ChunkDataLayout, TiffStats, decoder,
     gdalghostdata::GdalGhostData,
+    gdalmetadata::BandMetadata,
     io::{self, CogHeaderReader},
     reader::TiffOverview,
 };
@@ -34,6 +35,8 @@ pub struct GeoTiffMetadata {
     pub overviews: Vec<TiffOverview>,
     pub interleave: Interleave,
     pub gdal_ghost_data: Option<GdalGhostData>, // Additional GDAL ghost metadata if the file was created with GDAL
+    /// Per-band metadata (scale/offset) from GDAL metadata XML
+    pub band_metadata: Vec<BandMetadata>,
 }
 
 pub enum ParseFromBufferError {

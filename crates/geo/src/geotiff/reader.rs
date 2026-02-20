@@ -456,7 +456,8 @@ impl GeoTiffReader {
 #[cfg(test)]
 mod tests {
     use crate::{
-        ArrayDataType, GeoReference, RasterMetadata, ZoomLevelStrategy,
+        ArrayDataType, GeoReference, RasterMetadata, RasterScale, ZoomLevelStrategy,
+        array::Array,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles},
         geotiff::gdalghostdata::Interleave,
         raster::{Compression, DenseRaster, GeoTiffWriteOptions, Predictor, RasterReadWrite, TiffChunkType, WriteRasterOptions},
@@ -665,6 +666,55 @@ mod tests {
                 assert_eq!(overview_no_compression, overview_deflate);
             }
         }
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn read_scaled_cog_metadata() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let scaled_tif = tmp.path().join("scaled_landuse.tif");
+        let cog_output = tmp.path().join("scaled_landuse_cog.tif");
+
+        let expected_scale = RasterScale { scale: 0.5, offset: 10.0 };
+
+        {
+            let raster = DenseRaster::<u8>::read(&input)?;
+            let georef = raster.metadata().clone().with_scale(expected_scale);
+            let mut scaled_raster = raster.with_metadata(georef)?;
+
+            scaled_raster.write(&scaled_tif)?;
+        }
+
+        create_test_cog(&scaled_tif, &cog_output, COG_TILE_SIZE, None, None, None, true)?;
+
+        let mut cog_reader = GeoTiffReader::from_file(&cog_output)?;
+        let cog_metadata = cog_reader.metadata();
+
+        assert!(
+            cog_metadata.geo_reference.scale().is_some(),
+            "GeoTiffReader should read scale metadata from COG"
+        );
+        let actual_scale = cog_metadata.geo_reference.scale().unwrap();
+        assert_eq!(
+            actual_scale.scale, expected_scale.scale,
+            "GeoTiffReader should read correct scale value"
+        );
+        assert_eq!(
+            actual_scale.offset, expected_scale.offset,
+            "GeoTiffReader should read correct offset value"
+        );
+
+        // Also test that reading the raster data preserves the scale metadata
+        let cog_raster = cog_reader.read_raster_as::<u8, GeoReference>()?;
+        assert!(
+            cog_raster.metadata().scale().is_some(),
+            "Raster read by GeoTiffReader should contain scale metadata"
+        );
+        let raster_scale = cog_raster.metadata().scale().unwrap();
+        assert_eq!(raster_scale.scale, expected_scale.scale, "Raster scale value should match");
+        assert_eq!(raster_scale.offset, expected_scale.offset, "Raster offset value should match");
 
         Ok(())
     }
