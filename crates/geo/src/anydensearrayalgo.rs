@@ -13,6 +13,15 @@ fn cast_range_f64_to_f32(range: Option<RangeInclusive<f64>>) -> Option<RangeIncl
     range.map(|r| *r.start() as f32..=*r.end() as f32)
 }
 
+fn cast_range<T>(range: Option<RangeInclusive<f64>>) -> Option<RangeInclusive<T>>
+where
+    T: ArrayNum,
+    f64: num::traits::AsPrimitive<T>,
+{
+    use num::traits::AsPrimitive;
+    range.map(|r| r.start().as_()..=r.end().as_())
+}
+
 /// Crops an `AnyDenseArray` by removing nodata edges.
 ///
 /// This is a type-erased wrapper around `algo::crop`.
@@ -27,8 +36,13 @@ impl<Meta: ArrayMetadata> Scale<f64, u8> for AnyDenseArray<Meta> {
         match self {
             AnyDenseArray::F32(arr) => arr.scale(cast_range_f64_to_f32(input_range)),
             AnyDenseArray::F64(arr) => arr.scale(input_range),
+            AnyDenseArray::U8(arr) => arr.scale(cast_range(input_range)),
+            AnyDenseArray::U16(arr) => arr.scale(cast_range(input_range)),
+            AnyDenseArray::U32(arr) => arr.scale(cast_range(input_range)),
+            AnyDenseArray::I16(arr) => arr.scale(cast_range(input_range)),
+            AnyDenseArray::I32(arr) => arr.scale(cast_range(input_range)),
             _ => Err(Error::InvalidArgument(
-                "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
+                "Scale to u8 is not supported for this input type".to_string(),
             )),
         }
     }
@@ -37,8 +51,13 @@ impl<Meta: ArrayMetadata> Scale<f64, u8> for AnyDenseArray<Meta> {
         match self {
             AnyDenseArray::F32(arr) => arr.scale_to_slice(cast_range_f64_to_f32(input_range), output),
             AnyDenseArray::F64(arr) => arr.scale_to_slice(input_range, output),
+            AnyDenseArray::U8(arr) => arr.scale_to_slice(cast_range(input_range), output),
+            AnyDenseArray::U16(arr) => arr.scale_to_slice(cast_range(input_range), output),
+            AnyDenseArray::U32(arr) => arr.scale_to_slice(cast_range(input_range), output),
+            AnyDenseArray::I16(arr) => arr.scale_to_slice(cast_range(input_range), output),
+            AnyDenseArray::I32(arr) => arr.scale_to_slice(cast_range(input_range), output),
             _ => Err(Error::InvalidArgument(
-                "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
+                "Scale to u8 is not supported for this input type".to_string(),
             )),
         }
     }
@@ -51,8 +70,12 @@ impl<Meta: ArrayMetadata> Scale<f64, u16> for AnyDenseArray<Meta> {
         match self {
             AnyDenseArray::F32(arr) => arr.scale(cast_range_f64_to_f32(input_range)),
             AnyDenseArray::F64(arr) => arr.scale(input_range),
+            AnyDenseArray::U16(arr) => arr.scale(cast_range(input_range)),
+            AnyDenseArray::U32(arr) => arr.scale(cast_range(input_range)),
+            AnyDenseArray::I16(arr) => arr.scale(cast_range(input_range)),
+            AnyDenseArray::I32(arr) => arr.scale(cast_range(input_range)),
             _ => Err(Error::InvalidArgument(
-                "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
+                "Scale to u16 is not supported for this input type".to_string(),
             )),
         }
     }
@@ -61,8 +84,12 @@ impl<Meta: ArrayMetadata> Scale<f64, u16> for AnyDenseArray<Meta> {
         match self {
             AnyDenseArray::F32(arr) => arr.scale_to_slice(cast_range_f64_to_f32(input_range), output),
             AnyDenseArray::F64(arr) => arr.scale_to_slice(input_range, output),
+            AnyDenseArray::U16(arr) => arr.scale_to_slice(cast_range(input_range), output),
+            AnyDenseArray::U32(arr) => arr.scale_to_slice(cast_range(input_range), output),
+            AnyDenseArray::I16(arr) => arr.scale_to_slice(cast_range(input_range), output),
+            AnyDenseArray::I32(arr) => arr.scale_to_slice(cast_range(input_range), output),
             _ => Err(Error::InvalidArgument(
-                "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
+                "Scale to u16 is not supported for this input type".to_string(),
             )),
         }
     }
@@ -211,5 +238,73 @@ mod tests {
         let raster = DenseArray::<i32, _>::new(meta, data).unwrap();
         let any_raster = AnyDenseArray::I32(raster.clone());
         let _result: DenseArray<f32, _> = any_raster.binary_op_to::<f32, i32>(&AnyDenseArray::I32(raster), |a, b| (a / b) as f32);
+    }
+
+    #[test]
+    fn anydensearray_scale_u32_to_u8() {
+        let meta = create_test_metadata(2, 2);
+        let data = aligned_vec_from_slice(&[0_u32, 1000, 2000, 3000]);
+        let raster = DenseArray::<u32, _>::new(meta, data).unwrap();
+        let any_raster = AnyDenseArray::U32(raster);
+
+        let result: DenseArray<u8, _> = any_raster.scale(None).unwrap();
+        let values: Vec<Option<u8>> = result.iter_opt().collect();
+
+        assert_eq!(values.len(), 4);
+        assert!(values[0].is_some());
+        assert!(values[1].is_some());
+        assert!(values[2].is_some());
+        assert!(values[3].is_some());
+        assert!(result.metadata().scale.is_some());
+    }
+
+    #[test]
+    fn anydensearray_scale_i32_to_u16() {
+        let meta = create_test_metadata(2, 2);
+        let data = aligned_vec_from_slice(&[-1000_i32, 0, 1000, 2000]);
+        let raster = DenseArray::<i32, _>::new(meta, data).unwrap();
+        let any_raster = AnyDenseArray::I32(raster);
+
+        let result: DenseArray<u16, _> = any_raster.scale(None).unwrap();
+        let values: Vec<Option<u16>> = result.iter_opt().collect();
+
+        assert_eq!(values.len(), 4);
+        assert!(values[0].is_some());
+        assert!(values[1].is_some());
+        assert!(values[2].is_some());
+        assert!(values[3].is_some());
+        assert!(result.metadata().scale.is_some());
+    }
+
+    #[test]
+    fn anydensearray_scale_u16_to_u8() {
+        let meta = create_test_metadata(2, 2);
+        let data = aligned_vec_from_slice(&[0_u16, 100, 200, 300]);
+        let raster = DenseArray::<u16, _>::new(meta, data).unwrap();
+        let any_raster = AnyDenseArray::U16(raster);
+
+        let result: DenseArray<u8, _> = any_raster.scale(None).unwrap();
+        let values: Vec<Option<u8>> = result.iter_opt().collect();
+
+        assert_eq!(values.len(), 4);
+        assert!(values[0].is_some());
+        assert!(values[3].is_some());
+        assert!(result.metadata().scale.is_some());
+    }
+
+    #[test]
+    fn anydensearray_scale_f64_to_u8_still_works() {
+        let meta = create_test_metadata(2, 2);
+        let data = aligned_vec_from_slice(&[1.0_f64, 2.0, 3.0, 4.0]);
+        let raster = DenseArray::<f64, _>::new(meta, data).unwrap();
+        let any_raster = AnyDenseArray::F64(raster);
+
+        let result: DenseArray<u8, _> = any_raster.scale(None).unwrap();
+        let values: Vec<Option<u8>> = result.iter_opt().collect();
+
+        assert_eq!(values.len(), 4);
+        assert!(values[0].is_some());
+        assert!(values[3].is_some());
+        assert!(result.metadata().scale.is_some());
     }
 }

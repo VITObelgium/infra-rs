@@ -1,12 +1,12 @@
-//! Raster scaling operations for compressing floating-point data into integer types.
+//! Raster scaling operations for compressing numeric data into smaller integer types.
 //!
-//! This module provides trait methods to scale raster values from floating-point types (f32, f64)
+//! This module provides trait methods to scale raster values from various numeric types (f32, f64, u32, u16, i32, i16, u8)
 //! into smaller integer types (u8, u16) while preserving the data range through scale and offset
 //! metadata. The operations are reversible using the `descale` function, although not lossless due to quantization.
 //!
 //! # Usage
 //!
-//! Use the [`Scale`] trait to access scaling methods on `DenseArray<f32>` and `DenseArray<f64>`:
+//! Use the [`Scale`] trait to access scaling methods on `DenseArray` with supported numeric types:
 //!
 //! ```ignore
 //! use crate::raster::algo::Scale;
@@ -27,7 +27,7 @@
 //! # SIMD Acceleration
 //!
 //! When the `simd` feature is enabled, SIMD-optimized implementations are automatically used
-//! for `DenseArray<f32>` and `DenseArray<f64>`. To explicitly use the SIMD trait:
+//! for all supported input types (f32, f64, u32, u16, i32, i16, u8). To explicitly use the SIMD trait:
 //!
 //! ```ignore
 //! use crate::raster::algo::simd::Scale;
@@ -56,7 +56,7 @@ struct ScaleParams {
 /// Providing it can save resources if you already know the range or want to use a custom range.
 ///
 /// The trait is implemented for combinations of:
-/// - Input types: f32, f64
+/// - Input types: f32, f64, u32, u16, i32, i16, u8
 /// - Output types: u8, u16
 pub trait Scale<T, O: ArrayNum> {
     type Meta: ArrayMetadata;
@@ -92,12 +92,14 @@ pub mod simd {
     use super::*;
     use crate::{ArrayDataType, DenseArray, Nodata, NodataSimd};
     use inf::simd::SimdCastPl;
-    use std::simd::{Select, StdFloat};
+    use std::simd::Select;
 
     const LANES: usize = inf::simd::LANES;
 
     /// Internal macro to implement SIMD scaling to a slice without code duplication
     /// Returns the RasterScale to be used in metadata
+    ///
+    /// All arithmetic is done in f64 for consistency and to support both float and integer types.
     macro_rules! impl_scale_simd_slice {
         ($src:expr, $src_type:ty, $dest_type:ty, $array_data_type:expr, $input_range:expr, $output:expr) => {{
             if $output.len() != $src.len() {
@@ -119,11 +121,11 @@ pub mod simd {
                 let range_f64 = cast::inclusive_range::<f64>(range)?;
                 let params = super::calculate_scale_params(&range_f64, $array_data_type);
 
-                // SIMD constants
-                let simd_scale = Simd::<$src_type, LANES>::splat(params.scale as $src_type);
-                let simd_offset = Simd::<$src_type, LANES>::splat(params.offset as $src_type);
-                let simd_dest_min = Simd::<$src_type, LANES>::splat(params.dest_min as $src_type);
-                let simd_dest_max = Simd::<$src_type, LANES>::splat(params.dest_max as $src_type);
+                type FloatSimd = Simd<f64, LANES>;
+                let simd_scale = FloatSimd::splat(params.scale);
+                let simd_offset = FloatSimd::splat(params.offset);
+                let simd_dest_min = FloatSimd::splat(params.dest_min);
+                let simd_dest_max = FloatSimd::splat(params.dest_max);
 
                 let (src_head, src_simd, src_tail): (&[$src_type], &[Simd<$src_type, LANES>], &[$src_type]) =
                     $src.as_slice().as_simd::<LANES>();
@@ -145,7 +147,12 @@ pub mod simd {
                 // Process SIMD body
                 for (v_chunk, out_chunk) in src_simd.iter().zip(out_simd.iter_mut()) {
                     let nodata_mask = v_chunk.nodata_mask();
-                    let scaled = (*v_chunk - simd_offset) / simd_scale;
+
+                    // Cast to f64 SIMD for arithmetic
+                    let v_f64 = v_chunk.simd_cast::<f64>();
+                    let scaled = (v_f64 - simd_offset) / simd_scale;
+
+                    use std::simd::StdFloat;
                     let clamped = scaled.simd_clamp(simd_dest_min, simd_dest_max).round();
 
                     let casted = clamped.simd_cast::<$dest_type>();
@@ -200,11 +207,20 @@ pub mod simd {
         };
     }
 
-    // Implement Scale for all combinations of f32/f64 input and u8/u16 output
+    // Implement Scale for all supported input types (float and integer)
     impl_scale_simd!(f64, u8, ArrayDataType::Uint8);
     impl_scale_simd!(f64, u16, ArrayDataType::Uint16);
     impl_scale_simd!(f32, u8, ArrayDataType::Uint8);
     impl_scale_simd!(f32, u16, ArrayDataType::Uint16);
+    impl_scale_simd!(u32, u8, ArrayDataType::Uint8);
+    impl_scale_simd!(u32, u16, ArrayDataType::Uint16);
+    impl_scale_simd!(u16, u8, ArrayDataType::Uint8);
+    impl_scale_simd!(u16, u16, ArrayDataType::Uint16);
+    impl_scale_simd!(i32, u8, ArrayDataType::Uint8);
+    impl_scale_simd!(i32, u16, ArrayDataType::Uint16);
+    impl_scale_simd!(i16, u8, ArrayDataType::Uint8);
+    impl_scale_simd!(i16, u16, ArrayDataType::Uint16);
+    impl_scale_simd!(u8, u8, ArrayDataType::Uint8);
 }
 
 // Non-SIMD implementation of Scale trait for DenseArray
@@ -281,14 +297,23 @@ macro_rules! impl_scale {
 }
 
 #[cfg(not(feature = "simd"))]
-impl_scale!(f64, u8, crate::ArrayDataType::Uint8);
-#[cfg(not(feature = "simd"))]
-impl_scale!(f64, u16, crate::ArrayDataType::Uint16);
-#[cfg(not(feature = "simd"))]
-impl_scale!(f32, u8, crate::ArrayDataType::Uint8);
-#[cfg(not(feature = "simd"))]
-impl_scale!(f32, u16, crate::ArrayDataType::Uint16);
+mod non_simd_impls {
+    use super::*;
 
+    impl_scale!(f64, u8, crate::ArrayDataType::Uint8);
+    impl_scale!(f64, u16, crate::ArrayDataType::Uint16);
+    impl_scale!(f32, u8, crate::ArrayDataType::Uint8);
+    impl_scale!(f32, u16, crate::ArrayDataType::Uint16);
+    impl_scale!(u32, u8, crate::ArrayDataType::Uint8);
+    impl_scale!(u32, u16, crate::ArrayDataType::Uint16);
+    impl_scale!(u16, u8, crate::ArrayDataType::Uint8);
+    impl_scale!(u16, u16, crate::ArrayDataType::Uint16);
+    impl_scale!(i32, u8, crate::ArrayDataType::Uint8);
+    impl_scale!(i32, u16, crate::ArrayDataType::Uint16);
+    impl_scale!(i16, u8, crate::ArrayDataType::Uint8);
+    impl_scale!(i16, u16, crate::ArrayDataType::Uint16);
+    impl_scale!(u8, u8, crate::ArrayDataType::Uint8);
+}
 /// Descales the raster values using the scale and offset from the `geo_reference` metadata.
 /// The descaled value is calculated as: `(value * scale) + offset`
 /// This converts from stored/quantized values back to physical/real-world values.
@@ -341,6 +366,9 @@ mod tests {
 
     #[cfg(feature = "simd")]
     use crate::testutils;
+
+    #[cfg(feature = "simd")]
+    use crate::Nodata;
 
     use super::*;
 
@@ -746,6 +774,111 @@ mod tests {
         let simd_values: Vec<Option<u16>> = simd_result.iter_opt().collect();
 
         assert_eq!(simd_values.len(), 100);
+
+        // Verify metadata is set
+        assert!(simd_result.metadata().scale.is_some());
+    }
+
+    #[test]
+    #[cfg(feature = "simd")]
+    fn simd_scale_u32_to_u8() {
+        use crate::raster::algo::simd as simd_algo;
+
+        let size = RasterSize::with_rows_cols(Rows(10), Columns(10));
+        let meta = RasterMetadata::sized_with_nodata(size, Some(u32::NODATA as f64));
+
+        // Create test data with various values including nodata
+        let mut data = inf::allocate::new_aligned_vec();
+        for i in 0..100 {
+            if i % 13 == 0 {
+                data.push(u32::NODATA);
+            } else {
+                data.push(i * 1000);
+            }
+        }
+
+        let raster: DenseArray<u32, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+
+        // Get SIMD result
+        use simd_algo::Scale;
+        let simd_result: DenseArray<u8, RasterMetadata> = raster.scale(None).unwrap();
+
+        let simd_values: Vec<Option<u8>> = simd_result.iter_opt().collect();
+        assert_eq!(simd_values.len(), 100);
+
+        // Verify nodata is preserved
+        assert!(simd_values[0].is_none());
+        assert!(simd_values[1].is_some());
+
+        // Verify metadata is set
+        assert!(simd_result.metadata().scale.is_some());
+    }
+
+    #[test]
+    #[cfg(feature = "simd")]
+    fn simd_scale_i32_to_u16() {
+        use crate::raster::algo::simd as simd_algo;
+
+        let size = RasterSize::with_rows_cols(Rows(10), Columns(10));
+        let meta = RasterMetadata::sized_with_nodata(size, Some(i32::NODATA as f64));
+
+        // Create test data with various values including nodata and negative values
+        let mut data = inf::allocate::new_aligned_vec();
+        for i in 0..100 {
+            if i % 13 == 0 {
+                data.push(i32::NODATA);
+            } else {
+                data.push((i as i32) * 100 - 2000);
+            }
+        }
+
+        let raster: DenseArray<i32, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+
+        // Get SIMD result
+        use simd_algo::Scale;
+        let simd_result: DenseArray<u16, RasterMetadata> = raster.scale(None).unwrap();
+
+        let simd_values: Vec<Option<u16>> = simd_result.iter_opt().collect();
+        assert_eq!(simd_values.len(), 100);
+
+        // Verify nodata is preserved
+        assert!(simd_values[0].is_none());
+        assert!(simd_values[1].is_some());
+
+        // Verify metadata is set
+        assert!(simd_result.metadata().scale.is_some());
+    }
+
+    #[test]
+    #[cfg(feature = "simd")]
+    fn simd_scale_u16_to_u8() {
+        use crate::raster::algo::simd as simd_algo;
+
+        let size = RasterSize::with_rows_cols(Rows(10), Columns(10));
+        let meta = RasterMetadata::sized_with_nodata(size, Some(u16::NODATA as f64));
+
+        // Create test data with various values including nodata
+        let mut data = inf::allocate::new_aligned_vec();
+        for i in 0..100 {
+            if i % 13 == 0 {
+                data.push(u16::NODATA);
+            } else {
+                data.push((i * 100) as u16);
+            }
+        }
+
+        let raster: DenseArray<u16, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+
+        // Get SIMD result
+        use simd_algo::Scale;
+        let simd_result: DenseArray<u8, RasterMetadata> = raster.scale(None).unwrap();
+
+        let simd_values: Vec<Option<u8>> = simd_result.iter_opt().collect();
+        assert_eq!(simd_values.len(), 100);
+
+        // Verify nodata is preserved
+        assert!(simd_values[0].is_none());
+        assert!(simd_values[1].is_some());
 
         // Verify metadata is set
         assert!(simd_result.metadata().scale.is_some());
