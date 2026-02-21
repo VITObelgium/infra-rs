@@ -232,36 +232,6 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
         }
     }
 
-    pub fn cast(&self, data_type: ArrayDataType) -> AnyDenseArray<Metadata> {
-        match data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(self.cast_to::<u8>()),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(self.cast_to::<u16>()),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(self.cast_to::<u32>()),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(self.cast_to::<u64>()),
-            ArrayDataType::Int8 => AnyDenseArray::I8(self.cast_to::<i8>()),
-            ArrayDataType::Int16 => AnyDenseArray::I16(self.cast_to::<i16>()),
-            ArrayDataType::Int32 => AnyDenseArray::I32(self.cast_to::<i32>()),
-            ArrayDataType::Int64 => AnyDenseArray::I64(self.cast_to::<i64>()),
-            ArrayDataType::Float32 => AnyDenseArray::F32(self.cast_to::<f32>()),
-            ArrayDataType::Float64 => AnyDenseArray::F64(self.cast_to::<f64>()),
-        }
-    }
-
-    pub fn cast_to<T: ArrayNum>(&self) -> DenseArray<T, Metadata> {
-        match self {
-            AnyDenseArray::U8(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::U16(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::U32(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::U64(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I8(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I16(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I32(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I64(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::F32(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::F64(raster) => algo::cast::<T, _>(raster),
-        }
-    }
-
     pub fn with_metadata<M: ArrayMetadata>(self, meta: M) -> Result<AnyDenseArray<M>> {
         Ok(apply_to_anydensearray!(self, raster, raster.with_metadata(meta)?))
     }

@@ -61,7 +61,7 @@ pub fn warp_georeference(georef: &crate::GeoReference, opts: &WarpOptions) -> cr
 pub use conversion::replace_value;
 
 pub use {
-    cast::cast, crop::crop, distance::closest_target, distance::distance, distance::distance_with_obstacles,
+    cast::Cast, cast::cast, crop::crop, distance::closest_target, distance::distance, distance::distance_with_obstacles,
     distance::sum_targets_within_travel_distance, distance::sum_within_travel_distance, distance::travel_distance,
     distance::travel_distances_up_to, distance::value_at_closest_less_than_travel_target, distance::value_at_closest_target,
     distance::value_at_closest_travel_target, filter::filter, filter::filter_value, limits::min_max, quantile::SplitQuantiles,

@@ -225,24 +225,6 @@ pub mod simd {
             impl_scale_simd_slice!(self, f32, u16, ArrayDataType::Uint16, input_range, output)
         }
     }
-
-    pub fn scale_to_u8<T, Meta>(src: &DenseArray<T, Meta>, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u8, Meta>>
-    where
-        T: ArrayNum,
-        DenseArray<T, Meta>: Scale<T, Meta = Meta>,
-        Meta: ArrayMetadata,
-    {
-        src.scale_to_u8(input_range)
-    }
-
-    pub fn scale_to_u16<T, Meta>(src: &DenseArray<T, Meta>, input_range: Option<RangeInclusive<T>>) -> Result<DenseArray<u16, Meta>>
-    where
-        T: ArrayNum,
-        DenseArray<T, Meta>: Scale<T, Meta = Meta>,
-        Meta: ArrayMetadata,
-    {
-        src.scale_to_u16(input_range)
-    }
 }
 
 // Non-SIMD implementation of Scale trait for DenseArray
@@ -337,7 +319,7 @@ impl_scale!(f32, f64);
 /// The scale information is removed from the output metadata.
 pub fn descale<TDest, R>(src: &R) -> R::WithPixelType<TDest>
 where
-    R: Array,
+    R: Array + algo::cast::Cast,
     TDest: ArrayNum,
     for<'a> &'a R: IntoIterator<Item = Option<R::Pixel>>,
 {
