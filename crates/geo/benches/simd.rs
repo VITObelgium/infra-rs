@@ -191,7 +191,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    let _ = algo::scale_to_u8(raster, None).unwrap();
+                    let _ = raster.scale_to_u8(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -201,7 +201,8 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    let _ = algo::simd::scale_to_u8(raster, None).unwrap();
+                    use algo::simd::Scale;
+                    let _ = raster.scale_to_u8(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -212,7 +213,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = algo::scale_to_u8(raster, None).unwrap();
+                    let _ = raster.scale_to_u8(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -224,7 +225,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = algo::scale_to_u8(raster, range.clone()).unwrap();
+                    let _ = raster.scale_to_u8(range.clone()).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -234,7 +235,8 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = algo::simd::scale_to_u8(raster, None).unwrap();
+                    use algo::simd::Scale;
+                    let _ = raster.scale_to_u8(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -244,7 +246,8 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = algo::simd::scale_to_u8(raster, range.clone()).unwrap();
+                    use algo::simd::Scale;
+                    let _ = raster.scale_to_u8(range.clone()).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -255,7 +258,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    let _ = algo::scale_to_u16(raster, None).unwrap();
+                    let _ = raster.scale_to_u16(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -265,7 +268,8 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    let _ = algo::simd::scale_to_u16(raster, None).unwrap();
+                    use algo::simd::Scale;
+                    let _ = raster.scale_to_u16(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -276,7 +280,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = algo::scale_to_u16(raster, None).unwrap();
+                    let _ = raster.scale_to_u16(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -286,7 +290,8 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = algo::simd::scale_to_u16(raster, None).unwrap();
+                    use algo::simd::Scale;
+                    let _ = raster.scale_to_u16(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
