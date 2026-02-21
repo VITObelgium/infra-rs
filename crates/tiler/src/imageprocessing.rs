@@ -87,6 +87,23 @@ mod tests {
         [env!("CARGO_MANIFEST_DIR"), "test", "data", "ref_encoded.png"].iter().collect()
     }
 
+    /// Decode PNG bytes into RGBA pixel data
+    fn decode_png(data: &[u8]) -> Result<(u32, u32, Vec<u8>)> {
+        let decoder = png::Decoder::new(std::io::Cursor::new(data));
+        let mut reader = decoder
+            .read_info()
+            .map_err(|e| Error::Runtime(format!("Failed to read PNG info: {e}")))?;
+        let buf_size = reader
+            .output_buffer_size()
+            .ok_or_else(|| Error::Runtime("Failed to get PNG output buffer size".to_string()))?;
+        let mut buf = vec![0; buf_size];
+        let info = reader
+            .next_frame(&mut buf)
+            .map_err(|e| Error::Runtime(format!("Failed to decode PNG frame: {e}")))?;
+        buf.truncate(info.buffer_size());
+        Ok((info.width, info.height, buf))
+    }
+
     #[test_log::test]
     fn test_encode_png() -> Result<()> {
         const WIDTH: usize = 32;
@@ -103,7 +120,15 @@ mod tests {
 
         let result = encode_png(&data, WIDTH as u32, HEIGHT as u32)?;
         let reference = std::fs::read(reference_image())?;
-        assert_eq!(result, reference, "Encoded image does not match reference");
+
+        // Decode both PNGs and compare pixel data instead of raw bytes
+        // This makes the test robust against compression algorithm changes
+        let (result_width, result_height, result_pixels) = decode_png(&result)?;
+        let (ref_width, ref_height, ref_pixels) = decode_png(&reference)?;
+
+        assert_eq!(result_width, ref_width, "Width mismatch");
+        assert_eq!(result_height, ref_height, "Height mismatch");
+        assert_eq!(result_pixels, ref_pixels, "Decoded pixel data does not match reference");
         Ok(())
     }
 }
