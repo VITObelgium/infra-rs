@@ -23,85 +23,6 @@ pub enum AnyDenseArray<Metadata: ArrayMetadata = RasterMetadata> {
     F64(DenseArray<f64, Metadata>),
 }
 
-/// Macro for applying an operation to an `AnyDenseArray` that returns a non-`AnyDenseArray` type.
-/// This is useful for methods like `rows()`, `columns()`, `is_empty()`, `len()`, etc.
-///
-/// # Examples
-///
-/// ```ignore
-/// // Define a method that returns the same type regardless of variant
-/// apply_anydensearray_method!(rows, Rows);
-/// apply_anydensearray_method!(columns, Columns);
-/// apply_anydensearray_method!(is_empty, bool);
-/// apply_anydensearray_method!(len, usize);
-/// ```
-#[macro_export]
-macro_rules! apply_anydensearray_method {
-    ($method:ident, $ret:ty) => {
-        pub fn $method(&self) -> $ret {
-            match self {
-                $crate::AnyDenseArray::U8(raster) => raster.$method(),
-                $crate::AnyDenseArray::U16(raster) => raster.$method(),
-                $crate::AnyDenseArray::U32(raster) => raster.$method(),
-                $crate::AnyDenseArray::U64(raster) => raster.$method(),
-                $crate::AnyDenseArray::I8(raster) => raster.$method(),
-                $crate::AnyDenseArray::I16(raster) => raster.$method(),
-                $crate::AnyDenseArray::I32(raster) => raster.$method(),
-                $crate::AnyDenseArray::I64(raster) => raster.$method(),
-                $crate::AnyDenseArray::F32(raster) => raster.$method(),
-                $crate::AnyDenseArray::F64(raster) => raster.$method(),
-            }
-        }
-    };
-}
-
-/// Macro for applying an operation to an `AnyDenseArray` that returns a reference to a non-`AnyDenseArray` type.
-/// This is useful for methods like `metadata()` that return references.
-///
-/// # Examples
-///
-/// ```ignore
-/// // Define a method that returns a reference to the same type regardless of variant
-/// apply_anydensearray_method_ref!(metadata, Metadata);
-/// ```
-#[macro_export]
-macro_rules! apply_anydensearray_method_ref {
-    ($method:ident, $ret:ty) => {
-        pub fn $method(&self) -> &$ret {
-            match self {
-                $crate::AnyDenseArray::U8(raster) => raster.$method(),
-                $crate::AnyDenseArray::U16(raster) => raster.$method(),
-                $crate::AnyDenseArray::U32(raster) => raster.$method(),
-                $crate::AnyDenseArray::U64(raster) => raster.$method(),
-                $crate::AnyDenseArray::I8(raster) => raster.$method(),
-                $crate::AnyDenseArray::I16(raster) => raster.$method(),
-                $crate::AnyDenseArray::I32(raster) => raster.$method(),
-                $crate::AnyDenseArray::I64(raster) => raster.$method(),
-                $crate::AnyDenseArray::F32(raster) => raster.$method(),
-                $crate::AnyDenseArray::F64(raster) => raster.$method(),
-            }
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! apply_to_anydensearray {
-    ($array:expr, $var:ident, $expr:expr) => {
-        match $array {
-            $crate::AnyDenseArray::U8($var) => $crate::AnyDenseArray::U8($expr),
-            $crate::AnyDenseArray::U16($var) => $crate::AnyDenseArray::U16($expr),
-            $crate::AnyDenseArray::U32($var) => $crate::AnyDenseArray::U32($expr),
-            $crate::AnyDenseArray::U64($var) => $crate::AnyDenseArray::U64($expr),
-            $crate::AnyDenseArray::I8($var) => $crate::AnyDenseArray::I8($expr),
-            $crate::AnyDenseArray::I16($var) => $crate::AnyDenseArray::I16($expr),
-            $crate::AnyDenseArray::I32($var) => $crate::AnyDenseArray::I32($expr),
-            $crate::AnyDenseArray::I64($var) => $crate::AnyDenseArray::I64($expr),
-            $crate::AnyDenseArray::F32($var) => $crate::AnyDenseArray::F32($expr),
-            $crate::AnyDenseArray::F64($var) => $crate::AnyDenseArray::F64($expr),
-        }
-    };
-}
-
 impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     apply_anydensearray_method!(rows, Rows);
     apply_anydensearray_method!(columns, Columns);
@@ -173,33 +94,11 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 
     pub fn filled_with(fill: Option<f64>, metadata: Metadata, datatype: ArrayDataType) -> Self {
-        match datatype {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::filled_with(cast::option::<u8>(fill), metadata)),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(DenseArray::filled_with(cast::option::<u16>(fill), metadata)),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(DenseArray::filled_with(cast::option::<u32>(fill), metadata)),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(DenseArray::filled_with(cast::option::<u64>(fill), metadata)),
-            ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::filled_with(cast::option::<i8>(fill), metadata)),
-            ArrayDataType::Int16 => AnyDenseArray::I16(DenseArray::filled_with(cast::option::<i16>(fill), metadata)),
-            ArrayDataType::Int32 => AnyDenseArray::I32(DenseArray::filled_with(cast::option::<i32>(fill), metadata)),
-            ArrayDataType::Int64 => AnyDenseArray::I64(DenseArray::filled_with(cast::option::<i64>(fill), metadata)),
-            ArrayDataType::Float32 => AnyDenseArray::F32(DenseArray::filled_with(cast::option::<f32>(fill), metadata)),
-            ArrayDataType::Float64 => AnyDenseArray::F64(DenseArray::filled_with(cast::option::<f64>(fill), metadata)),
-        }
+        dispatch_datatype!(datatype, T, DenseArray::filled_with(cast::option::<T>(fill), metadata))
     }
 
     pub fn empty(datatype: ArrayDataType) -> Self {
-        match datatype {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::empty()),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(DenseArray::empty()),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(DenseArray::empty()),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(DenseArray::empty()),
-            ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::empty()),
-            ArrayDataType::Int16 => AnyDenseArray::I16(DenseArray::empty()),
-            ArrayDataType::Int32 => AnyDenseArray::I32(DenseArray::empty()),
-            ArrayDataType::Int64 => AnyDenseArray::I64(DenseArray::empty()),
-            ArrayDataType::Float32 => AnyDenseArray::F32(DenseArray::empty()),
-            ArrayDataType::Float64 => AnyDenseArray::F64(DenseArray::empty()),
-        }
+        dispatch_datatype!(datatype, T, DenseArray::<T, Metadata>::empty())
     }
 
     pub fn data_type(&self) -> ArrayDataType {
@@ -218,18 +117,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 
     pub fn cell_value<T: ArrayNum>(&self, cell: Cell) -> Option<T> {
-        match self {
-            AnyDenseArray::U8(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::U16(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::U32(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::U64(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::I8(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::I16(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::I32(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::I64(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::F32(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-            AnyDenseArray::F64(raster) => raster.cell_value(cell).and_then(|v| T::from(v)),
-        }
+        dispatch_anydensearray!(self, arr, arr.cell_value(cell).and_then(|v| T::from(v)))
     }
 
     pub fn with_metadata<M: ArrayMetadata>(self, meta: M) -> Result<AnyDenseArray<M>> {
@@ -237,34 +125,15 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 
     pub fn min_max(&self) -> Result<Option<std::ops::RangeInclusive<f64>>> {
-        Ok(match self {
-            AnyDenseArray::U8(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::U16(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::U32(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::U64(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::I8(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::I16(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::I32(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::I64(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::F32(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-            AnyDenseArray::F64(raster) => algo::min_max(raster).and_then(|r| cast::inclusive_range::<f64>(r).ok()),
-        })
+        Ok(dispatch_anydensearray!(
+            self,
+            arr,
+            algo::min_max(arr).and_then(|r| cast::inclusive_range::<f64>(r).ok())
+        ))
     }
 
     pub fn filter(&mut self, values_to_include: &[f64]) -> Result<()> {
-        match self {
-            AnyDenseArray::U8(raster) => algo::filter(raster, &cast::slice::<u8>(values_to_include)?),
-            AnyDenseArray::U16(raster) => algo::filter(raster, &cast::slice::<u16>(values_to_include)?),
-            AnyDenseArray::U32(raster) => algo::filter(raster, &cast::slice::<u32>(values_to_include)?),
-            AnyDenseArray::U64(raster) => algo::filter(raster, &cast::slice::<u64>(values_to_include)?),
-            AnyDenseArray::I8(raster) => algo::filter(raster, &cast::slice::<i8>(values_to_include)?),
-            AnyDenseArray::I16(raster) => algo::filter(raster, &cast::slice::<i16>(values_to_include)?),
-            AnyDenseArray::I32(raster) => algo::filter(raster, &cast::slice::<i32>(values_to_include)?),
-            AnyDenseArray::I64(raster) => algo::filter(raster, &cast::slice::<i64>(values_to_include)?),
-            AnyDenseArray::F32(raster) => algo::filter(raster, &cast::slice::<f32>(values_to_include)?),
-            AnyDenseArray::F64(raster) => algo::filter(raster, &cast::slice::<f64>(values_to_include)?),
-        }
-
+        dispatch_anydensearray!(self, arr, algo::filter(arr, &cast::slice(values_to_include)?));
         Ok(())
     }
 
@@ -277,54 +146,17 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     pub fn write(&mut self, path: &std::path::Path) -> Result<()> {
         use crate::raster::RasterReadWrite;
 
-        match self {
-            AnyDenseArray::U8(raster) => raster.write(path),
-            AnyDenseArray::U16(raster) => raster.write(path),
-            AnyDenseArray::U32(raster) => raster.write(path),
-            AnyDenseArray::U64(raster) => raster.write(path),
-            AnyDenseArray::I8(raster) => raster.write(path),
-            AnyDenseArray::I16(raster) => raster.write(path),
-            AnyDenseArray::I32(raster) => raster.write(path),
-            AnyDenseArray::I64(raster) => raster.write(path),
-            AnyDenseArray::F32(raster) => raster.write(path),
-            AnyDenseArray::F64(raster) => raster.write(path),
-        }
+        dispatch_anydensearray!(self, arr, arr.write(path))
     }
 
     /// # Safety
     /// Used for FFI with python where safety is not guaranteed anyway
     pub unsafe fn raw_data_u8_slice(&self) -> &[u8] {
         unsafe {
-            match self {
-                AnyDenseArray::U8(raster) => raster.as_slice(),
-                AnyDenseArray::U16(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::U32(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::U64(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::I8(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::I16(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::I32(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::I64(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::F32(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-                AnyDenseArray::F64(raster) => {
-                    std::slice::from_raw_parts(raster.as_slice().as_ptr().cast::<u8>(), std::mem::size_of_val(raster.as_slice()))
-                }
-            }
+            dispatch_anydensearray!(self, arr, {
+                let slice = arr.as_slice();
+                std::slice::from_raw_parts(slice.as_ptr().cast::<u8>(), std::mem::size_of_val(slice))
+            })
         }
     }
 }
@@ -354,18 +186,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     pub fn read_as(data_type: ArrayDataType, path: &std::path::Path) -> Result<Self> {
         use crate::raster::RasterReadWrite;
 
-        Ok(match data_type {
-            ArrayDataType::Int8 => AnyDenseArray::I8(DenseArray::<i8, _>::read(path)?),
-            ArrayDataType::Uint8 => AnyDenseArray::U8(DenseArray::<u8, _>::read(path)?),
-            ArrayDataType::Int16 => AnyDenseArray::I16(DenseArray::<i16, _>::read(path)?),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(DenseArray::<u16, _>::read(path)?),
-            ArrayDataType::Int32 => AnyDenseArray::I32(DenseArray::<i32, _>::read(path)?),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(DenseArray::<u32, _>::read(path)?),
-            ArrayDataType::Int64 => AnyDenseArray::I64(DenseArray::<i64, _>::read(path)?),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(DenseArray::<u64, _>::read(path)?),
-            ArrayDataType::Float32 => AnyDenseArray::F32(DenseArray::<f32, _>::read(path)?),
-            ArrayDataType::Float64 => AnyDenseArray::F64(DenseArray::<f64, _>::read(path)?),
-        })
+        Ok(dispatch_datatype!(data_type, T, DenseArray::<T, _>::read(path)?))
     }
 }
 
@@ -417,18 +238,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> TryFrom<AnyDenseArray<Metadata>> for 
     type Error = Error;
 
     fn try_from(value: AnyDenseArray<Metadata>) -> Result<Self> {
-        match value {
-            AnyDenseArray::U8(raster) => dense_array_as::<T, u8, _>(raster),
-            AnyDenseArray::U16(raster) => dense_array_as::<T, u16, _>(raster),
-            AnyDenseArray::U32(raster) => dense_array_as::<T, u32, _>(raster),
-            AnyDenseArray::U64(raster) => dense_array_as::<T, u64, _>(raster),
-            AnyDenseArray::I8(raster) => dense_array_as::<T, i8, _>(raster),
-            AnyDenseArray::I16(raster) => dense_array_as::<T, i16, _>(raster),
-            AnyDenseArray::I32(raster) => dense_array_as::<T, i32, _>(raster),
-            AnyDenseArray::I64(raster) => dense_array_as::<T, i64, _>(raster),
-            AnyDenseArray::F32(raster) => dense_array_as::<T, f32, _>(raster),
-            AnyDenseArray::F64(raster) => dense_array_as::<T, f64, _>(raster),
-        }
+        dispatch_anydensearray!(value, arr, dense_array_as::<T, _, _>(arr))
     }
 }
 
@@ -436,18 +246,7 @@ impl<'a, T: ArrayNum, Metadata: ArrayMetadata> TryFrom<&'a AnyDenseArray<Metadat
     type Error = Error;
 
     fn try_from(value: &'a AnyDenseArray<Metadata>) -> Result<Self> {
-        match value {
-            AnyDenseArray::U8(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::U16(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::U32(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::U64(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::I8(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::I16(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::I32(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::I64(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::F32(raster) => dense_array_as_ref::<T, _, _>(raster),
-            AnyDenseArray::F64(raster) => dense_array_as_ref::<T, _, _>(raster),
-        }
+        dispatch_anydensearray!(value, arr, dense_array_as_ref::<T, _, _>(arr))
     }
 }
 
@@ -455,18 +254,7 @@ impl<'a, T: ArrayNum, Metadata: ArrayMetadata> TryFrom<&'a mut AnyDenseArray<Met
     type Error = Error;
 
     fn try_from(value: &'a mut AnyDenseArray<Metadata>) -> Result<Self> {
-        match value {
-            AnyDenseArray::U8(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::U16(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::U32(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::U64(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::I8(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::I16(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::I32(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::I64(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::F32(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-            AnyDenseArray::F64(raster) => dense_array_as_mut_ref::<T, _, _>(raster),
-        }
+        dispatch_anydensearray!(value, arr, dense_array_as_mut_ref::<T, _, _>(arr))
     }
 }
 

@@ -6,9 +6,7 @@
 
 use std::ops::RangeInclusive;
 
-use crate::{
-    AnyDenseArray, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, Error, RasterScale, Result, apply_to_anydensearray, raster::algo,
-};
+use crate::{AnyDenseArray, ArrayDataType, ArrayMetadata, ArrayNum, DenseArray, Error, RasterScale, Result, raster::algo};
 use algo::{Cast, Scale};
 
 fn cast_range_f64_to_f32(range: Option<RangeInclusive<f64>>) -> Option<RangeInclusive<f32>> {
@@ -70,75 +68,10 @@ impl<Meta: ArrayMetadata> Scale<f64, u16> for AnyDenseArray<Meta> {
     }
 }
 
-/// Macro to apply a `Cast::cast` method to the inner `DenseArray` and wrap in specified `AnyDenseArray` variant.
-macro_rules! cast_inner {
-    ($self:expr, $t:ty) => {
-        match $self {
-            AnyDenseArray::U8(arr) => arr.cast::<$t>(),
-            AnyDenseArray::U16(arr) => arr.cast::<$t>(),
-            AnyDenseArray::U32(arr) => arr.cast::<$t>(),
-            AnyDenseArray::U64(arr) => arr.cast::<$t>(),
-            AnyDenseArray::I8(arr) => arr.cast::<$t>(),
-            AnyDenseArray::I16(arr) => arr.cast::<$t>(),
-            AnyDenseArray::I32(arr) => arr.cast::<$t>(),
-            AnyDenseArray::I64(arr) => arr.cast::<$t>(),
-            AnyDenseArray::F32(arr) => arr.cast::<$t>(),
-            AnyDenseArray::F64(arr) => arr.cast::<$t>(),
-        }
-    };
-}
-
-/// Macro to apply a `Cast::cast_to_slice` method to the inner `DenseArray`.
-macro_rules! cast_to_slice_inner {
-    ($self:expr, $t:ty, $output:expr) => {
-        match $self {
-            AnyDenseArray::U8(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::U16(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::U32(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::U64(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::I8(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::I16(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::I32(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::I64(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::F32(arr) => arr.cast_to_slice::<$t>($output),
-            AnyDenseArray::F64(arr) => arr.cast_to_slice::<$t>($output),
-        }
-    };
-}
-
-/// Macro to apply a `Cast::into_cast` method to the inner `DenseArray` and wrap in specified `AnyDenseArray` variant.
-macro_rules! into_cast_inner {
-    ($self:expr, $t:ty) => {
-        match $self {
-            AnyDenseArray::U8(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::U16(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::U32(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::U64(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::I8(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::I16(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::I32(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::I64(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::F32(arr) => arr.into_cast::<$t>(),
-            AnyDenseArray::F64(arr) => arr.into_cast::<$t>(),
-        }
-    };
-}
-
 /// Cast-like methods for `AnyDenseArray`.
 impl<Meta: ArrayMetadata> AnyDenseArray<Meta> {
     pub fn cast_to<T: ArrayNum>(&self) -> DenseArray<T, Meta> {
-        match self {
-            AnyDenseArray::U8(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::U16(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::U32(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::U64(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I8(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I16(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I32(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::I64(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::F32(raster) => algo::cast::<T, _>(raster),
-            AnyDenseArray::F64(raster) => algo::cast::<T, _>(raster),
-        }
+        dispatch_anydensearray!(self, arr, algo::cast::<T, _>(arr))
     }
 
     /// Cast the array values to the destination type, returning a new `AnyDenseArray`.
@@ -148,18 +81,7 @@ impl<Meta: ArrayMetadata> AnyDenseArray<Meta> {
     /// Values that cannot be represented in the destination type will become nodata.
     /// Existing nodata values are preserved as nodata in the output.
     pub fn cast(&self, data_type: ArrayDataType) -> AnyDenseArray<Meta> {
-        match data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(cast_inner!(self, u8)),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(cast_inner!(self, u16)),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(cast_inner!(self, u32)),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(cast_inner!(self, u64)),
-            ArrayDataType::Int8 => AnyDenseArray::I8(cast_inner!(self, i8)),
-            ArrayDataType::Int16 => AnyDenseArray::I16(cast_inner!(self, i16)),
-            ArrayDataType::Int32 => AnyDenseArray::I32(cast_inner!(self, i32)),
-            ArrayDataType::Int64 => AnyDenseArray::I64(cast_inner!(self, i64)),
-            ArrayDataType::Float32 => AnyDenseArray::F32(cast_inner!(self, f32)),
-            ArrayDataType::Float64 => AnyDenseArray::F64(cast_inner!(self, f64)),
-        }
+        dispatch_datatype!(data_type, T, dispatch_anydensearray!(self, arr, arr.cast::<T>()))
     }
 
     /// Cast the array values to the destination type, writing into a pre-allocated byte slice.
@@ -173,45 +95,10 @@ impl<Meta: ArrayMetadata> AnyDenseArray<Meta> {
     ///
     /// Returns an error if the output slice length doesn't match the array length (in bytes).
     pub fn cast_to_slice(&self, data_type: ArrayDataType, output: &mut [u8]) -> Result<()> {
-        match data_type {
-            ArrayDataType::Uint8 => cast_to_slice_inner!(self, u8, output),
-            ArrayDataType::Uint16 => {
-                let slice = bytemuck::cast_slice_mut::<u8, u16>(output);
-                cast_to_slice_inner!(self, u16, slice)
-            }
-            ArrayDataType::Uint32 => {
-                let slice = bytemuck::cast_slice_mut::<u8, u32>(output);
-                cast_to_slice_inner!(self, u32, slice)
-            }
-            ArrayDataType::Uint64 => {
-                let slice = bytemuck::cast_slice_mut::<u8, u64>(output);
-                cast_to_slice_inner!(self, u64, slice)
-            }
-            ArrayDataType::Int8 => {
-                let slice = bytemuck::cast_slice_mut::<u8, i8>(output);
-                cast_to_slice_inner!(self, i8, slice)
-            }
-            ArrayDataType::Int16 => {
-                let slice = bytemuck::cast_slice_mut::<u8, i16>(output);
-                cast_to_slice_inner!(self, i16, slice)
-            }
-            ArrayDataType::Int32 => {
-                let slice = bytemuck::cast_slice_mut::<u8, i32>(output);
-                cast_to_slice_inner!(self, i32, slice)
-            }
-            ArrayDataType::Int64 => {
-                let slice = bytemuck::cast_slice_mut::<u8, i64>(output);
-                cast_to_slice_inner!(self, i64, slice)
-            }
-            ArrayDataType::Float32 => {
-                let slice = bytemuck::cast_slice_mut::<u8, f32>(output);
-                cast_to_slice_inner!(self, f32, slice)
-            }
-            ArrayDataType::Float64 => {
-                let slice = bytemuck::cast_slice_mut::<u8, f64>(output);
-                cast_to_slice_inner!(self, f64, slice)
-            }
-        }
+        dispatch_datatype_nowrap!(data_type, T, {
+            let slice = bytemuck::cast_slice_mut::<u8, T>(output);
+            dispatch_anydensearray!(self, arr, arr.cast_to_slice::<T>(slice))
+        })
     }
 
     /// Cast the array values to the destination type, consuming self and reusing the buffer
@@ -225,18 +112,7 @@ impl<Meta: ArrayMetadata> AnyDenseArray<Meta> {
     /// This is more efficient than `cast_to_type()` when casting to a smaller type or equally sized type
     /// as it avoids allocating a new buffer.
     pub fn into_cast(self, data_type: ArrayDataType) -> AnyDenseArray<Meta> {
-        match data_type {
-            ArrayDataType::Uint8 => AnyDenseArray::U8(into_cast_inner!(self, u8)),
-            ArrayDataType::Uint16 => AnyDenseArray::U16(into_cast_inner!(self, u16)),
-            ArrayDataType::Uint32 => AnyDenseArray::U32(into_cast_inner!(self, u32)),
-            ArrayDataType::Uint64 => AnyDenseArray::U64(into_cast_inner!(self, u64)),
-            ArrayDataType::Int8 => AnyDenseArray::I8(into_cast_inner!(self, i8)),
-            ArrayDataType::Int16 => AnyDenseArray::I16(into_cast_inner!(self, i16)),
-            ArrayDataType::Int32 => AnyDenseArray::I32(into_cast_inner!(self, i32)),
-            ArrayDataType::Int64 => AnyDenseArray::I64(into_cast_inner!(self, i64)),
-            ArrayDataType::Float32 => AnyDenseArray::F32(into_cast_inner!(self, f32)),
-            ArrayDataType::Float64 => AnyDenseArray::F64(into_cast_inner!(self, f64)),
-        }
+        dispatch_datatype!(data_type, T, dispatch_anydensearray!(self, arr, arr.into_cast::<T>()))
     }
 }
 

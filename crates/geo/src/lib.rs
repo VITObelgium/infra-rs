@@ -2,6 +2,8 @@
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
+#[macro_use]
+mod anydensearray_macros;
 mod anydensearray;
 pub mod anydensearrayalgo;
 mod anydensearrayops;
