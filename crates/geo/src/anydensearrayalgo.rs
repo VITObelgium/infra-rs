@@ -114,6 +114,10 @@ impl<Meta: ArrayMetadata> AnyDenseArray<Meta> {
     pub fn into_cast(self, data_type: ArrayDataType) -> AnyDenseArray<Meta> {
         dispatch_datatype!(data_type, T, dispatch_anydensearray!(self, arr, arr.into_cast::<T>()))
     }
+
+    pub fn cast_into_dense_array<T: ArrayNum>(self) -> DenseArray<T, Meta> {
+        dispatch_anydensearray!(self, arr, arr.into_cast::<T>())
+    }
 }
 
 #[cfg(test)]
