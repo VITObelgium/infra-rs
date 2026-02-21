@@ -22,43 +22,47 @@ pub fn crop(array: AnyDenseArray) -> AnyDenseArray {
     apply_to_anydensearray!(array, arr, algo::crop(arr))
 }
 
-impl<Meta: ArrayMetadata> Scale<f64> for AnyDenseArray<Meta> {
+impl<Meta: ArrayMetadata> Scale<f64, u8> for AnyDenseArray<Meta> {
     type Meta = Meta;
 
-    fn scale_to_u8(&self, input_range: Option<RangeInclusive<f64>>) -> Result<DenseArray<u8, Meta>> {
+    fn scale(&self, input_range: Option<RangeInclusive<f64>>) -> Result<DenseArray<u8, Meta>> {
         match self {
-            AnyDenseArray::F32(arr) => arr.scale_to_u8(cast_range_f64_to_f32(input_range)),
-            AnyDenseArray::F64(arr) => arr.scale_to_u8(input_range),
+            AnyDenseArray::F32(arr) => arr.scale(cast_range_f64_to_f32(input_range)),
+            AnyDenseArray::F64(arr) => arr.scale(input_range),
             _ => Err(Error::InvalidArgument(
                 "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
             )),
         }
     }
 
-    fn scale_to_u16(&self, input_range: Option<RangeInclusive<f64>>) -> Result<DenseArray<u16, Meta>> {
+    fn scale_to_slice(&self, input_range: Option<RangeInclusive<f64>>, output: &mut [u8]) -> Result<RasterScale> {
         match self {
-            AnyDenseArray::F32(arr) => arr.scale_to_u16(cast_range_f64_to_f32(input_range)),
-            AnyDenseArray::F64(arr) => arr.scale_to_u16(input_range),
+            AnyDenseArray::F32(arr) => arr.scale_to_slice(cast_range_f64_to_f32(input_range), output),
+            AnyDenseArray::F64(arr) => arr.scale_to_slice(input_range, output),
+            _ => Err(Error::InvalidArgument(
+                "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
+            )),
+        }
+    }
+}
+
+impl<Meta: ArrayMetadata> Scale<f64, u16> for AnyDenseArray<Meta> {
+    type Meta = Meta;
+
+    fn scale(&self, input_range: Option<RangeInclusive<f64>>) -> Result<DenseArray<u16, Meta>> {
+        match self {
+            AnyDenseArray::F32(arr) => arr.scale(cast_range_f64_to_f32(input_range)),
+            AnyDenseArray::F64(arr) => arr.scale(input_range),
             _ => Err(Error::InvalidArgument(
                 "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
             )),
         }
     }
 
-    fn scale_to_u8_slice(&self, input_range: Option<RangeInclusive<f64>>, output: &mut [u8]) -> Result<RasterScale> {
+    fn scale_to_slice(&self, input_range: Option<RangeInclusive<f64>>, output: &mut [u16]) -> Result<RasterScale> {
         match self {
-            AnyDenseArray::F32(arr) => arr.scale_to_u8_slice(cast_range_f64_to_f32(input_range), output),
-            AnyDenseArray::F64(arr) => arr.scale_to_u8_slice(input_range, output),
-            _ => Err(Error::InvalidArgument(
-                "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
-            )),
-        }
-    }
-
-    fn scale_to_u16_slice(&self, input_range: Option<RangeInclusive<f64>>, output: &mut [u16]) -> Result<RasterScale> {
-        match self {
-            AnyDenseArray::F32(arr) => arr.scale_to_u16_slice(cast_range_f64_to_f32(input_range), output),
-            AnyDenseArray::F64(arr) => arr.scale_to_u16_slice(input_range, output),
+            AnyDenseArray::F32(arr) => arr.scale_to_slice(cast_range_f64_to_f32(input_range), output),
+            AnyDenseArray::F64(arr) => arr.scale_to_slice(input_range, output),
             _ => Err(Error::InvalidArgument(
                 "Scale is only supported for floating point rasters (f32 and f64)".to_string(),
             )),

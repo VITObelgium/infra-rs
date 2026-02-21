@@ -191,7 +191,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    let _ = raster.scale_to_u8(None).unwrap();
+                    let _: DenseRaster<u8> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -202,7 +202,7 @@ mod bench {
                 create_f64_raster,
                 |raster| {
                     use algo::simd::Scale;
-                    let _ = raster.scale_to_u8(None).unwrap();
+                    let _: DenseRaster<u8> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -213,7 +213,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = raster.scale_to_u8(None).unwrap();
+                    let _: DenseRaster<u8> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -225,7 +225,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = raster.scale_to_u8(range.clone()).unwrap();
+                    let _: DenseRaster<u8> = raster.scale_to(range.clone()).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -236,7 +236,7 @@ mod bench {
                 create_f32_raster,
                 |raster| {
                     use algo::simd::Scale;
-                    let _ = raster.scale_to_u8(None).unwrap();
+                    let _: DenseRaster<u8> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -247,7 +247,7 @@ mod bench {
                 create_f32_raster,
                 |raster| {
                     use algo::simd::Scale;
-                    let _ = raster.scale_to_u8(range.clone()).unwrap();
+                    let _: DenseRaster<u8> = raster.scale_to(range.clone()).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -258,7 +258,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    let _ = raster.scale_to_u16(None).unwrap();
+                    let _: DenseRaster<u16> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -269,7 +269,7 @@ mod bench {
                 create_f64_raster,
                 |raster| {
                     use algo::simd::Scale;
-                    let _ = raster.scale_to_u16(None).unwrap();
+                    let _: DenseRaster<u16> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -280,7 +280,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _ = raster.scale_to_u16(None).unwrap();
+                    let _: DenseRaster<u16> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -291,7 +291,7 @@ mod bench {
                 create_f32_raster,
                 |raster| {
                     use algo::simd::Scale;
-                    let _ = raster.scale_to_u16(None).unwrap();
+                    let _: DenseRaster<u16> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
             );
