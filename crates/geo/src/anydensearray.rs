@@ -258,6 +258,31 @@ impl<'a, T: ArrayNum, Metadata: ArrayMetadata> TryFrom<&'a mut AnyDenseArray<Met
     }
 }
 
+#[cfg(target_arch = "wasm32")]
+impl<Metadata: ArrayMetadata> From<&AnyDenseArray<Metadata>> for js_sys::ArrayBuffer {
+    fn from(array: &AnyDenseArray<Metadata>) -> Self {
+        match array {
+            AnyDenseArray::U8(arr) => js_sys::Uint8Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::U16(arr) => js_sys::Uint16Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::U32(arr) => js_sys::Uint32Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::U64(arr) => js_sys::BigUint64Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::I8(arr) => js_sys::Int8Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::I16(arr) => js_sys::Int16Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::I32(arr) => js_sys::Int32Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::I64(arr) => js_sys::BigInt64Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::F32(arr) => js_sys::Float32Array::from(arr.as_slice()).buffer(),
+            AnyDenseArray::F64(arr) => js_sys::Float64Array::from(arr.as_slice()).buffer(),
+        }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+impl<Metadata: ArrayMetadata> From<AnyDenseArray<Metadata>> for js_sys::ArrayBuffer {
+    fn from(array: AnyDenseArray<Metadata>) -> Self {
+        js_sys::ArrayBuffer::from(&array)
+    }
+}
+
 #[cfg(test)]
 mod tests {
 

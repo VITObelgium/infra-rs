@@ -92,6 +92,7 @@ test-log = "0.2"
 criterion = "0.8"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
+js-sys = "0.3"
 serde = { version = "1.0" }
 tsify = { version = "*", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2", features = ["serde"] }

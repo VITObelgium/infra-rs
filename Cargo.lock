@@ -2111,6 +2111,7 @@ dependencies = [
  "glob",
  "inf",
  "itertools 0.14.0",
+ "js-sys",
  "log",
  "num",
  "paste",
