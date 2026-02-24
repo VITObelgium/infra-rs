@@ -12,7 +12,7 @@ dependencies = [
 ]  # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
 overlay-triplets-path = "vcpkg-overlay/triplets"
-rev = "ce613c4"
+rev = "66c0373"
 
 [package.metadata.vcpkg.target]
 # aarch64-apple-darwin = { triplet = "arm64-osx-debugsymbols" }

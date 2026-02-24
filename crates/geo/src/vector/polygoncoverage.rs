@@ -52,11 +52,7 @@ pub enum BorderHandling {
 
 fn warp_geometry(geom: &geos::Geometry, source_projection: SpatialReference, dest_projection: SpatialReference) -> Result<geos::Geometry> {
     let transfomer = CoordinateTransformer::new(&source_projection.to_proj()?, &dest_projection.to_proj()?)?;
-
-    let warped = geom.transform_xy(|x, y| match transfomer.transform_point((x, y).into()) {
-        Ok(coord) => Some((coord.x(), coord.y())),
-        Err(_) => None,
-    })?;
+    let warped = geom.transform_xy(|x, y| transfomer.transform_point((x, y).into()).map(|coord| (coord.x(), coord.y())))?;
 
     Ok(warped)
 }
