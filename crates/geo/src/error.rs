@@ -42,9 +42,6 @@ pub enum Error {
     #[error("Python error: {0}")]
     PythonError(#[from] pyo3::PyErr),
     #[cfg(feature = "vector-processing")]
-    #[error("Geozero error: {0}")]
-    GeoZeroError(#[from] geozero::error::GeozeroError),
-    #[cfg(feature = "vector-processing")]
     #[error("Geos error: {0}")]
     GeosError(#[from] geos::Error),
     //#[error("Proj error: {0}")]

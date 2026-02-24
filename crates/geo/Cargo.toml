@@ -51,7 +51,6 @@ gdal = { version = "0.19", optional = true }
 gdal-sys = { version = "0.12", optional = true }
 geo-types = { version = "0.7", features = ["approx"] }
 geos = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
-geozero = { version = "0.15", optional = true }
 glob = "0.3"
 inf = { path = "../inf" }
 itertools = "0.14"
@@ -126,6 +125,4 @@ vector-processing = [
   "dep:gdal",
   "dep:geos",
   "dep:rayon",
-  "geozero/with-gdal",
-  "geozero/with-geos",
 ]

@@ -71,8 +71,6 @@ vector = ["geo/vector-io", "geo/vector-io-csv", "geo/vector-io-xlsx"]
 
 [patch.crates-io]
 crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev = "9d01fb7993537a3ba632bf60899b884434a1d453" }
-# more recent geozero to avoid multiple gdal copies
-geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "45d83658d1c13f81fd330b71868610b5bdac6160" }
 proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
 # https://github.com/image-rs/image-tiff/issues/253
 tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "51e31a7ff65e5c63cc404efacc4d2f9db174c773" }

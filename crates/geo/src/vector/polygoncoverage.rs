@@ -2,7 +2,6 @@ use crate::RasterSize;
 use crate::{Cell, CellIterator};
 use gdal::vector::{LayerAccess, ToGdal};
 use geos::Geom;
-use geozero::ToGeos as _;
 use inf::duration;
 use inf::progressinfo::AsyncProgressNotification;
 use rayon::prelude::*;
@@ -16,6 +15,13 @@ use crate::{
 
 use super::BurnValue;
 use super::coveragetools::VectorBuilder;
+
+/// Converts a GDAL geometry to a GEOS geometry using WKB serialization.
+fn gdal_to_geos(geom: &gdal::vector::Geometry) -> Result<geos::Geometry> {
+    let wkb = geom.wkb()?;
+    let geos_geom = geos::Geometry::new_from_wkb(&wkb)?;
+    Ok(geos_geom)
+}
 
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 pub struct CellInfo {
@@ -395,7 +401,7 @@ pub fn create_geometries(
             };
 
             if let Some(geom) = feature.geometry() {
-                geometries.push((feature.fid().unwrap_or(0), value, name, geom.to_geos()?));
+                geometries.push((feature.fid().unwrap_or(0), value, name, gdal_to_geos(geom)?));
             }
         }
     }
