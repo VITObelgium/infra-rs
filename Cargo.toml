@@ -7,7 +7,7 @@ dependencies = [
   "proj[core,embed-data]",
   "gdal[core,netcdf,zstd,expat]",
   "hdf5[core,zlib]",
-  "netcdf-c[core,netcdf-4,hdf5]",
+  "netcdf-c[core,netcdf-4]",
   "tiff[core,lzma,zstd]",
 ]  # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
