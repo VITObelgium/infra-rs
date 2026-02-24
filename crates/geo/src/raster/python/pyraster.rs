@@ -17,7 +17,7 @@ use arrow::{
 use pyo3::{pyclass, pymethods};
 
 #[derive(Clone)]
-#[pyclass(name = "RasterMetadata")]
+#[pyclass(from_py_object, name = "RasterMetadata")]
 pub struct PyRasterMetadata {
     // The raw projection string
     pub projection: String,

@@ -4,12 +4,12 @@ edition = "2024"
 
 [package.metadata.vcpkg]
 dependencies = [
-    "proj[core,embed-data]",
-    "gdal[core,netcdf,zstd,expat]",
-    "hdf5[core,zlib]",
-    "netcdf-c[core,netcdf-4,hdf5]",
-    "tiff[core,lzma,zstd]",
-] # needed to run the geo tests
+  "proj[core,embed-data]",
+  "gdal[core,netcdf,zstd,expat]",
+  "hdf5[core,zlib]",
+  "netcdf-c[core,netcdf-4,hdf5]",
+  "tiff[core,lzma,zstd]",
+]  # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
 overlay-triplets-path = "vcpkg-overlay/triplets"
 rev = "ce613c4"
@@ -26,57 +26,56 @@ x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 package.version = "2026.1.23"
 package.edition = "2024"
 members = [
-    "crates/geo",
-    "crates/geo/vector_derive",
-    "crates/inf",
-    "crates/raster-tile",
-    "crates/sqlite",
-    "crates/tiler",
-    "tools/cog-analyzer",
-    "tools/creatembtiles",
-    "tools/createcog",
-    "tools/tiles2raster",
-    "tools/tileserver",
+  "crates/geo",
+  "crates/geo/vector_derive",
+  "crates/inf",
+  "crates/raster-tile",
+  "crates/sqlite",
+  "crates/tiler",
+  "tools/cog-analyzer",
+  "tools/createcog",
+  "tools/creatembtiles",
+  "tools/tiles2raster",
+  "tools/tileserver",
 ]
-
 default-members = [
-    "crates/geo",
-    "crates/geo/vector_derive",
-    "crates/inf",
-    "crates/raster-tile",
-    "crates/sqlite",
-    "crates/tiler",
+  "crates/geo",
+  "crates/geo/vector_derive",
+  "crates/inf",
+  "crates/raster-tile",
+  "crates/sqlite",
+  "crates/tiler",
 ]
 
 [dependencies]
 geo = { path = "./crates/geo" }
 inf = { path = "./crates/inf" }
 pyo3 = { version = "*", optional = true }
-sqlite = { optional = true, path = "./crates/sqlite" }
-tiler = { optional = true, path = "./crates/tiler" }
-tileserver = { optional = true, path = "./tools/tileserver" }
+sqlite = { path = "./crates/sqlite", optional = true }
+tiler = { path = "./crates/tiler", optional = true }
+tileserver = { path = "./tools/tileserver", optional = true }
 
 [features]
+default = ["cog", "gdal-static", "serde", "sqlite"]
 arrow = ["geo/arrow"]
-cog = ["geo/raster-io-geotiff", "geo/deflate"]
-default = ["gdal-static", "serde", "sqlite", "cog"]
+cog = ["geo/deflate", "geo/raster-io-geotiff"]
 gdal = ["geo/gdal"]
 gdal-static = ["gdal", "geo/gdal-static"]
-vector = ["geo/vector-io", "geo/vector-io-xlsx", "geo/vector-io-csv"]
 python = ["pyo3/auto-initialize"]
 serde = ["inf/serde"]
+simd = ["geo/simd"]
 sqlite = ["dep:sqlite"]
 tiler = ["dep:tiler"]
-simd = ["geo/simd"]
 tui = ["tileserver/tui"]
+vector = ["geo/vector-io", "geo/vector-io-csv", "geo/vector-io-xlsx"]
 
 [patch.crates-io]
 crs-definitions = { git = "https://github.com/dirkvdb/crs-definitions.git", rev = "9d01fb7993537a3ba632bf60899b884434a1d453" }
-proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
-# https://github.com/image-rs/image-tiff/issues/253
-tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "5bdf780fbe72ace6cdb16a5d943870b5f72e9139" }
 # more recent geozero to avoid multiple gdal copies
 geozero = { git = "https://github.com/dirkvdb/geozero.git", rev = "45d83658d1c13f81fd330b71868610b5bdac6160" }
+proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
+# https://github.com/image-rs/image-tiff/issues/253
+tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "51e31a7ff65e5c63cc404efacc4d2f9db174c773" }
 
 # [profile.dev]
 # debug = "line-tables-only"

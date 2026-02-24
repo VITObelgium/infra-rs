@@ -1,6 +1,6 @@
 [package]
 name = "inf"
-version.workspace = true # inherit from [workspace.package]
+version.workspace = true  # inherit from [workspace.package]
 edition.workspace = true
 
 [[bench]]
@@ -9,12 +9,12 @@ name = "colormapping"
 
 [dependencies]
 approx = "0.5"
-bytemuck = { version = "1.25", features = ["extern_crate_alloc", "derive"] }
+bytemuck = { version = "1.25", features = ["derive", "extern_crate_alloc"] }
 log = "0.4"
 num = "0.4"
 serde = { version = "1.0", features = ["derive"], optional = true }
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
-strum = { version = "0.27", features = ["derive"] }
+strum = { version = "0.28", features = ["derive"] }
 thiserror = "2.0"
 
 [dev-dependencies]
@@ -27,9 +27,9 @@ test-log = "0.2"
 criterion = "0.8"
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen = { version = "0.2", features = ["serde"] }
-tsify = { version = "*", default-features = false, features = ["js"] }
 serde = { version = "1.0" }
+tsify = { version = "*", default-features = false, features = ["js"] }
+wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
 default = []

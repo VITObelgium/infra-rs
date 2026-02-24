@@ -1,6 +1,6 @@
 [package]
 name = "geo"
-version.workspace = true # inherit from [workspace.package]
+version.workspace = true  # inherit from [workspace.package]
 edition.workspace = true
 
 [package.metadata.docs.rs]
@@ -14,16 +14,16 @@ rustdoc-args = ["--cfg", "docsrs"]
 
 [package.metadata.vcpkg]
 dependencies = [
-    "gdal[core,geos,sqlite3]",
-    "proj[core,embed-data]",
-    "tiff[core,lzma,zip]",
+  "gdal[core,geos,sqlite3]",
+  "proj[core,embed-data]",
+  "tiff[core,lzma,zip]",
 ]
 
 [package.metadata.vcpkg.target]
 x86_64-unknown-linux-gnu = { dependencies = [
-    "gdal[core,geos,iconv,sqlite3]",
-    "proj[core,embed-data]",
-    "tiff[core,lzma,zip]",
+  "gdal[core,geos,iconv,sqlite3]",
+  "proj[core,embed-data]",
+  "tiff[core,lzma,zip]",
 ] }
 
 [[bench]]
@@ -36,46 +36,46 @@ name = "simd"
 
 [dependencies]
 approx = "0.5"
-arrow = { version = "57", optional = true }
+arrow = { version = "58", optional = true }
 bon = { version = "3.9", optional = true }
 bytemuck = { version = "1.25" }
-flate2 = { version = "1.1", default-features = false, features = [
-    "rust_backend",
-], optional = true }
 calamine = { version = "0.33", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.3.1", optional = true }
 csv = { version = "1.4", optional = true }
+flate2 = { version = "1.1", default-features = false, features = [
+  "rust_backend",
+], optional = true }
 gdal = { version = "0.19", optional = true }
-glob = "0.3"
 gdal-sys = { version = "0.12", optional = true }
 geo-types = { version = "0.7", features = ["approx"] }
 geos = { version = "10.0", features = ["geo", "v3_11_0"], optional = true }
 geozero = { version = "0.15", optional = true }
+glob = "0.3"
 inf = { path = "../inf" }
 itertools = "0.14"
 log = "0.4"
 num = "0.4"
 paste = "1.0"
-polars = { version = "0.53", features = [
-    "timezones",
-], default-features = false, optional = true } # crate dependencies should decide which features to use to avoid unnecessary long compile times
+polars = { version = "0.53", default-features = false, features = [
+  "timezones",
+], optional = true }  # crate dependencies should decide which features to use to avoid unnecessary long compile times
 proj = { version = "0.31", optional = true }
 proj4rs = { version = "0.1", features = [
-    "crs-definitions",
-    "geo-types",
+  "crs-definitions",
+  "geo-types",
 ], optional = true }
 proj4wkt = { version = "0.1", optional = true }
-pyo3 = { version = "0.26", optional = true }
+pyo3 = { version = "0.28", optional = true }
 rayon = { version = "1.11", optional = true }
 ruzstd = { version = "0.8", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 simd_macro = { path = "simd_macro" }
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 thiserror = "2.0"
-tiff = { version = "0.11.2", optional = true, default-features = false }
-vector_derive = { optional = true, path = "vector_derive" }
+tiff = { version = "0.11.3", default-features = false, optional = true }
+vector_derive = { path = "vector_derive", optional = true }
 weezl = { version = "0.1", optional = true }
 xml-rs = { version = "1.0", optional = true }
 
@@ -98,15 +98,15 @@ tsify = { version = "*", default-features = false, features = ["js"] }
 wasm-bindgen = { version = "0.2", features = ["serde"] }
 
 [features]
+default = [
+  "derive",
+  "gdal-static",
+  "raster-io-geotiff",
+  "vector-io",
+  "vector-processing",
+]
 arrow = ["dep:arrow"]
 deflate = ["dep:flate2"]
-default = [
-    "derive",
-    "gdal-static",
-    "vector-io",
-    "vector-processing",
-    "raster-io-geotiff",
-]
 derive = ["dep:vector_derive"]
 gdal = ["dep:bon", "dep:gdal", "dep:gdal-sys", "proj", "vector-io"]
 gdal-static = ["gdal"]
@@ -120,12 +120,12 @@ serde = ["dep:serde"]
 simd = ["inf/simd", "simd_macro/simd"]
 specta = ["dep:specta"]
 vector-io = ["dep:chrono"]
-vector-io-csv = ["vector-io", "dep:csv"]
-vector-io-xlsx = ["vector-io", "dep:calamine"]
+vector-io-csv = ["dep:csv", "vector-io"]
+vector-io-xlsx = ["dep:calamine", "vector-io"]
 vector-processing = [
-    "dep:gdal",
-    "dep:geos",
-    "dep:rayon",
-    "geozero/with-geos",
-    "geozero/with-gdal",
+  "dep:gdal",
+  "dep:geos",
+  "dep:rayon",
+  "geozero/with-gdal",
+  "geozero/with-geos",
 ]
