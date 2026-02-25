@@ -50,12 +50,9 @@ pub fn parse_tile_data<T: ArrayNum>(
     let mut meta = RasterMetadata::sized_with_nodata(raster_size, nodata);
     let mut tile_data = AlignedVecUnderConstruction::new(raster_size.cell_count());
 
-    parse_chunk_data_into_buffer(raster_size.cols.count() as u32, compression, predictor, chunk_data, unsafe {
-        tile_data.as_slice_mut()
-    })?;
+    parse_tile_data_into_slice(tile_size, compression, predictor, chunk_data, unsafe { tile_data.as_slice_mut() })?;
 
     let mut arr = DenseArray::<T>::new_init_nodata(meta, unsafe { tile_data.assume_init() })?;
-
     if let Some(cutout) = cutout {
         let size = RasterSize::with_rows_cols(Rows(cutout.rows), Columns(cutout.cols));
         let window = RasterWindow::new(Cell::from_row_col(cutout.src_row_offset, cutout.src_col_offset), size);
@@ -66,4 +63,17 @@ pub fn parse_tile_data<T: ArrayNum>(
     }
 
     Ok(arr)
+}
+
+#[simd_bounds]
+pub fn parse_tile_data_into_slice<T: ArrayNum>(
+    tile_size: u32,
+    compression: Option<Compression>,
+    predictor: Option<Predictor>,
+    chunk_data: &[u8],
+    tile_data: &mut [T],
+) -> Result<()> {
+    assert_eq!(tile_data.len(), tile_size as usize * tile_size as usize);
+    parse_chunk_data_into_buffer(tile_size, compression, predictor, chunk_data, tile_data)?;
+    Ok(())
 }
