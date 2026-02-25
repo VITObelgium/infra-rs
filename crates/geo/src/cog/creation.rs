@@ -22,6 +22,7 @@ pub struct CogCreationOptions {
     pub allow_sparse: bool,
     pub output_data_type: Option<ArrayDataType>,
     pub aligned_levels: Option<i32>,
+    pub scale: bool,
 }
 
 impl Default for CogCreationOptions {
@@ -35,6 +36,7 @@ impl Default for CogCreationOptions {
             allow_sparse: true,
             output_data_type: None,
             aligned_levels: None,
+            scale: false,
         }
     }
 }
@@ -79,13 +81,12 @@ fn gdal_predictor_name(predictor: Option<PredictorSelection>) -> &'static str {
     }
 }
 
-pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<String>> {
-    let mut overview_option = "IGNORE_EXISTING";
-
-    let mut options = vec![
-        "-overwrite".to_string(),
+fn cog_creation_options(opts: &CogCreationOptions) -> Vec<String> {
+    vec![
         "-f".to_string(),
         "COG".to_string(),
+        "-co".into(),
+        "INTERLEAVE=TILE".into(),
         "-co".to_string(),
         format!("BLOCKSIZE={}", opts.tile_size),
         "-co".to_string(),
@@ -106,7 +107,13 @@ pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<St
         format!("COMPRESS={}", gdal_compression_name(opts.compression)),
         "-co".to_string(),
         format!("PREDICTOR={}", gdal_predictor_name(opts.predictor)),
-    ];
+    ]
+}
+
+pub fn create_gdal_warp_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<String>> {
+    let mut overview_option = "IGNORE_EXISTING";
+
+    let mut options = cog_creation_options(&opts);
 
     match opts.zoom_level_strategy {
         ZoomLevelStrategy::Manual(zoom) => {
@@ -160,14 +167,52 @@ pub fn create_gdal_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<St
         options.extend(["-co".to_string(), format!("ALIGNED_LEVELS={aligned_levels}")]);
     }
 
-    options.extend(["-co".to_string(), format!("OVERVIEWS={overview_option}")]);
+    options.extend(["-overwrite".to_string(), "-co".to_string(), format!("OVERVIEWS={overview_option}")]);
 
-    if let Some(output_type) = opts.output_data_type {
+    // Don't set the output data type if scaling is requested, the raster will be scaled in a postprocessing step
+    if !opts.scale
+        && let Some(output_type) = opts.output_data_type
+    {
         options.push("-ot".to_string());
         options.push(gdal_data_type_name(output_type).to_string());
     }
 
     Ok(options)
+}
+
+pub fn create_translate_scale_args(opts: &CogCreationOptions) -> Result<Vec<String>> {
+    assert!(opts.scale);
+
+    let (scaled_data_type, nodata) = match opts.output_data_type {
+        Some(ArrayDataType::Uint8) | None => (ArrayDataType::Uint8, u8::MAX.to_string()),
+        Some(ArrayDataType::Uint16) => (ArrayDataType::Uint16, u16::MAX.to_string()),
+        Some(_) => {
+            return Err(Error::InvalidArgument(
+                "Scaling only supports output data type: u8 or u16".to_string(),
+            ));
+        }
+    };
+
+    let mut options = cog_creation_options(opts);
+    options.extend([
+        "-scale".to_string(),
+        "-ot".to_string(),
+        gdal_data_type_name(scaled_data_type).to_string(),
+        "-co".to_string(),
+        "OVERVIEWS=FORCE_USE_EXISTING".to_string(),
+        "-a_nodata".to_string(),
+        nodata,
+    ]);
+
+    Ok(options)
+}
+
+fn scale_cog(cog_path: &Path, opts: CogCreationOptions) -> Result<()> {
+    let translate_options = create_translate_scale_args(&opts)?;
+    let scaled_tmp_path = cog_path.with_file_name(format!(".temp.{}", cog_path.file_name().unwrap().to_string_lossy()));
+    raster::algo::gdal::translate_file(cog_path, &scaled_tmp_path, &translate_options)?;
+    std::fs::rename(&scaled_tmp_path, cog_path)?;
+    Ok(())
 }
 
 pub fn create_multiband_cog_tiles(input: &str, output: &Path, opts: CogCreationOptions) -> Result<()> {
@@ -179,20 +224,26 @@ pub fn create_multiband_cog_tiles(input: &str, output: &Path, opts: CogCreationO
     let datasets = file_paths
         .iter()
         .map(raster::formats::gdal::open_dataset_read_only)
+        .map(|res| res.and_then(create_vrt_with_nodata))
         .collect::<Result<Vec<_>>>()?;
 
     if datasets.is_empty() {
         return Err(Error::InvalidArgument(format!("No files match the input pattern: {}", input)));
     }
 
-    let mut options = create_gdal_args(file_paths.first().unwrap(), opts)?;
-    options.extend(["-co".into(), "INTERLEAVE=TILE".into()]);
+    let mut options = create_gdal_warp_args(file_paths.first().unwrap(), opts)?;
+    options.extend([]);
 
     let vrt_options = gdal::programs::raster::BuildVRTOptions::new(["-separate", "-strict"])?;
     let src_ds = gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?;
 
-    let options = create_gdal_args(&PathBuf::from(input), opts)?;
+    let options = create_gdal_warp_args(&PathBuf::from(input), opts)?;
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
+
+    if opts.scale {
+        scale_cog(output, opts)?;
+    }
+
     Ok(())
 }
 
@@ -217,13 +268,17 @@ fn create_vrt_with_nodata(src_ds: gdal::Dataset) -> Result<gdal::Dataset> {
 }
 
 pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -> Result<()> {
-    let options = create_gdal_args(input, opts)?;
+    let options = create_gdal_warp_args(input, opts)?;
     let src_ds = raster::formats::gdal::open_dataset_read_only(input)?;
     // If the source doesn't have a nodata value, create a VRT wrapper that adds it
     // This way we don't modify the read-only source dataset.
     let src_ds = create_vrt_with_nodata(src_ds)?;
 
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
+    if opts.scale {
+        scale_cog(output, opts)?;
+    }
+
     Ok(())
 }
 
@@ -256,6 +311,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Uint8),
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -285,6 +341,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Float32),
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -314,6 +371,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: None,
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -339,6 +397,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: None,
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -375,6 +434,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Uint8),
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -404,6 +464,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: Some(ArrayDataType::Float32),
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -433,6 +494,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: None,
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;
@@ -459,6 +521,7 @@ mod tests {
                 allow_sparse: true,
                 output_data_type: None,
                 aligned_levels: None,
+                scale: false,
             };
 
             create_cog_tiles(&input, &output, opts)?;

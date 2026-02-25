@@ -486,6 +486,7 @@ mod tests {
             predictor,
             output_data_type: output_type,
             aligned_levels: None,
+            scale: false,
         };
         create_cog_tiles(input_tif, output_tif, opts)?;
 

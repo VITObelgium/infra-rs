@@ -893,6 +893,7 @@ mod tests {
             predictor,
             output_data_type: output_type,
             aligned_levels: None,
+            scale: false,
         };
         create_cog_tiles(input_tif, output_tif, opts)?;
 
@@ -1464,6 +1465,9 @@ mod tests {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
 
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
+        let meta = GeoTiffMetadata::from_file(&cog_path)?;
+        let zoom_level_8_index = 2;
+        let cog_tiles = meta.overviews.get(zoom_level_8_index).unwrap().chunk_locations.clone();
         let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
         let tile_sources = cog.zoom_level_tile_sources(8).expect("Zoom level 8 not found");
@@ -1477,7 +1481,7 @@ mod tests {
 
                 assert_eq!(
                     tile_location.offset,
-                    264600 /* offset of the cog tile at 0 based index 2 (top right cog tile)*/
+                    cog_tiles[2].offset /* offset of the cog tile at 0 based index 2 (top right cog tile)*/
                 );
 
                 assert_eq!(cutout.cols, 128);
@@ -1591,6 +1595,7 @@ mod tests {
             predictor: None,
             output_data_type: None,
             aligned_levels: Some(2),
+            scale: false,
         };
         create_cog_tiles(&input, &output, opts)?;
 
@@ -1679,6 +1684,7 @@ mod tests {
             predictor: None,
             output_data_type: None,
             aligned_levels: Some(2),
+            scale: false,
         };
         create_cog_tiles(&input, &output, opts)?;
 

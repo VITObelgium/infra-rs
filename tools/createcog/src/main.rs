@@ -37,6 +37,9 @@ pub struct Opt {
     #[arg(long = "multi-band")]
     pub multi_band: bool,
 
+    #[arg(long = "scale")]
+    pub scale: bool,
+
     #[arg(long = "noprogress")]
     pub no_progress: bool,
 
@@ -70,6 +73,7 @@ fn main() -> Result<()> {
         tile_size: opt.tile_size,
         zoom_level_selection: opt.zoom_level_selection,
         multi_band: opt.multi_band,
+        scale: opt.scale,
     };
 
     let progress = multi.add(ProgressBar::new(100));

@@ -21,6 +21,7 @@ pub struct TileCreationOptions {
     pub zoom_level_selection: Option<ZoomLevelSelection>,
     pub tile_size: u32,
     pub multi_band: bool,
+    pub scale: bool,
 }
 
 fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions> {
@@ -41,11 +42,12 @@ fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions
         allow_sparse: true,
         output_data_type: None,
         aligned_levels: Some(2),
+        scale: opts.scale,
     })
 }
 
 pub fn print_gdal_translate_command(input: &Path, opts: TileCreationOptions) -> Result<()> {
-    let args = geo::cog::create_gdal_args(input, create_opts(opts)?)?;
+    let args = geo::cog::create_gdal_warp_args(input, create_opts(opts)?)?;
     println!("Gdal cmd:\n {}", args.join(" "));
     Ok(())
 }
