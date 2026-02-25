@@ -1,6 +1,6 @@
 [package]
 name = "tileserver"
-version.workspace = true # inherit from [workspace.package]
+version.workspace = true  # inherit from [workspace.package]
 edition.workspace = true
 
 [package.metadata.vcpkg]
@@ -12,25 +12,25 @@ clap = { version = "4.5", features = ["derive", "env"] }
 crossterm = { version = "0.29", features = ["event-stream"], optional = true }
 env_logger = { version = "0.11" }
 futures = { version = "0.3", optional = true }
-geo = { features = ["gdal-static", "serde"], path = "../../crates/geo" }
-inf = { features = ["serde"], path = "../../crates/inf" }
+geo = { path = "../../crates/geo", features = ["gdal-static", "serde"] }
+inf = { path = "../../crates/inf", features = ["serde"] }
 log = "0.4"
-ratatui = { version = "0.29", features = ["crossterm"], optional = true }
+ratatui = { version = "0.30", features = ["crossterm"], optional = true }
 rayon = "1.11"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 thiserror = "2.0"
-tiler = { features = ["serde"], path = "../../crates/tiler" }
+tiler = { path = "../../crates/tiler", features = ["serde"] }
 tokio = { version = "1.49", features = [
-    "macros",
-    "rt",
-    "rt-multi-thread",
-    "sync",
-    "time",
+  "macros",
+  "rt",
+  "rt-multi-thread",
+  "sync",
+  "time",
 ] }
 tower = { version = "0.5" }
 tower-http = { version = "0.6", features = ["trace"] }
-tui-logger = { version = "0.17", optional = true }
+tui-logger = { version = "0.18", optional = true }
 
 [features]
 tui = ["dep:crossterm", "dep:futures", "dep:ratatui", "dep:tui-logger"]

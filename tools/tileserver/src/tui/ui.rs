@@ -1,7 +1,7 @@
 use ratatui::{
     Frame,
     layout::{Alignment, Constraint, Direction, Layout},
-    style::{Color, Style, Stylize},
+    style::{Color, Style},
     widgets::{Block, BorderType, Row, Table},
 };
 use tiler::LayerMetadata;
