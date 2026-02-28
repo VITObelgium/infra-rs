@@ -629,9 +629,10 @@ impl WebTilesReader {
 
     // `band_range` supports all `RangeBounds<usize>` forms, including inclusive ranges.
     // This API only accepts multiband tile sources.
-    // `cog_chunks` must contain only the chunks needed to reconstruct the requested `band` for this tile:
-    // - `TileSource::Aligned` / `TileSource::MultiBandAligned`: first band_range.len() chunks of band 1 followed by band_range.len() chunks of band 2, etc.
-    // - `TileSource::MultiBandUnaligned`: interleaved chunks for all selected bands across tile sources
+    // `cog_chunks` must contain only the chunks needed to reconstruct the requested bands for this tile:
+    // - `TileSource::MultiBandAligned`: one chunk per requested band (band_range.len() chunks total)
+    // - `TileSource::MultiBandUnaligned`: for each tile source, the requested bands in order
+    //   (tile_source_count * band_range.len() chunks total, grouped per tile source)
     pub fn parse_multi_band_tile_data<R: std::ops::RangeBounds<usize>>(
         &self,
         band_range: R,
@@ -657,9 +658,10 @@ impl WebTilesReader {
         };
         let band_range = band_start..band_end;
         let band_range_valid = band_range.start >= 1 && band_range.end <= band_count + 1;
+        let requested_band_count = band_range.len();
         let chunks_valid = match tile_source {
-            TileSource::MultiBandAligned(_) => cog_chunks.len() == band_range.len(),
-            TileSource::MultiBandUnaligned(band_tile_sources) => cog_chunks.len() >= band_tile_sources.len() * band_count,
+            TileSource::MultiBandAligned(_) => cog_chunks.len() == requested_band_count,
+            TileSource::MultiBandUnaligned(band_tile_sources) => cog_chunks.len() >= band_tile_sources.len() * requested_band_count,
             _ => unreachable!("non-multiband tile sources are rejected above"),
         };
         assert!(
@@ -683,11 +685,11 @@ impl WebTilesReader {
                 band_range
                     .map(|band| {
                         let band = BandIndex::new(band).unwrap();
-                        let band_index = band.get() - 1;
+                        let band_offset = band.get() - band_start;
                         let band_chunks = cog_chunks
                             .iter()
-                            .skip(band_index)
-                            .step_by(band_count)
+                            .skip(band_offset)
+                            .step_by(requested_band_count)
                             .take(tile_count)
                             .copied()
                             .collect::<Vec<_>>();
