@@ -629,8 +629,8 @@ impl WebTilesReader {
 
     // `band_range` supports all `RangeBounds<usize>` forms, including inclusive ranges.
     // This API only accepts multiband tile sources.
-    // `cog_chunks` contains prefetched chunks for the selected bands:
-    // - `TileSource::Aligned` / `TileSource::MultiBandAligned`: one chunk per selected band
+    // `cog_chunks` must contain only the chunks needed to reconstruct the requested `band` for this tile:
+    // - `TileSource::Aligned` / `TileSource::MultiBandAligned`: first band_range.len() chunks of band 1 followed by band_range.len() chunks of band 2, etc.
     // - `TileSource::MultiBandUnaligned`: interleaved chunks for all selected bands across tile sources
     pub fn parse_multi_band_tile_data<R: std::ops::RangeBounds<usize>>(
         &self,
