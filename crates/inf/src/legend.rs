@@ -413,6 +413,15 @@ impl Legend {
         }
         colors
     }
+
+    pub fn mapping_config(&self) -> &MappingConfig {
+        match self {
+            Legend::Linear(legend) => &legend.mapping_config,
+            Legend::Banded(legend) => &legend.mapping_config,
+            Legend::CategoricNumeric(legend) => &legend.mapping_config,
+            Legend::CategoricString(legend) => &legend.mapping_config,
+        }
+    }
 }
 
 /// Create a legend with linear color mapping
