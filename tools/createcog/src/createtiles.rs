@@ -22,6 +22,7 @@ pub struct TileCreationOptions {
     pub tile_size: u32,
     pub multi_band: bool,
     pub scale: bool,
+    pub aligned_levels: Option<i32>,
 }
 
 fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions> {
@@ -37,11 +38,11 @@ fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions
         min_zoom: opts.min_zoom,
         zoom_level_strategy,
         tile_size: opts.tile_size,
-        compression: Some(Compression::Lzw),
+        compression: Some(Compression::Zstd),
         predictor: Some(PredictorSelection::Automatic),
         allow_sparse: true,
         output_data_type: None,
-        aligned_levels: Some(2),
+        aligned_levels: opts.aligned_levels.or(Some(2)),
         scale: opts.scale,
     })
 }

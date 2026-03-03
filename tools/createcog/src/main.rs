@@ -40,6 +40,9 @@ pub struct Opt {
     #[arg(long = "scale")]
     pub scale: bool,
 
+    #[arg(long = "aligned-levels")]
+    pub aligned_levels: Option<i32>,
+
     #[arg(long = "noprogress")]
     pub no_progress: bool,
 
@@ -74,6 +77,7 @@ fn main() -> Result<()> {
         zoom_level_selection: opt.zoom_level_selection,
         multi_band: opt.multi_band,
         scale: opt.scale,
+        aligned_levels: opt.aligned_levels,
     };
 
     let progress = multi.add(ProgressBar::new(100));
