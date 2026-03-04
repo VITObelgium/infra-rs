@@ -136,7 +136,10 @@ pub fn create_gdal_warp_args(input: &Path, opts: CogCreationOptions) -> Result<V
 
     let georef = GeoReference::from_file(input)?.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
     if georef.nodata().is_none() {
-        let data_type = raster::io::detect_data_type(input, 1)?;
+        let data_type = match opts.output_data_type {
+            Some(dt) => dt,
+            None => raster::io::detect_data_type(input, 1)?,
+        };
         options.push("-dstnodata".to_string());
         options.push(format!("{}", data_type.default_nodata_value()));
     }
