@@ -218,7 +218,12 @@ fn scale_cog(cog_path: &Path, opts: CogCreationOptions) -> Result<()> {
     Ok(())
 }
 
-pub fn create_multiband_cog_tiles(input: &str, output: &Path, opts: CogCreationOptions) -> Result<()> {
+pub fn create_multiband_cog_tiles(
+    input: &str,
+    output: &Path,
+    opts: CogCreationOptions,
+    progress: Option<&mut dyn FnMut(f64)>,
+) -> Result<()> {
     let file_paths: Vec<PathBuf> = glob::glob(input)?.filter_map(|entry| entry.ok()).collect();
     for path in file_paths.iter() {
         log::info!("Input file: {:?}", path);
@@ -234,14 +239,11 @@ pub fn create_multiband_cog_tiles(input: &str, output: &Path, opts: CogCreationO
         return Err(Error::InvalidArgument(format!("No files match the input pattern: {}", input)));
     }
 
-    let mut options = create_gdal_warp_args(file_paths.first().unwrap(), opts)?;
-    options.extend([]);
-
     let vrt_options = gdal::programs::raster::BuildVRTOptions::new(["-separate", "-strict"])?;
     let src_ds = gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?;
 
     let options = create_gdal_warp_args(&PathBuf::from(input), opts)?;
-    raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
+    raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], progress)?;
 
     if opts.scale {
         scale_cog(output, opts)?;
@@ -277,7 +279,7 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
     // This way we don't modify the read-only source dataset.
     let src_ds = create_vrt_with_nodata(src_ds)?;
 
-    raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())])?;
+    raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], None)?;
     if opts.scale {
         scale_cog(output, opts)?;
     }

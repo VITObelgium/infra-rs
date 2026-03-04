@@ -53,12 +53,12 @@ pub fn print_gdal_translate_command(input: &Path, opts: TileCreationOptions) -> 
     Ok(())
 }
 
-pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions) -> Result<()> {
+pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, progress: Option<&mut dyn FnMut(f64)>) -> Result<()> {
     let multi_band = opts.multi_band;
     let cog_create_opts = create_opts(opts)?;
 
     if multi_band {
-        Ok(geo::cog::create_multiband_cog_tiles(input, &output, cog_create_opts)?)
+        Ok(geo::cog::create_multiband_cog_tiles(input, &output, cog_create_opts, progress)?)
     } else {
         Ok(geo::cog::create_cog_tiles(&PathBuf::from(input), &output, cog_create_opts)?)
     }

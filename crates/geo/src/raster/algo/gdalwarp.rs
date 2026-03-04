@@ -1,5 +1,5 @@
 use std::{
-    ffi::{CString, c_double, c_int},
+    ffi::{CString, c_char, c_double, c_int, c_void},
     path::Path,
 };
 
@@ -168,11 +168,21 @@ impl Drop for WarpAppOptionsWrapper {
     }
 }
 
+unsafe extern "C" fn gdal_progress_trampoline(df_complete: f64, _psz_message: *const c_char, p_progress_arg: *mut c_void) -> c_int {
+    if p_progress_arg.is_null() {
+        return 1;
+    }
+    let cb = unsafe { &mut *(p_progress_arg.cast::<Box<dyn FnMut(f64)>>()) };
+    cb(df_complete);
+    1
+}
+
 pub fn warp_to_disk_cli(
     src_ds: &gdal::Dataset,
     dest_path: &Path,
     options: &[String],
     key_value_options: &Vec<(String, String)>,
+    progress: Option<&mut dyn FnMut(f64)>,
 ) -> Result<()> {
     let mut warp_options = WarpAppOptionsWrapper::new(options)?;
     warp_options.set_warp_options(key_value_options)?;
@@ -181,7 +191,17 @@ pub fn warp_to_disk_cli(
 
     let path_str = CString::new(dest_path.to_string_lossy().to_string())?;
 
+    // Box the callback behind a trait object pointer so the trampoline can reach it.
+    // The double-box is necessary: the outer Box<dyn FnMut> is the fat pointer we erase
+    // to *mut c_void, and the trampoline casts it back.
+    let mut boxed: Option<Box<dyn FnMut(f64)>> = progress.map(|cb| -> Box<dyn FnMut(f64)> { Box::new(cb) });
+
     unsafe {
+        if let Some(ref mut cb) = boxed {
+            let cb_ptr = (cb as *mut Box<dyn FnMut(f64)>).cast::<c_void>();
+            gdal_sys::GDALWarpAppOptionsSetProgress(warp_options.options, Some(gdal_progress_trampoline), cb_ptr);
+        }
+
         let mut user_error: c_int = 0;
         let handle = gdal_sys::GDALWarp(
             path_str.as_ptr(),

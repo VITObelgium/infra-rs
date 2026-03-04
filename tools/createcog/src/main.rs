@@ -1,10 +1,10 @@
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 use clap::Parser;
 use createtiles::TileCreationOptions;
 use env_logger::{Env, TimestampPrecision};
-use indicatif::{MultiProgress, ProgressBar};
-use indicatif_log_bridge::LogWrapper;
+use kdam::{BarExt, Column, RichProgress, tqdm};
 
 use crate::createtiles::{ZoomLevelSelection, create_cog_tiles, print_gdal_translate_command};
 
@@ -53,14 +53,11 @@ pub struct Opt {
 fn main() -> Result<()> {
     let opt = Opt::parse();
 
-    let logger = env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
-        .format_timestamp(Some(TimestampPrecision::Millis))
-        .build();
+    kdam::term::init(std::io::stderr().is_terminal());
 
-    let multi = MultiProgress::new();
-    let level = logger.filter();
-    LogWrapper::new(multi.clone(), logger).try_init().unwrap();
-    log::set_max_level(level);
+    env_logger::Builder::from_env(Env::default().default_filter_or("warn"))
+        .format_timestamp(Some(TimestampPrecision::Millis))
+        .init();
 
     let gdal_config = geo::RuntimeConfiguration::builder()
         .config_options(vec![
@@ -80,14 +77,31 @@ fn main() -> Result<()> {
         aligned_levels: opt.aligned_levels,
     };
 
-    let progress = multi.add(ProgressBar::new(100));
-    let p = progress.clone();
-
     if opt.print_command {
         print_gdal_translate_command(&PathBuf::from(opt.input), tile_opts)?;
     } else {
-        create_cog_tiles(&opt.input, opt.output, tile_opts)?;
-        p.finish_with_message("COG creation done");
+        let mut pb = RichProgress::new(
+            tqdm!(total = 100, disable = opt.no_progress),
+            vec![
+                Column::Text("[bold blue]Creating COG".to_owned()),
+                Column::Animation,
+                Column::Percentage(1),
+                Column::Text("•".to_owned()),
+                Column::ElapsedTime,
+                Column::Text("•".to_owned()),
+                Column::RemainingTime,
+            ],
+        );
+        let progress: Option<&mut dyn FnMut(f64)> = if opt.no_progress {
+            None
+        } else {
+            Some(&mut |fraction: f64| {
+                let _ = pb.update_to((fraction * 100.0) as usize);
+            })
+        };
+        create_cog_tiles(&opt.input, opt.output, tile_opts, progress)?;
+        pb.update_to(100)?;
+        eprintln!();
     }
 
     Ok(())
