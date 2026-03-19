@@ -229,20 +229,20 @@ pub fn create_multiband_cog_tiles(
         log::info!("Input file: {:?}", path);
     }
 
+    if file_paths.is_empty() {
+        return Err(Error::InvalidArgument(format!("No files match the input pattern: {}", input)));
+    }
+
     let datasets = file_paths
         .iter()
         .map(raster::formats::gdal::open_dataset_read_only)
         .map(|res| res.and_then(create_vrt_with_nodata))
         .collect::<Result<Vec<_>>>()?;
 
-    if datasets.is_empty() {
-        return Err(Error::InvalidArgument(format!("No files match the input pattern: {}", input)));
-    }
-
     let vrt_options = gdal::programs::raster::BuildVRTOptions::new(["-separate", "-strict"])?;
     let src_ds = gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?;
 
-    let options = create_gdal_warp_args(&PathBuf::from(input), opts)?;
+    let options = create_gdal_warp_args(&file_paths[0], opts)?;
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], progress)?;
 
     if opts.scale {
