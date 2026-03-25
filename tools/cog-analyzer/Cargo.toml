@@ -17,7 +17,7 @@ ratatui-image = { version = "10.0", default-features = false, features = [
 ] }
 image = "0.25"
 crossterm = { version = "0.29" }
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 anyhow = "1.0"
 log = "0.4"
 env_logger = "0.11"

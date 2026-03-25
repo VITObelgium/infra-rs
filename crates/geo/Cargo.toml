@@ -39,7 +39,7 @@ approx = "0.5"
 arrow = { version = "58", optional = true }
 bon = { version = "3.9", optional = true }
 bytemuck = { version = "1.25" }
-calamine = { version = "0.33", features = ["dates"], optional = true }
+calamine = { version = "0.34", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.3.1", optional = true }
@@ -50,7 +50,7 @@ flate2 = { version = "1.1", default-features = false, features = [
 gdal = { version = "0.19", optional = true }
 gdal-sys = { version = "0.12", optional = true }
 geo-types = { version = "0.7", features = ["approx"] }
-geos = { version = "11.0", features = ["geo", "v3_14_0"], optional = true }
+geos = { version = "11.1", features = ["geo", "v3_14_0"], optional = true }
 glob = "0.3"
 inf = { path = "../inf" }
 itertools = "0.14"

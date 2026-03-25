@@ -8,7 +8,7 @@ dependencies = ["gdal[core,netcdf]"]
 
 [dependencies]
 anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
+clap = { version = "4.6", features = ["derive"] }
 env_logger = { version = "0.11" }
 geo = { path = "../../crates/geo", features = [
   "gdal-static",

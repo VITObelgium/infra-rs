@@ -15,7 +15,7 @@ geo-types = "0.7"
 geozero = { version = "0.15", optional = true }
 inf = { features = ["serde"], path = "../inf" }
 log = "0.4"
-mvt = { version = "0.10", optional = true }
+mvt = { version = "0.12", optional = true }
 num = "0.4"
 png = "0.18"
 raster-tile = { path = "../raster-tile" }
