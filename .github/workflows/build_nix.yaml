@@ -26,6 +26,7 @@ jobs:
             - uses: cachix/cachix-action@v17
               with:
                   name: devenv
+                  extraPullNames: geo-overlay
             - name: Install pinned devenv
               run: nix profile add --accept-flake-config github:cachix/devenv/v2.0.5
             - name: Build the project
