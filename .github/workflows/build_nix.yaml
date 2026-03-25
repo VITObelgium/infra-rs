@@ -24,7 +24,7 @@ jobs:
             - uses: actions/checkout@v5
             - uses: cachix/install-nix-action@v31
             - name: Install devenv.sh
-              run: nix profile add nixpkgs#devenv
+              run: nix profile add "github:cachix/devenv/$(jq -r '.nodes.devenv.locked.rev' devenv.lock)#devenv"
             - name: Build the project
               shell: devenv shell bash -- -e {0}
               run: just build_ci
