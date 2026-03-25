@@ -1,103 +1,101 @@
 {
-  "nodes": {
-    "devenv": {
-      "locked": {
-        "dir": "src/modules",
-        "lastModified": 1774428097,
-        "narHash": "sha256-yQAutPgbsVHsN/SygZDyzMRxQn6Im53PJkrI377N8Sg=",
-        "owner": "cachix",
-        "repo": "devenv",
-        "rev": "957d63f663f230dc8ac3b85f950690e56fe8b1e0",
-        "type": "github"
-      },
-      "original": {
-        "dir": "src/modules",
-        "owner": "cachix",
-        "repo": "devenv",
-        "type": "github"
-      }
+    "nodes": {
+        "devenv": {
+            "locked": {
+                "dir": "src/modules",
+                "lastModified": 1774261302,
+                "narHash": "sha256-P5noO+IXXDBL7l8dEVcig94OXfzLiN1K1KT0COjPcTU=",
+                "owner": "cachix",
+                "repo": "devenv",
+                "rev": "406f2ed97937995234c5d3de43cf77f31c42ca2b",
+                "type": "github"
+            },
+            "original": {
+                "dir": "src/modules",
+                "owner": "cachix",
+                "repo": "devenv",
+                "type": "github"
+            }
+        },
+        "nixpkgs": {
+            "locked": {
+                "lastModified": 1774244481,
+                "narHash": "sha256-4XfMXU0DjN83o6HWZoKG9PegCvKvIhNUnRUI19vzTcQ=",
+                "owner": "NixOS",
+                "repo": "nixpkgs",
+                "rev": "4590696c8693fea477850fe379a01544293ca4e2",
+                "type": "github"
+            },
+            "original": {
+                "owner": "NixOS",
+                "ref": "nixos-25.11",
+                "repo": "nixpkgs",
+                "type": "github"
+            }
+        },
+        "pkgs-mod": {
+            "inputs": {
+                "nixpkgs": "nixpkgs"
+            },
+            "locked": {
+                "lastModified": 1774306428,
+                "narHash": "sha256-1s/EhKuCJop9gNQam/kJ9ncXaHVnmkBbWPZf7JEWuIU=",
+                "owner": "VITO-RMA",
+                "repo": "nix-pkgs",
+                "rev": "8fea420ffaf073d4f6c1b3b7c19a6556303a15b1",
+                "type": "github"
+            },
+            "original": {
+                "owner": "VITO-RMA",
+                "ref": "main",
+                "repo": "nix-pkgs",
+                "type": "github"
+            }
+        },
+        "nixpkgs_2": {
+            "locked": {
+                "lastModified": 1744536153,
+                "narHash": "sha256-awS2zRgF4uTwrOKwwiJcByDzDOdo3Q1rPZbiHQg/N38=",
+                "owner": "NixOS",
+                "repo": "nixpkgs",
+                "rev": "18dd725c29603f582cf1900e0d25f9f1063dbf11",
+                "type": "github"
+            },
+            "original": {
+                "owner": "NixOS",
+                "ref": "nixpkgs-unstable",
+                "repo": "nixpkgs",
+                "type": "github"
+            }
+        },
+
+        "root": {
+            "inputs": {
+                "devenv": "devenv",
+                "nixpkgs": ["pkgs-mod", "nixpkgs"],
+                "pkgs-mod": "pkgs-mod",
+                "rust-overlay": "rust-overlay"
+            }
+        },
+        "rust-overlay": {
+            "inputs": {
+                "nixpkgs": "nixpkgs_2"
+            },
+            "locked": {
+                "lastModified": 1774408260,
+                "narHash": "sha256-Jn9d9r85dmf3gTMnSRt6t+DP2nQ5uJns/MMXg2FpzfM=",
+                "owner": "oxalica",
+                "repo": "rust-overlay",
+                "rev": "d6471ee5a8f470251e6e5b83a20a182eb6c46c9b",
+                "type": "github"
+            },
+            "original": {
+                "owner": "oxalica",
+                "repo": "rust-overlay",
+                "type": "github"
+            }
+        }
     },
-    "nixpkgs": {
-      "locked": {
-        "lastModified": 1774244481,
-        "narHash": "sha256-4XfMXU0DjN83o6HWZoKG9PegCvKvIhNUnRUI19vzTcQ=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "4590696c8693fea477850fe379a01544293ca4e2",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixos-25.11",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "nixpkgs_2": {
-      "locked": {
-        "lastModified": 1744536153,
-        "narHash": "sha256-awS2zRgF4uTwrOKwwiJcByDzDOdo3Q1rPZbiHQg/N38=",
-        "owner": "NixOS",
-        "repo": "nixpkgs",
-        "rev": "18dd725c29603f582cf1900e0d25f9f1063dbf11",
-        "type": "github"
-      },
-      "original": {
-        "owner": "NixOS",
-        "ref": "nixpkgs-unstable",
-        "repo": "nixpkgs",
-        "type": "github"
-      }
-    },
-    "pkgs-mod": {
-      "inputs": {
-        "nixpkgs": "nixpkgs"
-      },
-      "locked": {
-        "lastModified": 1774306428,
-        "narHash": "sha256-1s/EhKuCJop9gNQam/kJ9ncXaHVnmkBbWPZf7JEWuIU=",
-        "owner": "VITO-RMA",
-        "repo": "nix-pkgs",
-        "rev": "8fea420ffaf073d4f6c1b3b7c19a6556303a15b1",
-        "type": "github"
-      },
-      "original": {
-        "owner": "VITO-RMA",
-        "ref": "main",
-        "repo": "nix-pkgs",
-        "type": "github"
-      }
-    },
-    "root": {
-      "inputs": {
-        "devenv": "devenv",
-        "nixpkgs": [
-          "pkgs-mod",
-          "nixpkgs"
-        ],
-        "pkgs-mod": "pkgs-mod",
-        "rust-overlay": "rust-overlay"
-      }
-    },
-    "rust-overlay": {
-      "inputs": {
-        "nixpkgs": "nixpkgs_2"
-      },
-      "locked": {
-        "lastModified": 1774408260,
-        "narHash": "sha256-Jn9d9r85dmf3gTMnSRt6t+DP2nQ5uJns/MMXg2FpzfM=",
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "rev": "d6471ee5a8f470251e6e5b83a20a182eb6c46c9b",
-        "type": "github"
-      },
-      "original": {
-        "owner": "oxalica",
-        "repo": "rust-overlay",
-        "type": "github"
-      }
-    }
-  },
-  "root": "root",
-  "version": 7
+    "root": "root",
+    "version": 7
 }

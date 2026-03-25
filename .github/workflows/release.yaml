@@ -50,9 +50,15 @@ jobs:
         steps:
             - uses: actions/checkout@v5
             - uses: cachix/install-nix-action@v31
+            - uses: cachix/cachix-action@v17
+              with:
+                  name: devenv
+            - uses: cachix/cachix-action@v17
+              with:
+                  name: geo-overlay
 
             - name: Install devenv.sh
-              run: nix profile install nixpkgs#devenv
+              run: nix profile add --accept-flake-config github:cachix/devenv/v2.0.5
 
             - name: Create archives and upload
               if: matrix.os == 'ubuntu-latest'

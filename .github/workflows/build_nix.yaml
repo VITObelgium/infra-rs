@@ -23,8 +23,11 @@ jobs:
         steps:
             - uses: actions/checkout@v5
             - uses: cachix/install-nix-action@v31
-            - name: Install devenv.sh
-              run: nix profile add "github:cachix/devenv/$(jq -r '.nodes.devenv.locked.rev' devenv.lock)#devenv"
+            - uses: cachix/cachix-action@v17
+              with:
+                  name: devenv
+            - name: Install pinned devenv
+              run: nix profile add --accept-flake-config github:cachix/devenv/v2.0.5
             - name: Build the project
               shell: devenv shell bash -- -e {0}
               run: just build_ci
