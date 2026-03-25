@@ -150,7 +150,10 @@ fn cast_vec_reuse<T: ArrayNum, TDest: ArrayNum>(data: AlignedVec<T>) -> AlignedV
 
     #[cfg(not(feature = "simd"))]
     {
-        let (ptr, _, _) = data.into_raw_parts();
+        // Use the stabilized into_raw_parts() when pkg-mod rustc version is >= 1.93
+        // let (ptr, _, _) = data.into_raw_parts();
+        let mut data = std::mem::ManuallyDrop::new(data);
+        let ptr = data.as_mut_ptr();
         unsafe { Vec::from_raw_parts(ptr.cast::<TDest>(), len, new_capacity) }
     }
 }
