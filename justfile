@@ -132,7 +132,7 @@ create_release_tarball tool build_type="":
     TARGET={{ tool }}${suffix}
     RELEASE_DIR=${TARGET}-release-temp
     echo "Building devenv output: ${TARGET}"
-    OUTPUT=$(devenv ${profile_arg} build outputs.${TARGET} 2>&1 | grep "^/nix/store")
+    OUTPUT=$(devenv build ${profile_arg} outputs.${TARGET} | jq -r --arg key "outputs.${TARGET}" '.[$key] // empty')
     if [ -z "${OUTPUT}" ]; then
         echo "Error: Devenv output could not be detected"
         exit 1

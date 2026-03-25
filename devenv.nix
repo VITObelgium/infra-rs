@@ -15,6 +15,17 @@ let
   pkgsMusl = buildEnv.pkgsStaticMusl;
   pkgsMingw = mingwBuildEnv.pkgsMingw;
 
+  # Latest stable Rust via rust-overlay, used only for the default (native) outputs
+  rustPlatformNative =
+    let
+      pkgsRust = pkgs.extend inputs.rust-overlay.overlays.default;
+      rust = pkgsRust.rust-bin.stable."1.94.0".default;
+    in
+    pkgs.makeRustPlatform {
+      cargo = rust;
+      rustc = rust;
+    };
+
   # Use pkgsStatic.rustPlatform which has musl target built-in
   rustPlatformMusl = pkgs.pkgsStatic.rustPlatform;
 
@@ -35,7 +46,7 @@ let
         else if useMingw then
           rustPlatformMingw
         else
-          pkgs.rustPlatform;
+          rustPlatformNative;
       buildInputsPkgs =
         if useMusl then
           pkgsMusl
@@ -60,9 +71,8 @@ let
         lockFile = ./Cargo.lock;
         outputHashes = {
           "crs-definitions-0.3.1" = "sha256-lHV/aO2uw0VVPah/7cN+/n3CczeIHcp/P72JTlNpO/U=";
-          "geozero-0.15.1" = "sha256-9dJm5fqnlczKBk85nuQOaBBaoEBVjdVPmSBtO1bGlnU=";
           "proj4wkt-0.1.0" = "sha256-EXhy17+PoYmhaM0Ip6IzG7g2qNTYlDtUD5ohOP7/mjw=";
-          "tiff-0.10.3" = "sha256-cFW1M24M0YkYJ/1sR4pfZAkBBdbfMiX1IjlIC2hCuu4=";
+          "tiff-0.11.3" = "sha256-lwtmCvF6TgtFKLh6BqArS48OjJoiP20IzmMWzAalrNU=";
         };
       };
 
