@@ -141,6 +141,7 @@ in
     nightly.module = {
       languages.rust = {
         channel = "nightly";
+        version = "latest";
         components = [
           "rustc"
           "cargo"
@@ -157,6 +158,7 @@ in
     musl.module = {
       languages.rust = {
         channel = "nightly";
+        version = "latest";
         targets = [ "x86_64-unknown-linux-musl" ];
       };
 
@@ -174,6 +176,7 @@ in
     mingw.module = {
       languages.rust = {
         channel = "nightly";
+        version = "latest";
         targets = [ "x86_64-pc-windows-gnu" ];
       };
 
