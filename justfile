@@ -114,6 +114,12 @@ pngtiles2raster zoom:
     cargo run --release -p tiles2raster -- --stats --url "http://localhost:4444/api/1/{z}/{x}/{y}.png?tile_format=float_png" --zoom {{ zoom }} --coord1 50.67,2.52 --coord2 51.50,5.91 -o test_png_{{ zoom }}.tif
 
 [unix]
+release_check:
+    just create_release_tarball createcog
+    just create_release_tarball createcog musl
+    just create_release_tarball createcog mingw
+
+[unix]
 create_release_tarball tool build_type="":
     #!/usr/bin/env bash
     if [ -z "{{ build_type }}" ]; then

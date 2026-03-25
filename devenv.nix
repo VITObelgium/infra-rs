@@ -15,23 +15,35 @@ let
   pkgsMusl = buildEnv.pkgsStaticMusl;
   pkgsMingw = mingwBuildEnv.pkgsMingw;
 
-  # Latest stable Rust via rust-overlay, used only for the default (native) outputs
-  rustPlatformNative =
+  # Pinned stable Rust via rust-overlay
+  mkRustPlatform =
+    { crossPkgs, targets }:
     let
       pkgsRust = pkgs.extend inputs.rust-overlay.overlays.default;
-      rust = pkgsRust.rust-bin.stable."1.94.0".default;
+      rust = pkgsRust.rust-bin.stable."1.94.0".default.override {
+        inherit targets;
+      };
     in
-    pkgs.makeRustPlatform {
+    crossPkgs.makeRustPlatform {
       cargo = rust;
       rustc = rust;
     };
 
-  # Use pkgsStatic.rustPlatform which has musl target built-in
-  rustPlatformMusl = pkgs.pkgsStatic.rustPlatform;
+  rustPlatformNative = mkRustPlatform {
+    crossPkgs = pkgs;
+    targets = [ ];
+  };
+  rustPlatformMusl = mkRustPlatform {
+    crossPkgs = pkgs.pkgsStatic;
+    targets = [ "x86_64-unknown-linux-musl" ];
+  };
 
   # Cross-compilation setup for MinGW
   pkgsCross = pkgsMingw.pkgsCross.mingwW64;
-  rustPlatformMingw = pkgsCross.rustPlatform;
+  rustPlatformMingw = mkRustPlatform {
+    crossPkgs = pkgsCross;
+    targets = [ "x86_64-pc-windows-gnu" ];
+  };
 
   mkRustTool =
     {
