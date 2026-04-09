@@ -328,14 +328,14 @@ fn create_raster_impl_with_options_for_format(
             {
                 #[cfg(feature = "gdal")]
                 {
-                    return Ok(Box::new(formats::gdal::GdalRasterIO::open_read_only_with_options(
+                    Ok(Box::new(formats::gdal::GdalRasterIO::open_read_only_with_options(
                         _path.as_ref(),
                         _options,
-                    )?));
+                    )?))
                 }
                 #[cfg(not(feature = "gdal"))]
                 {
-                    return Err(Error::Runtime("GeoTiff format support not compiled in".to_string()));
+                    Err(Error::Runtime("GeoTiff format support not compiled in".to_string()))
                 }
             }
         }
