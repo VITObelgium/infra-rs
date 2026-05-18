@@ -59,11 +59,12 @@ mod tests {
         array::{Columns, Rows},
     };
     use arrow::{array::Array as _, pyarrow::PyArrowType};
+    use ctor::ctor;
     use pyo3::{IntoPyObject, Py, PyAny};
 
     use crate::raster::DenseRaster;
 
-    #[ctor::ctor]
+    #[ctor(unsafe)]
     fn init() {
         pyo3::Python::initialize();
         pyo3::Python::attach(|py| {

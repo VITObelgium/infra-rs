@@ -99,7 +99,7 @@ fn diff_tiles_as_mvt<T: ArrayNum + gdal::raster::GdalType>(tile1: &DenseArray<T>
 //     use geo::{crs, GeoReference, RuntimeConfiguration, Tile};
 //     use path_macro::path;
 
-//     #[ctor::ctor]
+//     #[ctor(unsafe)]
 //     fn init() {
 //         let mut data_dir = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "target" / "data");
 //         if !data_dir.exists() {
