@@ -1,22 +1,22 @@
 [package]
 name = "tiles2raster"
-version.workspace = true # inherit from [workspace.package]
+version.workspace = true  # inherit from [workspace.package]
 edition.workspace = true
 
 [dependencies]
-inf = { path = "../../crates/inf", features = [] }
-geo = { path = "../../crates/geo", features = ["gdal-static"] }
-raster-tile = { path = "../../crates/raster-tile", features = ["float_png"] }
-sqlite = { path = "../../crates/sqlite", features = [] }
 clap = { version = "4.6", features = ["derive", "env"] }
-log = "0.4"
+comfy-table = { version = "7" }
 env_logger = { version = "0.11" }
-rayon = "1.11"
-thiserror = "2.0"
+geo = { path = "../../crates/geo", features = ["gdal-static"] }
 indicatif = "0.18"
 indicatif-log-bridge = "0.2"
+inf = { path = "../../crates/inf", features = [] }
+log = "0.4"
+raster-tile = { path = "../../crates/raster-tile", features = ["float_png"] }
+rayon = "1.12"
 reqwest = { version = "0.13" }
+sqlite = { path = "../../crates/sqlite", features = [] }
+thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
-comfy-table = { version = "7" }
 
 [features]
