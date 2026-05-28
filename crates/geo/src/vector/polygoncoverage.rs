@@ -418,7 +418,7 @@ pub fn create_polygon_coverages(
 
     // sort on geometry complexity, so we always start processing the most complex geometries
     // this avoids processing the most complext geometry in the end on a single core
-    geometries.sort_by(|lhs, rhs| rhs.3.get_num_points().cmp(&lhs.3.get_num_points()));
+    geometries.sort_by_key(|rhs| std::cmp::Reverse(rhs.3.get_num_points()));
 
     // export to string and import in every loop instance, accessing the spatial reference
     // from multiple threads is not thread safe

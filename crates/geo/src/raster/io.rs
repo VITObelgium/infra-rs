@@ -54,12 +54,12 @@ pub fn write_raster_band<T: ArrayNum>(
     options: WriteRasterOptions,
 ) -> Result<()> {
     match T::TYPE {
-        ArrayDataType::Uint8 | ArrayDataType::Uint16 | ArrayDataType::Uint32 | ArrayDataType::Uint64 => {
-            if georef.nodata().is_some_and(|v| v < 0.0) {
-                return Err(Error::InvalidArgument(
-                    "Trying to store a raster with unsigned data type using a negative nodata value".to_string(),
-                ));
-            }
+        ArrayDataType::Uint8 | ArrayDataType::Uint16 | ArrayDataType::Uint32 | ArrayDataType::Uint64
+            if georef.nodata().is_some_and(|v| v < 0.0) =>
+        {
+            return Err(Error::InvalidArgument(
+                "Trying to store a raster with unsigned data type using a negative nodata value".to_string(),
+            ));
         }
         _ => {}
     }

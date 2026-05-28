@@ -262,7 +262,7 @@ pub mod polars {
 
         let mut columns = vec![Vec::new(); schema.len()];
         for row in reader.iter_rows(options)? {
-            for (column, field) in &mut columns.iter_mut().zip(row.fields.into_iter()) {
+            for (column, field) in &mut columns.iter_mut().zip(row.fields) {
                 if let Some(field) = field? {
                     column.push(match field {
                         Field::String(v) => AnyValue::StringOwned(v.into()),
