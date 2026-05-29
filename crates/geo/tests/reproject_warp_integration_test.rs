@@ -30,7 +30,7 @@ mod tests {
 
         // Sort by geo duration (longest first)
         let mut sorted_timings: Vec<_> = timings.into_iter().collect();
-        sorted_timings.sort_by(|a, b| b.1.0.cmp(&a.1.0));
+        sorted_timings.sort_by_key(|timing| std::cmp::Reverse(timing.1.0));
 
         let mut total_geo_duration = Duration::new(0, 0);
         let mut total_gdal_duration = Duration::new(0, 0);
