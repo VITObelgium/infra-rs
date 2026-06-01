@@ -32,13 +32,17 @@ pub mod arrow {
 #[doc(inline)]
 pub use denseraster::DenseRaster;
 
-#[cfg(all(feature = "python", feature = "arrow"))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "python", feature = "arrow"))))]
+#[cfg(feature = "python")]
+#[cfg_attr(docsrs, doc(cfg(feature = "python")))]
 mod python;
 
-#[cfg(all(feature = "python", feature = "arrow"))]
-#[cfg_attr(docsrs, doc(cfg(all(feature = "python", feature = "arrow"))))]
+#[cfg(feature = "python")]
+#[cfg_attr(docsrs, doc(cfg(feature = "python")))]
 pub use python::pyraster::PyRaster;
+
+#[cfg(feature = "python")]
+#[cfg_attr(docsrs, doc(cfg(feature = "python")))]
+pub use python::pyraster::PyRasterMetadata;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum TiffChunkType {

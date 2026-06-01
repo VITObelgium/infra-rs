@@ -1,4 +1,4 @@
-#[cfg(all(feature = "python", feature = "arrow"))]
+#[cfg(feature = "python")]
 use {super::DenseRaster, crate::GeoReference, crate::Result, num::NumCast};
 
 /// Try to convert a python arrow object to a `DenseRaster`.
@@ -51,7 +51,7 @@ where
     }
 }
 
-#[cfg(all(feature = "python", feature = "arrow"))]
+#[cfg(feature = "python")]
 #[cfg(test)]
 mod tests {
     use crate::{

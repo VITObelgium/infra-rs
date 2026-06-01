@@ -17,7 +17,7 @@ use arrow::{
 use pyo3::{pyclass, pymethods};
 
 #[derive(Clone)]
-#[pyclass(from_py_object, name = "RasterMetadata")]
+#[pyclass(get_all, from_py_object, name = "RasterMetadata")]
 pub struct PyRasterMetadata {
     // The raw projection string
     pub projection: String,
@@ -63,6 +63,28 @@ impl From<&PyRasterMetadata> for GeoReference {
 
 #[pymethods]
 impl PyRasterMetadata {
+    #[new]
+    #[pyo3(signature = (projection, rows, cols, x_origin, y_origin, cell_width, cell_height, nodata=None))]
+    fn new(
+        projection: String,
+        rows: usize,
+        cols: usize,
+        x_origin: f64,
+        y_origin: f64,
+        cell_width: f64,
+        cell_height: f64,
+        nodata: Option<f64>,
+    ) -> Self {
+        PyRasterMetadata {
+            projection,
+            epsg: None,
+            size: (cols, rows),
+            cell_size: (cell_width, cell_height),
+            geo_transform: [x_origin, cell_width, 0.0, y_origin, 0.0, cell_height],
+            nodata,
+        }
+    }
+
     fn __repr__(&self) -> String {
         let mut str = format!(
             "Meta ({}x{}) cell size [x {} y {}]",
@@ -72,10 +94,6 @@ impl PyRasterMetadata {
             str += &format!(" EPSG: {}\n", self.epsg.unwrap_or_default());
         }
         str
-    }
-
-    fn __str__(&self) -> String {
-        self.__repr__()
     }
 }
 
@@ -118,9 +136,5 @@ impl PyRaster {
 
     fn __repr__(&self) -> String {
         format!("Raster ({}x{}) ({})", self.meta.size.0, self.meta.size.1, self.data.data_type())
-    }
-
-    fn __str__(&self) -> String {
-        self.__repr__()
     }
 }
