@@ -34,6 +34,8 @@ jobs:
             - name: Build the C++ dependencies using vcpkg
               run: mise -E vcpkg run bootstrap --target ${{ matrix.cfg.target }} --triplet ${{ matrix.cfg.triplet }}
             - name: Install the python environment with pixi
+              env:
+                MISE_GITHUB_SLSA: "false"
               if: matrix.cfg.id != 'mac-intel'
               run: mise -E vcpkg run bootstrap_py
             - name: Build the project
