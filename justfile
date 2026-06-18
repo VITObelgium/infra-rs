@@ -55,8 +55,13 @@ test_release:
 test_debug_simd:
     mise -E vcpkg run test_simd
 
+[windows]
 test_warp:
     mise -E vcpkg run test_warp --release
+
+[unix]
+test_warp:
+    cargo nextest run --release --profile integration -p geo --no-default-features --features=gdal-static,proj4rs,rayon,raster-io-geotiff --no-capture run_all_warp_integration_tests
 
 test_release_simd:
     @ {{ devenv_nightly }} 'set -o pipefail; rustc --version;cargo nextest run --profile ci --release --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv'

@@ -1,6 +1,7 @@
 // If both `proj4rs` and `proj` features are enabled, this module will be compiled but not used.
 #![allow(dead_code)]
 
+use crs_definitions::EPSG_3857_WEBMERC;
 use proj4rs::Proj;
 use proj4rs::proj::ProjType;
 use proj4rs::transform::transform;
@@ -39,10 +40,7 @@ impl SpatialReference {
     }
 
     pub fn from_epsg(epsg: Epsg) -> Result<Self> {
-        let proj_str = crs_definitions::from_code(epsg.code())
-            .map(|def| def.proj4.to_string())
-            .ok_or_else(|| Error::Runtime(format!("Failed to generate Proj4 string for EPSG code {}", epsg)))?;
-
+        let proj_str = proj_str_from_epsg(epsg)?;
         let srs = Proj::from_proj_string(&proj_str)?;
 
         let epsg_geo = if srs.is_latlong() { Some(epsg) } else { None };
@@ -143,6 +141,19 @@ fn is_wkt_string(s: &str) -> bool {
     WKT_ROOTS.iter().any(|&root| s.starts_with(root)) || WKT2_ROOTS.iter().any(|&root| s.starts_with(root))
 }
 
+fn crs_definition_from_epsg(epsg: Epsg) -> Option<crs_definitions::Def> {
+    match epsg.code() {
+        3857 => Some(EPSG_3857_WEBMERC), // User the webmercator definition from crs_definitions for EPSG:3857 to be compatblible with the proj library from c++
+        _ => crs_definitions::from_code(epsg.code()),
+    }
+}
+
+fn proj_str_from_epsg(epsg: Epsg) -> Result<String> {
+    crs_definition_from_epsg(epsg)
+        .map(|def| def.proj4.to_string())
+        .ok_or_else(|| Error::Runtime(format!("Failed to generate Proj4 string for EPSG code {}", epsg)))
+}
+
 /// The returned bool is true if the parsed WKT is a geographic CRS
 fn parse_wkt_epsg(s: &str) -> (Option<Epsg>, Option<Epsg>, bool) {
     let builder = proj4wkt::Builder;
@@ -191,9 +202,9 @@ fn proj_epsg_from_string(srs_str: &str) -> Result<(String, Option<Epsg>, Option<
         .strip_prefix("EPSG:")
         .and_then(|code| code.parse::<u16>().ok().map(Epsg::from));
     Ok(if let Some(epsg) = epsg_code {
-        let (proj_str, wkt_str) = crs_definitions::from_code(epsg.code())
+        let (proj_str, wkt_str) = crs_definition_from_epsg(epsg)
             .map(|def| (def.proj4.to_string(), def.wkt))
-            .ok_or_else(|| Error::Runtime("".into()))?;
+            .ok_or_else(|| Error::Runtime(format!("Failed to generate Proj4 string for EPSG code {}", epsg)))?;
         let (proj_epsg, geo_epsg, _is_geo) = parse_wkt_epsg(wkt_str);
         (proj_str, proj_epsg, geo_epsg)
     } else {
