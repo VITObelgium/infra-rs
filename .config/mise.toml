@@ -4,17 +4,16 @@ cargo-binstall = "latest"
 "cargo:cargo-nextest" = "latest"
 
 [tools.rust]
-version = "1.91.0"
+version = "1.94.0"
 profile = "default"
 targets = "wasm32-unknown-unknown{% if os() == 'macos' %},x86_64-apple-darwin{% endif %}"
-
 
 [settings]
 cargo.binstall = true
 
 [tasks.build]
 run = [
-    """
+  """
         {% set feat = option(name="features") | default(value="") %}
         cargo build -p geo \
             {% if flag(name='release') == "true" %}--release{% endif %} \
@@ -25,7 +24,7 @@ run = [
 
 [tasks.test]
 run = [
-    """
+  """
         {% set feat = option(name="features") | default(value="") %}
         cargo nextest run -p geo \
             {% if flag(name='release') == "true" %}--release{% endif %} \
@@ -36,7 +35,7 @@ run = [
 
 [tasks.ci]
 run = [
-    """
+  """
         {% set feat = option(name="features") | default(value="") %}
         cargo nextest run -p geo \
             --profile ci \

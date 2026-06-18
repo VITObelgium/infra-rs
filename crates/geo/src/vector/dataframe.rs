@@ -382,7 +382,7 @@ mod tests {
                 ))
             );
             assert_eq!(
-                df.column("Double Column")?.i64()?.into_iter().collect::<Vec<_>>(),
+                df.column("Double Column")?.i64()?.iter().collect::<Vec<_>>(),
                 vec![Some(12), None, Some(45), Some(89), Some(23)]
             );
         }

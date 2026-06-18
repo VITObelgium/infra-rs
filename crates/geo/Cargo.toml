@@ -38,7 +38,7 @@ name = "simd"
 
 [dependencies]
 approx = "0.5"
-arrow = { version = "58", optional = true }
+arrow = { version = "59", optional = true }
 bon = { version = "3.9", optional = true }
 bytemuck = { version = "1.25" }
 calamine = { version = "0.35", features = ["dates"], optional = true }
@@ -60,12 +60,12 @@ geo-types = { version = "0.7", features = ["approx"] }
 geos = { version = "11.1", features = ["geo", "v3_14_0"], optional = true }
 glob = "0.3"
 inf = { path = "../inf" }
-itertools = "0.14"
+itertools = "0.15"
 log = "0.4"
 num = "0.4"
 paste = "1.0"
 polars = {
-  version = "0.53",
+  version = "0.54",
   default-features = false,
   features = [
     "timezones",

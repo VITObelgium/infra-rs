@@ -10,12 +10,12 @@ x86_64-unknown-linux-gnu = { dependencies = ["hdf5[core, threadsafe]"] }
 
 [dependencies]
 gdal = "0.19"
-geo = { features = ["gdal", "serde", "raster-io-geotiff"], path = "../geo" }
+geo = { path = "../geo", features = ["gdal", "raster-io-geotiff", "serde"] }
 geo-types = "0.7"
 geozero = { version = "0.15", optional = true }
-inf = { features = ["serde"], path = "../inf" }
+inf = { path = "../inf", features = ["serde"] }
 log = "0.4"
-mvt = { version = "0.12", optional = true }
+mvt = { version = "0.13", optional = true }
 num = "0.4"
 png = "0.18"
 raster-tile = { path = "../raster-tile" }
@@ -27,15 +27,15 @@ thiserror = "2.0"
 
 [dev-dependencies]
 approx = "0.5"
-ctor = "0.6"
+ctor = "1.0"
 image = { version = "0.25", default-features = false, features = ["png"] }
 path_macro = "1.0"
-test-log = "0.2"
 tempfile = "3"
+test-log = "0.2"
 
 [features]
 serde = ["dep:serde", "dep:serde_json", "inf/serde"]
-simd = ["inf/simd", "geo/simd"]
+simd = ["geo/simd", "inf/simd"]
 slow_tests = []
 specta = ["dep:specta", "geo/specta", "inf/specta"]
 vector-tiles = ["dep:geozero", "dep:mvt", "geo/vector-processing"]
