@@ -1,8 +1,5 @@
 use num::{Float, Num, NumCast, One, ToPrimitive, Zero};
 
-#[cfg(feature = "simd")]
-use std::simd::Select;
-
 #[inline]
 pub fn linear_map_to_float<T, TFloat>(value: T, min: T, max: T) -> TFloat
 where

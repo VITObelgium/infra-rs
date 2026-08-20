@@ -257,10 +257,8 @@ fn handle_webtiles_keys(key_event: KeyEvent, app: &mut App) -> Result<()> {
                     }
                 }
                 // Go back (only for multiband)
-                KeyCode::Esc | KeyCode::Char('h') => {
-                    if app.webtiles_tab.is_multiband() {
-                        app.webtiles_tab.exit_to_bands();
-                    }
+                KeyCode::Esc | KeyCode::Char('h') if app.webtiles_tab.is_multiband() => {
+                    app.webtiles_tab.exit_to_bands();
                 }
                 _ => {}
             }
