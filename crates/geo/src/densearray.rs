@@ -256,7 +256,7 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     fn value_mut(&mut self, index: usize) -> Option<&mut T> {
         assert!(index < self.len());
         let val = self.data.get_mut(index);
-        val.and_then(|val| if val.is_nodata() { None } else { Some(val) })
+        val.filter(|val| !val.is_nodata())
     }
 
     fn index_has_data(&self, index: usize) -> bool {
