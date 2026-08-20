@@ -212,7 +212,7 @@ pub fn read_chunk_data_into_buffer_cb<T: ArrayNum>(
         tile_data.fill(cast::option(nodata).ok_or_else(|| Error::Runtime("Invalid nodata value".into()))?);
     } else {
         let cog_chunk = read_chunk_cb(*chunk)?;
-        parse_chunk_data_into_buffer(row_length, compression, predictor, &cog_chunk, tile_data)?;
+        parse_chunk_data_into_buffer(row_length, nodata, compression, predictor, &cog_chunk, tile_data)?;
     }
 
     Ok(())
@@ -221,6 +221,7 @@ pub fn read_chunk_data_into_buffer_cb<T: ArrayNum>(
 #[simd_bounds]
 pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
     row_length: u32,
+    nodata: Option<f64>,
     compression: Option<Compression>,
     predictor: Option<Predictor>,
     chunk_data: &[u8],
@@ -231,13 +232,33 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
     match compression {
         Some(Compression::Lzw) => lzw_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
         Some(Compression::Zstd) => zstd_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
-        #[cfg(feature = "deflate")]
-        Some(Compression::Deflate) => deflate_decompress_to::<T>(chunk_data, decoded_chunk_data)?,
-        #[cfg(not(feature = "deflate"))]
+        Some(Compression::Lerc) => lerc_decompress_to::<T>(row_length, nodata, chunk_data, decoded_chunk_data)?,
+        Some(Compression::LercDeflate) => {
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "deflate")] {
+                    let lerc_data = deflate_decompress_lerc_blob(chunk_data, decoded_chunk_data)?;
+                    lerc_decompress_to::<T>(row_length, nodata, &lerc_data, decoded_chunk_data)?;
+                } else {
+                    return Err(Error::Runtime(
+                        "LERC_DEFLATE decompression requires the 'deflate' feature to be enabled".into(),
+                    ));
+                }
+            }
+        }
+        Some(Compression::LercZstd) => {
+            let lerc_data = zstd_decompress_lerc_blob(chunk_data, decoded_chunk_data)?;
+            lerc_decompress_to::<T>(row_length, nodata, &lerc_data, decoded_chunk_data)?;
+        }
         Some(Compression::Deflate) => {
-            return Err(Error::Runtime(
-                "Deflate decompression requires the 'deflate' feature to be enabled".into(),
-            ));
+            cfg_if::cfg_if! {
+                if #[cfg(feature = "deflate")] {
+                    deflate_decompress_to::<T>(chunk_data, decoded_chunk_data)?;
+                } else {
+                    return Err(Error::Runtime(
+                        "Deflate decompression requires the 'deflate' feature to be enabled".into(),
+                    ));
+                }
+            }
         }
         None => {
             if chunk_data.len() != std::mem::size_of_val(decoded_chunk_data) {
@@ -391,6 +412,79 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     Ok(M::with_geo_reference(geo_reference))
 }
 
+fn lerc_blob_size_limit<T>(decode_buf: &[T]) -> Result<usize> {
+    let pixel_data_size = std::mem::size_of_val(decode_buf);
+    pixel_data_size
+        .checked_add(pixel_data_size / 3)
+        .and_then(|size| size.checked_add(256))
+        .ok_or_else(|| Error::Runtime("LERC decompression buffer size overflow".into()))
+}
+
+fn read_lerc_blob(mut decoder: impl Read, size_limit: usize) -> Result<Vec<u8>> {
+    let read_limit = size_limit
+        .checked_add(1)
+        .ok_or_else(|| Error::Runtime("LERC decompression buffer size overflow".into()))?;
+    let mut lerc_data = Vec::with_capacity(size_limit);
+    decoder.by_ref().take(read_limit as u64).read_to_end(&mut lerc_data)?;
+    if lerc_data.len() > size_limit {
+        return Err(Error::Runtime(format!(
+            "Decompressed LERC blob exceeds the maximum expected size of {size_limit} bytes"
+        )));
+    }
+
+    Ok(lerc_data)
+}
+
+fn zstd_decompress_lerc_blob<T>(data: &[u8], decode_buf: &[T]) -> Result<Vec<u8>> {
+    let decoder = StreamingDecoder::new(data).map_err(|_| Error::Runtime("Failed to create Zstd decoder for LERC blob".into()))?;
+    read_lerc_blob(decoder, lerc_blob_size_limit(decode_buf)?)
+}
+
+#[cfg(feature = "deflate")]
+fn deflate_decompress_lerc_blob<T>(data: &[u8], decode_buf: &[T]) -> Result<Vec<u8>> {
+    read_lerc_blob(ZlibDecoder::new(data), lerc_blob_size_limit(decode_buf)?)
+}
+
+fn lerc_decompress_to<T: ArrayNum>(row_length: u32, nodata: Option<f64>, data: &[u8], decode_buf: &mut [T]) -> Result<()> {
+    macro_rules! decode_lerc_into {
+        ($type:ty) => {{
+            let output = bytemuck::try_cast_slice_mut::<T, $type>(decode_buf)
+                .map_err(|err| Error::Runtime(format!("Invalid LERC output buffer: {err}")))?;
+            let nodata = cast::option_or::<$type>(nodata, <$type as crate::Nodata>::NODATA);
+            lerc::decode_into_with_nodata::<$type>(data, output, nodata)
+                .map_err(|err| Error::Runtime(format!("LERC decompression failed: {err}")))?
+        }};
+    }
+
+    let decoded = match T::TYPE {
+        ArrayDataType::Int8 => decode_lerc_into!(i8),
+        ArrayDataType::Uint8 => decode_lerc_into!(u8),
+        ArrayDataType::Int16 => decode_lerc_into!(i16),
+        ArrayDataType::Uint16 => decode_lerc_into!(u16),
+        ArrayDataType::Int32 => decode_lerc_into!(i32),
+        ArrayDataType::Uint32 => decode_lerc_into!(u32),
+        ArrayDataType::Float32 => decode_lerc_into!(f32),
+        ArrayDataType::Float64 => decode_lerc_into!(f64),
+        ArrayDataType::Int64 | ArrayDataType::Uint64 => {
+            return Err(Error::Runtime(format!("LERC does not support {} data", T::TYPE)));
+        }
+    };
+
+    let expected_height = decode_buf
+        .len()
+        .checked_div(row_length as usize)
+        .filter(|_| decode_buf.len().is_multiple_of(row_length as usize))
+        .ok_or_else(|| Error::Runtime("Invalid LERC output dimensions".into()))?;
+    if decoded.width != row_length || decoded.height as usize != expected_height || decoded.depth != 1 || decoded.bands != 1 {
+        return Err(Error::Runtime(format!(
+            "LERC dimensions ({}x{}, depth {}, bands {}) do not match the expected dimensions ({row_length}x{expected_height}, depth 1, bands 1)",
+            decoded.width, decoded.height, decoded.depth, decoded.bands
+        )));
+    }
+
+    Ok(())
+}
+
 fn lzw_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Result<()> {
     let decode_buf_byte_length = std::mem::size_of_val(decode_buf);
 
@@ -439,4 +533,22 @@ fn deflate_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Resu
     decoder.read_exact(decode_buf_byte)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn lerc_decompress_uses_metadata_nodata() {
+        let pixels = [1.0_f32, 2.0, 3.0, 4.0];
+        let mut mask = lerc::bitmask::BitMask::all_valid(pixels.len());
+        mask.set_invalid(1);
+        let encoded = lerc::encode_slice_masked(2, 2, &pixels, &mask, lerc::Precision::Lossless).expect("encode LERC test data");
+
+        let mut decoded = [0.0_f32; 4];
+        lerc_decompress_to(2, Some(-9999.0), &encoded, &mut decoded).expect("decode LERC test data");
+
+        assert_eq!(decoded, [1.0, -9999.0, 3.0, 4.0]);
+    }
 }

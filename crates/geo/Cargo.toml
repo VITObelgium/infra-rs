@@ -61,6 +61,7 @@ geos = { version = "11.1", features = ["geo", "v3_14_0"], optional = true }
 glob = "0.3"
 inf = { path = "../inf" }
 itertools = "0.15"
+lerc-rs = { version = "0.5", optional = true }
 log = "0.4"
 num = "0.4"
 paste = "1.0"
@@ -129,7 +130,7 @@ polars = ["dep:polars", "vector-io"]
 proj = ["dep:proj"]
 proj4rs = ["dep:crs-definitions", "dep:proj4rs", "dep:proj4wkt"]
 python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
-raster-io-geotiff = ["dep:ruzstd", "dep:tiff", "dep:weezl", "dep:xml-rs"]
+raster-io-geotiff = ["dep:lerc-rs", "dep:ruzstd", "dep:tiff", "dep:weezl", "dep:xml-rs"]
 rayon = ["dep:rayon"]
 serde = ["dep:serde"]
 simd = ["inf/simd", "simd_macro/simd"]

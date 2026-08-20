@@ -2126,6 +2126,7 @@ dependencies = [
  "inf",
  "itertools 0.15.0",
  "js-sys",
+ "lerc-rs",
  "log",
  "num",
  "paste",
@@ -3002,6 +3003,17 @@ name = "lebe"
 version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a79a3332a6609480d7d0c9eab957bca6b455b91bb84e66d19f5ff66294b85b8"
+
+[[package]]
+name = "lerc-rs"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f0ad5a536a2eb09d9adb0ae61e7d0eea9f78e644abd82c87f814ce6a38934a0f"
+dependencies = [
+ "bitvec",
+ "libm",
+ "thiserror 2.0.20",
+]
 
 [[package]]
 name = "lexical-core"

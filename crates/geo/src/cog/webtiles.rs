@@ -869,7 +869,7 @@ mod tests {
     use crate::{
         Array, FIRST_BAND, Nodata as _, Point, ZoomLevelStrategy,
         cog::{CogCreationOptions, PredictorSelection, create_cog_tiles, debug},
-        raster::{Compression, Predictor, RasterReadWrite},
+        raster::{Compression, DenseRaster, Predictor, RasterReadWrite},
         testutils,
     };
 
@@ -898,6 +898,99 @@ mod tests {
             scale: false,
         };
         create_cog_tiles(input_tif, output_tif, opts)?;
+
+        Ok(())
+    }
+
+    #[test_log::test]
+    fn lerc_compression_metadata() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+
+        for compression in [Compression::Lerc, Compression::LercDeflate, Compression::LercZstd] {
+            create_test_cog(&input, &output, COG_TILE_SIZE, Some(compression), None, None, true)?;
+            let metadata = GeoTiffMetadata::from_file(&output)?;
+            assert_eq!(metadata.compression, Some(compression));
+        }
+
+        Ok(())
+    }
+
+    fn compare_lerc_compressed_cog(compression: Compression) -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let output = tmp.path().join("cog.tif");
+        let reference_tile = Tile { z: 10, x: 524, y: 341 };
+
+        create_test_cog(&input, &output, COG_TILE_SIZE, None, None, None, true)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+        let mut reader = File::open(&output)?;
+        let reference_tile_data = cog.read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)?;
+
+        create_test_cog(&input, &output, COG_TILE_SIZE, Some(compression), None, None, true)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+        assert_eq!(cog.cog_metadata().compression, Some(compression));
+        let mut reader = File::open(&output)?;
+        let tile_data = cog.read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)?;
+
+        assert_eq!(tile_data, reference_tile_data);
+        Ok(())
+    }
+
+    #[cfg(feature = "deflate")]
+    #[test_log::test]
+    fn read_lerc_deflate_test_cog() -> Result<()> {
+        compare_lerc_compressed_cog(Compression::LercDeflate)
+    }
+
+    #[test_log::test]
+    fn read_lerc_zstd_test_cog() -> Result<()> {
+        compare_lerc_compressed_cog(Compression::LercZstd)
+    }
+
+    #[test_log::test]
+    fn read_lerc_nodata_test_cog() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let source = tmp.path().join("source.tif");
+        let output = tmp.path().join("cog.tif");
+        let reference_tile = Tile { z: 10, x: 524, y: 341 };
+
+        let mut geo_reference = GeoReference::from_file(&testutils::workspace_test_data_dir().join("landusebyte.tif"))?;
+        geo_reference.set_nodata(Some(f64::NAN));
+        let mut raster = DenseRaster::<f32>::filled_with(Some(1.0), geo_reference);
+        for (index, value) in raster.as_mut_slice().iter_mut().enumerate() {
+            if index.is_multiple_of(2) {
+                *value = f32::NODATA;
+            }
+        }
+        raster.write(&source)?;
+
+        create_test_cog(&source, &output, COG_TILE_SIZE, None, None, Some(ArrayDataType::Float32), true)?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+        let mut reader = File::open(&output)?;
+        let reference_tile_data = cog
+            .read_tile_data_as::<f32>(&reference_tile, FIRST_BAND, &mut reader)?
+            .expect("reference tile");
+
+        create_test_cog(
+            &source,
+            &output,
+            COG_TILE_SIZE,
+            Some(Compression::Lerc),
+            None,
+            Some(ArrayDataType::Float32),
+            true,
+        )?;
+        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+        let mut reader = File::open(&output)?;
+        let tile_data = cog
+            .read_tile_data_as::<f32>(&reference_tile, FIRST_BAND, &mut reader)?
+            .expect("LERC tile");
+
+        for (actual, expected) in tile_data.iter().zip(reference_tile_data.iter()) {
+            assert!((actual.is_nodata() && expected.is_nodata()) || actual == expected);
+        }
 
         Ok(())
     }
@@ -1129,6 +1222,20 @@ mod tests {
                 .unwrap();
 
             assert_eq!(tile_data.cast_to::<u8>(), reference_tile_data);
+        }
+
+        {
+            // Create a test COG file with LERC compression and decode it with our own decoder
+            create_test_cog(&input, &output, COG_TILE_SIZE, Some(Compression::Lerc), None, None, true)?;
+            let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&output)?)?;
+            assert_eq!(cog.cog_metadata().compression, Some(Compression::Lerc));
+
+            let mut reader = File::open(&output)?;
+            let tile_data = cog
+                .read_tile_data_as::<u8>(&reference_tile, FIRST_BAND, &mut reader)
+                .expect("LERC_u8")
+                .unwrap();
+            assert_eq!(tile_data, reference_tile_data);
         }
 
         #[cfg(feature = "deflate")]

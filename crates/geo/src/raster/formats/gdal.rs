@@ -284,6 +284,9 @@ fn write_raster_options_to_gdal(options: WriteRasterOptions) -> Vec<String> {
                     Some(Compression::Lzw) => "LZW",
                     Some(Compression::Zstd) => "ZSTD",
                     Some(Compression::Deflate) => "DEFLATE",
+                    Some(Compression::Lerc) => "LERC",
+                    Some(Compression::LercDeflate) => "LERC_DEFLATE",
+                    Some(Compression::LercZstd) => "LERC_ZSTD",
                     None => "NONE",
                 }
             ));

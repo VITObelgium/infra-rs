@@ -53,6 +53,9 @@ fn gdal_compression_name(compression: Option<Compression>) -> &'static str {
         Some(Compression::Lzw) => "LZW",
         Some(Compression::Zstd) => "ZSTD",
         Some(Compression::Deflate) => "DEFLATE",
+        Some(Compression::Lerc) => "LERC",
+        Some(Compression::LercDeflate) => "LERC_DEFLATE",
+        Some(Compression::LercZstd) => "LERC_ZSTD",
         None => "NONE",
     }
 }

@@ -245,17 +245,27 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
     };
 
     let samples_per_pixel = decoder.get_tag_u32(Tag::SamplesPerPixel)?;
-    let compression = match decoder.get_tag_u32(Tag::Compression)? {
+    let compression_tag = decoder.get_tag_u32(Tag::Compression)?;
+    let compression = match compression_tag {
         1 => None,
         5 => Some(Compression::Lzw),
         8 => Some(Compression::Deflate),
-        50000 => Some(Compression::Zstd),
-        _ => {
-            return Err(Error::InvalidArgument(format!(
-                "Only LZW and ZSTD compressed COGs are supported ({})",
-                decoder.get_tag_u32(Tag::Compression)?
-            )));
+        34887 => {
+            let lerc_parameters = decoder.get_tag_u32_vec(Tag::Unknown(50674))?;
+            match lerc_parameters.get(1) {
+                Some(0) => Some(Compression::Lerc),
+                Some(1) => Some(Compression::LercDeflate),
+                Some(2) => Some(Compression::LercZstd),
+                Some(additional_compression) => {
+                    return Err(Error::InvalidArgument(format!(
+                        "Unsupported LERC additional compression type ({additional_compression})"
+                    )));
+                }
+                None => return Err(Error::InvalidArgument("Invalid LercParameters tag".into())),
+            }
         }
+        50000 => Some(Compression::Zstd),
+        _ => return Err(Error::InvalidArgument(format!("Unsupported TIFF compression ({compression_tag})"))),
     };
 
     let predictor = match decoder.get_tag_u32(Tag::Predictor) {

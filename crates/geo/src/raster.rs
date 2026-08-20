@@ -56,6 +56,9 @@ pub enum Compression {
     Lzw,
     Zstd,
     Deflate,
+    Lerc,
+    LercDeflate,
+    LercZstd,
 }
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
