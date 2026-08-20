@@ -1924,6 +1924,75 @@ mod tests {
     }
 
     #[test_log::test]
+    fn parse_multi_band_tile_data_lerc_zstd() -> Result<()> {
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
+        let reference_path = tmp.path().join("reference.tif");
+        let lerc_zstd_path = tmp.path().join("lerc_zstd.tif");
+
+        for (output, compression) in [(&reference_path, None), (&lerc_zstd_path, Some(Compression::LercZstd))] {
+            create_cog_tiles(
+                &input,
+                output,
+                CogCreationOptions {
+                    min_zoom: Some(15),
+                    zoom_level_strategy: ZoomLevelStrategy::Closest,
+                    tile_size: COG_TILE_SIZE,
+                    compression,
+                    predictor: None,
+                    allow_sparse: true,
+                    output_data_type: None,
+                    aligned_levels: None,
+                    scale: false,
+                },
+            )?;
+        }
+
+        let reference = WebTilesReader::new(GeoTiffMetadata::from_file(&reference_path)?)?;
+        let lerc_zstd = WebTilesReader::new(GeoTiffMetadata::from_file(&lerc_zstd_path)?)?;
+        assert_eq!(lerc_zstd.cog_metadata().compression, Some(Compression::LercZstd));
+        assert_eq!(lerc_zstd.cog_metadata().band_count, reference.cog_metadata().band_count);
+
+        let band_count = lerc_zstd.cog_metadata().band_count as usize;
+        let max_zoom = lerc_zstd.tile_info().max_zoom;
+        let (tile, tile_source) = lerc_zstd
+            .zoom_level_tile_sources(max_zoom)
+            .expect("expected maximum zoom level to exist")
+            .iter()
+            .find(|(_, source)| matches!(source, TileSource::MultiBandAligned(locations) if locations.iter().all(|location| !location.is_sparse())))
+            .expect("expected at least one non-sparse aligned multiband tile");
+        let band_locations = match tile_source {
+            TileSource::MultiBandAligned(locations) => locations,
+            _ => unreachable!("tile source should be aligned multiband"),
+        };
+
+        let mut lerc_zstd_reader = File::open(&lerc_zstd_path)?;
+        let cog_chunks = band_locations
+            .iter()
+            .map(|location| {
+                let mut chunk = vec![0; location.size as usize];
+                io::read_chunk(location, &mut lerc_zstd_reader, &mut chunk)?;
+                Ok(chunk)
+            })
+            .collect::<Result<Vec<_>>>()?;
+        let cog_chunk_refs = cog_chunks.iter().map(Vec::as_slice).collect::<Vec<_>>();
+        let parsed = lerc_zstd.parse_multi_band_tile_data(1..=band_count, tile_source, &cog_chunk_refs)?;
+
+        let mut reference_reader = File::open(&reference_path)?;
+        for band_nr in 1..=band_count {
+            let band = BandIndex::new(band_nr).expect("band indices are 1-based");
+            let expected = AnyDenseArray::U8(
+                reference
+                    .read_tile_data_as::<u8>(tile, band, &mut reference_reader)?
+                    .expect("reference tile should be readable"),
+            );
+            assert_eq!(parsed[band_nr - 1], expected);
+        }
+
+        Ok(())
+    }
+
+    #[test_log::test]
     fn parse_multi_band_tile_data_unaligned_multiband() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
         let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&input)?)?;
