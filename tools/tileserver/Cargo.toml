@@ -21,7 +21,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1.0" }
 thiserror = "2.0"
 tiler = { path = "../../crates/tiler", features = ["serde"] }
-tokio = { version = "1.52", features = [
+tokio = { version = "1.53", features = [
   "macros",
   "rt",
   "rt-multi-thread",
@@ -29,7 +29,7 @@ tokio = { version = "1.52", features = [
   "time",
 ] }
 tower = { version = "0.5" }
-tower-http = { version = "0.6", features = ["trace"] }
+tower-http = { version = "0.7", features = ["trace"] }
 tui-logger = { version = "0.18", optional = true }
 
 [features]

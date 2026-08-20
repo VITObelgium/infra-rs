@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 clap = { version = "4.6", features = ["derive", "env"] }
-comfy-table = { version = "7" }
+comfy-table = { version = "8" }
 env_logger = { version = "0.11" }
 geo = { path = "../../crates/geo", features = ["gdal-static"] }
 indicatif = "0.18"

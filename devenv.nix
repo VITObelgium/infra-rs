@@ -5,7 +5,7 @@
   ...
 }:
 let
-  cargoToml = builtins.fromTOML (builtins.readFile ./Cargo.toml);
+  cargoToml = fromTOML (builtins.readFile ./Cargo.toml);
   version = cargoToml.workspace.package.version;
 
   # Use pkgs-mod's mkBuildEnv to get properly configured musl/mingw packages
@@ -59,7 +59,6 @@ let
       cargoLock = {
         lockFile = ./Cargo.lock;
         outputHashes = {
-          "crs-definitions-0.3.1" = "sha256-lHV/aO2uw0VVPah/7cN+/n3CczeIHcp/P72JTlNpO/U=";
           "proj4wkt-0.1.0" = "sha256-EXhy17+PoYmhaM0Ip6IzG7g2qNTYlDtUD5ohOP7/mjw=";
           "tiff-0.11.3" = "sha256-lwtmCvF6TgtFKLh6BqArS48OjJoiP20IzmMWzAalrNU=";
         };
@@ -196,7 +195,7 @@ in
   languages.rust = {
     enable = true;
     channel = "stable";
-    version = "1.94.0";
+    version = "1.95.0";
   };
 
   packages = with pkgs; [

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
-use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table, modifiers, presets};
+use comfy_table::{Attribute, Cell, Color, ContentArrangement, Table, presets};
 use env_logger::{Env, TimestampPrecision};
 use geo::{
     Array as _, ArrayMetadata, ArrayNum, Columns, Coordinate, DenseArray, RasterMetadata, RasterSize, Rows, Tile,
@@ -80,8 +80,7 @@ fn print_raster_stats<T: ArrayNum>(stats: &Option<RasterStats<T>>) {
     if let Some(stats) = stats {
         let mut table = Table::new();
         table
-            .load_preset(presets::UTF8_FULL_CONDENSED)
-            .apply_modifier(modifiers::UTF8_ROUND_CORNERS)
+            .load_style(presets::UTF8_FULL_CONDENSED.with_rounded_corners())
             .set_content_arrangement(ContentArrangement::Dynamic)
             .set_header(vec![
                 Cell::new("Statistics").add_attribute(Attribute::Bold).fg(Color::Green),

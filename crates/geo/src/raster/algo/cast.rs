@@ -144,8 +144,8 @@ fn cast_vec_reuse<T: ArrayNum, TDest: ArrayNum>(data: AlignedVec<T>) -> AlignedV
     // Now transmute the vec to the new type
     #[cfg(feature = "simd")]
     {
-        let (ptr, _, _, alloc) = data.into_raw_parts_with_alloc();
-        unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>(), len, new_capacity, alloc) }
+        let (ptr, _, _, alloc) = data.into_parts_with_alloc();
+        unsafe { Vec::from_raw_parts_in(ptr.as_ptr().cast::<TDest>(), len, new_capacity, alloc) }
     }
 
     #[cfg(not(feature = "simd"))]
