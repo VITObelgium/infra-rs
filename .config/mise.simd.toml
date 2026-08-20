@@ -62,7 +62,7 @@ run = [
         mise exec -E vcpkg -- sd @PYTHON_EXE@ {{vars.python_exe}} .cargo/config.vcpkg.toml && \
         cp .cargo/config.vcpkg.toml .cargo/config.toml
     """,
-    'mise exec -E vcpkg -- sd @WORKSPACE_ROOT@ {{config_root | replace(from="\", to="/")}} .cargo/config.vcpkg.toml',
+    'mise exec -E vcpkg -- sd @WORKSPACE_ROOT@ {{config_root | replace(from="\\", to="/")}} .cargo/config.vcpkg.toml',
     """
         {% set tgt = option(name="target") | default(value="") %}
         echo Vcpkg build for target {{tgt}}... && \
