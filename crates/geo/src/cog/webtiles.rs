@@ -398,6 +398,7 @@ pub struct WebTileInfo {
     pub max_zoom: i32,
     pub tile_size: u32,
     pub band_count: u32,
+    pub band_names: Vec<Option<String>>,
     pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
     pub scale: Option<RasterScale>,
@@ -422,11 +423,19 @@ impl WebTilesReader {
     }
 
     pub fn tile_info(&self) -> WebTileInfo {
+        let mut band_names = vec![None; self.cog_meta.band_count as usize];
+        for band in &self.cog_meta.band_metadata {
+            if let Some(band_name) = band_names.get_mut(band.sample as usize) {
+                *band_name = band.description.clone();
+            }
+        }
+
         WebTileInfo {
             min_zoom: self.web_tiles.min_zoom(),
             max_zoom: self.web_tiles.max_zoom(),
             tile_size: self.cog_meta.chunk_row_length(),
             band_count: self.cog_meta.band_count,
+            band_names,
             data_type: self.data_type(),
             scale: None, // TODO: extract scale info from the COG
             bounds: self.data_bounds(),
@@ -1798,6 +1807,34 @@ mod tests {
         create_cog_tiles(&input, &output, opts)?;
 
         Ok(output)
+    }
+
+    #[test_log::test]
+    fn tile_info_includes_band_names_from_cog_metadata() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile.tif");
+        let mut metadata = GeoTiffMetadata::from_file(&input)?;
+        let band_count = metadata.band_count;
+        metadata.band_metadata = vec![
+            crate::geotiff::BandMetadata {
+                sample: 0,
+                description: Some("Red".to_string()),
+                ..Default::default()
+            },
+            crate::geotiff::BandMetadata {
+                sample: 2,
+                description: Some("Blue".to_string()),
+                ..Default::default()
+            },
+        ];
+
+        let tile_info = WebTilesReader::new(metadata)?.tile_info();
+
+        assert_eq!(tile_info.band_names.len(), band_count as usize);
+        assert_eq!(tile_info.band_names[0].as_deref(), Some("Red"));
+        assert_eq!(tile_info.band_names[1].as_deref(), None);
+        assert_eq!(tile_info.band_names[2].as_deref(), Some("Blue"));
+
+        Ok(())
     }
 
     #[test_log::test]
