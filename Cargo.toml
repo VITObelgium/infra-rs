@@ -8,7 +8,7 @@ dependencies = [
   "gdal[core,netcdf,zstd,expat,lerc]",
   "hdf5[core,zlib]",
   "netcdf-c[core,netcdf-4]",
-  "tiff[core,lzma,zstd]",
+  "tiff[core,lzma,zstd,lerc]",
 ]  # needed to run the geo tests
 git = "https://github.com/microsoft/vcpkg"
 overlay-triplets-path = "vcpkg-overlay/triplets"
