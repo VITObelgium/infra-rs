@@ -158,3 +158,6 @@ create_release_tarball tool build_type="":
     (cd ${RELEASE_DIR} && tar -czf ../${TARGET}.tar.gz *)
     rm -rf ${RELEASE_DIR}
     echo "Release tarball created ${TARGET}.tar.gz"
+
+analyze_cog *args:
+    cargo run --release -p cog-analyzer -- {{ args }}
