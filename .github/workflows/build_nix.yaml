@@ -29,12 +29,5 @@ jobs:
                   extraPullNames: geo-overlay
             - name: Install pinned devenv
               run: nix profile add --accept-flake-config github:cachix/devenv/v2.0.5
-            - name: Build the project
-              shell: devenv shell bash -- -e {0}
-              run: just build_ci
-            - name: Run the unit tests
-              shell: devenv shell bash -- -e {0}
-              run: just test_ci
-            - name: Build the docs
-              shell: devenv --profile nightly shell bash -- -e {0}
-              run: just doc
+            - name: Run CI checks
+              run: devenv tasks run ci:checks

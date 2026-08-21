@@ -216,6 +216,13 @@ in
     cargo run -p createcog -- "$@"
   '';
 
+  tasks."ci:checks".exec = ''
+    set -e
+    just build_ci
+    just test_ci
+    devenv --profile nightly shell -- just doc
+  '';
+
   outputs = {
     createcog = mkRustTool { pname = "createcog"; };
     tiles2raster = mkRustTool { pname = "tiles2raster"; };
