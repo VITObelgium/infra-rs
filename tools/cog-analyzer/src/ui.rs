@@ -229,6 +229,18 @@ fn render_overview_tab(app: &mut App, frame: &mut Frame, area: Rect) {
         lines.push(labeled_row("Current Band", app.current_band_display()));
     }
 
+    let band_names: Vec<_> = (1..=app.band_count as usize)
+        .filter_map(|band| app.band_name(band).map(|name| (band, name.to_owned())))
+        .collect();
+    if !band_names.is_empty() {
+        lines.push(Line::from(""));
+        lines.push(Line::from(Span::styled(" ▸ Band Names", Style::default().fg(Color::Green).bold())));
+        lines.push(Line::from(""));
+        for (band, name) in band_names {
+            lines.push(labeled_row(&format!("Band {band}"), name));
+        }
+    }
+
     let raster_size = app.cog_metadata.geo_reference.raster_size();
     lines.push(labeled_row(
         "Resolution",
@@ -619,7 +631,7 @@ fn render_webtiles_navigation(app: &mut App, frame: &mut Frame, area: Rect) {
         TileViewState::BrowsingBands => "Bands".to_string(),
         TileViewState::BrowsingZoomLevels => {
             if let Some(band) = app.webtiles_tab.selected_band {
-                format!("Zoom Levels - Band {}", band)
+                format!("Zoom Levels - {}", app.band_display(band))
             } else {
                 "Zoom Levels".to_string()
             }
@@ -646,10 +658,7 @@ fn render_webtiles_navigation(app: &mut App, frame: &mut Frame, area: Rect) {
         TileViewState::BrowsingBands => {
             // Show list of bands
             let items: Vec<ListItem> = (1..=app.webtiles_tab.band_count)
-                .map(|band| {
-                    let content = format!("Band {}", band);
-                    ListItem::new(content)
-                })
+                .map(|band| ListItem::new(app.band_display(band as usize)))
                 .collect();
 
             let list = List::new(items)
@@ -725,10 +734,7 @@ fn render_webtiles_preview(app: &mut App, frame: &mut Frame, area: Rect) {
             // Show band info
             if let Some(band) = app.webtiles_tab.selected_band {
                 let info = vec![
-                    Line::from(vec![
-                        Span::styled("Band ", Style::default().fg(Color::Yellow).bold()),
-                        Span::raw(format!("{}", band)),
-                    ]),
+                    Line::from(Span::styled(app.band_display(band), Style::default().fg(Color::Yellow).bold())),
                     Line::from(""),
                     Line::from(vec![
                         Span::styled("Total Bands: ", Style::default().fg(Color::Cyan)),
@@ -771,7 +777,7 @@ fn render_webtiles_preview(app: &mut App, frame: &mut Frame, area: Rect) {
                     ]),
                     Line::from(vec![
                         Span::styled("Band: ", Style::default().fg(Color::Cyan)),
-                        Span::raw(format!("{}", app.webtiles_tab.get_selected_band())),
+                        Span::raw(app.band_display(app.webtiles_tab.get_selected_band())),
                     ]),
                     Line::from(""),
                     Line::from(Span::styled(

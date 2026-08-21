@@ -350,7 +350,7 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     // The orderinge of the chunks does not depend on the interleave, they are always stored in row-major order
     let chunks = &overview.chunk_locations;
     if meta.interleave == Interleave::Pixel {
-        unimplemented!("Pixel interleave tiff reading not implemented yet");
+        return Err(Error::Runtime("Pixel interleave tiff reading not supported".into()));
     }
 
     // BAND Interleave

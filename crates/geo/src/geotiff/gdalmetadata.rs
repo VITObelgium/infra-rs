@@ -17,11 +17,13 @@ pub struct TiffStats {
     pub valid_pixel_percentage: f64,
 }
 
-/// Band-specific metadata including offset and scale values
+/// Band-specific metadata including offset, scale, and description values
 #[derive(Debug, Clone, Default)]
 pub struct BandMetadata {
     /// The band/sample index (0-based)
     pub sample: u32,
+    /// Human-readable band description
+    pub description: Option<String>,
     /// Offset value for the band
     pub offset: Option<f64>,
     /// Scale value for the band
@@ -33,12 +35,26 @@ pub struct BandMetadata {
 pub struct GdalMetadata {
     /// Statistical information (min, max, mean, stddev, etc.)
     pub statistics: Option<TiffStats>,
-    /// Per-band metadata (offset, scale)
+    /// Per-band metadata (description, offset, scale)
     pub band_metadata: Vec<BandMetadata>,
     /// Interleave mode from `IMAGE_STRUCTURE` domain
     pub interleave: Option<Interleave>,
     /// Maximum zoom level from `TILING_SCHEME` domain
     pub max_zoom: Option<i32>,
+}
+
+impl GdalMetadata {
+    fn band_metadata_mut(&mut self, sample: u32) -> &mut BandMetadata {
+        if let Some(index) = self.band_metadata.iter().position(|band| band.sample == sample) {
+            return &mut self.band_metadata[index];
+        }
+
+        self.band_metadata.push(BandMetadata {
+            sample,
+            ..Default::default()
+        });
+        self.band_metadata.last_mut().expect("band metadata was just added")
+    }
 }
 
 // GDAL metadata can have various formats:
@@ -50,6 +66,7 @@ pub struct GdalMetadata {
 //   <Item name="STATISTICS_VALID_PERCENT" sample="0">45.34</Item>
 //   <Item name="NAME" domain="TILING_SCHEME">GoogleMapsCompatible</Item>
 //   <Item name="ZOOM_LEVEL" domain="TILING_SCHEME">10</Item>
+//   <Item name="DESCRIPTION" sample="0" role="description">Red</Item>
 //   <Item name="OFFSET" sample="0" role="offset">0</Item>
 //   <Item name="SCALE" sample="0" role="scale">0.031372549019600002</Item>
 //   <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">TILE</Item>
@@ -58,7 +75,7 @@ pub struct GdalMetadata {
 /// Parse GDAL metadata XML into a structured format
 ///
 /// This function parses the complete GDAL metadata XML from TIFF tags,
-/// including statistics, band-specific offset/scale values, and interleave mode.
+/// including statistics, band-specific descriptions/offset/scale values, and interleave mode.
 ///
 /// # Arguments
 /// * `xml` - The XML string containing GDAL metadata
@@ -132,21 +149,17 @@ pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
                                 metadata.max_zoom = data.parse::<i32>().ok();
                             }
                         }
+                        "DESCRIPTION" => {
+                            if let Some(sample) = current_sample {
+                                metadata.band_metadata_mut(sample).description = Some(data);
+                            }
+                        }
                         "OFFSET" => {
                             if let Some(role) = &current_role
                                 && role == "offset"
                                 && let Some(sample) = current_sample
                             {
-                                let offset_value = data.parse::<f64>().ok();
-                                if let Some(band) = metadata.band_metadata.iter_mut().find(|b| b.sample == sample) {
-                                    band.offset = offset_value;
-                                } else {
-                                    metadata.band_metadata.push(BandMetadata {
-                                        sample,
-                                        offset: offset_value,
-                                        scale: None,
-                                    });
-                                }
+                                metadata.band_metadata_mut(sample).offset = data.parse::<f64>().ok();
                             }
                         }
                         "SCALE" => {
@@ -154,16 +167,7 @@ pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
                                 && role == "scale"
                                 && let Some(sample) = current_sample
                             {
-                                let scale_value = data.parse::<f64>().ok();
-                                if let Some(band) = metadata.band_metadata.iter_mut().find(|b| b.sample == sample) {
-                                    band.scale = scale_value;
-                                } else {
-                                    metadata.band_metadata.push(BandMetadata {
-                                        sample,
-                                        offset: None,
-                                        scale: scale_value,
-                                    });
-                                }
+                                metadata.band_metadata_mut(sample).scale = data.parse::<f64>().ok();
                             }
                         }
                         "INTERLEAVE" => {
@@ -231,15 +235,18 @@ mod tests {
     }
 
     #[test]
-    fn parse_gdal_metadata_with_offset_scale() {
+    fn parse_gdal_metadata_with_band_metadata() {
         let xml = r#"
 <GDALMetadata>
   <Item name="OFFSET" sample="0" role="offset">0</Item>
   <Item name="SCALE" sample="0" role="scale">0.0313725490196</Item>
+  <Item name="DESCRIPTION" sample="0" role="description">Red</Item>
+  <Item name="DESCRIPTION" sample="1" role="description">Green</Item>
   <Item name="OFFSET" sample="1" role="offset">0</Item>
   <Item name="SCALE" sample="1" role="scale">0.0313725490196</Item>
   <Item name="OFFSET" sample="2" role="offset">0</Item>
   <Item name="SCALE" sample="2" role="scale">0.0313725490196</Item>
+  <Item name="DESCRIPTION" sample="2" role="description">Blue</Item>
 </GDALMetadata>
         "#;
         let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
@@ -251,6 +258,9 @@ mod tests {
             assert_eq!(band.offset, Some(0.0));
             assert_abs_diff_eq!(band.scale.unwrap(), 0.0313725490196);
         }
+        assert_eq!(metadata.band_metadata[0].description.as_deref(), Some("Red"));
+        assert_eq!(metadata.band_metadata[1].description.as_deref(), Some("Green"));
+        assert_eq!(metadata.band_metadata[2].description.as_deref(), Some("Blue"));
     }
 
     #[test]

@@ -219,11 +219,29 @@ impl App {
         }
     }
 
-    /// Get the current band index (1-based) for display.
+    /// Get the GDAL description for a 1-based band index.
+    pub fn band_name(&self, band: usize) -> Option<&str> {
+        let sample = u32::try_from(band.checked_sub(1)?).ok()?;
+        self.cog_metadata
+            .band_metadata
+            .iter()
+            .find(|metadata| metadata.sample == sample)
+            .and_then(|metadata| metadata.description.as_deref())
+    }
+
+    /// Get a display label for a 1-based band index.
+    pub fn band_display(&self, band: usize) -> String {
+        match self.band_name(band) {
+            Some(name) => format!("Band {band} ({name})"),
+            None => format!("Band {band}"),
+        }
+    }
+
+    /// Get the current band index (1-based) and name, if available, for display.
     pub fn current_band_display(&self) -> String {
         match self.selected_band {
-            Some(band) => format!("Band {} of {}", band.get(), self.band_count),
-            None => "Single band".to_string(),
+            Some(band) => format!("{} of {}", self.band_display(band.get()), self.band_count),
+            None => self.band_display(1),
         }
     }
 
