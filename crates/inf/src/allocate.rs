@@ -177,7 +177,7 @@ pub fn cast_aligned_vec<T: bytemuck::NoUninit, TDest: bytemuck::AnyBitPattern>(d
 
     #[cfg(feature = "simd")]
     {
-        let (ptr, len, cap, alloc) = data.into_parts_with_alloc();
+        let (ptr, len, cap, alloc) = data.into_parts_with_allocator();
 
         unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>().as_ptr(), len, cap, alloc) }
     }
