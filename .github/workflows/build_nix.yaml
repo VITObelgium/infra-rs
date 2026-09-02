@@ -28,6 +28,6 @@ jobs:
                   name: devenv
                   extraPullNames: geo-overlay
             - name: Install pinned devenv
-              run: nix profile add --accept-flake-config github:cachix/devenv/v2.0.5
+              run: nix profile add --accept-flake-config github:cachix/devenv/v2.2.2
             - name: Run CI checks
               run: devenv tasks run --no-tui ci:checks
