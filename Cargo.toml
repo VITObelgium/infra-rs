@@ -70,15 +70,9 @@ tui = ["tileserver/tui"]
 vector = ["geo/vector-io", "geo/vector-io-csv", "geo/vector-io-xlsx"]
 
 [patch.crates-io]
-proj4wkt = {
-  git = "https://github.com/3liz/proj4wkt-rs.git",
-  rev = "942030821e6c0201d1ff899bcfc981799566b324"
-}
+proj4wkt = { git = "https://github.com/3liz/proj4wkt-rs.git", rev = "942030821e6c0201d1ff899bcfc981799566b324" }
 # https://github.com/image-rs/image-tiff/issues/253
-tiff = {
-  git = "https://github.com/dirkvdb/image-tiff.git",
-  rev = "51e31a7ff65e5c63cc404efacc4d2f9db174c773"
-}
+tiff = { git = "https://github.com/dirkvdb/image-tiff.git", rev = "51e31a7ff65e5c63cc404efacc4d2f9db174c773" }
 
 # [profile.dev]
 # debug = "line-tables-only"
