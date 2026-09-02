@@ -223,38 +223,40 @@ in
     devenv --profile nightly shell -- just doc
   '';
 
-  outputs = {
-    createcog = mkRustTool { pname = "createcog"; };
-    tiles2raster = mkRustTool { pname = "tiles2raster"; };
-    tileserver = mkRustTool { pname = "tileserver"; };
+  outputs =
+    {
+      createcog = mkRustTool { pname = "createcog"; };
+      tiles2raster = mkRustTool { pname = "tiles2raster"; };
+      tileserver = mkRustTool { pname = "tileserver"; };
 
-    # Static musl binaries
-    createcog-musl = mkRustTool {
-      pname = "createcog";
-      useMusl = true;
+      # Static musl binaries
+      createcog-musl = mkRustTool {
+        pname = "createcog";
+        useMusl = true;
+      };
+      tiles2raster-musl = mkRustTool {
+        pname = "tiles2raster";
+        useMusl = true;
+      };
+      tileserver-musl = mkRustTool {
+        pname = "tileserver";
+        useMusl = true;
+      };
+    }
+    // lib.optionalAttrs (pkgs.system == "x86_64-linux") {
+      # MinGW binaries for Windows
+      createcog-mingw = mkRustTool {
+        pname = "createcog";
+        useMingw = true;
+      };
+      tiles2raster-mingw = mkRustTool {
+        pname = "tiles2raster";
+        useMingw = true;
+      };
+      tileserver-mingw = mkRustTool {
+        pname = "tileserver";
+        useMingw = true;
+      };
     };
-    tiles2raster-musl = mkRustTool {
-      pname = "tiles2raster";
-      useMusl = true;
-    };
-    tileserver-musl = mkRustTool {
-      pname = "tileserver";
-      useMusl = true;
-    };
-
-    # MinGW binaries for Windows
-    createcog-mingw = mkRustTool {
-      pname = "createcog";
-      useMingw = true;
-    };
-    tiles2raster-mingw = mkRustTool {
-      pname = "tiles2raster";
-      useMingw = true;
-    };
-    tileserver-mingw = mkRustTool {
-      pname = "tileserver";
-      useMingw = true;
-    };
-  };
 
 }
