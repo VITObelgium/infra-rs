@@ -2,7 +2,7 @@ use crate::vector::dataframe::{DataFrameOptions, DataFrameReader, DataFrameRow, 
 use crate::vector::fieldtype::{self, parse_bool_str};
 use crate::{Error, Result};
 use csv::{Reader, ReaderBuilder, StringRecord};
-use std::io::BufReader;
+use std::io::{BufRead, BufReader};
 use std::path::Path;
 
 const DEFAULT_DATA_TYPE_DETECTION_ROWS: usize = 10;
@@ -13,9 +13,43 @@ pub struct CsvReader {
 }
 
 impl CsvReader {
+    fn detect_delimiter(&self) -> Result<u8> {
+        let file = std::fs::File::open(&self.file_path)?;
+        let mut reader = BufReader::new(file);
+        let mut first_line = String::new();
+        reader.read_line(&mut first_line)?;
+
+        let mut in_quotes = false;
+        let mut counts = [(b',', 0), (b';', 0), (b'\t', 0), (b'|', 0)];
+
+        for byte in first_line.bytes() {
+            match byte {
+                b'"' => in_quotes = !in_quotes,
+                _ if !in_quotes => {
+                    if let Some((_, count)) = counts.iter_mut().find(|(candidate, _)| *candidate == byte) {
+                        *count += 1;
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let delimiter = counts
+            .into_iter()
+            .rev()
+            .filter(|(_, count)| *count > 0)
+            .max_by_key(|(_, count)| *count)
+            .map_or(b',', |(candidate, _)| candidate);
+
+        Ok(delimiter)
+    }
+
     fn create_reader(&self, has_headers: bool) -> Result<Reader<BufReader<std::fs::File>>> {
         let file = std::fs::File::open(&self.file_path)?;
-        Ok(ReaderBuilder::new().has_headers(has_headers).from_reader(BufReader::new(file)))
+        Ok(ReaderBuilder::new()
+            .has_headers(has_headers)
+            .delimiter(self.detect_delimiter()?)
+            .from_reader(BufReader::new(file)))
     }
 
     fn infer_column_type(records: &[StringRecord], col_idx: usize) -> FieldType {
@@ -249,7 +283,7 @@ impl DataFrameReader for CsvReader {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vector::readers::readertests;
+    use crate::{testutils, vector::readers::readertests};
 
     #[test]
     fn read_csv_empty_sheet() -> Result<()> {
@@ -259,6 +293,24 @@ mod tests {
     #[test]
     fn read_csv() -> Result<()> {
         readertests::read_table::<CsvReader>("csv")
+    }
+
+    #[test]
+    fn read_csv_detects_semicolon_delimiter() -> Result<()> {
+        let input_file = testutils::geo_test_data_dir().join("data_types_semicolon.csv");
+        let mut reader = CsvReader::from_file(input_file)?;
+
+        let schema = reader.schema(&DataFrameOptions {
+            header_row: HeaderRow::Auto,
+            ..Default::default()
+        })?;
+
+        assert_eq!(
+            schema.fields.iter().map(FieldInfo::name).collect::<Vec<_>>(),
+            vec!["String Column", "Double Column", "Integer Column"]
+        );
+
+        Ok(())
     }
 
     #[test]

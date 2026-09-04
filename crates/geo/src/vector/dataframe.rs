@@ -467,3 +467,29 @@ mod tests {
         Ok(())
     }
 }
+
+#[cfg(all(test, feature = "vector-io-csv", feature = "polars"))]
+mod csv_tests {
+    use super::{DataFrameOptions, HeaderRow, polars};
+    use crate::{Result, testutils};
+
+    #[test]
+    fn read_csv_dataframe_detects_semicolon_headers() -> Result<()> {
+        let input_file = testutils::geo_test_data_dir().join("data_types_semicolon.csv");
+        let df = polars::read_dataframe(
+            &input_file,
+            &DataFrameOptions {
+                header_row: HeaderRow::Auto,
+                ..Default::default()
+            },
+        )?;
+
+        let headers = df.get_column_names();
+        assert_eq!(
+            headers.iter().map(|name| name.as_str()).collect::<Vec<_>>(),
+            ["String Column", "Double Column", "Integer Column",]
+        );
+
+        Ok(())
+    }
+}
