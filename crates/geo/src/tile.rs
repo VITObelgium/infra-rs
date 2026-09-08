@@ -31,27 +31,24 @@ impl Tile {
     }
 
     pub fn for_coordinate(coord: Coordinate, zoom: i32) -> Tile {
-        let tilex;
-        let tiley;
-
         let p = Tile::xy(coord);
         let z2 = f64::powi(2.0, zoom);
 
-        if p.x() <= 0.0 {
-            tilex = 0;
+        let tilex = if p.x() <= 0.0 {
+            0
         } else if p.x() >= 1.0 {
-            tilex = (z2 - 1.0) as i32;
+            (z2 - 1.0) as i32
         } else {
-            tilex = ((p.x() + f64::EPSILON) * z2).floor() as i32;
-        }
+            ((p.x() + f64::EPSILON) * z2).floor() as i32
+        };
 
-        if p.y() <= 0.0 {
-            tiley = 0;
+        let tiley = if p.y() <= 0.0 {
+            0
         } else if p.y() >= 1.0 {
-            tiley = (z2 - 1.0) as i32;
+            (z2 - 1.0) as i32
         } else {
-            tiley = ((p.y() + f64::EPSILON) * z2).floor() as i32;
-        }
+            ((p.y() + f64::EPSILON) * z2).floor() as i32
+        };
 
         Tile {
             x: tilex,
