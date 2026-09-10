@@ -1,0 +1,10 @@
+# Problem statement:
+When creating multiband cogs using the createcog tool (which internally relies on the gdaltranslate and gdalwarp functions) when the bandcount is large the conversion process starts using a lot of cpu and basically comes to a halt. These algorithms are not optimized for large band counts. Appending bands to an existing dataset requires rebuilding the entire cog for each band, which is very inefficient.
+
+We need a specialized implementation to create multiband cogs that can optimize the writing of the cog because it knows it is going to create a multiband cog with interleave = TILE. The generic gdal implementation is not optimized for this layout so it has to build up the entire cog again for each band it appends. Our implementation has to be smarter.
+- Given the input file, first create a temporary directory with one geotiff for each band. This tiff should already be warped to the final output projection and resolution and should already contain all the zoom levels. This approach leverages as much as possible the existing gdalwarp and gdal_translate functionality to reduce complexity. The resulting files contain all the tiff tiles needed for constructing the final multiband cog. So the final construction pass is a matter of constructing the metadata and merging all the exidting tiff tiles in the final cog in the correct order.
+- Once we have the individual band geotiffs, we can then create the final multiband cog by reading all the individual tiles from the geotiffs in the order they will appear in the final cog. This way memory usage is minimized and we avoid the overhead of repeatedly writing to the same file for each band. The final cog can be created by iterating through the tiles of each band and appending them to the final cog.
+
+- Validation: 
+  - The final multiband cog should be validated to ensure that it has the correct number of bands, correct interleave (TILE).
+    Use the gdal validation tool: https://gdal.org/en/stable/programs/gdal_driver_cog_validate.html
