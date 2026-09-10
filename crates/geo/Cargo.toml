@@ -90,6 +90,7 @@ serde = { version = "1.0", features = ["derive"], optional = true }
 simd_macro = { path = "simd_macro" }
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 thiserror = "2.0"
+tempfile = "3"
 tiff = { version = "0.11.3", default-features = false, optional = true }
 vector_derive = { path = "vector_derive", optional = true }
 weezl = { version = "0.2", optional = true }
@@ -101,7 +102,6 @@ env_logger = "0.11"
 generic-tests = "0.1"
 path_macro = "1.0"
 rand = "0.10"
-tempfile = "3"
 test-log = "0.2"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dev-dependencies]
