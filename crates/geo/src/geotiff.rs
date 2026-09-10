@@ -1,5 +1,6 @@
 //! GeoTIFF format reading, writing, and processing capabilities.
 
+mod cog_assembler;
 mod decoder;
 mod gdalghostdata;
 mod gdalmetadata;
@@ -14,6 +15,7 @@ pub use crate::bandindex::{BandIndex, FIRST_BAND};
 
 use projectioninfo::ProjectionInfo;
 
+pub use cog_assembler::assemble_band_cogs;
 pub use gdalmetadata::{BandMetadata, GdalMetadata, TiffStats};
 pub use metadata::{GeoTiffMetadata, ParseFromBufferError};
 pub use reader::{ChunkDataLayout, GeoTiffReader, TiffChunkLocation, TiffOverview};
