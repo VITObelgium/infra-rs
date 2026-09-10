@@ -48,17 +48,32 @@ fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions
 }
 
 pub fn print_gdal_translate_command(input: &Path, opts: TileCreationOptions) -> Result<()> {
+    let uses_multiband_pipeline = opts.multi_band || geo::raster::formats::gdal::open_dataset_read_only(input)?.raster_count() > 1;
+    if uses_multiband_pipeline {
+        println!("Pipeline: create one single-band COG per input band, then assemble the compressed tiles into a multiband COG");
+        return Ok(());
+    }
+
     let args = geo::cog::create_gdal_warp_args(input, create_opts(opts)?)?;
     println!("Gdal cmd:\n {}", args.join(" "));
     Ok(())
 }
 
-pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, progress: Option<&mut dyn FnMut(f64)>) -> Result<()> {
-    let multi_band = opts.multi_band;
+pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, mut progress: Option<&mut dyn FnMut(f64)>) -> Result<()> {
+    let multi_band = opts.multi_band || geo::raster::formats::gdal::open_dataset_read_only(Path::new(input))?.raster_count() > 1;
     let cog_create_opts = create_opts(opts)?;
 
     if multi_band {
-        Ok(geo::cog::create_multiband_cog_tiles(input, &output, cog_create_opts, progress)?)
+        let (_temporary_directory, band_cogs) = geo::cog::create_temporary_band_cogs(input, cog_create_opts)?;
+        if let Some(progress) = progress.as_mut() {
+            progress(0.8);
+        }
+
+        geo::geotiff::assemble_band_cogs(&band_cogs, &output)?;
+        if let Some(progress) = progress.as_mut() {
+            progress(1.0);
+        }
+        Ok(())
     } else {
         Ok(geo::cog::create_cog_tiles(&PathBuf::from(input), &output, cog_create_opts)?)
     }
