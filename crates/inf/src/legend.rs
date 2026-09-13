@@ -166,7 +166,7 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
     ) {
         use fearless_simd::*;
 
-        let lane_count = <S::f32s as SimdBase<S>>::N;
+        let lane_count = <S::f32s as SimdBase<S>>::LEN;
         let nodata_f32 = cast::option::<f32>(nodata);
         let nodata_colors = unmappable.nodata.splat(simd);
 

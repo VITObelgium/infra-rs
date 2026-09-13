@@ -3524,7 +3524,7 @@ mod tests {
             let v = S::f32s::from_fn(simd, |i| values[i]);
             let colors = cmap.get_color_simd(simd, v);
             let mut out = [0u32; 16];
-            colors.store_slice(&mut out[..<S::u32s as SimdBase<S>>::N]);
+            colors.store_slice(&mut out[..<S::u32s as SimdBase<S>>::LEN]);
             out
         }
 
