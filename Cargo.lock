@@ -1827,9 +1827,9 @@ dependencies = [
 
 [[package]]
 name = "fearless_simd"
-version = "0.6.0"
+version = "1.0.0-rc.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f5f895dac0865bc235f1364793899569a7db538137f1024dccea56bf41c78d"
+checksum = "50a2d1ad65a201b433ff546990c72c804305bb2162f8c09707dd7f9125210b55"
 
 [[package]]
 name = "filedescriptor"
