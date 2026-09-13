@@ -25,6 +25,7 @@
                         "vector-io-csv",
                         "rayon",
                         "polars",
+                        "bench"
                     ],
                 },
                 "check": {
@@ -36,6 +37,7 @@
                         "vector-io-csv",
                         "rayon",
                         "polars",
+                        "bench"
                     ],
                     "command": "clippy", // rust-analyzer.checkOnSave.command
                 },
