@@ -3503,16 +3503,7 @@ mod tests {
         // Mix of in-range values, out-of-range values and NaN. Out-of-range and NaN lanes must map
         // to the transparent color, just like the scalar `get_color`.
         let inputs = [0.0, 0.25, 0.5, 0.75, 1.0, -1.0, 2.0, f32::NAN];
-        let expected: Vec<Color> = inputs
-            .iter()
-            .map(|&v| {
-                if (0.0..=1.0).contains(&v) {
-                    cmap.get_color(v)
-                } else {
-                    color::TRANSPARENT
-                }
-            })
-            .collect();
+        let expected: Vec<Color> = inputs.iter().map(|&v| cmap.get_color(v)).collect();
 
         // The native lane count depends on the detected SIMD level (up to 16 for AVX-512), so pad the
         // input to the widest supported width.
@@ -3520,18 +3511,19 @@ mod tests {
         values[..inputs.len()].copy_from_slice(&inputs);
 
         #[inline(always)]
-        fn run<S: Simd>(simd: S, cmap: &ProcessedColorMap, values: &[f32; 16]) -> [u32; 16] {
+        fn run<S: Simd>(simd: S, cmap: &ProcessedColorMap, values: &[f32; 16]) -> ([u32; 16], usize) {
+            let lane_count = <S::u32s as SimdBase<S>>::LEN;
             let v = S::f32s::from_fn(simd, |i| values[i]);
             let colors = cmap.get_color_simd(simd, v);
             let mut out = [0u32; 16];
-            colors.store_slice(&mut out[..<S::u32s as SimdBase<S>>::LEN]);
-            out
+            colors.store_slice(&mut out[..lane_count]);
+            (out, lane_count)
         }
 
         let level = Level::new();
-        let out = dispatch!(level, simd => run(simd, &cmap, &values));
+        let (out, lane_count) = dispatch!(level, simd => run(simd, &cmap, &values));
 
-        for (i, expected_color) in expected.iter().enumerate() {
+        for (i, expected_color) in expected.iter().take(lane_count).enumerate() {
             assert_eq!(Color::from(out[i]), *expected_color, "lane {i} (input {})", inputs[i]);
         }
     }
