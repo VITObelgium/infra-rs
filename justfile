@@ -93,7 +93,7 @@ rasterbench:
     cargo bench --bench rasterops --package=geo
 
 cmapbench:
-    cargo bench --bench colormapping --package=inf --features=simd
+    cargo bench --bench colormapping --package=inf --features=bench
 
 simdbench:
     @ {{ devenv_nightly }} 'cargo bench --bench simd --package=geo --features=simd,gdal-static,gdal'

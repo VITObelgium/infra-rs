@@ -151,7 +151,10 @@ in
           "miri"
         ];
       };
-      env.ENVIRONMENT = "nightly";
+      packages = [ pkgs.stdenv.cc.cc.lib ];
+      env = {
+        ENVIRONMENT = "nightly";
+      };
     };
 
     musl.module = {
@@ -210,7 +213,10 @@ in
     pkg-mod-openssl
     pkg-mod-gdal
     pkg-mod-proj
+    stdenv.cc.cc.lib
   ];
+
+  env.LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
 
   scripts.createcog.exec = ''
     cargo run -p createcog -- "$@"

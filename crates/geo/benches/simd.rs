@@ -7,6 +7,7 @@ mod bench {
     #[cfg(feature = "simd")]
     use geo::{
         Array, ArrayInterop as _, ArrayNum, Columns, GeoReference, RasterSize, Rows,
+        raster::algo::Scale as _,
         raster::{DenseRaster, algo},
     };
     use num::NumCast;
@@ -17,7 +18,7 @@ mod bench {
     #[cfg(feature = "simd")]
     const LANES: usize = inf::simd::LANES;
 
-    pub fn bench_name<T: ArrayNum>(name: &str) -> String {
+    fn bench_name<T: ArrayNum>(name: &str) -> String {
         #[cfg(feature = "simd")]
         return format!("{}_{:?}_simd", name, T::TYPE);
         #[cfg(not(feature = "simd"))]
@@ -25,7 +26,7 @@ mod bench {
     }
 
     #[geo::simd_bounds]
-    pub fn simd<T: ArrayNum>(c: &mut Criterion) {
+    fn simd<T: ArrayNum>(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
         let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
 
@@ -40,7 +41,7 @@ mod bench {
         });
     }
 
-    pub fn min_max(c: &mut Criterion) {
+    fn min_max(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
         let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
 
@@ -110,7 +111,7 @@ mod bench {
         group.finish();
     }
 
-    pub fn filter(c: &mut Criterion) {
+    fn filter(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
         let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
 
@@ -164,7 +165,7 @@ mod bench {
         group.finish();
     }
 
-    pub fn scale(c: &mut Criterion) {
+    fn scale(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
         let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(f64::NAN));
 
@@ -201,7 +202,6 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    use algo::simd::Scale;
                     let _: DenseRaster<u8> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
@@ -219,13 +219,13 @@ mod bench {
             );
         });
 
-        let range = algo::min_max(&create_f32_raster());
+        let range = algo::min_max(&create_f32_raster()).unwrap();
 
         group.bench_function("scale_to_u8_f32_rangeinput_scalar", |b| {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    let _: DenseRaster<u8> = raster.scale_to(range.clone()).unwrap();
+                    let _: DenseRaster<u8> = raster.scale(Some(range.clone())).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -235,7 +235,6 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    use algo::simd::Scale;
                     let _: DenseRaster<u8> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
@@ -246,8 +245,7 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    use algo::simd::Scale;
-                    let _: DenseRaster<u8> = raster.scale_to(range.clone()).unwrap();
+                    let _: DenseRaster<u8> = raster.scale(Some(range.clone())).unwrap();
                 },
                 BatchSize::LargeInput,
             );
@@ -268,7 +266,6 @@ mod bench {
             b.iter_batched_ref(
                 create_f64_raster,
                 |raster| {
-                    use algo::simd::Scale;
                     let _: DenseRaster<u16> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
@@ -290,7 +287,6 @@ mod bench {
             b.iter_batched_ref(
                 create_f32_raster,
                 |raster| {
-                    use algo::simd::Scale;
                     let _: DenseRaster<u16> = raster.scale(None).unwrap();
                 },
                 BatchSize::LargeInput,
