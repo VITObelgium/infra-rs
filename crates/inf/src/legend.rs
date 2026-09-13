@@ -1,25 +1,27 @@
 use num::NumCast;
 
 use crate::allocate::AlignedVec;
+use crate::color::ColorSimd;
 use crate::colormapper::UnmappableColors;
-#[cfg(feature = "simd")]
-use crate::colormapper::UnmappableColorsSimd;
 use crate::{
     Result, allocate, cast,
     color::Color,
     colormap::{ColorMap, ColorMapDirection, ColorMapPreset, ProcessedColorMap},
     colormapper::{self, ColorMapper},
 };
+use fearless_simd::Simd;
 use std::{
     collections::HashMap,
     ops::{Range, RangeInclusive},
 };
 
-#[cfg(feature = "simd")]
-use std::simd::{Select, Simd, SimdCast, SimdElement, cmp::SimdPartialEq, num::SimdFloat};
-
-#[cfg(feature = "simd")]
-pub const LANES: usize = crate::simd::LANES;
+/// Returns the best available SIMD level for the current CPU.
+/// The level is detected once and cached, since detection can be relatively expensive.
+fn simd_level() -> fearless_simd::Level {
+    use std::sync::OnceLock;
+    static LEVEL: OnceLock<fearless_simd::Level> = OnceLock::new();
+    *LEVEL.get_or_init(fearless_simd::Level::new)
+}
 
 /// Options for mapping values that can not be mapped by the legend mapper
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -77,20 +79,18 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         value.is_nan() || Some(value) == nodata || (self.mapping_config.zero_is_nodata && value == T::zero())
     }
 
-    #[cfg(feature = "simd")]
     #[inline]
-    fn is_unmappable_simd<const N: usize>(
-        &self,
-        value: Simd<f32, N>,
-        nodata: Option<f32>,
-    ) -> <std::simd::Simd<f32, N> as std::simd::cmp::SimdPartialEq>::Mask {
-        let mut mask = value.is_nan();
+    fn is_unmappable_simd<S: Simd>(&self, value: S::f32s, nodata: Option<f32>) -> S::mask32s {
+        use fearless_simd::*;
+
+        // NaN never compares equal to itself, so a self-inequality identifies NaN lanes.
+        let mut mask = !value.simd_eq(value);
         if let Some(nodata) = nodata {
-            mask |= value.simd_eq(Simd::splat(nodata));
+            mask |= value.simd_eq(nodata);
         }
 
         if self.mapping_config.zero_is_nodata {
-            mask |= value.simd_eq(Simd::splat(0.0));
+            mask |= value.simd_eq(0.0f32);
         }
 
         mask
@@ -107,44 +107,6 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         }
 
         self.mapper.color_for_numeric_value(value, unmappable)
-    }
-
-    #[cfg(feature = "simd")]
-    #[inline]
-    pub fn color_for_value_simd<T: num::NumCast + Copy + num::Zero + SimdElement + SimdCast>(
-        &self,
-        value: &std::simd::Simd<T, LANES>,
-        nodata: Option<T>,
-        color_buffer: &mut std::simd::Simd<u32, LANES>,
-    ) where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
-    {
-        let unmappable = self.mapper.compute_unmappable_colors_simd(&self.mapping_config);
-        self.color_for_value_simd_precomputed_unmappable(value, nodata, color_buffer, &unmappable);
-    }
-
-    #[cfg(feature = "simd")]
-    #[inline]
-    pub fn color_for_value_simd_precomputed_unmappable<T: num::NumCast + Copy + num::Zero + SimdElement + SimdCast>(
-        &self,
-        value: &std::simd::Simd<T, LANES>,
-        nodata: Option<T>,
-        color_buffer: &mut std::simd::Simd<u32, LANES>,
-        unmappable: &UnmappableColorsSimd,
-    ) where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
-    {
-        use crate::simd::SimdCastPl;
-
-        let value: Simd<T, LANES> = value.simd_cast();
-        let unmappable_mask = self.is_unmappable_simd(value.simd_cast(), cast::option::<f32>(nodata));
-        if unmappable_mask.all() {
-            *color_buffer = unmappable.nodata;
-            return;
-        }
-
-        let colors = self.mapper.color_for_numeric_value_simd(value.simd_cast(), unmappable);
-        *color_buffer = unmappable_mask.select(unmappable.nodata, colors);
     }
 
     pub fn color_for_opt_value<T: Copy + num::NumCast>(&self, value: Option<T>) -> Color {
@@ -167,68 +129,71 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         self.mapper.legend_entries()
     }
 
-    #[cfg(feature = "simd")]
-    pub fn apply_to_data<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color>
-    where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
-    {
-        self.apply_to_data_simd(data, nodata)
-    }
-
-    #[cfg(not(feature = "simd"))]
     pub fn apply_to_data<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
-        self.apply_to_data_scalar(data, nodata)
+        self.apply_to_data_simd(data, nodata)
     }
 
     pub fn apply_to_data_scalar<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         allocate::aligned_vec_from_iter(data.iter().map(|&value| self.color_for_value(value, nodata)))
     }
 
-    #[cfg(feature = "simd")]
     #[inline]
-    pub fn apply_to_data_simd<T: num::NumCast + num::Zero + SimdElement + SimdCast>(
-        &self,
-        data: &[T],
-        nodata: Option<T>,
-    ) -> AlignedVec<Color>
-    where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
-    {
-        use crate::allocate;
-
+    pub fn apply_to_data_simd<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         if !self.mapper.simd_supported() {
             // Not all color mappers can support SIMD, so fall back to scalar processing
             return self.apply_to_data_scalar(data, nodata);
         }
 
-        let mut colors = allocate::aligned_vec_with_capacity(data.len());
-        // Safety: all the cells in `colors` will be filled with u32 color bits, no need to initialize them
+        let mut colors: AlignedVec<Color> = allocate::aligned_vec_with_capacity(data.len());
+        // Safety: all the cells in `colors` will be filled with colors by the kernel below.
         unsafe { colors.set_len(data.len()) };
 
-        let (head, simd_vals, tail) = data.as_simd();
-        let (head_colors, simd_colors, tail_colors) = colors.as_simd_mut();
-
-        assert!(head.len() == head_colors.len(), "Data alignment error");
-
         let unmappable = self.mapper.compute_unmappable_colors(&self.mapping_config);
-        let unmappable_simd = self.mapper.compute_unmappable_colors_simd(&self.mapping_config);
 
-        // scalar head
-        for val in head.iter().zip(head_colors) {
-            *val.1 = self.color_for_value_precomputed_unmappable(*val.0, nodata, &unmappable).to_bits();
+        fearless_simd::dispatch!(simd_level(), simd => self.apply_to_data_kernel(simd, data, &mut colors, nodata, &unmappable));
+
+        colors
+    }
+
+    #[inline(always)]
+    fn apply_to_data_kernel<S: Simd, T: Copy + num::NumCast>(
+        &self,
+        simd: S,
+        data: &[T],
+        out: &mut [Color],
+        nodata: Option<T>,
+        unmappable: &UnmappableColors,
+    ) {
+        use fearless_simd::*;
+
+        let lane_count = <S::f32s as SimdBase<S>>::N;
+        let nodata_f32 = cast::option::<f32>(nodata);
+        let nodata_colors = unmappable.nodata.splat(simd);
+
+        // Scratch buffer to extract the color bits of a SIMD vector before converting them to `Color`.
+        // 16 is the widest currently supported native f32 lane count (AVX-512).
+        let mut bits = [0u32; 16];
+
+        let mut data_chunks = data.chunks_exact(lane_count);
+        let mut out_chunks = out.chunks_exact_mut(lane_count);
+
+        for (chunk, out_chunk) in data_chunks.by_ref().zip(out_chunks.by_ref()) {
+            // Convert each lane from the source type to f32 (nodata/invalid values become NaN).
+            let values = S::f32s::from_fn(simd, |i| chunk[i].to_f32().unwrap_or(f32::NAN));
+            let unmappable_mask = self.is_unmappable_simd::<S>(values, nodata_f32);
+            let colors = self.mapper.color_for_numeric_value_simd(simd, values, unmappable);
+            let colors = unmappable_mask.select(nodata_colors, colors);
+
+            colors.store_slice(&mut bits[..lane_count]);
+            for (slot, &value) in out_chunk.iter_mut().zip(bits.iter()) {
+                *slot = Color::from(value);
+            }
         }
 
-        // simd body
-        for (val_chunk, color_chunk) in simd_vals.iter().zip(simd_colors) {
-            self.color_for_value_simd_precomputed_unmappable(val_chunk, nodata, color_chunk, &unmappable_simd);
+        // Process the remaining values that do not fill a full SIMD vector with scalar code.
+        for (value, slot) in data_chunks.remainder().iter().zip(out_chunks.into_remainder().iter_mut()) {
+            *slot = self.color_for_value_precomputed_unmappable(*value, nodata, unmappable);
         }
-
-        // scalar tail
-        for val in tail.iter().zip(tail_colors) {
-            *val.1 = self.color_for_value_precomputed_unmappable(*val.0, nodata, &unmappable).to_bits();
-        }
-
-        allocate::cast_aligned_vec::<u32, Color>(colors)
     }
 }
 
@@ -310,11 +275,7 @@ impl Legend {
         Ok(Legend::CategoricString(create_categoric_string(string_map, mapping_config)?))
     }
 
-    #[cfg(feature = "simd")]
-    pub fn apply<T: num::NumCast + num::Zero + SimdElement + SimdCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color>
-    where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
-    {
+    pub fn apply<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         match self {
             Legend::Linear(legend) => legend.apply_to_data(data, nodata),
             Legend::Banded(legend) => legend.apply_to_data(data, nodata),
@@ -332,15 +293,7 @@ impl Legend {
         }
     }
 
-    #[cfg(feature = "simd")]
-    pub fn apply_simd<T: Copy + num::Zero + NumCast + std::simd::SimdElement + std::simd::SimdCast>(
-        &self,
-        data: &[T],
-        nodata: Option<T>,
-    ) -> AlignedVec<Color>
-    where
-        std::simd::Simd<T, LANES>: crate::simd::SimdCastPl<LANES>,
-    {
+    pub fn apply_simd<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         match self {
             Legend::Linear(legend) => legend.apply_to_data_simd(data, nodata),
             Legend::Banded(legend) => legend.apply_to_data_simd(data, nodata),
@@ -541,7 +494,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "simd")]
     #[test]
     fn banded_legend() -> Result<()> {
         const RASTER_SIZE: usize = 34;
@@ -560,7 +512,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "simd")]
     #[test]
     fn linear_legend() -> Result<()> {
         use crate::allocate;
@@ -581,7 +532,6 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(feature = "simd")]
     #[test]
     fn categoric_legend() -> Result<()> {
         const RASTER_SIZE: usize = 4;

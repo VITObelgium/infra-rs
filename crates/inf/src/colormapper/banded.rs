@@ -2,19 +2,12 @@ use std::ops::{Range, RangeInclusive};
 
 use crate::{
     Color, Error, Result,
+    color::ColorSimd,
     colormap::{ColorMap, ProcessedColorMap},
     legend::MappingConfig,
 };
 
-#[cfg(feature = "simd")]
-use super::UnmappableColorsSimd;
 use super::{ColorMapper, UnmappableColors};
-
-#[cfg(feature = "simd")]
-use std::simd::Select;
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
 
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[derive(Clone, Debug)]
@@ -184,49 +177,50 @@ impl ColorMapper for Banded {
         self.bands.len()
     }
 
-    #[cfg(feature = "simd")]
     #[inline]
-    fn color_for_numeric_value_simd(
+    fn color_for_numeric_value_simd<S: fearless_simd::Simd>(
         &self,
-        value: std::simd::Simd<f32, LANES>,
-        unmappable_colors: &UnmappableColorsSimd,
-    ) -> std::simd::Simd<u32, LANES> {
-        use std::simd::{Mask, Simd, cmp::SimdPartialOrd, num::SimdFloat};
+        simd: S,
+        value: S::f32s,
+        unmappable_colors: &UnmappableColors,
+    ) -> S::u32s {
+        use fearless_simd::*;
 
-        let mut in_range_total = Mask::splat(false);
-        let mut colors = unmappable_colors.nodata;
+        let mut in_range_total = S::mask32s::splat(simd, false);
+        let mut colors = unmappable_colors.nodata.splat(simd);
 
         for entry in &self.bands {
             let start = entry.range.start;
             let end = entry.range.end;
 
-            let in_range = value.simd_ge(Simd::splat(start)) & value.simd_lt(Simd::splat(end));
-            let band_color = Simd::splat(entry.color.to_bits());
+            let in_range = value.simd_ge(start) & value.simd_lt(end);
+            let band_color = entry.color.splat(simd);
 
             in_range_total |= in_range;
             colors = in_range.select(band_color, colors);
 
-            if in_range_total.all() {
+            if in_range_total.all_true() {
                 return colors;
             }
         }
 
         if let Some(first_entry) = self.bands.first() {
+            const EDGE_TOLERANCE: f32 = 1e-4;
+
             let last_entry = self.bands.last().unwrap_or(first_entry);
-            let edge_tolerance = Simd::splat(1e-4);
 
             let start = first_entry.range.start;
             let end = last_entry.range.end;
 
-            let lower_edge = (value - Simd::splat(start)).abs().simd_lt(edge_tolerance).cast::<i32>();
-            let upper_edge = (value - Simd::splat(end)).abs().simd_lt(edge_tolerance).cast::<i32>();
-            let out_of_range_low = value.simd_lt(Simd::splat(start)).cast::<i32>();
-            let out_of_range_high = value.simd_gt(Simd::splat(end)).cast::<i32>();
+            let lower_edge = (value - start).abs().simd_lt(EDGE_TOLERANCE);
+            let upper_edge = (value - end).abs().simd_lt(EDGE_TOLERANCE);
+            let out_of_range_low = value.simd_lt(start);
+            let out_of_range_high = value.simd_gt(end);
 
-            colors = out_of_range_low.select(unmappable_colors.low, colors);
-            colors = out_of_range_high.select(unmappable_colors.high, colors);
-            colors = lower_edge.select(Simd::splat(first_entry.color.to_bits()), colors);
-            colors = upper_edge.select(Simd::splat(last_entry.color.to_bits()), colors);
+            colors = out_of_range_low.select(unmappable_colors.low.splat(simd), colors);
+            colors = out_of_range_high.select(unmappable_colors.high.splat(simd), colors);
+            colors = lower_edge.select(first_entry.color.splat(simd), colors);
+            colors = upper_edge.select(last_entry.color.splat(simd), colors);
         }
 
         colors

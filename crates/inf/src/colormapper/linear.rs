@@ -1,3 +1,4 @@
+use crate::color::ColorSimd;
 use crate::colormap::ProcessedColorMap;
 use crate::interpolate::linear_map_to_float;
 use crate::legend::MappingConfig;
@@ -6,14 +7,6 @@ use std::ops::{Range, RangeInclusive};
 
 use super::ColorMapper;
 use super::UnmappableColors;
-#[cfg(feature = "simd")]
-use super::UnmappableColorsSimd;
-
-#[cfg(feature = "simd")]
-use std::simd::Select;
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
 
 /// Linear color mapper
 /// each value gets its color based on the position in the configured value range
@@ -60,27 +53,24 @@ impl ColorMapper for Linear {
         }
     }
 
-    #[cfg(feature = "simd")]
     #[inline]
-    fn color_for_numeric_value_simd(
-        &self,
-        value: std::simd::Simd<f32, LANES>,
-        unmappable: &UnmappableColorsSimd,
-    ) -> std::simd::Simd<u32, LANES> {
-        use std::simd::{Simd, cmp::SimdPartialOrd};
+    fn color_for_numeric_value_simd<S: fearless_simd::Simd>(&self, simd: S, value: S::f32s, unmappable: &UnmappableColors) -> S::u32s {
+        use fearless_simd::*;
 
         use crate::interpolate::linear_map_to_float_simd;
 
         const EDGE_TOLERANCE: f32 = 1e-4;
-        let start = Simd::splat(self.value_range.start - EDGE_TOLERANCE);
-        let end = Simd::splat(self.value_range.end + EDGE_TOLERANCE);
+        let start = self.value_range.start - EDGE_TOLERANCE;
+        let end = self.value_range.end + EDGE_TOLERANCE;
 
-        let value_0_1 = linear_map_to_float_simd(value, self.value_range.start, self.value_range.end);
-        let colors = self.color_map.get_color_simd(value_0_1);
+        let value_0_1 = linear_map_to_float_simd(simd, value, self.value_range.start, self.value_range.end);
+        let colors = self.color_map.get_color_simd(simd, value_0_1);
 
-        value
-            .simd_lt(start)
-            .select(unmappable.low, value.simd_gt(end).select(unmappable.high, colors))
+        let low = unmappable.low.splat(simd);
+        let high = unmappable.high.splat(simd);
+
+        let colors = value.simd_gt(end).select(high, colors);
+        value.simd_lt(start).select(low, colors)
     }
 
     fn color_for_string_value(&self, value: &str, unmappable: &UnmappableColors) -> Color {

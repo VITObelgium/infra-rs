@@ -1,6 +1,8 @@
+use fearless_simd::Simd;
+
 use crate::{
     Error, Result,
-    color::{self, Color},
+    color::{self, Color, ColorSimd},
 };
 use std::str::FromStr;
 
@@ -445,21 +447,24 @@ impl<const N: usize> ProcessedColorMap<N> {
         self.cmap[(value * (N - 1) as f32).round() as usize]
     }
 
-    #[cfg(feature = "simd")]
-    #[inline]
-    pub fn get_color_simd<const LANES: usize>(&self, value: std::simd::Simd<f32, LANES>) -> std::simd::Simd<u32, LANES> {
+    #[inline(always)]
+    pub fn get_color_simd<S: Simd>(&self, simd: S, value: S::f32s) -> S::u32s {
+        use fearless_simd::*;
+
         Self::assert_n_gt_1();
 
-        use std::simd::StdFloat;
-        use std::simd::prelude::*;
+        let cmap: &[u32] = bytemuck::cast_slice(&self.cmap);
+        let scale = (cmap.len() - 1) as f32;
+        let last = cmap.len() - 1;
 
-        let transparent = Simd::splat(color::TRANSPARENT.to_bits());
-        let in_range = value.simd_ge(Simd::splat(0.0)) | value.simd_le(Simd::splat(1.0));
-        let indexes = (value * Simd::splat((self.cmap.len() - 1) as f32)).round().cast::<usize>();
+        // Values outside [0, 1] (including NaN) are not mappable and become transparent.
+        let mappable = value.simd_ge(0.0f32) & value.simd_le(1.0f32);
+        // Saturating conversion: negative values and NaN map to 0.
+        let indices: S::u32s = (value * scale + 0.5f32).floor().to_int_precise();
 
-        let cmap: &[u32] = unsafe { std::mem::transmute::<&[Color], &[u32]>(&self.cmap) };
-
-        Simd::gather_select(cmap, in_range.cast(), indexes, transparent)
+        let gathered = S::u32s::from_fn(simd, |i| cmap[(indices[i] as usize).min(last)]);
+        let transparent = color::TRANSPARENT.splat(simd);
+        mappable.select(gathered, transparent)
     }
 
     pub fn get_color_by_value(&self, value: u8) -> Color {
@@ -3487,5 +3492,47 @@ mod tests {
     fn map_color() {
         let cmap = ProcessedColorMap::<256>::create(&ColorMap::Preset(ColorMapPreset::Turbo, ColorMapDirection::Regular)).unwrap();
         assert_eq!(cmap.get_color(1.0), cmap::TURBO[255]);
+    }
+
+    #[test]
+    fn get_color_simd_matches_scalar() {
+        use fearless_simd::*;
+
+        let cmap = ProcessedColorMap::<256>::create(&ColorMap::Preset(ColorMapPreset::Turbo, ColorMapDirection::Regular)).unwrap();
+
+        // Mix of in-range values, out-of-range values and NaN. Out-of-range and NaN lanes must map
+        // to the transparent color, just like the scalar `get_color`.
+        let inputs = [0.0, 0.25, 0.5, 0.75, 1.0, -1.0, 2.0, f32::NAN];
+        let expected: Vec<Color> = inputs
+            .iter()
+            .map(|&v| {
+                if (0.0..=1.0).contains(&v) {
+                    cmap.get_color(v)
+                } else {
+                    color::TRANSPARENT
+                }
+            })
+            .collect();
+
+        // The native lane count depends on the detected SIMD level (up to 16 for AVX-512), so pad the
+        // input to the widest supported width.
+        let mut values = [0.0f32; 16];
+        values[..inputs.len()].copy_from_slice(&inputs);
+
+        #[inline(always)]
+        fn run<S: Simd>(simd: S, cmap: &ProcessedColorMap, values: &[f32; 16]) -> [u32; 16] {
+            let v = S::f32s::from_fn(simd, |i| values[i]);
+            let colors = cmap.get_color_simd(simd, v);
+            let mut out = [0u32; 16];
+            colors.store_slice(&mut out[..<S::u32s as SimdBase<S>>::N]);
+            out
+        }
+
+        let level = Level::new();
+        let out = dispatch!(level, simd => run(simd, &cmap, &values));
+
+        for (i, expected_color) in expected.iter().enumerate() {
+            assert_eq!(Color::from(out[i]), *expected_color, "lane {i} (input {})", inputs[i]);
+        }
     }
 }

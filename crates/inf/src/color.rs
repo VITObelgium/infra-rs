@@ -91,6 +91,23 @@ impl Color {
     }
 }
 
+/// Extension methods for using [`Color`] together with `fearless_simd` vectors.
+///
+/// A `Color` is layout-compatible with a `u32`, so these helpers avoid having to spell out the
+/// `to_bits()` conversion at every SIMD call site.
+pub trait ColorSimd {
+    /// Splat this color across all lanes of a native-width `u32` SIMD vector.
+    fn splat<S: fearless_simd::Simd>(self, simd: S) -> S::u32s;
+}
+
+impl ColorSimd for Color {
+    #[inline(always)]
+    fn splat<S: fearless_simd::Simd>(self, simd: S) -> S::u32s {
+        use fearless_simd::SimdBase as _;
+        S::u32s::splat(simd, self.to_bits())
+    }
+}
+
 pub const BLACK: Color = Color { r: 0, g: 0, b: 0, a: 255 };
 pub const WHITE: Color = Color {
     r: 255,
