@@ -11,12 +11,7 @@ use crate::{
     legend::{LegendCategory, MappingConfig},
 };
 
-#[cfg(feature = "simd")]
-use super::UnmappableColorsSimd;
 use super::{ColorMapper, UnmappableColors};
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
 
 /// Categoric numeric color mapper (single numeric value → color)
 /// Contains a number of categories that map to a color
@@ -149,16 +144,8 @@ impl CategoricNumeric {
 
 impl ColorMapper for CategoricNumeric {
     fn simd_supported(&self) -> bool {
-        #[cfg(feature = "simd")]
-        {
-            // SIMD support is available only if fast lookup is created
-            self.fast_lookup.is_some()
-        }
-
-        #[cfg(not(feature = "simd"))]
-        {
-            false
-        }
+        // SIMD support is available only if the fast lookup table is created
+        self.fast_lookup.is_some()
     }
 
     #[inline]
@@ -177,21 +164,24 @@ impl ColorMapper for CategoricNumeric {
         unmappable_colors.nodata
     }
 
-    #[cfg(feature = "simd")]
     #[inline]
-    fn color_for_numeric_value_simd(
+    fn color_for_numeric_value_simd<S: fearless_simd::Simd>(
         &self,
-        value: std::simd::Simd<f32, LANES>,
-        unmappable_colors: &UnmappableColorsSimd,
-    ) -> std::simd::Simd<u32, LANES> {
-        use std::simd::num::SimdFloat as _;
-        assert!(self.fast_lookup.is_some());
+        simd: S,
+        value: S::f32s,
+        unmappable_colors: &UnmappableColors,
+    ) -> S::u32s {
+        use fearless_simd::*;
 
-        if let Some(lookup) = &self.fast_lookup {
-            std::simd::Simd::gather_or(lookup, value.cast(), unmappable_colors.nodata)
-        } else {
-            unmappable_colors.nodata
-        }
+        let lookup = self.fast_lookup.as_ref().expect("fast lookup table must be present for SIMD");
+        let nodata = unmappable_colors.nodata.to_bits();
+
+        // There is no SIMD gather instruction available, so perform a per-lane lookup. Lanes whose
+        // category falls outside the lookup table fall back to the nodata color.
+        S::u32s::from_fn(simd, |i| match value[i].to_i64() {
+            Some(cat) if cat >= 0 && (cat as usize) < lookup.len() => lookup[cat as usize],
+            _ => nodata,
+        })
     }
 
     fn color_for_string_value(&self, value: &str, unmappable_colors: &UnmappableColors) -> Color {
