@@ -133,12 +133,17 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         self.apply_to_data_simd(data, nodata)
     }
 
-    pub fn apply_to_data_scalar<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+    fn apply_to_data_scalar<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         allocate::aligned_vec_from_iter(data.iter().map(|&value| self.color_for_value(value, nodata)))
     }
 
+    #[cfg(feature = "bench")]
+    pub fn bench_apply_to_data_scalar<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+        self.apply_to_data_scalar(data, nodata)
+    }
+
     #[inline]
-    pub fn apply_to_data_simd<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+    fn apply_to_data_simd<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
         if !self.mapper.simd_supported() {
             // Not all color mappers can support SIMD, so fall back to scalar processing
             return self.apply_to_data_scalar(data, nodata);
@@ -155,7 +160,12 @@ impl<TMapper: ColorMapper> MappedLegend<TMapper> {
         colors
     }
 
-    #[inline(always)]
+    #[cfg(feature = "bench")]
+    pub fn bench_apply_to_data_simd<T: Copy + num::NumCast>(&self, data: &[T], nodata: Option<T>) -> AlignedVec<Color> {
+        self.apply_to_data_simd(data, nodata)
+    }
+
+    #[inline]
     fn apply_to_data_kernel<S: Simd, T: Copy + num::NumCast>(
         &self,
         simd: S,
