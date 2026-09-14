@@ -38,9 +38,7 @@ pub trait Cast: Array {
     ///
     /// Values that cannot be represented in the destination type will become nodata.
     /// Existing nodata values are preserved as nodata in the output.
-    fn cast<TDest: ArrayNum>(&self) -> Self::WithPixelType<TDest>
-    where
-        for<'a> &'a Self: IntoIterator<Item = Option<Self::Pixel>>;
+    fn cast<TDest: ArrayNum>(&self) -> Self::WithPixelType<TDest>;
 
     /// Cast the array values to the destination type, writing into a pre-allocated slice.
     ///
@@ -64,10 +62,7 @@ pub trait Cast: Array {
 }
 
 impl<T: ArrayNum, Meta: ArrayMetadata> Cast for DenseArray<T, Meta> {
-    fn cast<TDest: ArrayNum>(&self) -> DenseArray<TDest, Meta>
-    where
-        for<'a> &'a Self: IntoIterator<Item = Option<T>>,
-    {
+    fn cast<TDest: ArrayNum>(&self) -> DenseArray<TDest, Meta> {
         let mut output = AlignedVecUnderConstruction::<TDest>::new(self.len());
         self.cast_to_slice(unsafe { output.as_slice_mut() })
             .expect("Size mismatch in cast operation");
@@ -165,7 +160,6 @@ pub fn cast<TDest, R>(src: &R) -> R::WithPixelType<TDest>
 where
     R: Cast,
     TDest: ArrayNum,
-    for<'a> &'a R: IntoIterator<Item = Option<R::Pixel>>,
 {
     src.cast::<TDest>()
 }
