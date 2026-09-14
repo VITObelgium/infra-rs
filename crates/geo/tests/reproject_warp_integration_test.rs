@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
+#![cfg_attr(feature = "simd", feature(portable_simd))]
 
 #[cfg(all(test, any(feature = "proj", feature = "proj4rs")))]
 mod tests {
@@ -18,7 +18,7 @@ mod tests {
     use tempfile::TempDir;
 
     #[cfg(feature = "simd")]
-    const LANES: usize = inf::simd::LANES;
+    const LANES: usize = geo::simd::LANES;
 
     /// Dumps comparison timings to stdout
     fn dump_comparison_timings(timings: HashMap<String, (Duration, Duration)>) {

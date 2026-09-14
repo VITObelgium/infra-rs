@@ -35,6 +35,6 @@ wasm-bindgen = { version = "0.2", features = ["serde"] }
 [features]
 default = []
 bench = []
-simd = []
+allocator = []
 serde = ["dep:serde"]
 specta = ["dep:specta"]

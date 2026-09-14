@@ -20,7 +20,7 @@ use num::NumCast;
 use simd_macro::simd_bounds;
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[derive(Debug, Clone)]
 pub enum TileSource {

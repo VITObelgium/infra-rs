@@ -12,7 +12,7 @@ use num::Num;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = geo::simd::LANES;
 
 use crate::{
     Error, PixelFormat, Result,

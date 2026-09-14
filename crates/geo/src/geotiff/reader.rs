@@ -13,7 +13,7 @@ use crate::{Error, Result, raster};
 use std::{fs::File, mem::MaybeUninit, ops::Range, path::Path};
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct TiffChunkLocation {

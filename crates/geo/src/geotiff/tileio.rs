@@ -17,7 +17,7 @@ use crate::{
 };
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[simd_bounds]
 pub fn read_tile_data<T: ArrayNum>(

@@ -28,7 +28,7 @@ pub mod simd {
     use std::simd::Select;
     use std::simd::prelude::*;
 
-    const LANES: usize = inf::simd::LANES;
+    const LANES: usize = crate::simd::LANES;
 
     #[simd_bounds]
     pub fn min<R, T, Meta>(ras: &R) -> Option<T>
@@ -234,7 +234,7 @@ mod unspecialized_generictests {
     };
 
     #[cfg(feature = "simd")]
-    const LANES: usize = inf::simd::LANES;
+    const LANES: usize = crate::simd::LANES;
 
     use super::*;
 

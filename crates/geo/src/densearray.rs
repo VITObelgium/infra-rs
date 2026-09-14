@@ -13,7 +13,7 @@ use inf::{
 use num::NumCast;
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::NODATA`] for the type T in the same array data structure

@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
+#![cfg_attr(feature = "allocator", feature(allocator_api))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 extern crate approx;
@@ -21,9 +21,6 @@ pub mod interpolate;
 pub mod legend;
 pub mod legendscaletype;
 pub mod progressinfo;
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
-pub mod simd;
 
 #[doc(inline)]
 pub use color::Color;

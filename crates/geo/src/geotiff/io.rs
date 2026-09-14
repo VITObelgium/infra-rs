@@ -27,7 +27,7 @@ use std::{
 pub const COG_HEADER_SIZE: usize = 16 * 1024; // 16 KiB, which is usually sufficient for the COG header
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 // Detect if the file at the given path is a Cloud Optimized GeoTIFF (COG).
 /// Detection is done based on the presence of the Gdal Ghost Data in the TIFF header,

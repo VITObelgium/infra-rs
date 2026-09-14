@@ -2,7 +2,7 @@ use simd_macro::simd_bounds;
 use std::{mem::MaybeUninit, path::Path};
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 use crate::{
     ArrayDataType, ArrayNum, Error, GeoReference, RasterSize, Result,

@@ -1,7 +1,7 @@
 use std::{ops::Range, path::PathBuf};
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = geo::simd::LANES;
 
 use crate::{
     ColorMappedTileRequest, Error, LayerMetadata, Result, TileData, TileFormat, imageprocessing,

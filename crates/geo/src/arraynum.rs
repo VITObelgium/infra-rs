@@ -3,7 +3,7 @@ use crate::NodataSimd;
 use crate::{ArrayDataType, Nodata};
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[cfg(not(feature = "gdal"))]
 pub trait GdalNum {}

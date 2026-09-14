@@ -38,7 +38,7 @@ pub mod simd {
     use std::simd::Select;
     use std::simd::prelude::*;
 
-    const LANES: usize = inf::simd::LANES;
+    const LANES: usize = crate::simd::LANES;
 
     #[simd_bounds]
     pub fn filter_value<R, T, Meta>(ras: &mut R, value: T)

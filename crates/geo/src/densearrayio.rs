@@ -5,7 +5,7 @@ use crate::raster::{self, RasterReadWrite, WriteRasterOptions};
 use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, GeoReference, Result};
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[simd_macro::simd_bounds]
 impl<T: ArrayNum, Metadata: ArrayMetadata> RasterReadWrite for DenseArray<T, Metadata> {

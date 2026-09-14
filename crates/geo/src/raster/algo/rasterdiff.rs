@@ -34,7 +34,7 @@ impl<T: ArrayNum> RasterDiffResult<T> {
 }
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[cfg(feature = "gdal")]
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]

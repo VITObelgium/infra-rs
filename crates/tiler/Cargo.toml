@@ -35,7 +35,7 @@ test-log = "0.2"
 
 [features]
 serde = ["dep:serde", "dep:serde_json", "inf/serde"]
-simd = ["geo/simd", "inf/simd"]
+simd = ["geo/simd", "inf/allocator"]
 slow_tests = []
 specta = ["dep:specta", "geo/specta", "inf/specta"]
 vector-tiles = ["dep:geozero", "dep:mvt", "geo/vector-processing"]

@@ -1,8 +1,8 @@
 use std::mem::MaybeUninit;
 
-#[cfg(feature = "simd")]
+#[cfg(feature = "allocator")]
 pub type AlignedVec<T> = Vec<T, allocator::CacheAligned>;
-#[cfg(not(feature = "simd"))]
+#[cfg(not(feature = "allocator"))]
 pub type AlignedVec<T> = Vec<T>;
 
 /// Helper struct to create an aligned vec while avoiding unnecessary memory initializaton while constructing.
@@ -86,20 +86,20 @@ impl<T: bytemuck::AnyBitPattern> AlignedVecUnderConstruction<T> {
 /// Create an empty aligned vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
 /// Otherwise a regular Vec is created.
 pub fn new_aligned_vec<T>() -> AlignedVec<T> {
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocator")]
     return Vec::new_in(allocator::CacheAligned);
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocator"))]
     return Vec::new();
 }
 
 /// Create a vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_with_capacity<T>(capacity: usize) -> AlignedVec<T> {
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocator")]
     return Vec::with_capacity_in(capacity, allocator::CacheAligned);
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocator"))]
     return Vec::with_capacity(capacity);
 }
 
@@ -108,10 +108,10 @@ pub fn aligned_vec_with_capacity<T>(capacity: usize) -> AlignedVec<T> {
 /// This avoids the cost of initializing the elements, callers will have to initialize the elements themselves.
 /// and convert them to `T` when they are ready.
 pub fn aligned_vec_uninit<T>(len: usize) -> AlignedVec<MaybeUninit<T>> {
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocator")]
     let mut vec = Vec::with_capacity_in(len, allocator::CacheAligned);
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocator"))]
     let mut vec = Vec::with_capacity(len);
 
     unsafe {
@@ -131,38 +131,38 @@ pub unsafe fn aligned_vec_assume_init<T>(vec: AlignedVec<MaybeUninit<T>>) -> Ali
 /// Create a vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_from_iter<T, I: IntoIterator<Item = T>>(iter: I) -> AlignedVec<T> {
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocator")]
     {
         let mut vec = new_aligned_vec();
         iter.into_iter().for_each(|item| vec.push(item));
         vec
     }
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocator"))]
     return Vec::from_iter(iter);
 }
 
 /// Create a vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_from_slice<T: Copy>(slice: &[T]) -> AlignedVec<T> {
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocator")]
     return slice.to_vec_in(allocator::CacheAligned);
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocator"))]
     return slice.to_vec();
 }
 
 /// Create a vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
 /// Otherwise a regular Vec is created.
 pub fn aligned_vec_filled_with<T: Copy>(val: T, len: usize) -> AlignedVec<T> {
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocator")]
     {
         let mut vec = aligned_vec_with_capacity(len);
         vec.resize(len, val);
         vec
     }
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocator"))]
     return vec![val; len];
 }
 
@@ -175,18 +175,18 @@ pub fn cast_aligned_vec<T: bytemuck::NoUninit, TDest: bytemuck::AnyBitPattern>(d
         "Cannot reinterpret AlignedVec<T> to AlignedVec<TDest> because their sizes do not match"
     );
 
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocator")]
     {
         let (ptr, len, cap, alloc) = data.into_parts_with_allocator();
 
         unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>().as_ptr(), len, cap, alloc) }
     }
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocator"))]
     bytemuck::cast_vec(data)
 }
 
-#[cfg(feature = "simd")]
+#[cfg(feature = "allocator")]
 pub mod allocator {
     use std::alloc::{AllocError, Layout};
 

@@ -16,7 +16,7 @@ mod bench {
     const RASTER_HEIGHT: Rows = Rows(768);
 
     #[cfg(feature = "simd")]
-    const LANES: usize = inf::simd::LANES;
+    const LANES: usize = geo::simd::LANES;
 
     fn bench_name<T: ArrayNum>(name: &str) -> String {
         #[cfg(feature = "simd")]

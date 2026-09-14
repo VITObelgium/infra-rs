@@ -1,7 +1,7 @@
 use crate::ArrayNum;
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 /// Process nodata values in the data array
 /// This means replacing all the values that match the nodata value with the default nodata value for the type T
@@ -52,7 +52,7 @@ pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
 
 #[cfg(feature = "simd")]
 pub mod simd {
-    use inf::simd::LANES;
+    use crate::simd::LANES;
     use simd_macro::simd_bounds;
 
     use crate::{Nodata, NodataSimd};

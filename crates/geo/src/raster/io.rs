@@ -3,7 +3,7 @@
 //! For general use, the [`crate::Array`] and [`crate::raster::RasterReadWrite`] traits should be used.
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[cfg(any(feature = "gdal", feature = "raster-io-geotiff"))]
 use crate::raster::formats::{self, RasterFormat as _};

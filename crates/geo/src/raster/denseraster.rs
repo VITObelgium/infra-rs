@@ -10,7 +10,7 @@ use crate::{
 pub type DenseRaster<T> = DenseArray<T, GeoReference>;
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 #[simd_macro::simd_bounds]
 #[cfg(any(feature = "proj", feature = "proj4rs"))]

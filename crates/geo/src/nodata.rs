@@ -104,7 +104,7 @@ pub mod simd {
     use std::simd::num::SimdUint;
     use std::simd::prelude::*;
 
-    const LANES: usize = inf::simd::LANES;
+    const LANES: usize = crate::simd::LANES;
 
     pub trait NodataSimd: std::simd::cmp::SimdPartialEq + Sized {
         type Scalar: std::simd::SimdElement;

@@ -10,7 +10,7 @@ use crate::{
 use simd_macro::simd_bounds;
 
 #[cfg(feature = "simd")]
-const LANES: usize = inf::simd::LANES;
+const LANES: usize = crate::simd::LANES;
 
 macro_rules! impl_horizontal_unpredictable_for_int {
     ($($t:ty),*) => {

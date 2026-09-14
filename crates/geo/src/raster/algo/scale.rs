@@ -90,11 +90,11 @@ fn calculate_scale_params(range: &std::ops::RangeInclusive<f64>, dest_type: crat
 #[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub mod simd {
     use super::*;
+    use crate::simd::SimdCastPl;
     use crate::{ArrayDataType, DenseArray, Nodata, NodataSimd};
-    use inf::simd::SimdCastPl;
     use std::simd::Select;
 
-    const LANES: usize = inf::simd::LANES;
+    const LANES: usize = crate::simd::LANES;
 
     /// Internal macro to implement SIMD scaling to a slice without code duplication
     /// Returns the RasterScale to be used in metadata

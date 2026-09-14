@@ -45,6 +45,9 @@ mod rect;
 #[cfg(feature = "gdal")]
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 mod runtimeconfiguration;
+#[cfg(feature = "simd")]
+#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
+pub mod simd;
 pub mod srs;
 mod tile;
 pub mod tileutils;
