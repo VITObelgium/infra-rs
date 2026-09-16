@@ -114,6 +114,10 @@ fn cog_creation_options(opts: &CogCreationOptions) -> Vec<String> {
 }
 
 pub fn create_gdal_warp_args(input: &Path, opts: CogCreationOptions) -> Result<Vec<String>> {
+    create_gdal_warp_args_for_band(input, opts, 1)
+}
+
+fn create_gdal_warp_args_for_band(input: &Path, opts: CogCreationOptions, band_index: usize) -> Result<Vec<String>> {
     let mut overview_option = "IGNORE_EXISTING";
 
     let mut options = cog_creation_options(&opts);
@@ -137,11 +141,12 @@ pub fn create_gdal_warp_args(input: &Path, opts: CogCreationOptions) -> Result<V
         }
     }
 
-    let georef = GeoReference::from_file(input)?.warped_to_epsg(crs::epsg::WGS84_WEB_MERCATOR)?;
-    if georef.nodata().is_none() {
+    let source_dataset = raster::formats::gdal::open_dataset_read_only(input)?;
+    let source_band = source_dataset.rasterband(band_index)?;
+    if source_band.no_data_value().is_none() {
         let data_type = match opts.output_data_type {
             Some(dt) => dt,
-            None => raster::io::detect_data_type(input, 1)?,
+            None => ArrayDataType::try_from(source_band.band_type())?,
         };
         options.push("-dstnodata".to_string());
         options.push(format!("{}", data_type.default_nodata_value()));
@@ -239,7 +244,7 @@ pub fn create_multiband_cog_tiles(
     let datasets = file_paths
         .iter()
         .map(raster::formats::gdal::open_dataset_read_only)
-        .map(|res| res.and_then(create_vrt_with_nodata))
+        .map(|res| res.and_then(|dataset| create_vrt_with_nodata(dataset, 1)))
         .collect::<Result<Vec<_>>>()?;
 
     let vrt_options = gdal::programs::raster::BuildVRTOptions::new(["-separate", "-strict"])?;
@@ -257,8 +262,7 @@ pub fn create_multiband_cog_tiles(
 
 /// Creates a VRT wrapper around a source dataset that adds a nodata value if it doesn't have one already.
 /// This allows setting nodata metadata without modifying the original read-only file.
-fn create_vrt_with_nodata(src_ds: gdal::Dataset) -> Result<gdal::Dataset> {
-    let band_nr = 1;
+fn create_vrt_with_nodata(src_ds: gdal::Dataset, band_nr: usize) -> Result<gdal::Dataset> {
     let band = src_ds.rasterband(band_nr)?;
 
     if band.no_data_value().is_some() {
@@ -275,12 +279,47 @@ fn create_vrt_with_nodata(src_ds: gdal::Dataset) -> Result<gdal::Dataset> {
     Ok(gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_opts))?)
 }
 
+fn create_single_band_vrt(src_ds: gdal::Dataset, band_nr: usize) -> Result<gdal::Dataset> {
+    let band = src_ds.rasterband(band_nr)?;
+    let mut options = vec!["-b".to_string(), band_nr.to_string()];
+    if band.no_data_value().is_none() {
+        let nodata_value = ArrayDataType::try_from(band.band_type())?.default_nodata_value();
+        options.extend(["-vrtnodata".to_string(), nodata_value.to_string()]);
+    }
+
+    let datasets = vec![src_ds];
+    let vrt_options = gdal::programs::raster::BuildVRTOptions::new(options)?;
+    Ok(gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?)
+}
+
+pub(super) fn create_cog_tiles_for_band(
+    input: &Path,
+    output: &Path,
+    opts: CogCreationOptions,
+    band_index: usize,
+    source_srs: Option<&str>,
+) -> Result<()> {
+    let mut options = create_gdal_warp_args_for_band(input, opts, band_index)?;
+    if let Some(source_srs) = source_srs {
+        options.extend(["-s_srs".to_string(), source_srs.to_string()]);
+    }
+
+    let src_ds = raster::formats::gdal::open_dataset_read_only(input)?;
+    let src_ds = create_single_band_vrt(src_ds, band_index)?;
+    raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], None)?;
+    if opts.scale {
+        scale_cog(output, opts)?;
+    }
+
+    Ok(())
+}
+
 pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -> Result<()> {
     let options = create_gdal_warp_args(input, opts)?;
     let src_ds = raster::formats::gdal::open_dataset_read_only(input)?;
     // If the source doesn't have a nodata value, create a VRT wrapper that adds it
     // This way we don't modify the read-only source dataset.
-    let src_ds = create_vrt_with_nodata(src_ds)?;
+    let src_ds = create_vrt_with_nodata(src_ds, 1)?;
 
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], None)?;
     if opts.scale {

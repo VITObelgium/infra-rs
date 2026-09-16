@@ -2,7 +2,7 @@ use std::path::PathBuf;
 
 use crate::{Error, Result, raster};
 
-use super::{CogCreationOptions, create_cog_tiles};
+use super::{CogCreationOptions, creation::create_cog_tiles_for_band};
 
 /// Creates one temporary COG for every band in every file matching `input`.
 ///
@@ -22,21 +22,20 @@ pub fn create_temporary_band_cogs(
     }
 
     let temporary_directory = tempfile::tempdir()?;
-    let mut band_files = Vec::new();
+    let mut band_jobs = Vec::new();
 
     for input_path in input_paths {
         let band_count = raster::formats::gdal::open_dataset_read_only(&input_path)?.raster_count();
 
         for band_index in 1..=band_count {
-            let index = band_files.len();
-            let band_path = temporary_directory.path().join(format!("band-{index:04}.tif"));
+            let index = band_jobs.len();
             let cog_path = temporary_directory.path().join(format!("band-{index:04}.cog.tif"));
-            translate_band(&input_path, &band_path, band_index, source_srs)?;
-            band_files.push((band_path, cog_path));
+            band_jobs.push((input_path.clone(), cog_path, band_index));
         }
     }
 
-    let band_count = band_files.len();
+    let band_count = band_jobs.len();
+    let source_srs = source_srs.map(str::to_owned);
 
     #[cfg(feature = "rayon")]
     let warp_results = {
@@ -45,10 +44,10 @@ pub fn create_temporary_band_cogs(
 
         let (progress_sender, progress_receiver) = mpsc::channel();
         let worker = std::thread::spawn(move || {
-            band_files
+            band_jobs
                 .par_iter()
-                .map(|(band_path, cog_path)| {
-                    create_cog_tiles(band_path, cog_path, options).map(|()| {
+                .map(|(input_path, cog_path, band_index)| {
+                    create_cog_tiles_for_band(input_path, cog_path, options, *band_index, source_srs.as_deref()).map(|()| {
                         progress_sender.send(()).ok();
                         cog_path.clone()
                     })
@@ -71,11 +70,11 @@ pub fn create_temporary_band_cogs(
     };
 
     #[cfg(not(feature = "rayon"))]
-    let warp_results = band_files
+    let warp_results = band_jobs
         .iter()
         .enumerate()
-        .map(|(completed, (band_path, cog_path))| {
-            create_cog_tiles(band_path, cog_path, options).map(|()| {
+        .map(|(completed, (input_path, cog_path, band_index))| {
+            create_cog_tiles_for_band(input_path, cog_path, options, *band_index, source_srs.as_deref()).map(|()| {
                 if let Some(progress) = progress.as_mut() {
                     progress((completed + 1) as f64 / band_count as f64);
                 }
@@ -85,14 +84,6 @@ pub fn create_temporary_band_cogs(
         .collect::<Result<Vec<_>>>();
 
     Ok((temporary_directory, warp_results?))
-}
-
-fn translate_band(input: &std::path::Path, output: &std::path::Path, band_index: usize, source_srs: Option<&str>) -> Result<()> {
-    let mut translate_options = vec!["-of".to_string(), "GTiff".to_string(), "-b".to_string(), band_index.to_string()];
-    if let Some(source_srs) = source_srs {
-        translate_options.extend(["-a_srs".to_string(), source_srs.to_string()]);
-    }
-    raster::algo::gdal::translate_file(input, output, &translate_options).map(|_| ())
 }
 
 #[cfg(test)]
@@ -105,9 +96,17 @@ mod tests {
         let input = testutils::workspace_test_data_dir().join("multiband_cog.tif");
         let band_count = raster::formats::gdal::open_dataset_read_only(&input)?.raster_count();
 
-        let (temporary_directory, cogs) = create_temporary_band_cogs(&input.to_string_lossy(), CogCreationOptions::default(), None, None)?;
+        let mut progress_updates = Vec::new();
+        let (temporary_directory, cogs) = create_temporary_band_cogs(
+            &input.to_string_lossy(),
+            CogCreationOptions::default(),
+            None,
+            Some(&mut |progress| progress_updates.push(progress)),
+        )?;
 
         assert_eq!(cogs.len(), band_count);
+        assert_eq!(progress_updates.len(), band_count);
+        assert_eq!(progress_updates.last(), Some(&1.0));
         for path in &cogs {
             assert_eq!(raster::formats::gdal::open_dataset_read_only(path)?.raster_count(), 1);
         }

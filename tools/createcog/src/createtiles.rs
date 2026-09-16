@@ -65,6 +65,9 @@ pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions,
     let cog_create_opts = create_opts(&opts)?;
 
     if multi_band {
+        if let Some(progress) = progress.as_mut() {
+            progress(0.0);
+        }
         let mut warp_progress = |fraction: f64| {
             if let Some(progress) = progress.as_mut() {
                 progress(fraction * 0.8);
