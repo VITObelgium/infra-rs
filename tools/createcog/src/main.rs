@@ -94,6 +94,10 @@ fn parse_scale_bits(value: &str) -> std::result::Result<u8, String> {
 fn main() -> Result<()> {
     let opt = Opt::parse();
 
+    let available_cores = std::thread::available_parallelism()?.get();
+    let rayon_threads = (available_cores * 3 / 4).max(1);
+    rayon::ThreadPoolBuilder::new().num_threads(rayon_threads).build_global()?;
+
     let stderr_is_terminal = std::io::stderr().is_terminal();
     kdam::term::init(stderr_is_terminal);
 
@@ -124,6 +128,7 @@ fn main() -> Result<()> {
         }
     }
     logger.init();
+    log::debug!("Using {rayon_threads} Rayon threads ({available_cores} cores available)");
 
     let gdal_config = geo::RuntimeConfiguration::builder()
         .config_options(vec![
