@@ -12,6 +12,7 @@ pub fn create_temporary_band_cogs(
     input: &str,
     options: CogCreationOptions,
     source_srs: Option<&str>,
+    mut progress: Option<&mut dyn FnMut(f64)>,
 ) -> Result<(tempfile::TempDir, Vec<PathBuf>)> {
     let mut input_paths = glob::glob(input)?.collect::<std::result::Result<Vec<_>, _>>()?;
     input_paths.sort();
@@ -35,20 +36,52 @@ pub fn create_temporary_band_cogs(
         }
     }
 
+    let band_count = band_files.len();
+
     #[cfg(feature = "rayon")]
     let warp_results = {
         use rayon::prelude::*;
+        use std::sync::mpsc;
 
-        band_files
-            .par_iter()
-            .map(|(band_path, cog_path)| create_cog_tiles(band_path, cog_path, options).map(|()| cog_path.clone()))
-            .collect::<Result<Vec<_>>>()
+        let (progress_sender, progress_receiver) = mpsc::channel();
+        let worker = std::thread::spawn(move || {
+            band_files
+                .par_iter()
+                .map(|(band_path, cog_path)| {
+                    create_cog_tiles(band_path, cog_path, options).map(|()| {
+                        progress_sender.send(()).ok();
+                        cog_path.clone()
+                    })
+                })
+                .collect::<Result<Vec<_>>>()
+        });
+
+        if let Some(progress) = progress.as_mut() {
+            for completed in 1..=band_count {
+                if progress_receiver.recv().is_err() {
+                    break;
+                }
+                progress(completed as f64 / band_count as f64);
+            }
+        }
+
+        worker
+            .join()
+            .map_err(|_| Error::Runtime("Temporary band warp thread panicked".to_string()))?
     };
 
     #[cfg(not(feature = "rayon"))]
     let warp_results = band_files
         .iter()
-        .map(|(band_path, cog_path)| create_cog_tiles(band_path, cog_path, options).map(|()| cog_path.clone()))
+        .enumerate()
+        .map(|(completed, (band_path, cog_path))| {
+            create_cog_tiles(band_path, cog_path, options).map(|()| {
+                if let Some(progress) = progress.as_mut() {
+                    progress((completed + 1) as f64 / band_count as f64);
+                }
+                cog_path.clone()
+            })
+        })
         .collect::<Result<Vec<_>>>();
 
     Ok((temporary_directory, warp_results?))
@@ -72,7 +105,7 @@ mod tests {
         let input = testutils::workspace_test_data_dir().join("multiband_cog.tif");
         let band_count = raster::formats::gdal::open_dataset_read_only(&input)?.raster_count();
 
-        let (temporary_directory, cogs) = create_temporary_band_cogs(&input.to_string_lossy(), CogCreationOptions::default(), None)?;
+        let (temporary_directory, cogs) = create_temporary_band_cogs(&input.to_string_lossy(), CogCreationOptions::default(), None, None)?;
 
         assert_eq!(cogs.len(), band_count);
         for path in &cogs {
@@ -94,7 +127,7 @@ mod tests {
         std::fs::copy(&source, directory.path().join("b.tif"))?;
 
         let pattern = directory.path().join("*.tif").to_string_lossy().into_owned();
-        let (_temporary_directory, cogs) = create_temporary_band_cogs(&pattern, CogCreationOptions::default(), None)?;
+        let (_temporary_directory, cogs) = create_temporary_band_cogs(&pattern, CogCreationOptions::default(), None, None)?;
 
         assert_eq!(cogs.len(), 2);
         assert!(cogs.iter().all(|path| path.exists()));
@@ -106,7 +139,7 @@ mod tests {
     fn rejects_an_empty_glob() {
         let directory = tempfile::tempdir().expect("failed to create temporary directory");
         let pattern = directory.path().join("*.tif").to_string_lossy().into_owned();
-        let result = create_temporary_band_cogs(&pattern, CogCreationOptions::default(), None);
+        let result = create_temporary_band_cogs(&pattern, CogCreationOptions::default(), None, None);
 
         assert!(matches!(result, Err(Error::InvalidArgument(message)) if message.contains("No files match")));
     }

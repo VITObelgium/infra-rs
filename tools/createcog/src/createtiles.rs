@@ -65,11 +65,13 @@ pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions,
     let cog_create_opts = create_opts(&opts)?;
 
     if multi_band {
-        let (_temporary_directory, band_cogs) = geo::cog::create_temporary_band_cogs(input, cog_create_opts, opts.source_srs.as_deref())?;
-        if let Some(progress) = progress.as_mut() {
-            progress(0.8);
-        }
-
+        let mut warp_progress = |fraction: f64| {
+            if let Some(progress) = progress.as_mut() {
+                progress(fraction * 0.8);
+            }
+        };
+        let (_temporary_directory, band_cogs) =
+            geo::cog::create_temporary_band_cogs(input, cog_create_opts, opts.source_srs.as_deref(), Some(&mut warp_progress))?;
         geo::geotiff::assemble_band_cogs(&band_cogs, &output)?;
         if let Some(progress) = progress.as_mut() {
             progress(1.0);
