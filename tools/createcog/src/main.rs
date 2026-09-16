@@ -6,7 +6,7 @@ use std::{
 
 use clap::Parser;
 use createtiles::TileCreationOptions;
-use env_logger::{Env, Target, TimestampPrecision};
+use env_logger::{Env, Target, TimestampPrecision, WriteStyle};
 use kdam::{BarExt, Column, RichProgress, tqdm};
 
 use crate::createtiles::{ZoomLevelSelection, create_cog_tiles, print_gdal_translate_command};
@@ -85,7 +85,8 @@ pub struct Opt {
 fn main() -> Result<()> {
     let opt = Opt::parse();
 
-    kdam::term::init(std::io::stderr().is_terminal());
+    let stderr_is_terminal = std::io::stderr().is_terminal();
+    kdam::term::init(stderr_is_terminal);
 
     let show_progress = !opt.no_progress && !opt.print_command;
     let progress = Arc::new(Mutex::new(RichProgress::new(
@@ -107,6 +108,11 @@ fn main() -> Result<()> {
         logger.target(Target::Pipe(Box::new(ProgressWriter {
             progress: Arc::clone(&progress),
         })));
+
+        let use_terminal_colors = std::env::var("RUST_LOG_STYLE").map_or(true, |style| style.eq_ignore_ascii_case("auto"));
+        if stderr_is_terminal && use_terminal_colors {
+            logger.write_style(WriteStyle::Always);
+        }
     }
     logger.init();
 
