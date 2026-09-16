@@ -1257,6 +1257,7 @@ dependencies = [
  "inf",
  "kdam",
  "log",
+ "rayon",
  "strum",
  "thiserror 2.0.21",
 ]
