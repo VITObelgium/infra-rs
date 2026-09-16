@@ -18,6 +18,7 @@ geo = { path = "../../crates/geo", features = [
 inf = { path = "../../crates/inf", features = [] }
 kdam = { version = "0.6", features = ["rich"] }
 log = "0.4"
+rayon = "1.12"
 strum = { version = "0.28", features = ["derive"] }
 thiserror = "2.0"
 
