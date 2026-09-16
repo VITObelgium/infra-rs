@@ -1564,7 +1564,7 @@ mod tests {
     #[test_log::test]
     fn assembles_staged_band_cogs_without_changing_pixels() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("multiband_cog.tif");
-        let (staging, band_cogs) = create_temporary_band_cogs(&input.to_string_lossy(), CogCreationOptions::default(), None)?;
+        let (staging, band_cogs) = create_temporary_band_cogs(&input.to_string_lossy(), CogCreationOptions::default(), None, None)?;
         let output = staging.path().join("assembled.cog.tif");
 
         assemble_band_cogs(&band_cogs, &output)?;
