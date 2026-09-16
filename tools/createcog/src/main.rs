@@ -40,6 +40,10 @@ pub struct Opt {
     #[arg(long = "scale")]
     pub scale: bool,
 
+    /// Assign a source CRS when the input has no projection metadata (for example, EPSG:4326 NetCDF data).
+    #[arg(long = "source-srs")]
+    pub source_srs: Option<String>,
+
     #[arg(long = "aligned-levels")]
     pub aligned_levels: Option<i32>,
 
@@ -74,6 +78,7 @@ fn main() -> Result<()> {
         zoom_level_selection: opt.zoom_level_selection,
         multi_band: opt.multi_band,
         scale: opt.scale,
+        source_srs: opt.source_srs,
         aligned_levels: opt.aligned_levels,
     };
 

@@ -22,10 +22,11 @@ pub struct TileCreationOptions {
     pub tile_size: u32,
     pub multi_band: bool,
     pub scale: bool,
+    pub source_srs: Option<String>,
     pub aligned_levels: Option<i32>,
 }
 
-fn create_opts(opts: TileCreationOptions) -> Result<geo::cog::CogCreationOptions> {
+fn create_opts(opts: &TileCreationOptions) -> Result<geo::cog::CogCreationOptions> {
     let zoom_level_strategy = match (opts.zoom_level_selection, opts.max_zoom) {
         (Some(_), Some(_)) => bail!("Cannot specify both zoom level selection and max zoom"),
         (None, Some(max_zoom)) => ZoomLevelStrategy::Manual(max_zoom),
@@ -54,17 +55,17 @@ pub fn print_gdal_translate_command(input: &Path, opts: TileCreationOptions) -> 
         return Ok(());
     }
 
-    let args = geo::cog::create_gdal_warp_args(input, create_opts(opts)?)?;
+    let args = geo::cog::create_gdal_warp_args(input, create_opts(&opts)?)?;
     println!("Gdal cmd:\n {}", args.join(" "));
     Ok(())
 }
 
 pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, mut progress: Option<&mut dyn FnMut(f64)>) -> Result<()> {
     let multi_band = opts.multi_band || geo::raster::formats::gdal::open_dataset_read_only(Path::new(input))?.raster_count() > 1;
-    let cog_create_opts = create_opts(opts)?;
+    let cog_create_opts = create_opts(&opts)?;
 
     if multi_band {
-        let (_temporary_directory, band_cogs) = geo::cog::create_temporary_band_cogs(input, cog_create_opts)?;
+        let (_temporary_directory, band_cogs) = geo::cog::create_temporary_band_cogs(input, cog_create_opts, opts.source_srs.as_deref())?;
         if let Some(progress) = progress.as_mut() {
             progress(0.8);
         }
