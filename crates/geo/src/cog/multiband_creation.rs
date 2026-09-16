@@ -21,31 +21,37 @@ pub fn create_temporary_band_cogs(
     }
 
     let temporary_directory = tempfile::tempdir()?;
-    let mut cog_paths = Vec::new();
+    let mut band_files = Vec::new();
 
     for input_path in input_paths {
         let band_count = raster::formats::gdal::open_dataset_read_only(&input_path)?.raster_count();
 
-        if band_count == 1 {
-            let source_path = temporary_directory.path().join(format!("band-{:04}.tif", cog_paths.len()));
-            translate_band(&input_path, &source_path, 1, source_srs)?;
-            let cog_path = temporary_directory.path().join(format!("band-{:04}.cog.tif", cog_paths.len()));
-            create_cog_tiles(&source_path, &cog_path, options)?;
-            cog_paths.push(cog_path);
-            continue;
-        }
-
         for band_index in 1..=band_count {
-            let index = cog_paths.len();
+            let index = band_files.len();
             let band_path = temporary_directory.path().join(format!("band-{index:04}.tif"));
             let cog_path = temporary_directory.path().join(format!("band-{index:04}.cog.tif"));
             translate_band(&input_path, &band_path, band_index, source_srs)?;
-            create_cog_tiles(&band_path, &cog_path, options)?;
-            cog_paths.push(cog_path);
+            band_files.push((band_path, cog_path));
         }
     }
 
-    Ok((temporary_directory, cog_paths))
+    #[cfg(feature = "rayon")]
+    let warp_results = {
+        use rayon::prelude::*;
+
+        band_files
+            .par_iter()
+            .map(|(band_path, cog_path)| create_cog_tiles(band_path, cog_path, options).map(|()| cog_path.clone()))
+            .collect::<Result<Vec<_>>>()
+    };
+
+    #[cfg(not(feature = "rayon"))]
+    let warp_results = band_files
+        .iter()
+        .map(|(band_path, cog_path)| create_cog_tiles(band_path, cog_path, options).map(|()| cog_path.clone()))
+        .collect::<Result<Vec<_>>>();
+
+    Ok((temporary_directory, warp_results?))
 }
 
 fn translate_band(input: &std::path::Path, output: &std::path::Path, band_index: usize, source_srs: Option<&str>) -> Result<()> {
