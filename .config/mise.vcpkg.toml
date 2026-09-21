@@ -179,5 +179,5 @@ run = [
 description = "Generate the documentation"
 env.RUSTDOCFLAGS = "-D warnings --cfg docsrs"
 run = [
-  "cargo +nightly doc --workspace --config .cargo/config.vcpkg.toml --exclude=infra-rs --exclude=vector_derive --no-deps --all-features",
+  "cargo doc --workspace --config .cargo/config.vcpkg.toml --exclude=infra-rs --exclude=vector_derive --no-deps --all-features",
 ]

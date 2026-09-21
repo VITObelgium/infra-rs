@@ -159,7 +159,7 @@ in
 
     musl.module = {
       languages.rust = {
-        channel = "nightly";
+        channel = "stable";
         version = "latest";
         targets = [ "x86_64-unknown-linux-musl" ];
       };
@@ -177,7 +177,7 @@ in
 
     mingw.module = {
       languages.rust = {
-        channel = "nightly";
+        channel = "stable";
         version = "latest";
         targets = [ "x86_64-pc-windows-gnu" ];
       };
@@ -216,7 +216,10 @@ in
     stdenv.cc.cc.lib
   ];
 
-  env.LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
+  env = {
+    LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
+    CARGO_TERM_COLOR = "always";
+  };
 
   scripts.createcog.exec = ''
     cargo run -p createcog -- "$@"
@@ -226,7 +229,7 @@ in
     set -e
     just build_ci
     just test_ci
-    devenv --profile nightly shell -- just doc
+    just doc
   '';
 
   outputs =

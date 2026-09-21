@@ -11,10 +11,10 @@ serve_tiles_tui dir:
     cargo run -p tileserver --features=tui --release -- --tui --gis-dir {{ dir }}
 
 doc:
-    cargo +nightly doc --workspace --exclude=infra-rs --exclude=vector_derive --no-deps --all-features
+    cargo doc --workspace --exclude=infra-rs --exclude=vector_derive --no-deps --features=geo/arrow,geo/deflate,geo/derive,geo/gdal,geo/gdal-static,geo/polars,geo/proj,geo/proj4rs,geo/python,geo/raster-io-geotiff,geo/rayon,geo/serde,geo/specta,geo/vector-io,geo/vector-io-csv,geo/vector-io-xlsx,geo/vector-processing,inf/bench,inf/serde,inf/specta,raster-tile/float_png,raster-tile/gdal,raster-tile/lz4,tiler/serde,tiler/slow_tests,tiler/specta,tiler/vector-tiles,tileserver/tui,tileserver/vector-diff
 
 docdeps:
-    cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features
+    cargo doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features
 
 [windows]
 build_debug:
