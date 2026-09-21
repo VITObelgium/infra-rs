@@ -1,8 +1,4 @@
-use simd_macro::simd_bounds;
 use std::{mem::MaybeUninit, path::Path};
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
 
 use crate::{
     ArrayDataType, ArrayNum, Error, GeoReference, RasterSize, Result,
@@ -111,7 +107,6 @@ impl RasterFormat for GeotiffRasterIO {
 }
 
 impl GeotiffRasterIO {
-    #[simd_bounds]
     fn read_raster_band_as<T: ArrayNum>(
         &mut self,
         band_index: usize,
@@ -128,7 +123,6 @@ impl GeotiffRasterIO {
         self.reader.read_raster_into_buffer::<T, GeoReference>(dst_data)
     }
 
-    #[simd_bounds]
     fn read_raster_band_region_as<T: ArrayNum>(
         &mut self,
         band_index: usize,

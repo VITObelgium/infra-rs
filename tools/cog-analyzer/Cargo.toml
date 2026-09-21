@@ -2,6 +2,7 @@
 name = "cog-analyzer"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 description = "TUI tool to analyze and visualize Cloud Optimized GeoTIFF files"
 
 [dependencies]

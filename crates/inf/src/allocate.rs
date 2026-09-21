@@ -83,8 +83,8 @@ impl<T: bytemuck::AnyBitPattern> AlignedVecUnderConstruction<T> {
     }
 }
 
-/// Create an empty aligned vec with the buffer aligned to a cache line for simd usage if the simd feature is enabled.
-/// Otherwise a regular Vec is created.
+/// Create an empty vector with a cache-line-aligned buffer when the `allocator` feature is enabled.
+/// Otherwise, create a regular `Vec`.
 pub fn new_aligned_vec<T>() -> AlignedVec<T> {
     #[cfg(feature = "allocator")]
     return Vec::new_in(allocator::CacheAligned);
@@ -177,7 +177,7 @@ pub fn cast_aligned_vec<T: bytemuck::NoUninit, TDest: bytemuck::AnyBitPattern>(d
 
     #[cfg(feature = "allocator")]
     {
-        let (ptr, len, cap, alloc) = data.into_parts_with_allocator();
+        let (ptr, len, cap, alloc) = data.into_parts_with_alloc();
 
         unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>().as_ptr(), len, cap, alloc) }
     }

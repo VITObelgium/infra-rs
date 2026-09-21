@@ -7,11 +7,6 @@ use crate::{
     raster::intersection::{CutOut, intersect_georeference},
 };
 
-use simd_macro::simd_bounds;
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
 macro_rules! impl_horizontal_unpredictable_for_int {
     ($($t:ty),*) => {
         $(
@@ -118,7 +113,6 @@ pub fn change_georef_cell_size(geo_reference: &GeoReference, cell_size: CellSize
     result
 }
 
-#[simd_bounds]
 pub fn merge_tile_chunks_into_buffer<T: ArrayNum>(
     meta: &GeoTiffMetadata,
     geo_reference: &GeoReference, // The georeference of the provided buffer
@@ -163,7 +157,6 @@ pub fn merge_tile_chunk_into_buffer<T: ArrayNum>(
     }
 }
 
-#[simd_bounds]
 pub fn merge_strip_chunks_into_buffer<T: ArrayNum>(
     meta: &GeoTiffMetadata,
     geo_reference: &GeoReference, // The georeference of the provided buffer

@@ -1,6 +1,7 @@
 [package]
 name = "infra-rs"
 edition = "2024"
+rust-version = "1.95"
 
 [package.metadata.vcpkg]
 dependencies = [
@@ -25,6 +26,7 @@ x86_64-pc-windows-msvc = { triplet = "x64-windows-static-release" }
 [workspace]
 package.version = "2026.9.14"
 package.edition = "2024"
+package.rust-version = "1.95"
 members = [
   "crates/geo",
   "crates/geo/vector_derive",
@@ -57,13 +59,13 @@ tileserver = { path = "./tools/tileserver", optional = true }
 
 [features]
 default = ["cog", "gdal-static", "serde", "sqlite"]
+allocate = ["geo/allocate"]
 arrow = ["geo/arrow"]
 cog = ["geo/deflate", "geo/raster-io-geotiff"]
 gdal = ["geo/gdal"]
 gdal-static = ["gdal", "geo/gdal-static"]
 python = ["pyo3/auto-initialize"]
 serde = ["inf/serde"]
-simd = ["geo/simd"]
 sqlite = ["dep:sqlite"]
 tiler = ["dep:tiler"]
 tui = ["tileserver/tui"]

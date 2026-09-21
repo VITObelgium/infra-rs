@@ -11,7 +11,7 @@ serve_tiles_tui dir:
     cargo run -p tileserver --features=tui --release -- --tui --gis-dir {{ dir }}
 
 doc:
-    cargo doc --workspace --exclude=infra-rs --exclude=vector_derive --no-deps --all-features
+    cargo +nightly doc --workspace --exclude=infra-rs --exclude=vector_derive --no-deps --all-features
 
 docdeps:
     cargo +nightly doc --workspace --exclude='infra-rs' --exclude='vector_derive' --all-features
@@ -64,9 +64,6 @@ test_warp:
 test_warp:
     cargo nextest run --release --profile integration -p geo --no-default-features --features=gdal-static,proj4rs,rayon,raster-io-geotiff --no-capture run_all_warp_integration_tests
 
-test_release_simd:
-    @ {{ devenv_nightly }} 'set -o pipefail; rustc --version;cargo nextest run --profile ci --release --features=simd,serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv'
-
 test_debug_py:
     @ {{ devenv_nightly }} 'set -o pipefail; cargo nextest run --profile ci --workspace --all-features'
 
@@ -76,11 +73,9 @@ test_release_py:
 test_integration:
     cargo nextest run --profile integration --release --no-capture --no-default-features --features=serde,gdal,gdal-static,derive,vector-io-xlsx,vector-io-csv,polars,rayon,proj4rs,deflate
 
-test_all: test_release test_release_py test_integration test_simd
+test_all: test_release test_release_py test_integration
 
 test: test_debug
-
-test_simd: test_release_simd
 
 build_ci: build_allfeatures
 
@@ -96,7 +91,7 @@ cmapbench:
     cargo bench --bench colormapping --package=inf --features=bench
 
 simdbench:
-    @ {{ devenv_nightly }} 'cargo bench --bench simd --package=geo --features=simd,gdal-static,gdal'
+    cargo bench --bench simd --package=geo --no-default-features
 
 rasterbenchbaseline name:
     cargo bench --bench rasterops --package=geo -- --save-baseline {{ name }}

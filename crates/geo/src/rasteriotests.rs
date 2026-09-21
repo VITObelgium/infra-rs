@@ -46,8 +46,8 @@ mod generictests {
     }
 
     #[test]
-    fn read_write_raster_nodata_handling<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterReadWrite>() -> Result<()>
-    {
+    fn read_write_raster_nodata_handling<T: ArrayNum + fmt::Debug, R: Array<Pixel = T, Metadata = GeoReference> + RasterReadWrite>()
+    -> Result<()> {
         let tmp_dir = tempfile::TempDir::new().unwrap();
         let raster_path = tmp_dir.path().join("test.asc");
 

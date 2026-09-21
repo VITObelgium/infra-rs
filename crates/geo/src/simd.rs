@@ -1,52 +1,130 @@
-use std::simd::{SimdCast, prelude::*};
+use std::sync::OnceLock;
 
-#[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-pub const LANES: usize = 4; // wasm SIMD128 (4 x f32 lanes)
+use fearless_simd::{Level, Simd, SimdBase, SimdElement, SimdMask, prelude::*};
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx512f"))]
-pub const LANES: usize = 16; // AVX-512 512-bit (16 x f32 lanes)
+use crate::ArrayNum;
 
-#[cfg(all(target_arch = "x86_64", target_feature = "avx2", not(target_feature = "avx512f")))]
-pub const LANES: usize = 8; // AVX2 256-bit (8 x f32 lanes)
-
-#[cfg(all(target_arch = "x86_64", target_feature = "sse2", not(target_feature = "avx2")))]
-pub const LANES: usize = 4; // SSE2 128-bit (4 x f32 lanes)
-
-#[cfg(all(target_arch = "aarch64", target_feature = "neon"))]
-pub const LANES: usize = 4; // NEON 128-bit (4 x f32 lanes)
-
-// Fallback if none of the above matches
-#[cfg(not(any(
-    all(target_arch = "wasm32", target_feature = "simd128"),
-    all(target_arch = "x86_64", target_feature = "avx512f"),
-    all(target_arch = "x86_64", target_feature = "avx2"),
-    all(target_arch = "x86_64", target_feature = "sse2"),
-    all(target_arch = "aarch64", target_feature = "neon")
-)))]
-pub const LANES: usize = 1; // scalar fallback
-
-pub trait SimdCastPl<const N: usize> {
-    fn simd_cast<U: SimdCast>(self) -> Simd<U, N>;
+/// Returns the best SIMD level supported by the current CPU.
+/// Cached to avoid an expensive cpu feature check on every call.
+#[inline]
+pub fn level() -> Level {
+    static LEVEL: OnceLock<Level> = OnceLock::new();
+    *LEVEL.get_or_init(Level::new)
 }
 
-macro_rules! impl_cast_custom {
-    ($_type:ty, $_trait:ident) => {
-        impl<const N: usize> SimdCastPl<N> for Simd<$_type, N> {
-            fn simd_cast<U: SimdCast>(self) -> Simd<U, N> {
-                use std::simd::num::$_trait;
-                self.cast::<U>()
-            }
+macro_rules! dispatch_array_num_simd {
+    ($data_type:expr, $simd_type:ty, $callback:ident $(, $arg:expr)* $(,)?) => {
+        match $data_type {
+            crate::ArrayDataType::Uint8 => $callback!($simd_type, u8, <$simd_type as fearless_simd::Simd>::u8s $(, $arg)*),
+            crate::ArrayDataType::Uint16 => $callback!($simd_type, u16, <$simd_type as fearless_simd::Simd>::u16s $(, $arg)*),
+            crate::ArrayDataType::Uint32 => $callback!($simd_type, u32, <$simd_type as fearless_simd::Simd>::u32s $(, $arg)*),
+            crate::ArrayDataType::Uint64 => $callback!($simd_type, u64, <$simd_type as fearless_simd::Simd>::u64s $(, $arg)*),
+            crate::ArrayDataType::Int8 => $callback!($simd_type, i8, <$simd_type as fearless_simd::Simd>::i8s $(, $arg)*),
+            crate::ArrayDataType::Int16 => $callback!($simd_type, i16, <$simd_type as fearless_simd::Simd>::i16s $(, $arg)*),
+            crate::ArrayDataType::Int32 => $callback!($simd_type, i32, <$simd_type as fearless_simd::Simd>::i32s $(, $arg)*),
+            crate::ArrayDataType::Int64 => $callback!($simd_type, i64, <$simd_type as fearless_simd::Simd>::i64s $(, $arg)*),
+            crate::ArrayDataType::Float32 => $callback!($simd_type, f32, <$simd_type as fearless_simd::Simd>::f32s $(, $arg)*),
+            crate::ArrayDataType::Float64 => $callback!($simd_type, f64, <$simd_type as fearless_simd::Simd>::f64s $(, $arg)*),
         }
     };
 }
 
-impl_cast_custom!(u8, SimdUint);
-impl_cast_custom!(u16, SimdUint);
-impl_cast_custom!(u32, SimdUint);
-impl_cast_custom!(u64, SimdUint);
-impl_cast_custom!(i8, SimdInt);
-impl_cast_custom!(i16, SimdInt);
-impl_cast_custom!(i32, SimdInt);
-impl_cast_custom!(i64, SimdInt);
-impl_cast_custom!(f32, SimdFloat);
-impl_cast_custom!(f64, SimdFloat);
+pub(crate) use dispatch_array_num_simd;
+
+#[inline(always)]
+pub(crate) fn nodata_mask<S, T, V>(value: V) -> V::Mask
+where
+    S: Simd,
+    T: ArrayNum + SimdElement,
+    V: SimdBase<S, Element = T>,
+{
+    if T::has_nan() {
+        !value.simd_eq(value)
+    } else {
+        value.simd_eq(T::NODATA)
+    }
+}
+
+#[allow(dead_code)]
+#[inline(always)]
+pub(crate) fn init_nodata<S, T, V>(value: V, nodata: T) -> V
+where
+    S: Simd,
+    T: ArrayNum + SimdElement,
+    V: SimdBase<S, Element = T>,
+{
+    value.simd_eq(nodata).select(V::splat(value.token(), T::NODATA), value)
+}
+
+#[allow(dead_code)]
+#[inline(always)]
+pub(crate) fn restore_nodata<S, T, V>(value: V, nodata: T) -> V
+where
+    S: Simd,
+    T: ArrayNum + SimdElement,
+    V: SimdBase<S, Element = T>,
+{
+    nodata_mask::<S, T, V>(value).select(V::splat(value.token(), nodata), value)
+}
+
+#[inline(always)]
+pub(crate) fn nodata_min<S, T, V>(lhs: V, rhs: V) -> V
+where
+    S: Simd,
+    T: ArrayNum + SimdElement,
+    V: SimdBase<S, Element = T>,
+{
+    if T::has_nan() {
+        lhs.min_precise(rhs)
+    } else {
+        let result = lhs.min(rhs);
+        let result = nodata_mask::<S, T, V>(lhs).select(rhs, result);
+        nodata_mask::<S, T, V>(rhs).select(lhs, result)
+    }
+}
+
+#[inline(always)]
+pub(crate) fn nodata_max<S, T, V>(lhs: V, rhs: V) -> V
+where
+    S: Simd,
+    T: ArrayNum + SimdElement,
+    V: SimdBase<S, Element = T>,
+{
+    if T::has_nan() {
+        lhs.max_precise(rhs)
+    } else {
+        let result = lhs.max(rhs);
+        let result = nodata_mask::<S, T, V>(lhs).select(rhs, result);
+        nodata_mask::<S, T, V>(rhs).select(lhs, result)
+    }
+}
+
+#[inline(always)]
+pub(crate) fn reduce_min<S, T, V>(value: V) -> Option<T>
+where
+    S: Simd,
+    T: ArrayNum + SimdElement,
+    V: SimdBase<S, Element = T>,
+{
+    let nodata = nodata_mask::<S, T, V>(value);
+    if nodata.all_true() {
+        None
+    } else {
+        Some(nodata.select(V::splat(value.token(), T::max_value()), value).reduce_min())
+    }
+}
+
+#[inline(always)]
+pub(crate) fn reduce_max<S, T, V>(value: V) -> Option<T>
+where
+    S: Simd,
+    T: ArrayNum + SimdElement,
+    V: SimdBase<S, Element = T>,
+{
+    let nodata = nodata_mask::<S, T, V>(value);
+    if nodata.all_true() {
+        None
+    } else {
+        Some(nodata.select(V::splat(value.token(), T::min_value()), value).reduce_max())
+    }
+}

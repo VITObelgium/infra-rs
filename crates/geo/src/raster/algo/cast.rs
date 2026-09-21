@@ -136,19 +136,15 @@ fn cast_vec_reuse<T: ArrayNum, TDest: ArrayNum>(data: AlignedVec<T>) -> AlignedV
         unsafe { dst_ptr.add(i).write(dst_val) };
     }
 
-    // Now transmute the vec to the new type
-    #[cfg(feature = "simd")]
+    #[cfg(feature = "allocate")]
     {
-        let (ptr, _, _, alloc) = data.into_parts_with_allocator();
-        unsafe { Vec::from_raw_parts_in(ptr.as_ptr().cast::<TDest>(), len, new_capacity, alloc) }
+        let (ptr, _, _, alloc) = data.into_parts_with_alloc();
+        unsafe { Vec::from_raw_parts_in(ptr.cast::<TDest>().as_ptr(), len, new_capacity, alloc) }
     }
 
-    #[cfg(not(feature = "simd"))]
+    #[cfg(not(feature = "allocate"))]
     {
-        // Use the stabilized into_raw_parts() when pkg-mod rustc version is >= 1.93
-        // let (ptr, _, _) = data.into_raw_parts();
-        let mut data = std::mem::ManuallyDrop::new(data);
-        let ptr = data.as_mut_ptr();
+        let (ptr, _, _) = data.into_raw_parts();
         unsafe { Vec::from_raw_parts(ptr.cast::<TDest>(), len, new_capacity) }
     }
 }

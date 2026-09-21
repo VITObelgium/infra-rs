@@ -2,6 +2,7 @@
 name = "tileserver"
 version.workspace = true  # inherit from [workspace.package]
 edition.workspace = true
+rust-version.workspace = true
 
 [package.metadata.vcpkg]
 dependencies = ["gdal[core,netcdf]"]

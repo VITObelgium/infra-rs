@@ -1,4 +1,4 @@
-#![cfg_attr(feature = "simd", feature(portable_simd, allocator_api))]
+#![cfg_attr(feature = "allocate", feature(allocator_api))]
 #![cfg_attr(docsrs, feature(doc_cfg))]
 
 pub type Result<T = ()> = std::result::Result<T, Error>;
@@ -45,8 +45,6 @@ mod rect;
 #[cfg(feature = "gdal")]
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 mod runtimeconfiguration;
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub mod simd;
 pub mod srs;
 mod tile;
@@ -71,23 +69,11 @@ pub use bandindex::{BandIndex, FIRST_BAND};
 #[doc(inline)]
 pub use {
     anydensearray::AnyDenseArray, array::Array, array::ArrayCopy, array::ArrayInterop, array::ArrayMetadata, array::Columns,
-    array::RasterWindow, array::Rows, arraydatatype::ArrayDataType, arraynum::ArrayNum, arraynum::ArrayNumScalar, cell::Cell,
-    cell::CellIterator, coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference,
+    array::RasterWindow, array::Rows, arraydatatype::ArrayDataType, arraynum::ArrayNum, cell::Cell, cell::CellIterator,
+    coordinate::Coordinate, densearray::DenseArray, error::Error, georeference::CellSize, georeference::GeoReference,
     geotransform::GeoTransform, latlonbounds::LatLonBounds, nodata::Nodata, raster::RasterNodataCompatibility,
     rastermetadata::RasterMetadata, rasterscale::RasterScale, rastersize::RasterSize, rect::Rect, tile::Tile, tile::ZoomLevelStrategy,
 };
-
-#[doc(inline)]
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
-pub use arraynum::ArrayNumSimd;
-
-#[doc(inline)]
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
-pub use nodata::simd::NodataSimd;
-
-pub use simd_macro::geo_simd_bounds as simd_bounds;
 
 #[doc(inline)]
 pub use point::Point;

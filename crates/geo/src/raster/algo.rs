@@ -68,7 +68,6 @@ pub use {
     quantile::quantiles, quantile::quantiles_neg_pos, scale::Scale, scale::descale, statistics::RasterStats, statistics::statistics,
 };
 
-#[cfg(feature = "simd")]
 pub mod simd {
     pub use super::{
         filter::simd::filter, filter::simd::filter_value, limits::simd::max, limits::simd::min, limits::simd::min_max, scale::Scale,

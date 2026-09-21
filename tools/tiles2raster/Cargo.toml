@@ -2,6 +2,7 @@
 name = "tiles2raster"
 version.workspace = true  # inherit from [workspace.package]
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 clap = { version = "4.6", features = ["derive", "env"] }

@@ -1,4 +1,3 @@
-#![cfg_attr(feature = "simd", feature(portable_simd))]
 #![warn(clippy::unwrap_used)]
 
 mod layermetadata;

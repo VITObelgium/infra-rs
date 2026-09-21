@@ -1,12 +1,10 @@
-#![cfg_attr(feature = "simd", feature(portable_simd))]
-
-#[cfg(feature = "simd")]
 mod bench {
     use criterion::{BatchSize, Criterion};
 
-    #[cfg(feature = "simd")]
+    use std::ops::RangeInclusive;
+
     use geo::{
-        Array, ArrayInterop as _, ArrayNum, Columns, GeoReference, RasterSize, Rows,
+        Array, ArrayMetadata as _, ArrayNum, Columns, GeoReference, Nodata as _, RasterScale, RasterSize, Rows,
         raster::algo::Scale as _,
         raster::{DenseRaster, algo},
     };
@@ -14,32 +12,6 @@ mod bench {
 
     const RASTER_WIDTH: Columns = Columns(1024);
     const RASTER_HEIGHT: Rows = Rows(768);
-
-    #[cfg(feature = "simd")]
-    const LANES: usize = geo::simd::LANES;
-
-    fn bench_name<T: ArrayNum>(name: &str) -> String {
-        #[cfg(feature = "simd")]
-        return format!("{}_{:?}_simd", name, T::TYPE);
-        #[cfg(not(feature = "simd"))]
-        return format!("{}_{:?}", name, T::TYPE);
-    }
-
-    #[geo::simd_bounds]
-    fn simd<T: ArrayNum>(c: &mut Criterion) {
-        let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
-        let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(5.0));
-
-        let create_raster = || DenseRaster::<T>::filled_with(NumCast::from(4.0), geo_ref.clone());
-
-        c.bench_function(&bench_name::<T>("init_nodata"), |b| {
-            b.iter_batched_ref(create_raster, |lhs| lhs.init_nodata(), BatchSize::LargeInput);
-        });
-
-        c.bench_function(&bench_name::<T>("restore_nodata"), |b| {
-            b.iter_batched_ref(create_raster, |lhs| lhs.restore_nodata(), BatchSize::LargeInput);
-        });
-    }
 
     fn min_max(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
@@ -165,6 +137,42 @@ mod bench {
         group.finish();
     }
 
+    macro_rules! scalar_scale {
+        ($fn_name:ident, $src_type:ty, $dest_type:ty) => {
+            fn $fn_name(raster: &DenseRaster<$src_type>, input_range: Option<RangeInclusive<$src_type>>) -> DenseRaster<$dest_type> {
+                let range = input_range
+                    .or_else(|| algo::min_max(raster))
+                    .expect("benchmark raster contains data");
+                let range = inf::cast::inclusive_range::<f64>(range).unwrap();
+                let dest_min = 0.0;
+                let dest_max = <$dest_type as ArrayNum>::TYPE.default_nodata_value() - 1.0;
+                let input_range = range.end() - range.start();
+                let output_range = dest_max - dest_min;
+                let scale = if input_range > 0.0 { input_range / output_range } else { 1.0 };
+                let offset = range.start() - (dest_min * scale);
+
+                let mut output = inf::allocate::AlignedVecUnderConstruction::<$dest_type>::new(raster.len());
+                for (value, output) in raster.iter_opt().zip(unsafe { output.as_slice_mut() }) {
+                    *output = match value {
+                        Some(value) => {
+                            let value: f64 = NumCast::from(value).unwrap();
+                            ((value - offset) / scale).max(dest_min).min(dest_max).round() as $dest_type
+                        }
+                        None => <$dest_type>::NODATA,
+                    };
+                }
+
+                let metadata = raster.metadata().clone().with_scale(RasterScale { scale, offset });
+                DenseRaster::new(metadata, unsafe { output.assume_init() }).unwrap()
+            }
+        };
+    }
+
+    scalar_scale!(scale_f64_to_u8_scalar, f64, u8);
+    scalar_scale!(scale_f32_to_u8_scalar, f32, u8);
+    scalar_scale!(scale_f64_to_u16_scalar, f64, u16);
+    scalar_scale!(scale_f32_to_u16_scalar, f32, u16);
+
     fn scale(c: &mut Criterion) {
         let raster_size = RasterSize::with_rows_cols(RASTER_HEIGHT, RASTER_WIDTH);
         let geo_ref = GeoReference::without_spatial_reference(raster_size, Some(f64::NAN));
@@ -191,9 +199,7 @@ mod bench {
         group.bench_function("scale_to_u8_f64_scalar", |b| {
             b.iter_batched_ref(
                 create_f64_raster,
-                |raster| {
-                    let _: DenseRaster<u8> = raster.scale(None).unwrap();
-                },
+                |raster| scale_f64_to_u8_scalar(raster, None),
                 BatchSize::LargeInput,
             );
         });
@@ -212,9 +218,7 @@ mod bench {
         group.bench_function("scale_to_u8_f32_scalar", |b| {
             b.iter_batched_ref(
                 create_f32_raster,
-                |raster| {
-                    let _: DenseRaster<u8> = raster.scale(None).unwrap();
-                },
+                |raster| scale_f32_to_u8_scalar(raster, None),
                 BatchSize::LargeInput,
             );
         });
@@ -224,9 +228,7 @@ mod bench {
         group.bench_function("scale_to_u8_f32_rangeinput_scalar", |b| {
             b.iter_batched_ref(
                 create_f32_raster,
-                |raster| {
-                    let _: DenseRaster<u8> = raster.scale(Some(range.clone())).unwrap();
-                },
+                |raster| scale_f32_to_u8_scalar(raster, Some(range.clone())),
                 BatchSize::LargeInput,
             );
         });
@@ -255,9 +257,7 @@ mod bench {
         group.bench_function("scale_to_u16_f64_scalar", |b| {
             b.iter_batched_ref(
                 create_f64_raster,
-                |raster| {
-                    let _: DenseRaster<u16> = raster.scale(None).unwrap();
-                },
+                |raster| scale_f64_to_u16_scalar(raster, None),
                 BatchSize::LargeInput,
             );
         });
@@ -276,9 +276,7 @@ mod bench {
         group.bench_function("scale_to_u16_f32_scalar", |b| {
             b.iter_batched_ref(
                 create_f32_raster,
-                |raster| {
-                    let _: DenseRaster<u16> = raster.scale(None).unwrap();
-                },
+                |raster| scale_f32_to_u16_scalar(raster, None),
                 BatchSize::LargeInput,
             );
         });
@@ -296,16 +294,7 @@ mod bench {
         group.finish();
     }
 
-    criterion::criterion_group!(benches_i32, simd<i32>);
-    criterion::criterion_group!(benches_f32, simd<f32>);
     criterion::criterion_group!(algobenches_f32, min_max, filter, scale);
-    criterion::criterion_main!(algobenches_f32);
 }
 
-#[cfg(feature = "simd")]
 criterion::criterion_main!(bench::algobenches_f32);
-
-#[cfg(not(feature = "simd"))]
-fn main() {
-    println!("SIMD feature is not enabled. Please enable the 'simd' feature to run benchmarks.");
-}

@@ -2,9 +2,6 @@
 //! These functions should only be used for specific use-cases.
 //! For general use, the [`crate::Array`] and [`crate::raster::RasterReadWrite`] traits should be used.
 
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
 #[cfg(any(feature = "gdal", feature = "raster-io-geotiff"))]
 use crate::raster::formats::{self, RasterFormat as _};
 use crate::{
@@ -18,7 +15,6 @@ use crate::{
 use bytemuck::cast_slice;
 use inf::allocate::{AlignedVec, AlignedVecUnderConstruction};
 use num::NumCast;
-use simd_macro::simd_bounds;
 use std::{mem::MaybeUninit, path::Path};
 
 //////////////////////////////////////////////////////////////////////////////////////////////
@@ -95,7 +91,6 @@ pub fn write_raster_band<T: ArrayNum>(
     }
 }
 
-#[simd_bounds]
 pub fn read_raster_band_region<T: ArrayNum>(
     path: impl AsRef<Path>,
     band_nr: usize,

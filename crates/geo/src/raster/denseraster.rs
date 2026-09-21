@@ -9,10 +9,6 @@ use crate::{
 
 pub type DenseRaster<T> = DenseArray<T, GeoReference>;
 
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
-#[simd_macro::simd_bounds]
 #[cfg(any(feature = "proj", feature = "proj4rs"))]
 impl<T: crate::ArrayNum> DenseRaster<T> {
     pub fn warped_to_epsg(&self, epsg: crs::Epsg) -> crate::Result<Self> {

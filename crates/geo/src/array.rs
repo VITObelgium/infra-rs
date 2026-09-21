@@ -156,9 +156,6 @@ pub trait Array:
 {
     type Pixel: ArrayNum;
 
-    //#[cfg(feature = "simd")]
-    //type SimdPixel: NodataSimd<Scalar = Self::Pixel>;
-
     type Metadata: ArrayMetadata;
 
     type WithPixelType<TDest: ArrayNum>: Array<Pixel = TDest, Metadata = Self::Metadata>;

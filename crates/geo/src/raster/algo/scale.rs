@@ -26,22 +26,13 @@
 //!
 //! # SIMD Acceleration
 //!
-//! When the `simd` feature is enabled, SIMD-optimized implementations are automatically used
-//! for all supported input types (f32, f64, u32, u16, i32, i16, u8). To explicitly use the SIMD trait:
-//!
-//! ```ignore
-//! use crate::raster::algo::simd::Scale;
-//! let result: DenseArray<u8, _> = my_raster.scale(None)?;
-//! ```
-//!
-//! SIMD implementations provide significant speedups over scalar versions for large rasters.
+//! SIMD-optimized implementations are automatically used for all supported input types
+//! (f32, f64, u32, u16, i32, i16, u8).
 
 use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, Error, RasterScale, Result, raster::algo};
 use inf::cast;
 
 use std::ops::RangeInclusive;
-#[cfg(feature = "simd")]
-use std::simd::prelude::*;
 
 /// Helper struct to hold scale calculation parameters
 struct ScaleParams {
@@ -86,105 +77,60 @@ fn calculate_scale_params(range: &std::ops::RangeInclusive<f64>, dest_type: crat
     }
 }
 
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub mod simd {
+    use fearless_simd::{Simd, SimdBase, prelude::*};
+
     use super::*;
-    use crate::simd::SimdCastPl;
-    use crate::{ArrayDataType, DenseArray, Nodata, NodataSimd};
-    use std::simd::Select;
+    use crate::{ArrayDataType, DenseArray, Nodata};
 
-    const LANES: usize = crate::simd::LANES;
-
-    /// Internal macro to implement SIMD scaling to a slice without code duplication
-    /// Returns the RasterScale to be used in metadata
-    ///
-    /// All arithmetic is done in f64 for consistency and to support both float and integer types.
-    macro_rules! impl_scale_simd_slice {
-        ($src:expr, $src_type:ty, $dest_type:ty, $array_data_type:expr, $input_range:expr, $output:expr) => {{
-            if $output.len() != $src.len() {
-                return Err(Error::InvalidArgument(format!(
-                    "Output slice length {} does not match input length {}",
-                    $output.len(),
-                    $src.len()
-                )));
-            }
-
-            let geo_ref = $src.metadata().geo_reference();
-            if geo_ref.scale().is_some() {
-                return Err(Error::InvalidArgument(
-                    "Cannot scale raster that already has scale information. Use descale first.".to_string(),
-                ));
-            }
-
-            let raster_scale = if let Some(range) = $input_range.or_else(|| algo::limits::min_max($src)) {
-                let range_f64 = cast::inclusive_range::<f64>(range)?;
-                let params = super::calculate_scale_params(&range_f64, $array_data_type);
-
-                type FloatSimd = Simd<f64, LANES>;
-                let simd_scale = FloatSimd::splat(params.scale);
-                let simd_offset = FloatSimd::splat(params.offset);
-                let simd_dest_min = FloatSimd::splat(params.dest_min);
-                let simd_dest_max = FloatSimd::splat(params.dest_max);
-
-                let (src_head, src_simd, src_tail): (&[$src_type], &[Simd<$src_type, LANES>], &[$src_type]) =
-                    $src.as_slice().as_simd::<LANES>();
-                let (out_head, out_simd, out_tail): (&mut [$dest_type], &mut [Simd<$dest_type, LANES>], &mut [$dest_type]) =
-                    $output.as_simd_mut::<LANES>();
-
-                // Process scalar head
-                for (&v, out) in src_head.iter().zip(out_head.iter_mut()) {
-                    *out = if v.is_nodata() {
-                        <$dest_type>::NODATA
-                    } else {
-                        let v_f64 = v as f64;
-                        let scaled = (v_f64 - params.offset) / params.scale;
-                        let clamped = scaled.max(params.dest_min).min(params.dest_max).round();
-                        clamped as $dest_type
-                    };
-                }
-
-                // Process SIMD body
-                for (v_chunk, out_chunk) in src_simd.iter().zip(out_simd.iter_mut()) {
-                    let nodata_mask = v_chunk.nodata_mask();
-
-                    // Cast to f64 SIMD for arithmetic
-                    let v_f64 = v_chunk.simd_cast::<f64>();
-                    let scaled = (v_f64 - simd_offset) / simd_scale;
-
-                    use std::simd::StdFloat;
-                    let clamped = scaled.simd_clamp(simd_dest_min, simd_dest_max).round();
-
-                    let casted = clamped.simd_cast::<$dest_type>();
-                    *out_chunk = nodata_mask.select(Simd::<$dest_type, LANES>::splat(<$dest_type>::NODATA), casted);
-                }
-
-                // Process scalar tail
-                for (&v, out) in src_tail.iter().zip(out_tail.iter_mut()) {
-                    *out = if v.is_nodata() {
-                        <$dest_type>::NODATA
-                    } else {
-                        let v_f64 = v as f64;
-                        let scaled = (v_f64 - params.offset) / params.scale;
-                        let clamped = scaled.max(params.dest_min).min(params.dest_max).round();
-                        clamped as $dest_type
-                    };
-                }
-
-                RasterScale {
-                    scale: params.scale,
-                    offset: params.offset,
-                }
-            } else {
-                $output.fill(<$dest_type>::NODATA);
-                RasterScale { scale: 1.0, offset: 0.0 }
-            };
-
-            Ok::<RasterScale, Error>(raster_scale)
-        }};
+    #[inline]
+    fn scale_value<TSrc: ArrayNum, TDest: ArrayNum>(value: TSrc, params: &ScaleParams) -> TDest {
+        if value.is_nodata() {
+            TDest::NODATA
+        } else {
+            let value = num::cast::<TSrc, f64>(value).expect("supported raster values convert to f64");
+            let scaled = (value - params.offset) / params.scale;
+            num::cast::<f64, TDest>(scaled.max(params.dest_min).min(params.dest_max).round()).expect("scaled value fits destination type")
+        }
     }
 
-    /// Macro to implement Scale<T, O> for DenseArray with SIMD optimization
+    #[inline(always)]
+    fn scale_kernel<S, TSrc, TDest>(simd: S, src: &[TSrc], output: &mut [TDest], params: &ScaleParams)
+    where
+        S: Simd,
+        TSrc: ArrayNum,
+        TDest: ArrayNum,
+    {
+        let simd_scale = S::f64s::splat(simd, params.scale);
+        let simd_offset = S::f64s::splat(simd, params.offset);
+        let simd_dest_min = S::f64s::splat(simd, params.dest_min);
+        let simd_dest_max = S::f64s::splat(simd, params.dest_max);
+
+        let mut src_chunks = src.chunks_exact(S::f64s::LEN);
+        let mut output_chunks = output.chunks_exact_mut(S::f64s::LEN);
+        for (src_chunk, output_chunk) in src_chunks.by_ref().zip(output_chunks.by_ref()) {
+            let values = S::f64s::from_fn(simd, |index| {
+                num::cast::<TSrc, f64>(src_chunk[index]).expect("supported raster values convert to f64")
+            });
+            let scaled = (values - simd_offset) / simd_scale;
+            let scaled = scaled.max(simd_dest_min).min(simd_dest_max);
+            // Scaled values are non-negative, so adding 0.5 and flooring matches scalar round-away-from-zero.
+            let rounded = (scaled + 0.5).floor();
+
+            for index in 0..S::f64s::LEN {
+                output_chunk[index] = if src_chunk[index].is_nodata() {
+                    TDest::NODATA
+                } else {
+                    num::cast::<f64, TDest>(rounded[index]).expect("scaled value fits destination type")
+                };
+            }
+        }
+
+        for (&value, output) in src_chunks.remainder().iter().zip(output_chunks.into_remainder()) {
+            *output = scale_value(value, params);
+        }
+    }
+
     macro_rules! impl_scale_simd {
         ($src_type:ty, $dest_type:ty, $array_data_type:expr) => {
             impl<Meta: ArrayMetadata> Scale<$src_type, $dest_type> for DenseArray<$src_type, Meta> {
@@ -201,13 +147,40 @@ pub mod simd {
                 }
 
                 fn scale_to_slice(&self, input_range: Option<RangeInclusive<$src_type>>, output: &mut [$dest_type]) -> Result<RasterScale> {
-                    impl_scale_simd_slice!(self, $src_type, $dest_type, $array_data_type, input_range, output)
+                    if output.len() != self.len() {
+                        return Err(Error::InvalidArgument(format!(
+                            "Output slice length {} does not match input length {}",
+                            output.len(),
+                            self.len()
+                        )));
+                    }
+
+                    if self.metadata().geo_reference().scale().is_some() {
+                        return Err(Error::InvalidArgument(
+                            "Cannot scale raster that already has scale information. Use descale first.".to_string(),
+                        ));
+                    }
+
+                    let Some(range) = input_range.or_else(|| algo::limits::min_max(self)) else {
+                        output.fill(<$dest_type>::NODATA);
+                        return Ok(RasterScale { scale: 1.0, offset: 0.0 });
+                    };
+
+                    let range_f64 = cast::inclusive_range::<f64>(range)?;
+                    let params = super::calculate_scale_params(&range_f64, $array_data_type);
+                    fearless_simd::dispatch!(crate::simd::level(), simd => {
+                        scale_kernel(simd, self.as_slice(), output, &params)
+                    });
+
+                    Ok(RasterScale {
+                        scale: params.scale,
+                        offset: params.offset,
+                    })
                 }
             }
         };
     }
 
-    // Implement Scale for all supported input types (float and integer)
     impl_scale_simd!(f64, u8, ArrayDataType::Uint8);
     impl_scale_simd!(f64, u16, ArrayDataType::Uint16);
     impl_scale_simd!(f32, u8, ArrayDataType::Uint8);
@@ -223,97 +196,6 @@ pub mod simd {
     impl_scale_simd!(u8, u8, ArrayDataType::Uint8);
 }
 
-// Non-SIMD implementation of Scale trait for DenseArray
-#[cfg(not(feature = "simd"))]
-macro_rules! impl_scale_slice {
-    ($t:ty, $dest_type:ty, $array_data_type:expr, $self:expr, $input_range:expr, $output:expr) => {{
-        use crate::Nodata;
-        use num::NumCast;
-
-        if $output.len() != $self.len() {
-            return Err(Error::InvalidArgument(format!(
-                "Output slice length {} does not match input length {}",
-                $output.len(),
-                $self.len()
-            )));
-        }
-
-        let geo_ref = $self.metadata().geo_reference();
-        if geo_ref.scale().is_some() {
-            return Err(Error::InvalidArgument(
-                "Cannot scale raster that already has scale information. Use descale first.".to_string(),
-            ));
-        }
-
-        let raster_scale = if let Some(range) = $input_range.or_else(|| algo::limits::min_max($self)) {
-            let range_f64 = cast::inclusive_range::<f64>(range)?;
-            let params = calculate_scale_params(&range_f64, $array_data_type);
-
-            for (opt_v, out) in $self.iter_opt().zip($output.iter_mut()) {
-                *out = if let Some(v) = opt_v {
-                    let v_f64: f64 = NumCast::from(v).unwrap();
-                    let scaled = (v_f64 - params.offset) / params.scale;
-                    let clamped = scaled.max(params.dest_min).min(params.dest_max).round();
-                    clamped as $dest_type
-                } else {
-                    <$dest_type>::NODATA
-                };
-            }
-
-            RasterScale {
-                scale: params.scale,
-                offset: params.offset,
-            }
-        } else {
-            $output.fill(<$dest_type>::NODATA);
-            RasterScale { scale: 1.0, offset: 0.0 }
-        };
-
-        Ok::<RasterScale, Error>(raster_scale)
-    }};
-}
-
-#[cfg(not(feature = "simd"))]
-macro_rules! impl_scale {
-    ($src_type:ty, $dest_type:ty, $array_data_type:expr) => {
-        impl<Meta: ArrayMetadata> Scale<$src_type, $dest_type> for DenseArray<$src_type, Meta> {
-            type Meta = Meta;
-
-            fn scale(&self, input_range: Option<RangeInclusive<$src_type>>) -> Result<DenseArray<$dest_type, Meta>> {
-                let mut output = inf::allocate::AlignedVecUnderConstruction::<$dest_type>::new(self.len());
-                let raster_scale = self.scale_to_slice(input_range, unsafe { output.as_slice_mut() })?;
-                let new_metadata = Meta::with_geo_reference(self.metadata().geo_reference().with_scale(raster_scale));
-                Ok(
-                    DenseArray::<$dest_type, Meta>::new(new_metadata, unsafe { output.assume_init() })
-                        .expect("Size mismatch in scale operation"),
-                )
-            }
-
-            fn scale_to_slice(&self, input_range: Option<RangeInclusive<$src_type>>, output: &mut [$dest_type]) -> Result<RasterScale> {
-                impl_scale_slice!($src_type, $dest_type, $array_data_type, self, input_range, output)
-            }
-        }
-    };
-}
-
-#[cfg(not(feature = "simd"))]
-mod non_simd_impls {
-    use super::*;
-
-    impl_scale!(f64, u8, crate::ArrayDataType::Uint8);
-    impl_scale!(f64, u16, crate::ArrayDataType::Uint16);
-    impl_scale!(f32, u8, crate::ArrayDataType::Uint8);
-    impl_scale!(f32, u16, crate::ArrayDataType::Uint16);
-    impl_scale!(u32, u8, crate::ArrayDataType::Uint8);
-    impl_scale!(u32, u16, crate::ArrayDataType::Uint16);
-    impl_scale!(u16, u8, crate::ArrayDataType::Uint8);
-    impl_scale!(u16, u16, crate::ArrayDataType::Uint16);
-    impl_scale!(i32, u8, crate::ArrayDataType::Uint8);
-    impl_scale!(i32, u16, crate::ArrayDataType::Uint16);
-    impl_scale!(i16, u8, crate::ArrayDataType::Uint8);
-    impl_scale!(i16, u16, crate::ArrayDataType::Uint16);
-    impl_scale!(u8, u8, crate::ArrayDataType::Uint8);
-}
 /// Descales the raster values using the scale and offset from the `geo_reference` metadata.
 /// The descaled value is calculated as: `(value * scale) + offset`
 /// This converts from stored/quantized values back to physical/real-world values.
@@ -359,16 +241,10 @@ mod tests {
     use approx::assert_relative_eq;
 
     use crate::{
-        Array, ArrayDataType, DenseArray, RasterMetadata, RasterScale, RasterSize,
+        Array, ArrayDataType, DenseArray, Nodata, RasterMetadata, RasterScale, RasterSize,
         array::{Columns, Rows},
-        testutils::{NOD, create_vec},
+        testutils::{self, NOD, create_vec},
     };
-
-    #[cfg(feature = "simd")]
-    use crate::testutils;
-
-    #[cfg(feature = "simd")]
-    use crate::Nodata;
 
     use super::*;
 
@@ -649,7 +525,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "simd")]
     fn simd_scale_to_u8_matches_scalar() {
         use crate::raster::algo::simd as simd_algo;
 
@@ -686,7 +561,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "simd")]
     fn simd_scale_to_u16_matches_scalar() {
         use crate::raster::algo::simd as simd_algo;
 
@@ -718,7 +592,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "simd")]
     fn simd_scale_to_u8_f32_matches_scalar() {
         use crate::raster::algo::simd as simd_algo;
 
@@ -749,7 +622,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "simd")]
     fn simd_scale_to_u16_f32_matches_scalar() {
         use crate::raster::algo::simd as simd_algo;
 
@@ -780,7 +652,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "simd")]
     fn simd_scale_u32_to_u8() {
         use crate::raster::algo::simd as simd_algo;
 
@@ -815,7 +686,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "simd")]
     fn simd_scale_i32_to_u16() {
         use crate::raster::algo::simd as simd_algo;
 
@@ -850,7 +720,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "simd")]
     fn simd_scale_u16_to_u8() {
         use crate::raster::algo::simd as simd_algo;
 

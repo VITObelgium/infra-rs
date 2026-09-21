@@ -146,7 +146,7 @@ mod tests {
             RasterSize::with_rows_cols(Rows(256), Columns(256)),
             [626172.1357121639, 611.49622628141, 0.0, 6731350.45890576, 0.0, -611.49622628141].into(),
             None,
-            None
+            None,
         );
 
         assert!(meta1.intersects(&meta2).unwrap());

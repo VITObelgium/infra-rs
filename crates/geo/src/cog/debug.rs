@@ -1,5 +1,3 @@
-use simd_macro::simd_bounds;
-
 use crate::{
     AnyDenseArray, ArrayDataType, ArrayNum, CellSize, DenseArray, Error, GeoReference, Point, RasterSize, Result, Tile,
     cog::WebTilesReader,
@@ -12,10 +10,6 @@ use std::{
     path::Path,
 };
 
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
-#[simd_bounds]
 fn read_tile_data<T: ArrayNum>(
     cog_tile: &TiffChunkLocation,
     meta: &GeoTiffMetadata,

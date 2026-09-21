@@ -11,9 +11,6 @@ use geo::{cog::WebTilesReader, geotiff::GeoTiffMetadata};
 use inf::Legend;
 use raster_tile::{CompressionAlgorithm, RasterTileIO};
 
-#[cfg(feature = "simd")]
-const LANES: usize = geo::simd::LANES;
-
 use crate::{
     Error, PixelFormat, Result, TileProvider, imageprocessing,
     layermetadata::{LayerId, LayerMetadata, LayerSourceType},
@@ -76,7 +73,6 @@ impl CogTileProvider {
         geotiff::io::file_is_cog(path)
     }
 
-    #[geo::simd_bounds]
     fn read_tile_data<T: ArrayNum>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<DenseArray<T>> {
         if Some(tile_size) != meta.tile_size {
             return Err(Error::InvalidArgument("Invalid COG tile size requested".to_string()));
@@ -98,7 +94,6 @@ impl CogTileProvider {
         }
     }
 
-    #[geo::simd_bounds]
     fn read_vrt_tile<T: ArrayNum>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<TileData> {
         let tile_data = Self::read_tile_data::<T>(meta, tile, tile_size)?;
         if tile_data.is_empty() {
@@ -109,7 +104,6 @@ impl CogTileProvider {
         Ok(TileData::new(meta.tile_format, PixelFormat::Native, raster_tile))
     }
 
-    #[geo::simd_bounds]
     fn read_png_tile<T: ArrayNum>(meta: &LayerMetadata, tile: &Tile, tile_size: u32, dpi_ratio: u8) -> Result<TileData> {
         let raw_tile_data = Self::read_tile_data::<T>(meta, tile, tile_size)?;
         if raw_tile_data.is_empty() {
@@ -126,7 +120,6 @@ impl CogTileProvider {
         )
     }
 
-    #[geo::simd_bounds]
     fn read_tile_data_color_mappped<T: ArrayNum>(meta: &LayerMetadata, tile_req: &ColorMappedTileRequest) -> Result<TileData> {
         log::debug!(
             "COG color map tile: {}@{}x {}px {}",

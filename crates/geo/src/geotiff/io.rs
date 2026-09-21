@@ -14,7 +14,6 @@ use crate::{
 use flate2::read::ZlibDecoder;
 use inf::cast;
 use ruzstd::decoding::StreamingDecoder;
-use simd_macro::simd_bounds;
 use weezl::{BitOrder, decode::Decoder};
 
 use crate::{Error, Result};
@@ -25,9 +24,6 @@ use std::{
 };
 
 pub const COG_HEADER_SIZE: usize = 16 * 1024; // 16 KiB, which is usually sufficient for the COG header
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
 
 // Detect if the file at the given path is a Cloud Optimized GeoTIFF (COG).
 /// Detection is done based on the presence of the Gdal Ghost Data in the TIFF header,
@@ -173,7 +169,6 @@ pub fn read_chunk(cog_location: &TiffChunkLocation, reader: &mut (impl Read + Se
     Ok(())
 }
 
-#[simd_bounds]
 pub fn read_chunk_data_into_buffer<T: ArrayNum>(
     chunk: &TiffChunkLocation,
     row_length: u32,
@@ -198,7 +193,6 @@ pub fn read_chunk_data_into_buffer<T: ArrayNum>(
     )
 }
 
-#[simd_bounds]
 pub fn read_chunk_data_into_buffer_cb<T: ArrayNum>(
     chunk: &TiffChunkLocation,
     row_length: u32,
@@ -218,7 +212,6 @@ pub fn read_chunk_data_into_buffer_cb<T: ArrayNum>(
     Ok(())
 }
 
-#[simd_bounds]
 pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
     row_length: u32,
     nodata: Option<f64>,
@@ -292,7 +285,6 @@ pub fn parse_chunk_data_into_buffer<T: ArrayNum>(
     Ok(())
 }
 
-#[simd_bounds]
 fn read_chunk_data_into_buffer_cb_as<T: ArrayNum>(
     meta: &GeoTiffMetadata,
     chunk: &TiffChunkLocation,
@@ -323,7 +315,6 @@ fn read_chunk_data_into_buffer_cb_as<T: ArrayNum>(
     Ok(())
 }
 
-#[simd_bounds]
 pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
     meta: &GeoTiffMetadata,
     overview: &TiffOverview,

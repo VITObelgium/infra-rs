@@ -2,7 +2,7 @@
 #[generic_tests::define]
 mod tests {
     use crate::{
-        Array, ArrayMetadata as _, ArrayNumScalar, DenseArray, RasterSize,
+        Array, ArrayMetadata as _, ArrayNum, DenseArray, RasterSize,
         array::{Columns, Rows},
         rastermetadata::RasterMetadata,
         testutils::{NOD, create_vec},

@@ -17,11 +17,6 @@ use crate::{LatLonBounds, RasterSize, Tile, crs};
 
 use inf::allocate::AlignedVecUnderConstruction;
 use num::NumCast;
-use simd_macro::simd_bounds;
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
 #[derive(Debug, Clone)]
 pub enum TileSource {
     Aligned(TiffChunkLocation),
@@ -499,7 +494,6 @@ impl WebTilesReader {
         })
     }
 
-    #[simd_bounds]
     pub fn read_overview_as<T: ArrayNum>(
         &self,
         overview: &TiffOverview,
@@ -710,7 +704,6 @@ impl WebTilesReader {
         }
     }
 
-    #[simd_bounds]
     pub fn read_tile_data_as<T: ArrayNum>(
         &self,
         tile: &Tile,
@@ -809,7 +802,6 @@ impl WebTilesReader {
         }
     }
 
-    #[simd_bounds]
     /// Parses the tile data from a byte slice into a `DenseArray<T>`.
     /// Only call this for parsing tiled data layout.
     fn parse_tile_data_as<T: ArrayNum>(&self, tile_data: &[u8]) -> Result<DenseArray<T>> {
@@ -844,7 +836,6 @@ impl WebTilesReader {
         Ok(tile_data)
     }
 
-    #[simd_bounds]
     fn merge_tile_sources<T: ArrayNum>(&self, tile_sources: &[(TiffChunkLocation, CutOut)], cog_chunks: &[&[u8]]) -> Result<DenseArray<T>> {
         let tile_size = self.cog_metadata().chunk_row_length() as usize;
         let tile_raster_size = RasterSize::square(tile_size as i32);

@@ -46,8 +46,6 @@ jobs:
               run: mise -E vcpkg run test_integration --release --target ${{ matrix.cfg.target }}
             - name: Run the unit tests with python feature enabled
               run: mise -E vcpkg run test_py
-            - name: Run the unit tests with simd feature enabled
-              run: mise -E simd run test_ci --release --target ${{ matrix.cfg.target }}
             - name: Archive build logs
               if: ${{ failure() }}
               uses: actions/upload-artifact@v6

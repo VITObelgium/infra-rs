@@ -4,7 +4,6 @@
 use std::io::{Read, Seek};
 
 use inf::allocate::{self, AlignedVecUnderConstruction};
-use simd_macro::simd_bounds;
 
 use crate::{
     Array as _, ArrayInterop as _, ArrayMetadata as _, ArrayNum, Cell, Columns, DenseArray, RasterMetadata, RasterSize, RasterWindow,
@@ -16,10 +15,6 @@ use crate::{
     raster::{Compression, Predictor, intersection::CutOut},
 };
 
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
-#[simd_bounds]
 pub fn read_tile_data<T: ArrayNum>(
     cog_location: &TiffChunkLocation,
     tile_size: u32,
@@ -37,7 +32,6 @@ pub fn read_tile_data<T: ArrayNum>(
     parse_tile_data(tile_size, nodata, compression, predictor, None, &cog_chunk)
 }
 
-#[simd_bounds]
 pub fn parse_tile_data<T: ArrayNum>(
     tile_size: u32,
     nodata: Option<f64>,
@@ -67,7 +61,6 @@ pub fn parse_tile_data<T: ArrayNum>(
     Ok(arr)
 }
 
-#[simd_bounds]
 pub fn parse_tile_data_into_slice<T: ArrayNum>(
     tile_size: u32,
     nodata: Option<f64>,

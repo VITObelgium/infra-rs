@@ -7,13 +7,9 @@ use crate::{
 
 use inf::{allocate, cast};
 use num::NumCast;
-use simd_macro::simd_bounds;
 
 use crate::{Error, Result, raster};
 use std::{fs::File, mem::MaybeUninit, ops::Range, path::Path};
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
 
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
 pub struct TiffChunkLocation {
@@ -76,7 +72,6 @@ impl GeoTiffReader {
         &self.meta.geo_reference
     }
 
-    #[simd_bounds]
     fn read_tiled_raster_band_as<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview: &TiffOverview,
@@ -89,7 +84,6 @@ impl GeoTiffReader {
         DenseArray::new_init_nodata(M::with_geo_reference(georef), data)
     }
 
-    #[simd_bounds]
     fn read_tiled_raster_band_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         meta: &GeoTiffMetadata,
         overview: &TiffOverview,
@@ -105,7 +99,6 @@ impl GeoTiffReader {
         })
     }
 
-    #[simd_bounds]
     fn read_striped_raster_band_as<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         band_index: BandIndex,
@@ -119,7 +112,6 @@ impl GeoTiffReader {
         DenseArray::new_init_nodata(georef, unsafe { data.assume_init() })
     }
 
-    #[simd_bounds]
     fn read_striped_raster_band_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         band_index: BandIndex,
@@ -143,17 +135,14 @@ impl GeoTiffReader {
         Ok(M::with_geo_reference(geo_ref))
     }
 
-    #[simd_bounds]
     pub fn read_raster_as<T: ArrayNum, M: ArrayMetadata>(&mut self) -> Result<DenseArray<T, M>> {
         self.read_overview_band_as(0, FIRST_BAND)
     }
 
-    #[simd_bounds]
     pub fn read_raster_band_as<T: ArrayNum, M: ArrayMetadata>(&mut self, band_index: BandIndex) -> Result<DenseArray<T, M>> {
         self.read_overview_band_as(0, band_index)
     }
 
-    #[simd_bounds]
     pub fn read_raster_into_buffer<T: ArrayNum, M: ArrayMetadata>(&mut self, dst_data: &mut [std::mem::MaybeUninit<T>]) -> Result<M> {
         self.read_overview_band_into_buffer::<T, M>(0, FIRST_BAND, dst_data)
     }
@@ -161,7 +150,6 @@ impl GeoTiffReader {
     /// Reads a band from an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
     /// `band_index` is 1 based.
-    #[simd_bounds]
     pub fn read_overview_band_as<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview_index: usize,
@@ -187,7 +175,6 @@ impl GeoTiffReader {
 
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
-    #[simd_bounds]
     pub fn read_band_region_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         band_index: BandIndex,
@@ -199,7 +186,6 @@ impl GeoTiffReader {
 
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
-    #[simd_bounds]
     pub fn read_overview_band_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview_index: usize,
@@ -236,7 +222,6 @@ impl GeoTiffReader {
 
     /// Reads an overview raster at the specified index
     /// overview 0 is the full resolution raster, and each subsequent overview is a downsampled version.
-    #[simd_bounds]
     pub fn read_overview_region_into_buffer<T: ArrayNum, M: ArrayMetadata>(
         &mut self,
         overview_index: usize,
@@ -291,7 +276,6 @@ impl GeoTiffReader {
         Err(Error::Runtime(format!("No overview available with index {overview_index}")))
     }
 
-    #[simd_bounds]
     fn read_chunk_data_into_buffer_as<T: ArrayNum>(
         meta: &GeoTiffMetadata,
         chunk: &TiffChunkLocation,

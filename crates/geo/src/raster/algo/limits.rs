@@ -16,205 +16,90 @@ where
     }
 }
 
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub mod simd {
-    use simd_macro::simd_bounds;
-
-    use crate::NodataSimd;
+    use fearless_simd::{Simd, SimdBase, SimdElement};
 
     use super::*;
-    use crate::densearrayutil;
-    use std::simd::Select;
-    use std::simd::prelude::*;
+    use crate::{densearrayutil, simd::dispatch_array_num_simd};
 
-    const LANES: usize = crate::simd::LANES;
-
-    #[simd_bounds]
     pub fn min<R, T, Meta>(ras: &R) -> Option<T>
     where
         T: ArrayNum,
         R: Array<Pixel = T, Metadata = Meta>,
     {
-        if ras.is_empty() {
-            return None;
-        }
-
-        let mut min = T::max_value();
-        let mut simd_min = Simd::splat(min);
-        let mut has_data = false;
-        let mut has_simd_data = Mask::splat(false);
-
-        densearrayutil::simd::unary_simd(
-            ras.as_slice(),
-            |&v| {
-                has_data |= !v.is_nodata();
-                min = min.nodata_min(v);
-            },
-            |v| {
-                let nodata_mask = v.nodata_mask();
-                has_simd_data |= !nodata_mask;
-                //simd_min = v.nodata_min(simd_min);
-                simd_min = nodata_mask.select(simd_min, v.nodata_min(simd_min));
-            },
-        );
-
-        match (has_data, has_simd_data.any()) {
-            (false, false) => return None,
-            (true, false) => {}
-            (false, true) => {
-                let valid_data = has_simd_data.select(simd_min, Simd::splat(min));
-                min = valid_data.reduce_min_unchecked();
-            }
-            (true, true) => {
-                let valid_data = has_simd_data.select(simd_min, Simd::splat(T::max_value()));
-                min = min.nodata_min(valid_data.reduce_min_unchecked());
-            }
-        }
-
-        Some(min)
+        min_max(ras).map(|range| *range.start())
     }
 
-    #[simd_bounds]
     pub fn max<R, T, Meta>(ras: &R) -> Option<T>
     where
         T: ArrayNum,
         R: Array<Pixel = T, Metadata = Meta>,
     {
-        if ras.is_empty() {
-            return None;
-        }
-
-        let mut max = T::min_value();
-        let mut simd_max = Simd::splat(max);
-        let mut has_data = false;
-        let mut has_simd_data = Mask::splat(false);
-
-        densearrayutil::simd::unary_simd(
-            ras.as_slice(),
-            |&v| {
-                has_data |= !v.is_nodata();
-                max = max.nodata_max(v);
-            },
-            |v| {
-                let nodata_mask = v.nodata_mask();
-                has_simd_data |= !nodata_mask;
-                simd_max = nodata_mask.select(simd_max, v.nodata_max(simd_max));
-            },
-        );
-
-        match (has_data, has_simd_data.any()) {
-            (false, false) => return None,
-            (true, false) => {}
-            (false, true) => {
-                let valid_data = has_simd_data.select(simd_max, Simd::splat(max));
-                max = valid_data.reduce_max_unchecked();
-            }
-            (true, true) => {
-                let valid_data = has_simd_data.select(simd_max, Simd::splat(max));
-                max = max.nodata_max(valid_data.reduce_max_unchecked());
-            }
-        }
-
-        Some(max)
+        min_max(ras).map(|range| *range.end())
     }
 
-    #[simd_bounds]
     pub fn min_max<R, T, Meta>(ras: &R) -> Option<RangeInclusive<T>>
     where
         T: ArrayNum,
         R: Array<Pixel = T, Metadata = Meta>,
     {
-        if ras.is_empty() {
-            return None;
+        fearless_simd::dispatch!(crate::simd::level(), simd => min_max_dispatched(simd, ras.as_slice()))
+    }
+
+    #[inline(always)]
+    fn min_max_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &[T]) -> Option<RangeInclusive<T>> {
+        macro_rules! run {
+            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr) => {{
+                let data: &[$scalar] = bytemuck::cast_slice($data);
+                min_max_kernel::<$simd_type, $scalar, $vector>($simd, data).map(|range| {
+                    let min = num::cast::<$scalar, T>(*range.start()).expect("ArrayNum type must match its ArrayDataType");
+                    let max = num::cast::<$scalar, T>(*range.end()).expect("ArrayNum type must match its ArrayDataType");
+                    min..=max
+                })
+            }};
         }
 
-        if T::has_nan() {
-            // Specialized implementation for floating point types where NaN is the nodata value
-            // This uses the fact that some simd operations can ignore NaN values when calculating min/max
-            // This is faster that the fixed point implementation where masks need to be created
-            let mut min = T::NODATA;
-            let mut max = T::NODATA;
+        dispatch_array_num_simd!(T::TYPE, S, run, simd, data)
+    }
 
-            let mut simd_min = Simd::<T, LANES>::splat(min);
-            let mut simd_max = Simd::<T, LANES>::splat(max);
+    #[inline(always)]
+    fn min_max_kernel<S, T, V>(simd: S, data: &[T]) -> Option<RangeInclusive<T>>
+    where
+        S: Simd,
+        T: ArrayNum + SimdElement,
+        V: SimdBase<S, Element = T>,
+    {
+        let mut scalar_min: Option<T> = None;
+        let mut scalar_max: Option<T> = None;
+        let mut vector_min = V::splat(simd, T::NODATA);
+        let mut vector_max = V::splat(simd, T::NODATA);
 
-            densearrayutil::simd::unary_simd(
-                ras.as_slice(),
-                |&v| {
-                    min = min.nodata_min(v);
-                    max = max.nodata_max(v);
-                },
-                |v| {
-                    simd_min = v.nodata_min(simd_min);
-                    simd_max = v.nodata_max(simd_max);
-                },
-            );
-
-            let min = min.nodata_min(simd_min.reduce_min().unwrap_or(min));
-            let max = max.nodata_max(simd_max.reduce_max().unwrap_or(max));
-
-            match (min.is_nan(), max.is_nan()) {
-                (true, true) => None,
-                (false, false) => Some(min..=max),
-                _ => {
-                    // If a min could not be calculated, it means all values were NaN
-                    // so there should also be no max
-                    panic!("Unexpected NaN values in min_max calculation");
+        densearrayutil::simd::unary_simd::<S, T, V>(
+            simd,
+            data,
+            |&value| {
+                if !value.is_nodata() {
+                    scalar_min = Some(scalar_min.map_or(value, |min| min.nodata_min(value)));
+                    scalar_max = Some(scalar_max.map_or(value, |max| max.nodata_max(value)));
                 }
-            }
-        } else {
-            let mut min = T::max_value();
-            let mut max = T::min_value();
+            },
+            |values| {
+                vector_min = crate::simd::nodata_min::<S, T, V>(vector_min, values);
+                vector_max = crate::simd::nodata_max::<S, T, V>(vector_max, values);
+            },
+        );
 
-            let mut simd_min = Simd::<T, LANES>::splat(min);
-            let mut simd_max = Simd::<T, LANES>::splat(max);
+        if let Some(value) = crate::simd::reduce_min::<S, T, V>(vector_min) {
+            scalar_min = Some(scalar_min.map_or(value, |min| min.nodata_min(value)));
+        }
+        if let Some(value) = crate::simd::reduce_max::<S, T, V>(vector_max) {
+            scalar_max = Some(scalar_max.map_or(value, |max| max.nodata_max(value)));
+        }
 
-            let mut has_data = false;
-            let mut simd_lane_has_data = Mask::splat(false);
-
-            densearrayutil::simd::unary_simd(
-                ras.as_slice(),
-                |&v| {
-                    has_data |= !v.is_nodata();
-                    min = min.nodata_min(v);
-                    max = max.nodata_max(v);
-                },
-                |v| {
-                    let nodata_mask = v.nodata_mask();
-                    //has_simd_data |= !nodata_mask;
-                    simd_min = nodata_mask.select(simd_min, v.min_unchecked(simd_min));
-                    simd_max = nodata_mask.select(simd_max, v.max_unchecked(simd_max));
-                },
-            );
-
-            // A second pass to check for nodata is measured to be faster ???
-            densearrayutil::simd::unary_simd(
-                ras.as_slice(),
-                |_| {},
-                |v| {
-                    simd_lane_has_data |= !v.nodata_mask();
-                },
-            );
-
-            match (has_data, simd_lane_has_data.any()) {
-                (false, false) => return None,
-                (true, false) => {}
-                (false, true) => {
-                    let valid_data = simd_lane_has_data.select(simd_min, Simd::splat(min));
-                    min = valid_data.reduce_min_unchecked();
-                    let valid_data = simd_lane_has_data.select(simd_max, Simd::splat(max));
-                    max = valid_data.reduce_max_unchecked();
-                }
-                (true, true) => {
-                    let valid_data = simd_lane_has_data.select(simd_min, Simd::splat(T::max_value()));
-                    min = min.nodata_min(valid_data.reduce_min_unchecked());
-                    let valid_data = simd_lane_has_data.select(simd_max, Simd::splat(T::min_value()));
-                    max = max.nodata_max(valid_data.reduce_max_unchecked());
-                }
-            }
-
-            Some(min..=max)
+        match (scalar_min, scalar_max) {
+            (Some(min), Some(max)) => Some(min..=max),
+            (None, None) => None,
+            _ => unreachable!("minimum and maximum data presence must match"),
         }
     }
 }
@@ -224,7 +109,6 @@ pub mod simd {
 mod unspecialized_generictests {
 
     use inf::{allocate, cast};
-    use simd_macro::simd_bounds;
 
     use crate::{
         ArrayInterop, CellSize, GeoReference, Point, RasterSize, Result,
@@ -233,13 +117,9 @@ mod unspecialized_generictests {
         testutils::{self, NOD},
     };
 
-    #[cfg(feature = "simd")]
-    const LANES: usize = crate::simd::LANES;
-
     use super::*;
 
     #[test]
-    #[simd_bounds(R::Pixel)]
     fn test_min_max_empty<R>() -> Result<()>
     where
         R: Array<Metadata = GeoReference>,
@@ -262,7 +142,6 @@ mod unspecialized_generictests {
         let range = min_max(&raster);
         assert!(range.is_none());
 
-        #[cfg(feature = "simd")]
         {
             let range_simd = simd::min_max(&raster);
             assert!(range_simd.is_none());
@@ -272,7 +151,6 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_bounds(R::Pixel)]
     fn test_min_max_only_nodata<R>() -> Result<()>
     where
         R: Array<Metadata = GeoReference>,
@@ -299,7 +177,6 @@ mod unspecialized_generictests {
         let range = min_max(&raster);
         assert!(range.is_none());
 
-        #[cfg(feature = "simd")]
         {
             let range_simd = simd::min_max(&raster);
             assert_eq!(range_simd, None);
@@ -309,7 +186,6 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_bounds(R::Pixel)]
     fn test_min_max_single_element<R>() -> Result<()>
     where
         R: Array<Metadata = GeoReference>,
@@ -332,7 +208,6 @@ mod unspecialized_generictests {
         let range = min_max(&raster);
         assert_eq!(range, Some(cast::inclusive_range::<R::Pixel>(5.0..=5.0)?));
 
-        #[cfg(feature = "simd")]
         {
             let range_simd = simd::min_max(&raster);
             assert_eq!(range_simd, range.clone());
@@ -344,7 +219,6 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_bounds(R::Pixel)]
     fn test_min_max_multiple_elements<R>() -> Result<()>
     where
         R: Array<Metadata = GeoReference>,
@@ -371,7 +245,6 @@ mod unspecialized_generictests {
         let range = min_max(&raster);
         assert_eq!(range, Some(cast::inclusive_range(0.0..=2.0)?));
 
-        #[cfg(feature = "simd")]
         {
             let range_simd = simd::min_max(&raster);
             assert_eq!(range_simd, range.clone());
@@ -383,7 +256,6 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_bounds(R::Pixel)]
     fn test_min_max_multiple_elements_nodata<R>() -> Result<()>
     where
         R: Array<Metadata = GeoReference>,
@@ -410,7 +282,6 @@ mod unspecialized_generictests {
         let range = min_max(&raster);
         assert_eq!(range, Some(cast::inclusive_range(-10.0..=21.0)?));
 
-        #[cfg(feature = "simd")]
         {
             let range_simd = simd::min_max(&raster);
             assert_eq!(range_simd, range.clone());
@@ -422,8 +293,6 @@ mod unspecialized_generictests {
     }
 
     #[test]
-    #[simd_bounds(R::Pixel)]
-    #[cfg(feature = "simd")]
     fn test_min_max_random_elements<R>() -> Result<()>
     where
         R: Array<Metadata = GeoReference> + ArrayInterop,

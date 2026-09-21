@@ -1,9 +1,4 @@
-#[cfg(feature = "simd")]
-use crate::NodataSimd;
 use crate::{ArrayDataType, Nodata};
-
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
 
 #[cfg(not(feature = "gdal"))]
 pub trait GdalNum {}
@@ -12,7 +7,7 @@ pub trait GdalNum {}
 #[cfg_attr(docsrs, doc(cfg(feature = "gdal")))]
 pub trait GdalNum: gdal::raster::GdalType {}
 
-pub trait ArrayNumScalar:
+pub trait ArrayNum:
     Copy
     + Nodata
     + num::Num
@@ -72,27 +67,6 @@ pub trait ArrayNumScalar:
         *self = self.div_nodata_aware(other);
     }
 }
-
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
-pub trait ArrayNumSimd: std::simd::SimdElement + std::simd::SimdCast {
-    type Simd: NodataSimd;
-}
-
-#[cfg(feature = "simd")]
-impl<T: std::simd::SimdElement + std::simd::SimdCast> ArrayNumSimd for T
-where
-    std::simd::Simd<T, LANES>: NodataSimd,
-{
-    type Simd = std::simd::Simd<T, LANES>;
-}
-
-#[cfg(not(feature = "simd"))]
-pub trait ArrayNum: ArrayNumScalar {}
-
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
-pub trait ArrayNum: ArrayNumScalar + ArrayNumSimd {}
 
 macro_rules! add_nodata_impl {
     () => {
@@ -271,9 +245,9 @@ macro_rules! div_fp_nodata_impl {
     };
 }
 
-macro_rules! impl_arraynum_scalar_signed {
+macro_rules! impl_arraynum_signed {
     ($t:ty, $raster_type:ident) => {
-        impl ArrayNumScalar for $t {
+        impl ArrayNum for $t {
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
@@ -283,14 +257,13 @@ macro_rules! impl_arraynum_scalar_signed {
             div_nodata_impl!();
         }
 
-        impl ArrayNum for $t {}
         impl GdalNum for $t {}
     };
 }
 
-macro_rules! impl_arraynum_scalar_unsigned {
+macro_rules! impl_arraynum_unsigned {
     ($t:ty, $raster_type:ident) => {
-        impl ArrayNumScalar for $t {
+        impl ArrayNum for $t {
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = false;
 
@@ -300,14 +273,13 @@ macro_rules! impl_arraynum_scalar_unsigned {
             div_nodata_impl!();
         }
 
-        impl ArrayNum for $t {}
         impl GdalNum for $t {}
     };
 }
 
-macro_rules! impl_arraynum_scalar_fp {
+macro_rules! impl_arraynum_fp {
     ($t:ty, $raster_type:ident) => {
-        impl ArrayNumScalar for $t {
+        impl ArrayNum for $t {
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
@@ -317,18 +289,17 @@ macro_rules! impl_arraynum_scalar_fp {
             div_fp_nodata_impl!();
         }
 
-        impl ArrayNum for $t {}
         impl GdalNum for $t {}
     };
 }
 
-impl_arraynum_scalar_signed!(i8, Int8);
-impl_arraynum_scalar_signed!(i16, Int16);
-impl_arraynum_scalar_signed!(i32, Int32);
-impl_arraynum_scalar_signed!(i64, Int64);
-impl_arraynum_scalar_unsigned!(u8, Uint8);
-impl_arraynum_scalar_unsigned!(u16, Uint16);
-impl_arraynum_scalar_unsigned!(u32, Uint32);
-impl_arraynum_scalar_unsigned!(u64, Uint64);
-impl_arraynum_scalar_fp!(f32, Float32);
-impl_arraynum_scalar_fp!(f64, Float64);
+impl_arraynum_signed!(i8, Int8);
+impl_arraynum_signed!(i16, Int16);
+impl_arraynum_signed!(i32, Int32);
+impl_arraynum_signed!(i64, Int64);
+impl_arraynum_unsigned!(u8, Uint8);
+impl_arraynum_unsigned!(u16, Uint16);
+impl_arraynum_unsigned!(u32, Uint32);
+impl_arraynum_unsigned!(u64, Uint64);
+impl_arraynum_fp!(f32, Float32);
+impl_arraynum_fp!(f64, Float64);

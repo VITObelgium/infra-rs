@@ -28,55 +28,94 @@ where
     }
 }
 
-#[cfg(feature = "simd")]
-#[cfg_attr(docsrs, doc(cfg(feature = "simd")))]
 pub mod simd {
-    use simd_macro::simd_bounds;
+    use fearless_simd::{Simd, SimdBase, SimdElement, SimdMask, prelude::*};
 
     use super::*;
-    use crate::densearrayutil;
-    use std::simd::Select;
-    use std::simd::prelude::*;
+    use crate::{densearrayutil, simd::dispatch_array_num_simd};
 
-    const LANES: usize = crate::simd::LANES;
-
-    #[simd_bounds]
     pub fn filter_value<R, T, Meta>(ras: &mut R, value: T)
     where
         T: ArrayNum,
         R: Array<Pixel = T, Metadata = Meta>,
     {
-        let filter_val = Simd::splat(value);
-        densearrayutil::simd::unary_simd_mut(
-            ras.as_mut_slice(),
-            |v| {
-                if *v != value {
-                    *v = T::NODATA;
+        fearless_simd::dispatch!(crate::simd::level(), simd => filter_value_dispatched(simd, ras.as_mut_slice(), value));
+    }
+
+    #[inline(always)]
+    fn filter_value_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], value: T) {
+        macro_rules! run {
+            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr, $value:expr) => {{
+                let data: &mut [$scalar] = bytemuck::cast_slice_mut($data);
+                let value = num::cast::<T, $scalar>($value).expect("ArrayNum type must match its ArrayDataType");
+                filter_value_kernel::<$simd_type, $scalar, $vector>($simd, data, value);
+            }};
+        }
+
+        dispatch_array_num_simd!(T::TYPE, S, run, simd, data, value);
+    }
+
+    #[inline(always)]
+    fn filter_value_kernel<S, T, V>(simd: S, data: &mut [T], value: T)
+    where
+        S: Simd,
+        T: ArrayNum + SimdElement,
+        V: SimdBase<S, Element = T>,
+    {
+        densearrayutil::simd::unary_simd_mut::<S, T, V>(
+            simd,
+            data,
+            |item| {
+                if *item != value {
+                    *item = T::NODATA;
                 }
             },
-            |v| *v = (*v).simd_ne(filter_val).select(Simd::splat(T::NODATA), *v),
+            |items| items.simd_eq(value).select(items, V::splat(simd, T::NODATA)),
         );
     }
 
-    #[simd_bounds]
     pub fn filter<R, T>(ras: &mut R, values_to_include: &[T])
     where
         R: Array<Pixel = T>,
         T: ArrayNum,
     {
-        densearrayutil::simd::unary_simd_mut(
-            ras.as_mut_slice(),
-            |v| {
-                if !values_to_include.contains(v) {
-                    *v = T::NODATA;
+        fearless_simd::dispatch!(crate::simd::level(), simd => filter_dispatched(simd, ras.as_mut_slice(), values_to_include));
+    }
+
+    #[inline(always)]
+    fn filter_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], values_to_include: &[T]) {
+        macro_rules! run {
+            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr, $values:expr) => {{
+                let data: &mut [$scalar] = bytemuck::cast_slice_mut($data);
+                let values: &[$scalar] = bytemuck::cast_slice($values);
+                filter_kernel::<$simd_type, $scalar, $vector>($simd, data, values);
+            }};
+        }
+
+        dispatch_array_num_simd!(T::TYPE, S, run, simd, data, values_to_include);
+    }
+
+    #[inline(always)]
+    fn filter_kernel<S, T, V>(simd: S, data: &mut [T], values_to_include: &[T])
+    where
+        S: Simd,
+        T: ArrayNum + SimdElement,
+        V: SimdBase<S, Element = T>,
+    {
+        densearrayutil::simd::unary_simd_mut::<S, T, V>(
+            simd,
+            data,
+            |item| {
+                if !values_to_include.contains(item) {
+                    *item = T::NODATA;
                 }
             },
-            |v| {
-                let mut mask = Mask::splat(false);
-                for filter_val in values_to_include {
-                    mask |= (*v).simd_eq(Simd::splat(*filter_val));
+            |items| {
+                let mut included = <V::Mask as SimdMask<S>>::splat(simd, false);
+                for &value in values_to_include {
+                    included |= items.simd_eq(value);
                 }
-                *v = (!mask).select(Simd::splat(T::NODATA), *v);
+                included.select(items, V::splat(simd, T::NODATA))
             },
         );
     }
@@ -111,12 +150,10 @@ mod unspecialized_generictests {
         );
 
         let mut raster = R::WithPixelType::<f64>::new(meta.clone(), allocate::new_aligned_vec())?;
-        #[cfg(feature = "simd")]
         let mut simd_raster = raster.clone();
 
         filter(&mut raster, &[1.0, 2.0]);
 
-        #[cfg(feature = "simd")]
         {
             simd::filter(&mut simd_raster, &[1.0, 2.0]);
             assert_eq!(raster, simd_raster);
@@ -140,7 +177,6 @@ mod unspecialized_generictests {
         );
 
         let mut raster = R::WithPixelType::<f64>::new_init_nodata(meta.clone(), allocate::aligned_vec_filled_with(5.0, 1))?;
-        #[cfg(feature = "simd")]
         let mut simd_raster = raster.clone();
 
         filter(&mut raster, &[5.0]);
@@ -149,7 +185,6 @@ mod unspecialized_generictests {
         filter(&mut raster, &[1.0]);
         assert_eq!(raster.value(0), None);
 
-        #[cfg(feature = "simd")]
         {
             simd::filter(&mut simd_raster, &[5.0]);
             assert_eq!(simd_raster.value(0), Some(5.0));
@@ -185,7 +220,6 @@ mod unspecialized_generictests {
             ]),
         )?;
 
-        #[cfg(feature = "simd")]
         let mut simd_raster = raster.clone();
 
         filter(&mut raster, &[5.0]);
@@ -202,7 +236,6 @@ mod unspecialized_generictests {
 
         assert_eq!(expected, raster);
 
-        #[cfg(feature = "simd")]
         {
             simd::filter(&mut simd_raster, &[5.0]);
             assert_eq!(raster, simd_raster);
@@ -235,7 +268,6 @@ mod unspecialized_generictests {
             ]),
         )?;
 
-        #[cfg(feature = "simd")]
         let mut simd_raster = raster.clone();
 
         #[rustfmt::skip]
@@ -251,7 +283,6 @@ mod unspecialized_generictests {
         filter(&mut raster, &[-10.0, 21.0, 2.0]);
         assert_eq!(raster, expected);
 
-        #[cfg(feature = "simd")]
         {
             simd::filter(&mut simd_raster, &[-10.0, 21.0, 2.0]);
             assert_eq!(raster, simd_raster);

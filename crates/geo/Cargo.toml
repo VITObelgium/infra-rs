@@ -2,6 +2,7 @@
 name = "geo"
 version.workspace = true  # inherit from [workspace.package]
 edition.workspace = true
+rust-version.workspace = true
 
 [package.metadata.docs.rs]
 all-features = true
@@ -46,6 +47,7 @@ cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.5", optional = true }
 csv = { version = "1.4", optional = true }
+fearless_simd = "1.0.0-rc.2"
 flate2 = {
   version = "1.1",
   default-features = false,
@@ -87,7 +89,7 @@ pyo3 = { version = "0.29", optional = true }
 rayon = { version = "1.12", optional = true }
 ruzstd = { version = "0.9", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
-simd_macro = { path = "simd_macro" }
+
 specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
 thiserror = "2.0"
 tiff = { version = "0.11.3", default-features = false, optional = true }
@@ -121,6 +123,7 @@ default = [
   "vector-io",
   "vector-processing",
 ]
+allocate = ["inf/allocator"]
 arrow = ["dep:arrow"]
 deflate = ["dep:flate2"]
 derive = ["dep:vector_derive"]
@@ -133,7 +136,6 @@ python = ["arrow", "arrow/pyarrow", "dep:pyo3"]
 raster-io-geotiff = ["dep:lerc-rs", "dep:ruzstd", "dep:tiff", "dep:weezl", "dep:xml-rs"]
 rayon = ["dep:rayon"]
 serde = ["dep:serde"]
-simd = ["inf/allocator", "simd_macro/simd"]
 specta = ["dep:specta"]
 vector-io = ["dep:chrono"]
 vector-io-csv = ["dep:csv", "vector-io"]

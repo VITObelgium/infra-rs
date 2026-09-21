@@ -12,9 +12,6 @@ use inf::{
 };
 use num::NumCast;
 
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
 /// Raster implementation using a dense data structure.
 /// The nodata values are stored as the [`crate::Nodata::NODATA`] for the type T in the same array data structure
 /// So no additional data is allocated for tracking nodata cells.
@@ -24,31 +21,22 @@ pub struct DenseArray<T: ArrayNum, Metadata: ArrayMetadata = RasterMetadata> {
     pub(super) data: AlignedVec<T>,
 }
 
-/// Clone for `DenseArray`
-/// When simd is enabled we need to ensure that the cloned vec is properly aligned.
 impl<T: Clone + ArrayNum, Metadata: Clone + ArrayMetadata> Clone for DenseArray<T, Metadata> {
     #[inline]
     fn clone(&self) -> DenseArray<T, Metadata> {
-        #[cfg(feature = "simd")]
-        {
+        #[cfg(feature = "allocate")]
+        let data = {
             let mut data = allocate::aligned_vec_with_capacity(self.data.len());
-            unsafe {
-                // SAFETY: We allocated with len capacituy, so we can safely set the length
-                data.set_len(self.data.len());
-            }
-            data.copy_from_slice(self.data.as_slice());
+            data.extend_from_slice(&self.data);
+            data
+        };
 
-            DenseArray {
-                meta: Clone::clone(&self.meta),
-                data,
-            }
-        }
+        #[cfg(not(feature = "allocate"))]
+        let data = self.data.clone();
 
-        #[cfg(not(feature = "simd"))]
-        // If simd is not enabled, we can just clone the data directly
         DenseArray {
-            meta: Clone::clone(&self.meta),
-            data: Clone::clone(&self.data),
+            meta: self.meta.clone(),
+            data,
         }
     }
 }
@@ -65,10 +53,13 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> DenseArray<T, Metadata> {
     }
 
     pub fn into_raw_parts_global_alloc(self) -> (Metadata, Vec<T>) {
-        #[cfg(feature = "simd")]
-        return (self.meta, self.data.to_vec_in(std::alloc::Global));
-        #[cfg(not(feature = "simd"))]
-        return (self.meta, self.data);
+        #[cfg(feature = "allocate")]
+        let data = self.data.to_vec_in(std::alloc::Global);
+
+        #[cfg(not(feature = "allocate"))]
+        let data = self.data;
+
+        (self.meta, data)
     }
 
     pub fn unary(&self, op: impl Fn(T) -> T) -> Self {
@@ -333,7 +324,6 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> Array for DenseArray<T, Metadata> {
     }
 }
 
-#[simd_macro::simd_bounds]
 impl<T: ArrayNum, Metadata: ArrayMetadata> ArrayInterop for DenseArray<T, Metadata> {
     fn new_init_nodata(meta: Self::Metadata, data: AlignedVec<Self::Pixel>) -> Result<Self> {
         let mut raster = Self::new(meta, data)?;

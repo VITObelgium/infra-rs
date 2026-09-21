@@ -1827,9 +1827,9 @@ dependencies = [
 
 [[package]]
 name = "fearless_simd"
-version = "1.0.0-rc.1"
+version = "1.0.0-rc.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "50a2d1ad65a201b433ff546990c72c804305bb2162f8c09707dd7f9125210b55"
+checksum = "93cba5fa02824e5d3ef137031efa604eafe7ce8a52b8dbfcdd9943eec39fa4fc"
 
 [[package]]
 name = "filedescriptor"
@@ -2098,6 +2098,7 @@ dependencies = [
  "csv",
  "ctor",
  "env_logger",
+ "fearless_simd",
  "flate2",
  "gdal",
  "gdal-sys",
@@ -2122,7 +2123,6 @@ dependencies = [
  "rayon",
  "ruzstd",
  "serde",
- "simd_macro",
  "specta",
  "tempfile",
  "test-log",
@@ -5091,7 +5091,6 @@ dependencies = [
  "num",
  "path_macro",
  "png",
- "simd_macro",
  "thiserror 2.0.20",
  "tokio",
  "wasm-bindgen",
@@ -5918,15 +5917,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "95890f873bec569a0362c235787f3aca6e1e887302ba4840839bcc6459c42da6"
 dependencies = [
  "quote",
-]
-
-[[package]]
-name = "simd_macro"
-version = "2026.9.2"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]

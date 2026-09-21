@@ -4,10 +4,6 @@ use crate::array::ArrayInterop as _;
 use crate::raster::{self, RasterReadWrite, WriteRasterOptions};
 use crate::{Array, ArrayMetadata, ArrayNum, DenseArray, GeoReference, Result};
 
-#[cfg(feature = "simd")]
-const LANES: usize = crate::simd::LANES;
-
-#[simd_macro::simd_bounds]
 impl<T: ArrayNum, Metadata: ArrayMetadata> RasterReadWrite for DenseArray<T, Metadata> {
     fn read(path: impl AsRef<Path>) -> Result<Self> {
         Self::read_band(path, 1)
