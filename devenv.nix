@@ -205,6 +205,7 @@ in
     just
     lld
     cargo-nextest
+    sccache
     trivy
     just
     pkg-config
@@ -219,6 +220,7 @@ in
   env = {
     LD_LIBRARY_PATH = lib.makeLibraryPath [ pkgs.stdenv.cc.cc.lib ];
     CARGO_TERM_COLOR = "always";
+    RUSTC_WRAPPER = "${pkgs.sccache}/bin/sccache";
   };
 
   scripts.createcog.exec = ''
