@@ -782,7 +782,8 @@ where
     for &cell in cells.iter() {
         assert!(distance_to_target[cell] <= max_travel_time);
         if !value_to_sum.cell_is_nodata(cell) {
-            sum += NumCast::from(value_to_sum[cell]).expect("Failed to cast value to TResult");
+            let value: TResult = NumCast::from(value_to_sum[cell]).expect("Failed to cast value to TResult");
+            sum += value;
         }
         assert_eq!(mark[cell], MARK_DONE);
         mark[cell] = MARK_TODO;
@@ -799,7 +800,8 @@ where
                 && mark[cell] == MARK_TODO
             {
                 if !value_to_sum.cell_is_nodata(cell) {
-                    sum += NumCast::from(value_to_sum[cell]).expect("Failed to cast value to TResult");
+                    let value: TResult = NumCast::from(value_to_sum[cell]).expect("Failed to cast value to TResult");
+                    sum += value;
                 }
                 mark[cell] = MARK_DONE;
                 adjacent_cells.push(cell);
@@ -938,7 +940,7 @@ where
     // FLT_MAX/4 allows to add 2 x sqrt(2) of them and still be less than FLT_MAX
     let resistance = nodata::replace_nodata(
         resistance_map,
-        ResistanceRaster::Pixel::max_value() / NumCast::from(4.0).expect("Failed to cast 4.0"),
+        ResistanceRaster::Pixel::max_value() / <ResistanceRaster::Pixel as NumCast>::from(4.0).expect("Failed to cast 4.0"),
     );
 
     for r in 0..rows.count() {
@@ -967,7 +969,7 @@ where
                 mark[cur_cell] = MARK_DONE;
                 if distance_to_target[cur_cell] <= max_resistance && added[cur_cell] == 0 {
                     // we can get here via different routes within the maxTravelTime.  But count only once.
-                    result[cur_cell] += NumCast::from(targets[cell]).expect("Failed to cast target to TResult");
+                    result[cur_cell] += <TResult as NumCast>::from(targets[cell]).expect("Failed to cast target to TResult");
                     added[cur_cell] = 1;
                 }
 

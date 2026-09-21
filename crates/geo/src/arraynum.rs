@@ -1,4 +1,5 @@
 use crate::{ArrayDataType, Nodata};
+use fearless_simd::{Simd, SimdBase, SimdElement};
 
 #[cfg(not(feature = "gdal"))]
 pub trait GdalNum {}
@@ -20,10 +21,13 @@ pub trait ArrayNum:
     + approx::AbsDiffEq<Epsilon = Self>
     + bytemuck::AnyBitPattern
     + bytemuck::NoUninit
+    + SimdElement
     + GdalNum
     + Send
     + Sync
 {
+    type SimdVector<S: Simd>: SimdBase<S, Element = Self>;
+
     const TYPE: ArrayDataType;
     const IS_SIGNED: bool;
 
@@ -246,8 +250,10 @@ macro_rules! div_fp_nodata_impl {
 }
 
 macro_rules! impl_arraynum_signed {
-    ($t:ty, $raster_type:ident) => {
+    ($t:ty, $raster_type:ident, $vector:ident) => {
         impl ArrayNum for $t {
+            type SimdVector<S: Simd> = S::$vector;
+
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
@@ -262,8 +268,10 @@ macro_rules! impl_arraynum_signed {
 }
 
 macro_rules! impl_arraynum_unsigned {
-    ($t:ty, $raster_type:ident) => {
+    ($t:ty, $raster_type:ident, $vector:ident) => {
         impl ArrayNum for $t {
+            type SimdVector<S: Simd> = S::$vector;
+
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = false;
 
@@ -278,8 +286,10 @@ macro_rules! impl_arraynum_unsigned {
 }
 
 macro_rules! impl_arraynum_fp {
-    ($t:ty, $raster_type:ident) => {
+    ($t:ty, $raster_type:ident, $vector:ident) => {
         impl ArrayNum for $t {
+            type SimdVector<S: Simd> = S::$vector;
+
             const TYPE: ArrayDataType = ArrayDataType::$raster_type;
             const IS_SIGNED: bool = true;
 
@@ -293,13 +303,13 @@ macro_rules! impl_arraynum_fp {
     };
 }
 
-impl_arraynum_signed!(i8, Int8);
-impl_arraynum_signed!(i16, Int16);
-impl_arraynum_signed!(i32, Int32);
-impl_arraynum_signed!(i64, Int64);
-impl_arraynum_unsigned!(u8, Uint8);
-impl_arraynum_unsigned!(u16, Uint16);
-impl_arraynum_unsigned!(u32, Uint32);
-impl_arraynum_unsigned!(u64, Uint64);
-impl_arraynum_fp!(f32, Float32);
-impl_arraynum_fp!(f64, Float64);
+impl_arraynum_signed!(i8, Int8, i8s);
+impl_arraynum_signed!(i16, Int16, i16s);
+impl_arraynum_signed!(i32, Int32, i32s);
+impl_arraynum_signed!(i64, Int64, i64s);
+impl_arraynum_unsigned!(u8, Uint8, u8s);
+impl_arraynum_unsigned!(u16, Uint16, u16s);
+impl_arraynum_unsigned!(u32, Uint32, u32s);
+impl_arraynum_unsigned!(u64, Uint64, u64s);
+impl_arraynum_fp!(f32, Float32, f32s);
+impl_arraynum_fp!(f64, Float64, f64s);

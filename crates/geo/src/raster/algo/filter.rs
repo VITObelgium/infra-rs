@@ -29,40 +29,26 @@ where
 }
 
 pub mod simd {
-    use fearless_simd::{Simd, SimdBase, SimdElement, SimdMask, prelude::*};
+    use fearless_simd::{Simd, SimdBase, SimdMask, prelude::*};
 
     use super::*;
-    use crate::{densearrayutil, simd::dispatch_array_num_simd};
+    use crate::densearrayutil;
 
     pub fn filter_value<R, T, Meta>(ras: &mut R, value: T)
     where
         T: ArrayNum,
         R: Array<Pixel = T, Metadata = Meta>,
     {
-        fearless_simd::dispatch!(crate::simd::level(), simd => filter_value_dispatched(simd, ras.as_mut_slice(), value));
+        fearless_simd::dispatch!(crate::simd::level(), simd => filter_value_kernel(simd, ras.as_mut_slice(), value));
     }
 
     #[inline(always)]
-    fn filter_value_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], value: T) {
-        macro_rules! run {
-            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr, $value:expr) => {{
-                let data: &mut [$scalar] = bytemuck::cast_slice_mut($data);
-                let value = num::cast::<T, $scalar>($value).expect("ArrayNum type must match its ArrayDataType");
-                filter_value_kernel::<$simd_type, $scalar, $vector>($simd, data, value);
-            }};
-        }
-
-        dispatch_array_num_simd!(T::TYPE, S, run, simd, data, value);
-    }
-
-    #[inline(always)]
-    fn filter_value_kernel<S, T, V>(simd: S, data: &mut [T], value: T)
+    fn filter_value_kernel<S, T>(simd: S, data: &mut [T], value: T)
     where
         S: Simd,
-        T: ArrayNum + SimdElement,
-        V: SimdBase<S, Element = T>,
+        T: ArrayNum,
     {
-        densearrayutil::simd::unary_simd_mut::<S, T, V>(
+        densearrayutil::simd::unary_simd_mut::<S, T, T::SimdVector<S>>(
             simd,
             data,
             |item| {
@@ -70,7 +56,7 @@ pub mod simd {
                     *item = T::NODATA;
                 }
             },
-            |items| items.simd_eq(value).select(items, V::splat(simd, T::NODATA)),
+            |items| items.simd_eq(value).select(items, T::SimdVector::<S>::splat(simd, T::NODATA)),
         );
     }
 
@@ -79,30 +65,16 @@ pub mod simd {
         R: Array<Pixel = T>,
         T: ArrayNum,
     {
-        fearless_simd::dispatch!(crate::simd::level(), simd => filter_dispatched(simd, ras.as_mut_slice(), values_to_include));
+        fearless_simd::dispatch!(crate::simd::level(), simd => filter_kernel(simd, ras.as_mut_slice(), values_to_include));
     }
 
     #[inline(always)]
-    fn filter_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], values_to_include: &[T]) {
-        macro_rules! run {
-            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr, $values:expr) => {{
-                let data: &mut [$scalar] = bytemuck::cast_slice_mut($data);
-                let values: &[$scalar] = bytemuck::cast_slice($values);
-                filter_kernel::<$simd_type, $scalar, $vector>($simd, data, values);
-            }};
-        }
-
-        dispatch_array_num_simd!(T::TYPE, S, run, simd, data, values_to_include);
-    }
-
-    #[inline(always)]
-    fn filter_kernel<S, T, V>(simd: S, data: &mut [T], values_to_include: &[T])
+    fn filter_kernel<S, T>(simd: S, data: &mut [T], values_to_include: &[T])
     where
         S: Simd,
-        T: ArrayNum + SimdElement,
-        V: SimdBase<S, Element = T>,
+        T: ArrayNum,
     {
-        densearrayutil::simd::unary_simd_mut::<S, T, V>(
+        densearrayutil::simd::unary_simd_mut::<S, T, T::SimdVector<S>>(
             simd,
             data,
             |item| {
@@ -111,11 +83,11 @@ pub mod simd {
                 }
             },
             |items| {
-                let mut included = <V::Mask as SimdMask<S>>::splat(simd, false);
+                let mut included = <<T::SimdVector<S> as SimdBase<S>>::Mask as SimdMask<S>>::splat(simd, false);
                 for &value in values_to_include {
                     included |= items.simd_eq(value);
                 }
-                included.select(items, V::splat(simd, T::NODATA))
+                included.select(items, T::SimdVector::<S>::splat(simd, T::NODATA))
             },
         );
     }

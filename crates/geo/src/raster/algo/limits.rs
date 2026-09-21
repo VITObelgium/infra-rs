@@ -17,10 +17,10 @@ where
 }
 
 pub mod simd {
-    use fearless_simd::{Simd, SimdBase, SimdElement};
+    use fearless_simd::{Simd, SimdBase};
 
     use super::*;
-    use crate::{densearrayutil, simd::dispatch_array_num_simd};
+    use crate::densearrayutil;
 
     pub fn min<R, T, Meta>(ras: &R) -> Option<T>
     where
@@ -43,38 +43,21 @@ pub mod simd {
         T: ArrayNum,
         R: Array<Pixel = T, Metadata = Meta>,
     {
-        fearless_simd::dispatch!(crate::simd::level(), simd => min_max_dispatched(simd, ras.as_slice()))
+        fearless_simd::dispatch!(crate::simd::level(), simd => min_max_kernel(simd, ras.as_slice()))
     }
 
     #[inline(always)]
-    fn min_max_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &[T]) -> Option<RangeInclusive<T>> {
-        macro_rules! run {
-            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr) => {{
-                let data: &[$scalar] = bytemuck::cast_slice($data);
-                min_max_kernel::<$simd_type, $scalar, $vector>($simd, data).map(|range| {
-                    let min = num::cast::<$scalar, T>(*range.start()).expect("ArrayNum type must match its ArrayDataType");
-                    let max = num::cast::<$scalar, T>(*range.end()).expect("ArrayNum type must match its ArrayDataType");
-                    min..=max
-                })
-            }};
-        }
-
-        dispatch_array_num_simd!(T::TYPE, S, run, simd, data)
-    }
-
-    #[inline(always)]
-    fn min_max_kernel<S, T, V>(simd: S, data: &[T]) -> Option<RangeInclusive<T>>
+    fn min_max_kernel<S, T>(simd: S, data: &[T]) -> Option<RangeInclusive<T>>
     where
         S: Simd,
-        T: ArrayNum + SimdElement,
-        V: SimdBase<S, Element = T>,
+        T: ArrayNum,
     {
         let mut scalar_min: Option<T> = None;
         let mut scalar_max: Option<T> = None;
-        let mut vector_min = V::splat(simd, T::NODATA);
-        let mut vector_max = V::splat(simd, T::NODATA);
+        let mut vector_min = T::SimdVector::<S>::splat(simd, T::NODATA);
+        let mut vector_max = T::SimdVector::<S>::splat(simd, T::NODATA);
 
-        densearrayutil::simd::unary_simd::<S, T, V>(
+        densearrayutil::simd::unary_simd::<S, T, T::SimdVector<S>>(
             simd,
             data,
             |&value| {
@@ -84,15 +67,15 @@ pub mod simd {
                 }
             },
             |values| {
-                vector_min = crate::simd::nodata_min::<S, T, V>(vector_min, values);
-                vector_max = crate::simd::nodata_max::<S, T, V>(vector_max, values);
+                vector_min = crate::simd::nodata_min::<S, T, T::SimdVector<S>>(vector_min, values);
+                vector_max = crate::simd::nodata_max::<S, T, T::SimdVector<S>>(vector_max, values);
             },
         );
 
-        if let Some(value) = crate::simd::reduce_min::<S, T, V>(vector_min) {
+        if let Some(value) = crate::simd::reduce_min::<S, T, T::SimdVector<S>>(vector_min) {
             scalar_min = Some(scalar_min.map_or(value, |min| min.nodata_min(value)));
         }
-        if let Some(value) = crate::simd::reduce_max::<S, T, V>(vector_max) {
+        if let Some(value) = crate::simd::reduce_max::<S, T, T::SimdVector<S>>(vector_max) {
             scalar_max = Some(scalar_max.map_or(value, |max| max.nodata_max(value)));
         }
 

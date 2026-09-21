@@ -44,7 +44,7 @@ pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: Option<T>) {
 pub mod simd {
     use fearless_simd::{Simd, SimdBase, SimdElement};
 
-    use crate::{ArrayNum, Nodata, simd::dispatch_array_num_simd};
+    use crate::{ArrayNum, Nodata};
 
     #[inline(always)]
     pub fn unary_simd<S, T, V>(simd: S, data: &[T], mut cb_scalar: impl FnMut(&T), mut cb_simd: impl FnMut(V))
@@ -76,49 +76,33 @@ pub mod simd {
 
     #[allow(dead_code)]
     pub fn init_nodata<T: ArrayNum>(data: &mut [T], nodata: T) {
-        fearless_simd::dispatch!(crate::simd::level(), simd => init_nodata_dispatched(simd, data, nodata));
+        fearless_simd::dispatch!(crate::simd::level(), simd => init_nodata_kernel(simd, data, nodata));
     }
 
     #[allow(dead_code)]
     #[inline(always)]
-    fn init_nodata_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], nodata: T) {
-        macro_rules! run {
-            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr, $nodata:expr) => {{
-                let data: &mut [$scalar] = bytemuck::cast_slice_mut($data);
-                let nodata = num::cast::<T, $scalar>($nodata).expect("ArrayNum type must match its ArrayDataType");
-                unary_simd_mut::<$simd_type, $scalar, $vector>(
-                    $simd,
-                    data,
-                    |value| Nodata::init_nodata(value, nodata),
-                    |value| crate::simd::init_nodata::<$simd_type, $scalar, $vector>(value, nodata),
-                );
-            }};
-        }
-
-        dispatch_array_num_simd!(T::TYPE, S, run, simd, data, nodata);
+    fn init_nodata_kernel<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], nodata: T) {
+        unary_simd_mut::<S, T, T::SimdVector<S>>(
+            simd,
+            data,
+            |value| Nodata::init_nodata(value, nodata),
+            |value| crate::simd::init_nodata::<S, T, T::SimdVector<S>>(value, nodata),
+        );
     }
 
     #[allow(dead_code)]
     pub fn restore_nodata<T: ArrayNum>(data: &mut [T], nodata: T) {
-        fearless_simd::dispatch!(crate::simd::level(), simd => restore_nodata_dispatched(simd, data, nodata));
+        fearless_simd::dispatch!(crate::simd::level(), simd => restore_nodata_kernel(simd, data, nodata));
     }
 
     #[allow(dead_code)]
     #[inline(always)]
-    fn restore_nodata_dispatched<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], nodata: T) {
-        macro_rules! run {
-            ($simd_type:ty, $scalar:ty, $vector:ty, $simd:expr, $data:expr, $nodata:expr) => {{
-                let data: &mut [$scalar] = bytemuck::cast_slice_mut($data);
-                let nodata = num::cast::<T, $scalar>($nodata).expect("ArrayNum type must match its ArrayDataType");
-                unary_simd_mut::<$simd_type, $scalar, $vector>(
-                    $simd,
-                    data,
-                    |value| Nodata::restore_nodata(value, nodata),
-                    |value| crate::simd::restore_nodata::<$simd_type, $scalar, $vector>(value, nodata),
-                );
-            }};
-        }
-
-        dispatch_array_num_simd!(T::TYPE, S, run, simd, data, nodata);
+    fn restore_nodata_kernel<S: Simd, T: ArrayNum>(simd: S, data: &mut [T], nodata: T) {
+        unary_simd_mut::<S, T, T::SimdVector<S>>(
+            simd,
+            data,
+            |value| Nodata::restore_nodata(value, nodata),
+            |value| crate::simd::restore_nodata::<S, T, T::SimdVector<S>>(value, nodata),
+        );
     }
 }

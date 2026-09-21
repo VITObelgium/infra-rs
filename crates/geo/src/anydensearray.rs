@@ -117,7 +117,7 @@ impl<Metadata: ArrayMetadata> AnyDenseArray<Metadata> {
     }
 
     pub fn cell_value<T: ArrayNum>(&self, cell: Cell) -> Option<T> {
-        dispatch_anydensearray!(self, arr, arr.cell_value(cell).and_then(|v| T::from(v)))
+        dispatch_anydensearray!(self, arr, arr.cell_value(cell).and_then(<T as num::NumCast>::from))
     }
 
     pub fn with_metadata<M: ArrayMetadata>(self, meta: M) -> Result<AnyDenseArray<M>> {

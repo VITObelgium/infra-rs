@@ -12,25 +12,6 @@ pub fn level() -> Level {
     *LEVEL.get_or_init(Level::new)
 }
 
-macro_rules! dispatch_array_num_simd {
-    ($data_type:expr, $simd_type:ty, $callback:ident $(, $arg:expr)* $(,)?) => {
-        match $data_type {
-            crate::ArrayDataType::Uint8 => $callback!($simd_type, u8, <$simd_type as fearless_simd::Simd>::u8s $(, $arg)*),
-            crate::ArrayDataType::Uint16 => $callback!($simd_type, u16, <$simd_type as fearless_simd::Simd>::u16s $(, $arg)*),
-            crate::ArrayDataType::Uint32 => $callback!($simd_type, u32, <$simd_type as fearless_simd::Simd>::u32s $(, $arg)*),
-            crate::ArrayDataType::Uint64 => $callback!($simd_type, u64, <$simd_type as fearless_simd::Simd>::u64s $(, $arg)*),
-            crate::ArrayDataType::Int8 => $callback!($simd_type, i8, <$simd_type as fearless_simd::Simd>::i8s $(, $arg)*),
-            crate::ArrayDataType::Int16 => $callback!($simd_type, i16, <$simd_type as fearless_simd::Simd>::i16s $(, $arg)*),
-            crate::ArrayDataType::Int32 => $callback!($simd_type, i32, <$simd_type as fearless_simd::Simd>::i32s $(, $arg)*),
-            crate::ArrayDataType::Int64 => $callback!($simd_type, i64, <$simd_type as fearless_simd::Simd>::i64s $(, $arg)*),
-            crate::ArrayDataType::Float32 => $callback!($simd_type, f32, <$simd_type as fearless_simd::Simd>::f32s $(, $arg)*),
-            crate::ArrayDataType::Float64 => $callback!($simd_type, f64, <$simd_type as fearless_simd::Simd>::f64s $(, $arg)*),
-        }
-    };
-}
-
-pub(crate) use dispatch_array_num_simd;
-
 #[inline(always)]
 pub(crate) fn nodata_mask<S, T, V>(value: V) -> V::Mask
 where
