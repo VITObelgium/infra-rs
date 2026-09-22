@@ -47,7 +47,7 @@ cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.5", optional = true }
 csv = { version = "1.4", optional = true }
-fearless_simd = "1.0.0-rc.2"
+fearless_simd = "1.0"
 flate2 = {
   version = "1.1",
   default-features = false,
