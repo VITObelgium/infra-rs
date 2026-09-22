@@ -1052,7 +1052,7 @@ dependencies = [
 
 [[package]]
 name = "cog-analyzer"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "anyhow",
  "clap",
@@ -1247,7 +1247,7 @@ dependencies = [
 
 [[package]]
 name = "createcog"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "anyhow",
  "clap",
@@ -1262,7 +1262,7 @@ dependencies = [
 
 [[package]]
 name = "creatembtiles"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "clap",
  "env_logger",
@@ -2084,7 +2084,7 @@ dependencies = [
 
 [[package]]
 name = "geo"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "approx",
  "arrow",
@@ -2713,7 +2713,7 @@ dependencies = [
 
 [[package]]
 name = "inf"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "approx",
  "bytemuck",
@@ -5082,7 +5082,7 @@ dependencies = [
 
 [[package]]
 name = "raster-tile"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "futures",
  "geo",
@@ -5988,7 +5988,7 @@ dependencies = [
 
 [[package]]
 name = "sqlite"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "inf",
  "libsqlite3-sys",
@@ -6402,7 +6402,7 @@ dependencies = [
 
 [[package]]
 name = "tiler"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "approx",
  "ctor",
@@ -6429,7 +6429,7 @@ dependencies = [
 
 [[package]]
 name = "tiles2raster"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "clap",
  "comfy-table",
@@ -6449,7 +6449,7 @@ dependencies = [
 
 [[package]]
 name = "tileserver"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "axum",
  "clap",
@@ -6911,7 +6911,7 @@ checksum = "accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426"
 
 [[package]]
 name = "vector_derive"
-version = "2026.9.2"
+version = "2026.9.14"
 dependencies = [
  "inf",
  "proc-macro2",
