@@ -38,6 +38,10 @@ build_nofeatures:
 build_allfeatures:
     cargo build --workspace --release --features=serde,gdal-static,arrow,derive,vector,vector-processing,vector-io-xlsx,vector-io-csv,polars,proj4rs,tui,deflate
 
+[unix]
+verify_flake:
+    nix build .#createcog .#tiles2raster .#tileserver
+
 build: build_release
 
 [windows]
