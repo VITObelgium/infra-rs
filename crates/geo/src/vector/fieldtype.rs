@@ -162,6 +162,7 @@ impl VectorFieldType for String {
             Field::String(val) => Ok(Some(val)),
             Field::Boolean(val) => Ok(Some(val.to_string())),
             Field::DateTime(val) => Ok(Some(val.to_string())),
+            Field::Binary(val) => Ok(Some(String::from_utf8_lossy(&val).into_owned())),
         }
     }
 }

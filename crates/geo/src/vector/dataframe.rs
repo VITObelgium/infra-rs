@@ -31,6 +31,7 @@ pub enum FieldType {
     Float,
     Boolean,
     DateTime,
+    Binary,
     Native,
 }
 
@@ -41,6 +42,7 @@ pub enum Field {
     Float(f64),
     Boolean(bool),
     DateTime(chrono::NaiveDateTime),
+    Binary(Vec<u8>),
 }
 
 impl Field {
@@ -60,12 +62,14 @@ impl Field {
             FieldType::DateTime => Ok(Some(Field::DateTime(
                 parse_date_str(val).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
             ))),
+            FieldType::Binary => Ok(Some(Field::Binary(val.as_bytes().to_vec()))),
         }
     }
 
     pub fn from_string(val: String, requested_type: FieldType) -> Result<Option<Field>> {
         match requested_type {
             FieldType::String => Ok(Some(Field::String(val))),
+            FieldType::Binary => Ok(Some(Field::Binary(val.into_bytes()))),
             _ => Field::from_str(&val, requested_type),
         }
     }
@@ -81,6 +85,7 @@ impl Field {
             FieldType::DateTime => Ok(Some(Field::DateTime(
                 fieldtype::date_from_integer(val).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
             ))),
+            FieldType::Binary => Err(Error::Runtime("Can not convert an integer field to binary".into())),
         }
     }
 
@@ -95,6 +100,15 @@ impl Field {
             FieldType::DateTime => Ok(Some(Field::DateTime(
                 fieldtype::date_from_integer(val as i64).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
             ))),
+            FieldType::Binary => Err(Error::Runtime("Can not convert a float field to binary".into())),
+        }
+    }
+
+    pub fn from_binary(val: Vec<u8>, requested_type: FieldType) -> Result<Option<Field>> {
+        match requested_type {
+            FieldType::Binary | FieldType::Native => Ok(Some(Field::Binary(val))),
+            FieldType::String => Ok(Some(Field::String(String::from_utf8_lossy(&val).into_owned()))),
+            _ => Err(Error::Runtime("Can not convert a binary field to the requested type".into())),
         }
     }
 
@@ -107,6 +121,7 @@ impl Field {
             FieldType::DateTime => Ok(Some(Field::DateTime(
                 fieldtype::date_from_integer(val as i64).ok_or_else(|| Error::Runtime(format!("Not a valid date value: '{}'", val)))?,
             ))),
+            FieldType::Binary => Err(Error::Runtime("Can not convert a boolean field to binary".into())),
         }
     }
 }
@@ -274,6 +289,7 @@ pub mod polars {
                         Field::DateTime(v) => {
                             AnyValue::Datetime(v.and_utc().timestamp_nanos_opt().unwrap_or(0), TimeUnit::Nanoseconds, None)
                         }
+                        Field::Binary(v) => AnyValue::BinaryOwned(v),
                     });
                 } else {
                     column.push(AnyValue::Null);
@@ -472,7 +488,7 @@ mod tests {
 
 #[cfg(all(test, feature = "gdal", feature = "polars"))]
 mod gdal_tests {
-    use super::DataFrameOptions;
+    use super::{DataFrameOptions, FieldInfo, FieldType, Schema};
     use crate::Result;
     use crate::vector::dataframe::DataFrameReader;
     use crate::vector::readers::GdalReader;
@@ -494,21 +510,33 @@ mod gdal_tests {
         assert_eq!(layer_names, vec!["metadata", "tiles"]);
 
         let options = DataFrameOptions {
-            layer: Some("metadata".to_string()),
+            layer: Some("tiles".to_string()),
             ..Default::default()
         };
         let schema = reader.schema(&options)?;
         assert_eq!(
             schema.fields.iter().map(|field| field.name()).collect::<Vec<_>>(),
-            vec!["name", "value"]
+            vec!["zoom_level", "tile_column", "tile_row", "tile_data"]
         );
+        assert_eq!(schema.fields[3].field_type(), super::FieldType::Binary);
 
         let dataframe = super::polars::read_dataframe(&database_path, &options)?;
         assert_eq!(
             dataframe.get_column_names().iter().map(|name| name.as_str()).collect::<Vec<_>>(),
-            vec!["name", "value"]
+            vec!["zoom_level", "tile_column", "tile_row", "tile_data"]
         );
+        assert_eq!(dataframe.column("tile_data")?.dtype(), &::polars::prelude::DataType::Binary);
+        assert!(dataframe.column("tile_data")?.binary()?.get(0).is_some_and(|data| !data.is_empty()));
         assert!(dataframe.shape().0 > 0);
+
+        let override_options = DataFrameOptions {
+            layer: Some("tiles".to_string()),
+            schema_override: Some(Schema {
+                fields: vec![FieldInfo::new("tile_data", FieldType::String)],
+            }),
+            ..Default::default()
+        };
+        assert!(reader.iter_rows(&override_options).is_err());
 
         Ok(())
     }

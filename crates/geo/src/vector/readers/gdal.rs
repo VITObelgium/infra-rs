@@ -53,6 +53,7 @@ fn map_ogr_field_type_to_field_type(ogr_type: OGRFieldType::Type) -> FieldType {
     match ogr_type {
         OGRFieldType::OFTInteger | OGRFieldType::OFTInteger64 => FieldType::Integer,
         OGRFieldType::OFTReal => FieldType::Float,
+        OGRFieldType::OFTBinary => FieldType::Binary,
         OGRFieldType::OFTDateTime | OGRFieldType::OFTDate | OGRFieldType::OFTTime => FieldType::DateTime,
         _ => FieldType::String, // Default to string for unsupported types
     }
@@ -124,12 +125,30 @@ impl GdalRowIterator {
             .fields
             .iter()
             .map(|schema_field| {
-                Ok((
-                    schema_field.field_type(),
-                    layer.defn().field_index(schema_field.name()).map_err(|_| {
+                let field_index = layer.defn().field_index(schema_field.name()).map_err(|_| {
+                    Error::InvalidArgument(format!("Field '{}' not found in layer '{}'", schema_field.name(), layer.name()))
+                })?;
+                let source_field_type = layer
+                    .defn()
+                    .fields()
+                    .nth(field_index)
+                    .map(|field| map_ogr_field_type_to_field_type(field.field_type()))
+                    .ok_or_else(|| {
                         Error::InvalidArgument(format!("Field '{}' not found in layer '{}'", schema_field.name(), layer.name()))
-                    })?,
-                ))
+                    })?;
+                let requested_field_type = match schema_field.field_type() {
+                    FieldType::Native => source_field_type,
+                    field_type => field_type,
+                };
+                if requested_field_type != source_field_type
+                    && (source_field_type == FieldType::Binary || requested_field_type == FieldType::Binary)
+                {
+                    return Err(Error::InvalidArgument(format!(
+                        "Binary field '{}' type can not be overridden",
+                        schema_field.name()
+                    )));
+                }
+                Ok((requested_field_type, field_index))
             })
             .collect::<Result<Vec<(FieldType, usize)>>>()?;
 
@@ -147,7 +166,22 @@ impl GdalRowIterator {
         })
     }
 
+    fn read_binary_field(feature: &Feature, index: usize, field_type: FieldType) -> Result<Option<Field>> {
+        let mut byte_count = 0;
+        let data = unsafe { gdal_sys::OGR_F_GetFieldAsBinary(feature.c_feature(), index as i32, &mut byte_count) };
+        let bytes = if data.is_null() {
+            Vec::new()
+        } else {
+            unsafe { std::slice::from_raw_parts(data, byte_count as usize).to_vec() }
+        };
+        Field::from_binary(bytes, field_type)
+    }
+
     fn read_feature_field_as(feature: &Feature, index: usize, field_type: FieldType) -> Result<Option<Field>> {
+        if field_type == FieldType::Binary {
+            return Self::read_binary_field(feature, index, field_type);
+        }
+
         match feature.field(index)? {
             Some(f) => convert_field_value_to_field(f, field_type),
             None => Ok(None),
