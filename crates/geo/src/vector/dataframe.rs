@@ -470,6 +470,50 @@ mod tests {
     }
 }
 
+#[cfg(all(test, feature = "gdal", feature = "polars"))]
+mod gdal_tests {
+    use super::DataFrameOptions;
+    use crate::Result;
+    use crate::vector::dataframe::DataFrameReader;
+    use crate::vector::readers::GdalReader;
+    use std::fs;
+
+    use path_macro::path;
+    use tempfile::tempdir;
+
+    #[test]
+    fn read_sqlite_db_dataframe_with_gdal() -> Result<()> {
+        let temp_dir = tempdir()?;
+        let database_path = temp_dir.path().join("gem_limburg.db");
+        let source_path = path!(env!("CARGO_MANIFEST_DIR") / ".." / "tiler" / "test" / "data" / "gem_limburg.mbtiles");
+        fs::copy(source_path, &database_path)?;
+
+        let mut reader = GdalReader::from_file(&database_path)?;
+        let mut layer_names = reader.layer_names()?;
+        layer_names.sort_unstable();
+        assert_eq!(layer_names, vec!["metadata", "tiles"]);
+
+        let options = DataFrameOptions {
+            layer: Some("metadata".to_string()),
+            ..Default::default()
+        };
+        let schema = reader.schema(&options)?;
+        assert_eq!(
+            schema.fields.iter().map(|field| field.name()).collect::<Vec<_>>(),
+            vec!["name", "value"]
+        );
+
+        let dataframe = super::polars::read_dataframe(&database_path, &options)?;
+        assert_eq!(
+            dataframe.get_column_names().iter().map(|name| name.as_str()).collect::<Vec<_>>(),
+            vec!["name", "value"]
+        );
+        assert!(dataframe.shape().0 > 0);
+
+        Ok(())
+    }
+}
+
 #[cfg(all(test, feature = "vector-io-csv", feature = "polars"))]
 mod csv_tests {
     use super::{DataFrameOptions, HeaderRow, polars};
