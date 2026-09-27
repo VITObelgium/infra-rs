@@ -423,6 +423,7 @@ mod tests {
 
     use super::*;
 
+    #[cfg(any(feature = "gdal", all(feature = "raster-io-geotiff", feature = "proj4rs")))]
     #[test]
     fn projection_info_projected_31370() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg31370.tif");
@@ -434,6 +435,7 @@ mod tests {
         assert_eq!(meta.projection_frienly_name(), "EPSG:31370");
     }
 
+    #[cfg(any(feature = "gdal", all(feature = "raster-io-geotiff", feature = "proj4rs")))]
     #[test]
     fn projection_info_projected_3857() {
         let path = path!(env!("CARGO_MANIFEST_DIR") / ".." / ".." / "tests" / "data" / "epsg3857.tif");
