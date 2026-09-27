@@ -207,6 +207,7 @@ pub fn create_dataframe_reader(path: &Path) -> Result<Box<dyn DataFrameReader>> 
         vector::VectorFileFormat::ShapeFile
         | vector::VectorFileFormat::GeoJson
         | vector::VectorFileFormat::GeoPackage
+        | vector::VectorFileFormat::SQLite
         | vector::VectorFileFormat::Tab
         | vector::VectorFileFormat::Parquet
         | vector::VectorFileFormat::Arrow => Ok(Box::new(vector::readers::GdalReader::from_file(path)?)),
@@ -242,6 +243,7 @@ pub mod polars {
             vector::VectorFileFormat::ShapeFile
             | vector::VectorFileFormat::GeoJson
             | vector::VectorFileFormat::GeoPackage
+            | vector::VectorFileFormat::SQLite
             | vector::VectorFileFormat::Tab
             | vector::VectorFileFormat::Parquet
             | vector::VectorFileFormat::Arrow => read_dataframe_with::<vector::readers::GdalReader>(path, _options),

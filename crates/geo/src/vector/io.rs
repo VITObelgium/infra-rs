@@ -11,6 +11,7 @@ impl VectorFileFormat {
             VectorFileFormat::Xlsx => "XLSX",
             VectorFileFormat::GeoJson => "GeoJSON",
             VectorFileFormat::GeoPackage => "GPKG",
+            VectorFileFormat::SQLite => "SQLite",
             VectorFileFormat::PostgreSQL => "PostgreSQL",
             VectorFileFormat::Wfs => "WFS",
             VectorFileFormat::Vrt => "OGR_VRT",
@@ -49,6 +50,11 @@ mod tests {
         assert_eq!(
             VectorFileFormat::guess_from_path(Path::new("test.gpkg")),
             VectorFileFormat::GeoPackage
+        );
+        assert_eq!(VectorFileFormat::guess_from_path(Path::new("test.db")), VectorFileFormat::SQLite);
+        assert_eq!(
+            VectorFileFormat::guess_from_path(Path::new("test.sqlite")),
+            VectorFileFormat::SQLite
         );
         assert_eq!(VectorFileFormat::guess_from_path(Path::new("test.vrt")), VectorFileFormat::Vrt);
         assert_eq!(
