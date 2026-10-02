@@ -37,10 +37,6 @@ pub struct GeoTiffMetadata {
     pub gdal_ghost_data: Option<GdalGhostData>, // Additional GDAL ghost metadata if the file was created with GDAL
     /// Per-band metadata (description, scale, offset) from GDAL metadata XML
     pub band_metadata: Vec<BandMetadata>,
-    /// Valid-data AABB in native CRS: `[minx, miny, maxx, maxy]`.
-    pub data_bounds: Option<[f64; 4]>,
-    /// Valid-data AABB in WGS84: `[west, south, east, north]`.
-    pub data_bounds_4326: Option<[f64; 4]>,
 }
 
 pub enum ParseFromBufferError {
