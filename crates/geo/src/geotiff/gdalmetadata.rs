@@ -41,6 +41,36 @@ pub struct GdalMetadata {
     pub interleave: Option<Interleave>,
     /// Maximum zoom level from `TILING_SCHEME` domain
     pub max_zoom: Option<i32>,
+    /// Valid-data AABB in native CRS (EPSG:3857 for GoogleMapsCompatible COGs): `[minx, miny, maxx, maxy]`.
+    pub data_bounds: Option<[f64; 4]>,
+    /// Valid-data AABB in WGS84: `[west, south, east, north]`.
+    pub data_bounds_4326: Option<[f64; 4]>,
+}
+
+/// Parse a JSON-style AABB `[a,b,c,d]` as written by GDAL `metadataOptions`.
+fn parse_bounds_array(raw: &str) -> Option<[f64; 4]> {
+    let trimmed = raw.trim();
+    if !trimmed.starts_with('[') || !trimmed.ends_with(']') {
+        return None;
+    }
+    let inner = &trimmed[1..trimmed.len() - 1];
+    let mut values = [0.0_f64; 4];
+    let mut count = 0usize;
+    for part in inner.split(',') {
+        if count >= 4 {
+            return None;
+        }
+        values[count] = part.trim().parse().ok()?;
+        count += 1;
+    }
+    if count != 4 {
+        return None;
+    }
+    let [a, b, c, d] = values;
+    if !values.iter().all(|value| value.is_finite()) || !(a < c && b < d) {
+        return None;
+    }
+    Some(values)
 }
 
 impl GdalMetadata {
@@ -176,6 +206,12 @@ pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
                             {
                                 metadata.interleave = super::gdalghostdata::parse_interleave_mode(&data);
                             }
+                        }
+                        "data_bounds" => {
+                            metadata.data_bounds = parse_bounds_array(&data);
+                        }
+                        "data_bounds_4326" => {
+                            metadata.data_bounds_4326 = parse_bounds_array(&data);
                         }
                         _ => {}
                     }
@@ -361,6 +397,36 @@ mod tests {
         assert!(metadata.statistics.is_none());
         assert!(metadata.band_metadata.is_empty());
         assert!(metadata.interleave.is_none());
+        assert!(metadata.data_bounds.is_none());
+        assert!(metadata.data_bounds_4326.is_none());
+    }
+
+    #[test]
+    fn parse_gdal_metadata_data_bounds() {
+        let xml = r#"
+<GDALMetadata>
+  <Item name="data_bounds">[3958649.0,3247722.0,3988749.0,3277822.0]</Item>
+  <Item name="data_bounds_4326">[4.6600340395095525,52.22028643027196,5.132071086172366,52.50897297186259]</Item>
+</GDALMetadata>
+        "#;
+        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+
+        assert_eq!(
+            metadata.data_bounds,
+            Some([3958649.0, 3247722.0, 3988749.0, 3277822.0])
+        );
+        let wgs84 = metadata.data_bounds_4326.expect("data_bounds_4326");
+        assert_abs_diff_eq!(wgs84[0], 4.6600340395095525, epsilon = 1e-12);
+        assert_abs_diff_eq!(wgs84[1], 52.22028643027196, epsilon = 1e-12);
+        assert_abs_diff_eq!(wgs84[2], 5.132071086172366, epsilon = 1e-12);
+        assert_abs_diff_eq!(wgs84[3], 52.50897297186259, epsilon = 1e-12);
+    }
+
+    #[test]
+    fn parse_bounds_array_rejects_invalid() {
+        assert!(parse_bounds_array("").is_none());
+        assert!(parse_bounds_array("[1,2,3]").is_none());
+        assert!(parse_bounds_array("[1,2,0,4]").is_none()); // west >= east
     }
 
     #[test]
