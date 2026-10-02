@@ -396,6 +396,8 @@ pub struct WebTileInfo {
     pub band_names: Vec<Option<String>>,
     pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
+    /// Valid-data AABB in WGS84 when present on the COG: `[west, south, east, north]`.
+    pub data_bounds_4326: Option<[f64; 4]>,
     pub scale: Option<RasterScale>,
     pub statistics: Option<TiffStats>,
 }
@@ -434,6 +436,7 @@ impl WebTilesReader {
             data_type: self.data_type(),
             scale: None, // TODO: extract scale info from the COG
             bounds: self.data_bounds(),
+            data_bounds_4326: self.cog_meta.data_bounds_4326,
             statistics: self.cog_meta.statistics.clone(),
         }
     }
