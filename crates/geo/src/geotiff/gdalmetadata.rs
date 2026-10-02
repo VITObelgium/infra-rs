@@ -67,7 +67,7 @@ fn parse_bounds_array(raw: &str) -> Option<[f64; 4]> {
         return None;
     }
     let [a, b, c, d] = values;
-    if !(a < c && b < d) {
+    if !values.iter().all(|value| value.is_finite()) || !(a < c && b < d) {
         return None;
     }
     Some(values)
