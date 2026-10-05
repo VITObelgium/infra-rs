@@ -364,8 +364,15 @@ fn load_chunk_data_if_needed(app: &mut App) {
         return;
     }
 
-    // Load the chunk data
-    match data::load_chunk_data(&app.file_path, overview_idx, chunk_idx, band_idx, &app.cog_metadata) {
+    // Load the chunk data, fetching only its byte range for remote COGs.
+    let mut reader = match app.open_file() {
+        Ok(reader) => reader,
+        Err(e) => {
+            app.set_error(format!("Failed to open COG: {}", e));
+            return;
+        }
+    };
+    match data::load_chunk_data(&mut reader, overview_idx, chunk_idx, band_idx, &app.cog_metadata) {
         Ok(chunk_data) => {
             // Don't create image_state yet - user must press Space for hi-res rendering
             app.chunks_tab.set_chunk_data(chunk_data);
@@ -397,12 +404,19 @@ fn load_tile_data_if_needed(app: &mut App) {
         return;
     }
 
-    // Load the tile data
+    // Load the tile data, fetching only its byte range for remote COGs.
     let Some(band_index) = geo::geotiff::BandIndex::new(band_idx) else {
         app.set_error(format!("Invalid band index: {}", band_idx));
         return;
     };
-    match data::load_tile_data(&app.file_path, tile, band_index, webtiles_reader) {
+    let mut reader = match app.open_file() {
+        Ok(reader) => reader,
+        Err(e) => {
+            app.set_error(format!("Failed to open COG: {}", e));
+            return;
+        }
+    };
+    match data::load_tile_data(&mut reader, tile, band_index, webtiles_reader) {
         Ok(tile_data) => {
             // Don't create image_state yet - user must press Space for hi-res rendering
             app.webtiles_tab.set_tile_data(tile_data);
