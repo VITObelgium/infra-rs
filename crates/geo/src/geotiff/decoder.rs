@@ -352,7 +352,6 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
 
     let band_metadata = gdal_metadata.as_ref().map(|m| m.band_metadata.clone()).unwrap_or_default();
     let data_bounds = gdal_metadata.as_ref().and_then(|m| m.data_bounds);
-    let data_bounds_4326 = gdal_metadata.as_ref().and_then(|m| m.data_bounds_4326);
 
     Ok(GeoTiffMetadata {
         data_layout,
@@ -367,6 +366,5 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         gdal_ghost_data: None,
         band_metadata,
         data_bounds,
-        data_bounds_4326,
     })
 }

@@ -395,8 +395,9 @@ pub struct WebTileInfo {
     pub band_count: u32,
     pub band_names: Vec<Option<String>>,
     pub data_type: ArrayDataType,
-    pub bounds: LatLonBounds,
-    /// Valid-data AABB in WGS84 when present on the COG.
+    /// The bounding box of the webtiles that contain raster data
+    pub tile_bounds: LatLonBounds,
+    /// The bounding box on pixel level that contains raster data (typically used to configure a map view camera to show the data)
     pub data_bounds: Option<LatLonBounds>,
     pub scale: Option<RasterScale>,
     pub statistics: Option<TiffStats>,
@@ -435,8 +436,8 @@ impl WebTilesReader {
             band_names,
             data_type: self.data_type(),
             scale: None, // TODO: extract scale info from the COG
-            bounds: self.data_bounds(),
-            data_bounds: self.cog_meta.data_bounds_4326.map(LatLonBounds::from),
+            tile_bounds: self.data_bounds(),
+            data_bounds: self.cog_meta.data_bounds.map(LatLonBounds::from),
             statistics: self.cog_meta.statistics.clone(),
         }
     }
@@ -1821,7 +1822,7 @@ mod tests {
             },
         ];
         let data_bounds = [4.66, 52.22, 5.13, 52.51];
-        metadata.data_bounds_4326 = Some(data_bounds);
+        metadata.data_bounds = Some(data_bounds);
 
         let tile_info = WebTilesReader::new(metadata)?.tile_info();
 

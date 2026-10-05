@@ -3,7 +3,7 @@
 //! This module provides functions to load and normalize pixel data from
 //! COG chunks and web tiles for visualization in the TUI.
 
-use std::fs::File;
+use std::io::{Read, Seek};
 
 use geo::cog::WebTilesReader;
 use geo::geotiff::tileio::read_tile_data;
@@ -38,10 +38,10 @@ fn pixels_to_image(pixels: &[u8], width: u32, height: u32) -> DynamicImage {
     DynamicImage::ImageRgb8(img)
 }
 
-/// Load chunk data from a COG file and normalize it to grayscale (0-255).
+/// Load chunk data from a COG reader and normalize it to grayscale (0-255).
 ///
 /// # Arguments
-/// * `file_path` - Path to the COG file
+/// * `reader` - Reader for the COG file; remote readers fetch the selected range on demand
 /// * `overview_index` - Index of the overview to read from
 /// * `chunk_index` - Index of the chunk within the overview
 /// * `_band_index` - Band to read (1-based) - currently unused, chunks are read directly
@@ -50,7 +50,7 @@ fn pixels_to_image(pixels: &[u8], width: u32, height: u32) -> DynamicImage {
 /// # Returns
 /// A `ChunkData` struct with normalized pixel values ready for visualization.
 pub fn load_chunk_data(
-    file_path: &std::path::Path,
+    reader: &mut (impl Read + Seek),
     overview_index: usize,
     chunk_index: usize,
     _band_index: BandIndex,
@@ -88,8 +88,6 @@ pub fn load_chunk_data(
         });
     }
 
-    let mut file = File::open(file_path)?;
-
     // Read the chunk directly using the tileio function based on data type
     let nodata = metadata.geo_reference.nodata();
     let compression = metadata.compression;
@@ -97,61 +95,61 @@ pub fn load_chunk_data(
 
     let (chunk_pixels, width, height): (Vec<f64>, u32, u32) = match metadata.data_type {
         ArrayDataType::Uint8 => {
-            let array: DenseArray<u8> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<u8> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Uint16 => {
-            let array: DenseArray<u16> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<u16> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Uint32 => {
-            let array: DenseArray<u32> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<u32> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Uint64 => {
-            let array: DenseArray<u64> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<u64> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Int8 => {
-            let array: DenseArray<i8> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<i8> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Int16 => {
-            let array: DenseArray<i16> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<i16> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Int32 => {
-            let array: DenseArray<i32> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<i32> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Int64 => {
-            let array: DenseArray<i64> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<i64> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Float32 => {
-            let array: DenseArray<f32> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<f32> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().iter().map(|&v| v as f64).collect(), w, h)
         }
         ArrayDataType::Float64 => {
-            let array: DenseArray<f64> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, &mut file)?;
+            let array: DenseArray<f64> = read_tile_data(chunk_location, tile_size, nodata, compression, predictor, reader)?;
             let w = array.columns().count() as u32;
             let h = array.rows().count() as u32;
             (array.as_ref().to_vec(), w, h)
@@ -178,10 +176,10 @@ pub fn load_chunk_data(
     })
 }
 
-/// Load tile data from a COG file via `WebTilesReader`.
+/// Load tile data from a COG reader via `WebTilesReader`.
 ///
 /// # Arguments
-/// * `file_path` - Path to the COG file
+/// * `reader` - Reader for the COG file; remote readers fetch the selected range on demand
 /// * `tile` - The web tile to read
 /// * `band_index` - Band to read (1-based)
 /// * `webtiles_reader` - `WebTiles` reader for accessing the tile
@@ -189,14 +187,12 @@ pub fn load_chunk_data(
 /// # Returns
 /// A `TileData` struct with normalized pixel values ready for visualization.
 pub fn load_tile_data(
-    file_path: &std::path::Path,
+    reader: &mut (impl Read + Seek),
     tile: Tile,
     band_index: BandIndex,
     webtiles_reader: &WebTilesReader,
 ) -> Result<TileData> {
-    let mut file = File::open(file_path)?;
-
-    let array_opt = webtiles_reader.read_tile_data(&tile, band_index, &mut file)?;
+    let array_opt = webtiles_reader.read_tile_data(&tile, band_index, reader)?;
 
     let Some(array) = array_opt else {
         // Tile doesn't exist

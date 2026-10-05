@@ -55,10 +55,13 @@ pub fn render(app: &mut App, frame: &mut Frame) {
 
 /// Render the title bar with file path and band info.
 fn render_title_bar(app: &App, frame: &mut Frame, area: Rect) {
-    let file_name = app
-        .file_path
-        .file_name()
-        .map_or_else(|| app.file_path.display().to_string(), |n| n.to_string_lossy().to_string());
+    let file_name = if app.source.starts_with("http://") || app.source.starts_with("https://") {
+        app.source.clone()
+    } else {
+        app.file_path
+            .file_name()
+            .map_or_else(|| app.source.clone(), |n| n.to_string_lossy().to_string())
+    };
 
     let band_info = if app.is_multiband {
         format!(" [{}]", app.current_band_display())
@@ -207,7 +210,7 @@ fn render_overview_tab(app: &mut App, frame: &mut Frame, area: Rect) {
         Style::default().fg(Color::Green).bold(),
     )));
     lines.push(Line::from(""));
-    lines.push(labeled_row("Path", app.file_path.display().to_string()));
+    lines.push(labeled_row("Path", app.source.clone()));
     lines.push(labeled_row("Size", format_file_size(app.file_size)));
     lines.push(Line::from(""));
 
@@ -354,10 +357,10 @@ fn render_overview_tab(app: &mut App, frame: &mut Frame, area: Rect) {
             "Bounds",
             format!(
                 "[{:.4}, {:.4}] → [{:.4}, {:.4}]",
-                info.bounds.west(),
-                info.bounds.south(),
-                info.bounds.east(),
-                info.bounds.north()
+                info.tile_bounds.west(),
+                info.tile_bounds.south(),
+                info.tile_bounds.east(),
+                info.tile_bounds.north()
             ),
         ));
     }
