@@ -396,6 +396,8 @@ pub struct WebTileInfo {
     pub band_names: Vec<Option<String>>,
     pub data_type: ArrayDataType,
     pub bounds: LatLonBounds,
+    /// Valid-data AABB in WGS84 when present on the COG.
+    pub data_bounds: Option<LatLonBounds>,
     pub scale: Option<RasterScale>,
     pub statistics: Option<TiffStats>,
 }
@@ -434,6 +436,7 @@ impl WebTilesReader {
             data_type: self.data_type(),
             scale: None, // TODO: extract scale info from the COG
             bounds: self.data_bounds(),
+            data_bounds: self.cog_meta.data_bounds_4326.map(LatLonBounds::from),
             statistics: self.cog_meta.statistics.clone(),
         }
     }
@@ -1817,6 +1820,8 @@ mod tests {
                 ..Default::default()
             },
         ];
+        let data_bounds = [4.66, 52.22, 5.13, 52.51];
+        metadata.data_bounds_4326 = Some(data_bounds);
 
         let tile_info = WebTilesReader::new(metadata)?.tile_info();
 
@@ -1824,6 +1829,7 @@ mod tests {
         assert_eq!(tile_info.band_names[0].as_deref(), Some("Red"));
         assert_eq!(tile_info.band_names[1].as_deref(), None);
         assert_eq!(tile_info.band_names[2].as_deref(), Some("Blue"));
+        assert_eq!(tile_info.data_bounds, Some(data_bounds.into()));
 
         Ok(())
     }
