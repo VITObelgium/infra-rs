@@ -541,7 +541,7 @@ mod tests {
             }
         }
 
-        let raster: DenseArray<f64, RasterMetadata> = DenseArray::new(meta.clone(), testutils::create_vec(&data)).unwrap();
+        let raster: DenseArray<f64, RasterMetadata> = DenseArray::new(meta, testutils::create_vec(&data)).unwrap();
 
         // Get SIMD result
         use simd_algo::Scale;
@@ -577,7 +577,7 @@ mod tests {
             }
         }
 
-        let raster: DenseArray<f64, RasterMetadata> = DenseArray::new(meta.clone(), testutils::create_vec(&data)).unwrap();
+        let raster: DenseArray<f64, RasterMetadata> = DenseArray::new(meta, testutils::create_vec(&data)).unwrap();
 
         // Get SIMD result
         use simd_algo::Scale;
@@ -609,7 +609,7 @@ mod tests {
             }
         }
 
-        let raster: DenseArray<f32, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+        let raster: DenseArray<f32, RasterMetadata> = DenseArray::new(meta, data).unwrap();
         // Get SIMD result
         use simd_algo::Scale;
         let simd_result: DenseArray<u8, RasterMetadata> = raster.scale(None).unwrap();
@@ -639,7 +639,7 @@ mod tests {
             }
         }
 
-        let raster: DenseArray<f32, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+        let raster: DenseArray<f32, RasterMetadata> = DenseArray::new(meta, data).unwrap();
         // Get SIMD result
         use simd_algo::Scale;
         let simd_result: DenseArray<u16, RasterMetadata> = raster.scale(None).unwrap();
@@ -668,7 +668,7 @@ mod tests {
             }
         }
 
-        let raster: DenseArray<u32, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+        let raster: DenseArray<u32, RasterMetadata> = DenseArray::new(meta, data).unwrap();
 
         // Get SIMD result
         use simd_algo::Scale;
@@ -698,11 +698,11 @@ mod tests {
             if i % 13 == 0 {
                 data.push(i32::NODATA);
             } else {
-                data.push((i as i32) * 100 - 2000);
+                data.push(i * 100 - 2000);
             }
         }
 
-        let raster: DenseArray<i32, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+        let raster: DenseArray<i32, RasterMetadata> = DenseArray::new(meta, data).unwrap();
 
         // Get SIMD result
         use simd_algo::Scale;
@@ -736,7 +736,7 @@ mod tests {
             }
         }
 
-        let raster: DenseArray<u16, RasterMetadata> = DenseArray::new(meta.clone(), data).unwrap();
+        let raster: DenseArray<u16, RasterMetadata> = DenseArray::new(meta, data).unwrap();
 
         // Get SIMD result
         use simd_algo::Scale;
