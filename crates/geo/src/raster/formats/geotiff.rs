@@ -48,16 +48,16 @@ impl RasterFormatDyn for GeotiffRasterIO {
         data: &mut [std::mem::MaybeUninit<u8>],
     ) -> Result<GeoReference> {
         match data_type {
-            ArrayDataType::Uint8 => self.read_raster_band_as::<u8>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Uint16 => self.read_raster_band_as::<u16>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Uint32 => self.read_raster_band_as::<u32>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Uint64 => self.read_raster_band_as::<u64>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Int8 => self.read_raster_band_as::<i8>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Int16 => self.read_raster_band_as::<i16>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Int32 => self.read_raster_band_as::<i32>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Int64 => self.read_raster_band_as::<i64>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Float32 => self.read_raster_band_as::<f32>(band, data_type, cast_uninit_byte_slice_mut(data)),
-            ArrayDataType::Float64 => self.read_raster_band_as::<f64>(band, data_type, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint8 => self.read_raster_band_as::<u8>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint16 => self.read_raster_band_as::<u16>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint32 => self.read_raster_band_as::<u32>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Uint64 => self.read_raster_band_as::<u64>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int8 => self.read_raster_band_as::<i8>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int16 => self.read_raster_band_as::<i16>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int32 => self.read_raster_band_as::<i32>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Int64 => self.read_raster_band_as::<i64>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Float32 => self.read_raster_band_as::<f32>(band, cast_uninit_byte_slice_mut(data)),
+            ArrayDataType::Float64 => self.read_raster_band_as::<f64>(band, cast_uninit_byte_slice_mut(data)),
         }
     }
 
@@ -69,16 +69,16 @@ impl RasterFormatDyn for GeotiffRasterIO {
         dst_data: &mut [std::mem::MaybeUninit<u8>],
     ) -> Result<GeoReference> {
         match data_type {
-            ArrayDataType::Uint8 => self.read_raster_band_region_as::<u8>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Uint16 => self.read_raster_band_region_as::<u16>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Uint32 => self.read_raster_band_region_as::<u32>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Uint64 => self.read_raster_band_region_as::<u64>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Int8 => self.read_raster_band_region_as::<i8>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Int16 => self.read_raster_band_region_as::<i16>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Int32 => self.read_raster_band_region_as::<i32>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Int64 => self.read_raster_band_region_as::<i64>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Float32 => self.read_raster_band_region_as::<f32>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
-            ArrayDataType::Float64 => self.read_raster_band_region_as::<f64>(band, extent, data_type, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Uint8 => self.read_raster_band_region_as::<u8>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Uint16 => self.read_raster_band_region_as::<u16>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Uint32 => self.read_raster_band_region_as::<u32>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Uint64 => self.read_raster_band_region_as::<u64>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Int8 => self.read_raster_band_region_as::<i8>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Int16 => self.read_raster_band_region_as::<i16>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Int32 => self.read_raster_band_region_as::<i32>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Int64 => self.read_raster_band_region_as::<i64>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Float32 => self.read_raster_band_region_as::<f32>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
+            ArrayDataType::Float64 => self.read_raster_band_region_as::<f64>(band, extent, cast_uninit_byte_slice_mut(dst_data)),
         }
     }
 }
@@ -107,12 +107,8 @@ impl RasterFormat for GeotiffRasterIO {
 }
 
 impl GeotiffRasterIO {
-    fn read_raster_band_as<T: ArrayNum>(
-        &mut self,
-        band_index: usize,
-        data_type: crate::ArrayDataType,
-        dst_data: &mut [std::mem::MaybeUninit<T>],
-    ) -> Result<GeoReference> {
+    fn read_raster_band_as<T: ArrayNum>(&mut self, band_index: usize, dst_data: &mut [std::mem::MaybeUninit<T>]) -> Result<GeoReference> {
+        let data_type = T::TYPE;
         assert_eq!(1, band_index, "Geotiff format currently only supports single raster band");
         assert_eq!(
             data_type,
@@ -127,9 +123,9 @@ impl GeotiffRasterIO {
         &mut self,
         band_index: usize,
         region: &GeoReference,
-        data_type: ArrayDataType,
         dst_data: &mut [MaybeUninit<T>],
     ) -> Result<GeoReference> {
+        let data_type = T::TYPE;
         assert_eq!(1, band_index, "Geotiff format currently only supports single raster band");
         debug_assert_eq!(
             data_type,

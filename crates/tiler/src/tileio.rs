@@ -111,7 +111,7 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
     let ds = raster::algo::gdal::translate_file(raster_path, &output_path, &options)?;
 
     let mut data = AlignedVecUnderConstruction::new(meta.raster_size.cell_count());
-    let meta = formats::gdal::GdalRasterIO::from_dataset(ds).read_raster_band_as(1, T::TYPE, data.as_uninit_slice_mut())?;
+    let meta = formats::gdal::GdalRasterIO::from_dataset(ds).read_raster_band_as(1, data.as_uninit_slice_mut())?;
     Ok(DenseArray::new(RasterMetadata::with_geo_reference(meta), unsafe {
         data.assume_init()
     })?)
