@@ -416,18 +416,21 @@ impl<T: ArrayNum, Metadata: ArrayMetadata> std::ops::Index<Cell> for DenseArray<
     type Output = T;
 
     fn index(&self, cell: Cell) -> &Self::Output {
+        let index = self.cell_index(cell);
+        debug_assert!(index < self.data.len(), "Cell index out of bounds");
         unsafe {
-            // SAFETY: The index is checked to be within bounds
-            self.data.get_unchecked(self.cell_index(cell))
+            // SAFETY: The caller must provide an in-bounds cell; only checked in debug builds.
+            self.data.get_unchecked(index)
         }
     }
 }
 
 impl<T: ArrayNum, Metadata: ArrayMetadata> std::ops::IndexMut<Cell> for DenseArray<T, Metadata> {
     fn index_mut(&mut self, cell: Cell) -> &mut Self::Output {
+        let index = self.cell_index(cell);
+        debug_assert!(index < self.data.len(), "Cell index out of bounds");
         unsafe {
-            // SAFETY: The index is checked to be within bounds
-            let index = self.cell_index(cell);
+            // SAFETY: The caller must provide an in-bounds cell; only checked in debug builds.
             self.data.get_unchecked_mut(index)
         }
     }
