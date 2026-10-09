@@ -268,10 +268,12 @@ pub trait Array:
     /// Return a mutable iterator over the raster data
     fn iter_mut(&mut self) -> std::slice::IterMut<'_, Self::Pixel>;
 
-    /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::NODATA`
+    /// Return an iterator over every cell in the window in row-major order.
+    /// Cells outside the raster yield `Self::Pixel::NODATA`.
     fn iter_window(&self, window: RasterWindow) -> impl Iterator<Item = Self::Pixel>;
 
-    /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::NODATA`
+    /// Return an iterator over the raster subwindow, nodata values are `Self::Pixel::NODATA`.
+    /// Windows must be fully contained in the raster
     fn iter_window_mut(&mut self, window: RasterWindow) -> impl Iterator<Item = &mut Self::Pixel>;
 
     /// Return the value at the given cell or None if the cell contains nodata
