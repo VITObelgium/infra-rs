@@ -39,6 +39,13 @@ A nix devenv configuration is provided for setting up a reproducible development
 This is the recommended way to setup the development environment on Linux and MacOS.
 Use direnv to automatically load the nix environment when entering the repository or manuelly enter a nix shell with `devenv shell`.
 
+Entering the devenv shell also copies the [Rust best practices agent skill](https://github.com/stolinski/s-stack/tree/main/skills/rust-best-practices),
+including its reference chapters, into `.agents/skills/rust-best-practices` for Zed and other agents that support this directory.
+The skill source is pinned in `devenv.lock`; update it with `devenv update s-stack` and re-enter the shell.
+The generated copy contains project-local files rather than symlinks to the Nix store, avoiding Zed's outside-project permission prompts.
+It is ignored by Git and replaced on every shell entry, so local edits to the generated skill are discarded.
+Start a new Zed agent conversation after entering the shell to discover the skill.
+
 On Windows or if you don't want to use nix, you can use the mise config to setup the development environment.
 Check https://mise.jdx.dev/getting-started.html for installing mise.
 

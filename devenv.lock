@@ -76,7 +76,8 @@
           "nixpkgs"
         ],
         "pkgs-mod": "pkgs-mod",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay",
+        "s-stack": "s-stack"
       }
     },
     "rust-overlay": {
@@ -94,6 +95,23 @@
       "original": {
         "owner": "oxalica",
         "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "s-stack": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1783618785,
+        "narHash": "sha256-dNEnuzJ9SPvNZ//HHHBbOCEWh493S79LKMHzEXeMGYY=",
+        "owner": "stolinski",
+        "repo": "s-stack",
+        "rev": "3cc9e7c22e7e1039297ac6aa98923dc1ac963351",
+        "type": "github"
+      },
+      "original": {
+        "owner": "stolinski",
+        "ref": "main",
+        "repo": "s-stack",
         "type": "github"
       }
     }
