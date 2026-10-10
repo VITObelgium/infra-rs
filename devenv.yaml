@@ -5,3 +5,6 @@ inputs:
         url: github:VITO-RMA/nix-pkgs/main
     rust-overlay:
         url: github:oxalica/rust-overlay
+    s-stack:
+        url: github:stolinski/s-stack/main
+        flake: false

@@ -3,6 +3,7 @@ target
 .pixi
 .direnv
 .devenv*
+/.agents/skills/rust-best-practices
 *.aux.xml
 **/__pycache__
 .idea
