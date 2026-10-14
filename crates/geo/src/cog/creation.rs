@@ -154,7 +154,7 @@ pub fn create_gdal_warp_args(input: &Path, opts: CogCreationOptions) -> Result<V
 
         let mut overview_count = (max_zoom - min_zoom) as usize;
         if overview_count == 0 && tile_size_offset > 0 {
-            // Zoome levels for larger tiles sizes are offset by the factor of tile_size above 256
+            // Zoom levels for larger tiles sizes are offset by the factor of tile_size above 256
             // Reoffset if the overview count is zero otherwise the min zoom level gets ignored
             overview_count += tile_size_offset as usize;
         }
