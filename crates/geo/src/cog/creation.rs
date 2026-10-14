@@ -549,6 +549,76 @@ mod tests {
     }
 
     #[test]
+    fn scaled_single_band_cog_should_preserve_nodata_without_zeros() -> Result<()> {
+        let raster = create_tiny_scaled_cog()?;
+        let pixels = raster.as_slice();
+
+        assert_eq!(pixels[2], 255, "Declared -9999 nodata must become 255");
+        assert_eq!(pixels[4], 255, "NaN must become 255");
+        assert!(!pixels.contains(&0), "Unexpected zero pixels: {pixels:?}");
+        for index in [0, 1, 3, 5, 6, 7, 8] {
+            assert_ne!(pixels[index], 255, "Valid input pixel {index} must not become nodata");
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn scaled_single_band_cog_should_preserve_min_max_when_descaled() -> Result<()> {
+        let raster = create_tiny_scaled_cog()?;
+        let pixels = raster.as_slice();
+        // Invert GDAL's implicit -scale mapping of [10, 16] to [0, 255.999].
+        let quantization_step = (16.0 - 10.0) / 255.999;
+        let (min, max) = pixels
+            .iter()
+            .copied()
+            .filter(|&value| value != 255)
+            .map(|value| 10.0 + f64::from(value) * quantization_step)
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), value| {
+                (min.min(value), max.max(value))
+            });
+
+        assert_relative_eq!(min, 10.0, epsilon = quantization_step);
+        assert_relative_eq!(max, 16.0, epsilon = quantization_step);
+        Ok(())
+    }
+
+    fn create_tiny_scaled_cog() -> Result<DenseRaster<u8>> {
+        use crate::{CellSize, Point, RasterSize};
+
+        let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
+        let input = tmp.path().join("input.tif");
+        let output = tmp.path().join("scaled.tif");
+        let pixels = [10.0f32, 11.0, -9999.0, 12.0, f32::NAN, 13.0, 14.0, 15.0, 16.0];
+        let pixel_size = Tile::pixel_size_at_zoom_level(8, 256);
+        let georef = GeoReference::with_top_left_origin(
+            "EPSG:3857",
+            RasterSize::square(3),
+            Point::new(2.0 * pixel_size, -3.0 * pixel_size),
+            CellSize::square(pixel_size),
+            Some(-9999.0),
+        );
+        {
+            // Write raw floats so NaN is not normalized to the declared -9999 nodata.
+            let dataset = raster::formats::gdal::create_in_memory_dataset_with_data(&georef, &pixels)?;
+            raster::algo::gdal::translate(&dataset, &input, &["-of".into(), "COG".into()])?;
+        }
+        create_cog_tiles(
+            &input,
+            &output,
+            CogCreationOptions {
+                tile_size: 256,
+                scale: true,
+                ..Default::default()
+            },
+        )?;
+
+        let result = DenseRaster::<u8>::read_bounds(&output, &georef, 1)?;
+        assert_eq!(result.metadata().nodata(), Some(255.0));
+
+        Ok(result)
+    }
+
+    #[test]
     fn cog_creation_source_has_no_nodata() -> Result<()> {
         // test case for source datasets that have no nodata value defined
         // This used to create invalid output COGs where the nodata at the edges due to the rotation of the warp
