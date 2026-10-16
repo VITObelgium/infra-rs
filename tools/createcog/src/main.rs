@@ -37,8 +37,9 @@ pub struct Opt {
     #[arg(long = "multi-band")]
     pub multi_band: bool,
 
-    #[arg(long = "scale")]
-    pub scale: bool,
+    /// Scale to an unsigned 8-bit or 16-bit raster.
+    #[arg(long = "scale", value_name = "8|16", value_parser = parse_scale_bits)]
+    pub scale: Option<u8>,
 
     #[arg(long = "aligned-levels")]
     pub aligned_levels: Option<i32>,
@@ -48,6 +49,14 @@ pub struct Opt {
 
     #[arg(long = "gdal-cmd")]
     pub print_command: bool,
+}
+
+fn parse_scale_bits(value: &str) -> std::result::Result<u8, String> {
+    match value {
+        "8" => Ok(8),
+        "16" => Ok(16),
+        _ => Err("Scaling bit depth must be 8 or 16".to_string()),
+    }
 }
 
 fn main() -> Result<()> {
@@ -105,4 +114,41 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse_options(extra: &[&str]) -> std::result::Result<Opt, clap::Error> {
+        Opt::try_parse_from(
+            ["createcog", "--input", "input.tif", "--output", "output.tif"]
+                .into_iter()
+                .chain(extra.iter().copied()),
+        )
+    }
+
+    #[test]
+    fn omitted_scale_disables_scaling() {
+        assert_eq!(parse_options(&[]).unwrap().scale, None);
+    }
+
+    #[test]
+    fn scale_accepts_eight_or_sixteen_bits() {
+        for (value, bits) in [("8", 8), ("16", 16)] {
+            assert_eq!(parse_options(&["--scale", value]).unwrap().scale, Some(bits));
+        }
+    }
+
+    #[test]
+    fn scale_rejects_other_values() {
+        for value in ["0", "7", "9", "15", "17", "32", "256", "-8", "true", "8.0"] {
+            assert!(parse_options(&["--scale", value]).is_err(), "Unexpectedly accepted --scale {value}");
+        }
+    }
+
+    #[test]
+    fn scale_requires_a_value() {
+        assert!(parse_options(&["--scale"]).is_err());
+    }
 }
