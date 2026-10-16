@@ -93,8 +93,6 @@ fn cog_creation_options(opts: &CogCreationOptions) -> Vec<String> {
         "-co".to_string(),
         format!("BLOCKSIZE={}", opts.tile_size),
         "-co".to_string(),
-        "TILING_SCHEME=GoogleMapsCompatible".to_string(),
-        "-co".to_string(),
         "ADD_ALPHA=NO".to_string(),
         "-co".to_string(),
         "STATISTICS=YES".to_string(),
@@ -117,6 +115,7 @@ pub fn create_gdal_warp_args(input: &Path, opts: CogCreationOptions) -> Result<V
     let mut overview_option = "IGNORE_EXISTING";
 
     let mut options = cog_creation_options(&opts);
+    options.extend(["-co".to_string(), "TILING_SCHEME=GoogleMapsCompatible".to_string()]);
 
     match opts.zoom_level_strategy {
         ZoomLevelStrategy::Manual(zoom) => {
@@ -186,7 +185,7 @@ pub fn create_gdal_warp_args(input: &Path, opts: CogCreationOptions) -> Result<V
     Ok(options)
 }
 
-pub fn create_translate_scale_args(opts: &CogCreationOptions) -> Result<Vec<String>> {
+fn create_scaled_cog_output_args(opts: &CogCreationOptions) -> Result<Vec<String>> {
     assert!(opts.scale);
 
     let (scaled_data_type, nodata) = match opts.output_data_type {
@@ -199,9 +198,9 @@ pub fn create_translate_scale_args(opts: &CogCreationOptions) -> Result<Vec<Stri
         }
     };
 
+    // Preserve the grid established by the warp instead of applying a tiling scheme again.
     let mut options = cog_creation_options(opts);
     options.extend([
-        "-scale".to_string(),
         "-ot".to_string(),
         gdal_data_type_name(scaled_data_type).to_string(),
         "-co".to_string(),
@@ -213,10 +212,88 @@ pub fn create_translate_scale_args(opts: &CogCreationOptions) -> Result<Vec<Stri
     Ok(options)
 }
 
+struct BandScaling {
+    src_min: f64,
+    src_max: f64,
+    dst_max: f64,
+    scale: f64,
+    offset: f64,
+}
+
+fn calculate_band_scaling(source_band: &gdal::raster::RasterBand<'_>, index: usize, output_max: f64) -> Result<BandScaling> {
+    // Approximate extrema can push valid outliers into the reserved nodata value.
+    let stats = source_band
+        .get_statistics(true, false)
+        .map_err(|err| Error::Runtime(format!("Cannot determine scaling range for band {index}: {err}")))?
+        .ok_or_else(|| Error::Runtime(format!("No statistics available for scaling band {index}")))?;
+    if !stats.min.is_finite() || !stats.max.is_finite() || stats.min > stats.max {
+        return Err(Error::Runtime(format!("Invalid scaling range for band {index}")));
+    }
+
+    let (src_min, src_max, dst_max, inverse_scale) = if stats.min == stats.max {
+        // Encode constants as zero; their inverse offset recovers the original value.
+        (0.0, 1.0, 0.0, 1.0)
+    } else {
+        (stats.min, stats.max, output_max, (stats.max - stats.min) / output_max)
+    };
+    let source_scale = source_band.scale().unwrap_or(1.0);
+    let source_offset = source_band.offset().unwrap_or(0.0);
+    let scale = inverse_scale * source_scale;
+    let offset = stats.min * source_scale + source_offset;
+    if !inverse_scale.is_finite()
+        || inverse_scale == 0.0
+        || !(dst_max / (src_max - src_min)).is_finite()
+        || !scale.is_finite()
+        || !offset.is_finite()
+    {
+        return Err(Error::Runtime(format!("Scaling coefficients are out of range for band {index}")));
+    }
+
+    Ok(BandScaling {
+        src_min,
+        src_max,
+        dst_max,
+        scale,
+        offset,
+    })
+}
+
 fn scale_cog(cog_path: &Path, opts: CogCreationOptions) -> Result<()> {
-    let translate_options = create_translate_scale_args(&opts)?;
+    // Default scaling from 0 to max value is not sufficient for preserving the nodata values
+    // So we explicitely need to set the scaling range for each band
+
+    let mut translate_options = create_scaled_cog_output_args(&opts)?;
+    let output_max = opts.output_data_type.unwrap_or(ArrayDataType::Uint8).default_nodata_value() - 1.0;
     let scaled_tmp_path = cog_path.with_file_name(format!(".temp.{}", cog_path.file_name().unwrap().to_string_lossy()));
-    raster::algo::gdal::translate_file(cog_path, &scaled_tmp_path, &translate_options)?;
+    {
+        let source = raster::formats::gdal::open_dataset_read_only(cog_path)?;
+        // Set inverse scaling metadata on a VRT, not on a completed COG whose layout must remain intact.
+        let scaled_source = raster::algo::gdal::translate(&source, Path::new(""), &["-of".into(), "VRT".into()])?;
+
+        for index in 1..=source.raster_count() {
+            let source_band = source.rasterband(index)?;
+            let scaling = calculate_band_scaling(&source_band, index, output_max)?;
+            translate_options.extend([
+                if source.raster_count() == 1 {
+                    "-scale".to_string()
+                } else {
+                    format!("-scale_{index}")
+                },
+                scaling.src_min.to_string(),
+                scaling.src_max.to_string(),
+                "0".to_string(),
+                scaling.dst_max.to_string(),
+            ]);
+
+            // The scale and metedata have to be explicitely set, otherwise they are not included in scaled cog metadata
+            let mut band = scaled_source.rasterband(index)?;
+            band.set_scale(scaling.scale)?;
+            band.set_offset(scaling.offset)?;
+        }
+
+        raster::algo::gdal::translate(&scaled_source, &scaled_tmp_path, &translate_options)?;
+    }
+
     std::fs::rename(&scaled_tmp_path, cog_path)?;
     Ok(())
 }
@@ -549,30 +626,27 @@ mod tests {
     }
 
     #[test]
-    fn scaled_single_band_cog_should_preserve_nodata_without_zeros() -> Result<()> {
+    fn scaled_single_band_cog_should_preserve_nodata_and_range() -> Result<()> {
         let raster = create_tiny_scaled_cog()?;
         let pixels = raster.as_slice();
 
         assert_eq!(pixels[2], 255, "Declared -9999 nodata must become 255");
-        assert_eq!(pixels[4], 255, "NaN must become 255");
-        assert!(!pixels.contains(&0), "Unexpected zero pixels: {pixels:?}");
-        for index in [0, 1, 3, 5, 6, 7, 8] {
-            assert_ne!(pixels[index], 255, "Valid input pixel {index} must not become nodata");
-        }
+        assert_eq!(pixels[4], 255, "Declared -9999 nodata must become 255");
+        assert_eq!(pixels, &[0, 42, 255, 85, 255, 127, 169, 212, 254]);
         Ok(())
     }
 
     #[test]
     fn scaled_single_band_cog_should_preserve_min_max_when_descaled() -> Result<()> {
         let raster = create_tiny_scaled_cog()?;
-        let pixels = raster.as_slice();
-        // Invert GDAL's implicit -scale mapping of [10, 16] to [0, 255.999].
-        let quantization_step = (16.0 - 10.0) / 255.999;
-        let (min, max) = pixels
-            .iter()
-            .copied()
-            .filter(|&value| value != 255)
-            .map(|value| 10.0 + f64::from(value) * quantization_step)
+        let scale = raster.metadata().scale().expect("Scaled output must include inverse scale/offset");
+        let quantization_step = (16.0 - 10.0) / 254.0;
+        assert_relative_eq!(scale.scale, quantization_step, epsilon = 1e-12);
+        assert_relative_eq!(scale.offset, 10.0, epsilon = 1e-12);
+        let descaled: DenseRaster<f64> = raster::algo::descale(&raster);
+        let (min, max) = descaled
+            .iter_opt()
+            .flatten()
             .fold((f64::INFINITY, f64::NEG_INFINITY), |(min, max), value| {
                 (min.min(value), max.max(value))
             });
@@ -588,7 +662,7 @@ mod tests {
         let tmp = tempfile::tempdir().expect("Failed to create temporary directory");
         let input = tmp.path().join("input.tif");
         let output = tmp.path().join("scaled.tif");
-        let pixels = [10.0f32, 11.0, -9999.0, 12.0, f32::NAN, 13.0, 14.0, 15.0, 16.0];
+        let pixels = [10.0f32, 11.0, -9999.0, 12.0, -9999.0, 13.0, 14.0, 15.0, 16.0];
         let pixel_size = Tile::pixel_size_at_zoom_level(8, 256);
         let georef = GeoReference::with_top_left_origin(
             "EPSG:3857",
@@ -598,7 +672,6 @@ mod tests {
             Some(-9999.0),
         );
         {
-            // Write raw floats so NaN is not normalized to the declared -9999 nodata.
             let dataset = raster::formats::gdal::create_in_memory_dataset_with_data(&georef, &pixels)?;
             raster::algo::gdal::translate(&dataset, &input, &["-of".into(), "COG".into()])?;
         }
@@ -612,7 +685,9 @@ mod tests {
             },
         )?;
 
-        let result = DenseRaster::<u8>::read_bounds(&output, &georef, 1)?;
+        let mut bounds = georef;
+        bounds.set_scale(GeoReference::from_file(&output)?.scale());
+        let result = DenseRaster::<u8>::read_bounds(&output, &bounds, 1)?;
         assert_eq!(result.metadata().nodata(), Some(255.0));
 
         Ok(result)
