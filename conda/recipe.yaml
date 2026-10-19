@@ -24,7 +24,8 @@ requirements:
   build:
     - ${{ compiler('c') }}
     - ${{ compiler('cxx') }}
-    - ${{ stdlib('c') }}
+    - if: unix
+      then: ${{ stdlib('c') }}
     - rust 1.95.*
     - python 3.13.*
     - pkg-config
