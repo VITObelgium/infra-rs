@@ -182,12 +182,22 @@ mod round_trip {
         for write_bottom_up in [false, true] {
             write_raster_bands(&path, &bands, WriteRasterOptions::NetCdf(NetcdfWriteOptions { write_bottom_up }))?;
 
+            let dataset = gdal::Dataset::open_ex(
+                &path,
+                gdal::DatasetOptions {
+                    open_flags: gdal::GdalOpenFlags::GDAL_OF_MULTIDIM_RASTER,
+                    allowed_drivers: Some(&["netCDF"]),
+                    ..Default::default()
+                },
+            )?;
+            let root_group = dataset.root_group()?;
+
             for (index, &(expected_meta, expected_data)) in bands.iter().enumerate() {
                 let variable = format!("NETCDF:\"{}\":Band{}", path.display(), index + 1);
                 let mut reader = RasterIO::open_read_only(variable)?;
                 assert_eq!(reader.band_count()?, 1);
                 assert_eq!(reader.data_type(1)?, <f32 as ArrayNum>::TYPE);
-                let (meta, data) = reader.read_raster_band::<f32>(1)?;
+                let meta = reader.georeference(1)?;
                 assert_eq!(meta.raster_size(), expected_meta.raster_size());
                 assert_eq!(meta.geo_transform(), expected_meta.geo_transform());
                 assert_eq!(meta.projected_epsg(), Some(WGS84_WEB_MERCATOR));
@@ -197,15 +207,17 @@ mod round_trip {
                 } else {
                     assert!(meta.nodata().is_some_and(f64::is_nan));
                 }
-                assert_eq!(data.len(), expected_data.len());
-                // The classic reader assumes bottom-up storage for this fixture,
-                // reversing top-down rows despite reporting the original transform.
-                // Check every stored row explicitly; the transform alone cannot be
-                // used as a coordinate oracle for that reader behavior.
+                // The classic reader's automatic row orientation varies across GDAL
+                // versions and configuration. Inspect native storage to test WRITE_BOTTOMUP.
                 let rows = expected_meta.rows().count() as usize;
                 let cols = expected_meta.columns().count() as usize;
+                let array = root_group.open_md_array(&format!("Band{}", index + 1), Default::default())?;
+                let dimensions = array.dimensions()?;
+                assert_eq!(dimensions.iter().map(|dim| dim.size()).collect::<Vec<_>>(), [rows, cols]);
+                let data = array.read_as::<f32>(vec![0, 0], vec![rows, cols])?;
+                assert_eq!(data.len(), expected_data.len());
                 for (row, actual_row) in data.chunks_exact(cols).enumerate() {
-                    let source_row = if write_bottom_up { row } else { rows - 1 - row };
+                    let source_row = if write_bottom_up { rows - 1 - row } else { row };
                     let expected_row = &expected_data[source_row * cols..(source_row + 1) * cols];
                     for (&actual, &expected) in actual_row.iter().zip(expected_row) {
                         assert!(
