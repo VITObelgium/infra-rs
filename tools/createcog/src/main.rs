@@ -199,10 +199,9 @@ fn main() -> Result<()> {
     if opt.print_command {
         print_gdal_translate_command(&opt.input, tile_opts)?;
     } else {
-        let mut update_progress = |fraction: f64| {
+        let progress_callback: &mut dyn FnMut(f64) = &mut |fraction: f64| {
             let _ = progress.lock().update_to((fraction * 100.0) as usize);
         };
-        let progress_callback: Option<&mut dyn FnMut(f64)> = show_progress.then_some(&mut update_progress);
 
         create_cog_tiles(&opt.input, opt.output, tile_opts, progress_callback)?;
         progress.lock().update_to(100)?;
