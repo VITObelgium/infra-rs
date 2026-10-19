@@ -79,11 +79,19 @@ pub struct GeoTiffWriteOptions {
     pub sparse_ok: bool,
 }
 
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct NetcdfWriteOptions {
+    /// Store rows bottom-up when true; defaults to false for top-down storage.
+    pub write_bottom_up: bool,
+}
+
 pub enum WriteRasterOptions {
     /// Write the raster with the default options
     Default,
     /// Write the raster with the provided options
     GeoTiff(GeoTiffWriteOptions),
+    /// Write `NetCDF` with explicit row storage order (requires the `gdal` feature).
+    NetCdf(NetcdfWriteOptions),
 }
 
 /// Raster read/write operations trait
