@@ -271,6 +271,101 @@ fn assert_rejected(input: &Path, output: &Path, args: &[&str], words: &[&str]) {
 }
 
 #[test]
+fn single_band_tiff_defaults_preserve_raw_samples_and_nodata() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let input = directory.path().join("packed.tif");
+    create_raster(&input, "GTiff", &[PACKED])?;
+    let dataset = convert(&input, &directory.path().join("output.tif"), tiff_grid(), &[], 1)?;
+    let band = dataset.rasterband(1)?;
+    assert_eq!(band.band_type(), GdalDataType::Int32);
+    assert_eq!(band.no_data_value(), Some(NODATA));
+    assert_samples(&dataset, 1, tiff_grid(), false, 0.0, |row, column| PACKED.raw(row, column))
+}
+
+#[test]
+fn multiband_tiff_defaults_preserve_raw_samples_and_nodata() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let input = directory.path().join("packed.tif");
+    let bands = [PACKED, OTHER_PACKED];
+    create_raster(&input, "GTiff", &bands)?;
+    let dataset = convert(&input, &directory.path().join("output.tif"), tiff_grid(), &[], bands.len())?;
+    for (index, &packed) in bands.iter().enumerate() {
+        let band = dataset.rasterband(index + 1)?;
+        assert_eq!(band.band_type(), GdalDataType::Int32);
+        assert_eq!(band.no_data_value(), Some(NODATA));
+        assert_samples(&dataset, index + 1, tiff_grid(), false, 0.0, |row, column| packed.raw(row, column))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn tiff_glob_defaults_detect_multiband_and_preserve_sorted_file_then_band_order() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let later = [OTHER_PACKED, PackedBand { base: 1901, ..PACKED }];
+    let earlier = [PACKED, PackedBand { base: 501, ..OTHER_PACKED }];
+    create_raster(&directory.path().join("b.tif"), "GTiff", &later)?;
+    create_raster(&directory.path().join("a.tif"), "GTiff", &earlier)?;
+    let dataset = convert(
+        &directory.path().join("[ab].tif"),
+        &directory.path().join("output.tif"),
+        tiff_grid(),
+        &[],
+        4,
+    )?;
+    for (index, packed) in [earlier[0], earlier[1], later[0], later[1]].into_iter().enumerate() {
+        let band = dataset.rasterband(index + 1)?;
+        assert_eq!(band.band_type(), GdalDataType::Int32);
+        assert_eq!(band.no_data_value(), Some(NODATA));
+        assert_samples(&dataset, index + 1, tiff_grid(), false, 0.0, |row, column| packed.raw(row, column))?;
+    }
+    Ok(())
+}
+
+#[test]
+fn tiff_glob_matching_one_single_band_file_preserves_raw_samples() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    create_raster(&directory.path().join("input.tif"), "GTiff", &[PACKED])?;
+    let dataset = convert(
+        &directory.path().join("input*.tif"),
+        &directory.path().join("output.tif"),
+        tiff_grid(),
+        &[],
+        1,
+    )?;
+    assert_samples(&dataset, 1, tiff_grid(), false, 0.0, |row, column| PACKED.raw(row, column))
+}
+
+#[test]
+fn tiff_conversion_ignores_invalid_netcdf_dimensions() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let input = directory.path().join("packed.tif");
+    create_raster(&input, "GTiff", &[PACKED])?;
+    let dataset = convert(
+        &input,
+        &directory.path().join("output.tif"),
+        tiff_grid(),
+        &["--dimensions", "not_a_valid_dimension_list"],
+        1,
+    )?;
+    assert_eq!(dataset.rasterband(1)?.no_data_value(), Some(NODATA));
+    assert_samples(&dataset, 1, tiff_grid(), false, 0.0, |row, column| PACKED.raw(row, column))
+}
+
+#[test]
+fn tiff_conversion_rejects_netcdf_variable_selection_without_output() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let input = directory.path().join("packed.tif");
+    create_raster(&input, "GTiff", &[PACKED])?;
+    assert_rejected(
+        &input,
+        &directory.path().join("output.tif"),
+        &["--variable", "Band1"],
+        &["--variable", "only supported for NetCDF"],
+    );
+    Ok(())
+}
+
+#[test]
 fn single_band_unscale_defaults_to_float64_and_preserves_nodata() -> TestResult {
     let directory = tempfile::tempdir()?;
     for (driver, extension, args) in [
