@@ -71,7 +71,11 @@ impl GeoTiffMetadata {
                         if io_err.kind() == std::io::ErrorKind::UnexpectedEof =>
                     {
                         // If the error is an EOF, we need more data to parse the header
+                        let previous_size = cog_buffer_reader.cog_header().len();
                         cog_buffer_reader.increase_buffer_size(&mut file_reader)?;
+                        if cog_buffer_reader.cog_header().len() == previous_size {
+                            return Err(Error::IOError(io_err));
+                        }
                         log::debug!("Cog header dit not fit in default header size, retry with increased buffer size");
                     }
                     Ok(mut meta) => {
@@ -110,6 +114,55 @@ impl GeoTiffMetadata {
 
     pub fn is_tiled(&self) -> bool {
         matches!(self.data_layout, ChunkDataLayout::Tiled(_))
+    }
+}
+
+#[cfg(test)]
+mod safety_tests {
+    use super::*;
+
+    #[test]
+    fn from_file_rejects_short_headers() -> Result<()> {
+        let file = tempfile::NamedTempFile::new()?;
+        for header in [b"II*\0\0\0\0\0".as_slice(), b"II+\0\x08\0\0\0\0\0\0\0\0\0\0\0".as_slice()] {
+            for length in 0..header.len() {
+                std::fs::write(file.path(), &header[..length])?;
+                assert!(
+                    GeoTiffMetadata::from_file(file.path()).is_err(),
+                    "Expected truncated TIFF header of length {length} to be rejected"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn from_file_rejects_truncated_metadata_with_recognized_ghost() -> Result<()> {
+        let ghost = "LAYOUT=IFDS_BEFORE_DATA\nBLOCK_ORDER=ROW_MAJOR\nBLOCK_LEADER=SIZE_AS_UINT4\nBLOCK_TRAILER=LAST_4_BYTES_REPEATED\nKNOWN_INCOMPATIBLE_EDITION=NO\n";
+        let mut header = b"II*\0".to_vec();
+        let ifd_offset = u32::try_from(2 * io::COG_HEADER_SIZE).expect("test IFD offset fits in u32");
+        header.extend_from_slice(&ifd_offset.to_le_bytes());
+        header.extend_from_slice(format!("GDAL_STRUCTURAL_METADATA_SIZE={:06} bytes\n", ghost.len()).as_bytes());
+        header.extend_from_slice(ghost.as_bytes());
+        assert!(GdalGhostData::from_tiff_header_buffer(&header).is_some_and(|ghost| ghost.is_cog()));
+
+        let file = tempfile::NamedTempFile::new()?;
+        for file_size in [header.len(), io::COG_HEADER_SIZE + 1] {
+            let mut contents = header.clone();
+            contents.resize(file_size, 0);
+            std::fs::write(file.path(), contents)?;
+
+            let error = GeoTiffMetadata::from_file(file.path()).expect_err("IFD beyond EOF must be rejected");
+            assert!(
+                matches!(
+                    &error,
+                    Error::IOError(io_err) | Error::TiffError(tiff::TiffError::IoError(io_err))
+                        if io_err.kind() == std::io::ErrorKind::UnexpectedEof
+                ),
+                "Expected UnexpectedEof for file size {file_size}, got {error:?}"
+            );
+        }
+        Ok(())
     }
 }
 

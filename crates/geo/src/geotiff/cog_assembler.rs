@@ -4,21 +4,26 @@
 //! directories and copies each compressed tile payload byte-for-byte.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, VecDeque},
     fs::File,
-    io::{BufWriter, Read, Seek, SeekFrom, Write},
+    io::{BufWriter, Write},
     path::{Path, PathBuf},
 };
 
 use tiff::{
     decoder::Decoder,
-    tags::{ByteOrder, Type, ValueBuffer},
+    tags::{ByteOrder, Type},
 };
-use xml::reader::{EventReader, XmlEvent};
 
-use crate::{Error, Result};
+use crate::{Error, RasterSize, Result};
 
-use super::{TiffChunkLocation, gdalghostdata::GdalGhostData, io::COG_HEADER_SIZE};
+mod gdal_metadata;
+mod source_metadata;
+
+use gdal_metadata::{GdalMetadataItem, serialize_gdal_metadata};
+use source_metadata::{ImageMetadata, read_image_metadata};
+
+use super::{GeoTiffMetadata, TiffChunkLocation, TiffOverview, gdalghostdata::GdalGhostData, io};
 
 const TAG_NEW_SUBFILE_TYPE: u16 = 254;
 const TAG_IMAGE_WIDTH: u16 = 256;
@@ -30,13 +35,9 @@ const TAG_FILL_ORDER: u16 = 266;
 const TAG_IMAGE_DESCRIPTION: u16 = 270;
 const TAG_ORIENTATION: u16 = 274;
 const TAG_SAMPLES_PER_PIXEL: u16 = 277;
-const TAG_ROWS_PER_STRIP: u16 = 278;
-const TAG_STRIP_BYTE_COUNTS: u16 = 279;
 const TAG_X_RESOLUTION: u16 = 282;
 const TAG_Y_RESOLUTION: u16 = 283;
 const TAG_PLANAR_CONFIGURATION: u16 = 284;
-const TAG_FREE_OFFSETS: u16 = 288;
-const TAG_FREE_BYTE_COUNTS: u16 = 289;
 const TAG_RESOLUTION_UNIT: u16 = 296;
 const TAG_SOFTWARE: u16 = 305;
 const TAG_ARTIST: u16 = 315;
@@ -46,7 +47,6 @@ const TAG_TILE_WIDTH: u16 = 322;
 const TAG_TILE_LENGTH: u16 = 323;
 const TAG_TILE_OFFSETS: u16 = 324;
 const TAG_TILE_BYTE_COUNTS: u16 = 325;
-const TAG_SUB_IFD: u16 = 330;
 const TAG_EXTRA_SAMPLES: u16 = 338;
 const TAG_COPYRIGHT: u16 = 33432;
 const TAG_MODEL_PIXEL_SCALE: u16 = 33550;
@@ -59,8 +59,6 @@ const TAG_GEO_ASCII_PARAMS: u16 = 34737;
 const TAG_SAMPLE_FORMAT: u16 = 339;
 const TAG_GDAL_METADATA: u16 = 42112;
 const TAG_GDAL_NODATA: u16 = 42113;
-const TAG_EXIF_DIRECTORY: u16 = 0x8769;
-const TAG_GPS_DIRECTORY: u16 = 0x8825;
 const TAG_LERC_PARAMETERS: u16 = 50674;
 
 const COMPRESSION_NONE: u16 = 1;
@@ -74,31 +72,29 @@ const PLANAR_SEPARATE: u16 = 2;
 const REDUCED_IMAGE: u32 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct RawTag {
+struct EncodedTag {
     field_type: Type,
     count: u64,
     bytes: Vec<u8>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct SourceLevel {
-    width: u32,
-    height: u32,
-    tile_width: u32,
-    tile_length: u32,
-    bits_per_sample: u16,
-    compression: u16,
-    photometric: u16,
-    predictor: u16,
-    sample_format: u16,
-    tile_locations: Vec<TiffChunkLocation>,
-    tags: BTreeMap<u16, RawTag>,
+    raster_size: RasterSize,
+    chunk_locations: Vec<TiffChunkLocation>,
+    image_metadata: ImageMetadata,
 }
 
 #[derive(Debug)]
 struct SourceCog {
     path: PathBuf,
     levels: Vec<SourceLevel>,
+}
+
+impl SourceCog {
+    fn levels(&self) -> &[SourceLevel] {
+        &self.levels
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -108,6 +104,14 @@ enum TiffVariant {
 }
 
 impl TiffVariant {
+    fn align_metadata(self, value: u64) -> std::result::Result<u64, LayoutError> {
+        let alignment = match self {
+            Self::Classic => 2,
+            Self::Big => 8,
+        };
+        checked_add(value, alignment - 1, "metadata alignment").map(|value| value & !(alignment - 1))
+    }
+
     fn header_size(self) -> u64 {
         match self {
             Self::Classic => 8,
@@ -148,12 +152,12 @@ impl TiffVariant {
 
 #[derive(Debug)]
 struct OutputIfd {
-    tags: BTreeMap<u16, RawTag>,
+    tags: BTreeMap<u16, EncodedTag>,
 }
 
 #[derive(Debug)]
 struct PlannedTag {
-    value: RawTag,
+    value: EncodedTag,
     value_offset: Option<u64>,
 }
 
@@ -187,12 +191,6 @@ enum LayoutError {
     Invalid(String),
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
-struct XmlItem {
-    attributes: Vec<(String, String)>,
-    text: String,
-}
-
 /// Merge compatible staged single-band COGs into one planar-separate,
 /// tile-interleaved multiband COG without decoding or recompressing tiles.
 ///
@@ -209,15 +207,6 @@ pub fn assemble_band_cogs(inputs: &[PathBuf], output: &Path) -> Result<()> {
             "Band count {} exceeds the TIFF SamplesPerPixel limit",
             inputs.len()
         )));
-    }
-
-    for input in inputs {
-        if input == output {
-            return Err(Error::InvalidArgument(format!(
-                "Output path must not equal an input path: {}",
-                input.display()
-            )));
-        }
     }
 
     let sources = inputs
@@ -243,562 +232,306 @@ pub fn assemble_band_cogs(inputs: &[PathBuf], output: &Path) -> Result<()> {
 }
 
 fn read_source_cog(input_index: usize, path: &Path) -> Result<SourceCog> {
-    let input_name = || format!("Input band {} ({})", input_index + 1, path.display());
-    let file_size = std::fs::metadata(path)
-        .map_err(|error| Error::Runtime(format!("{} cannot be inspected: {error}", input_name())))?
-        .len();
-
-    let mut header_file = File::open(path)?;
-    let mut header = Vec::with_capacity(COG_HEADER_SIZE);
-    Read::by_ref(&mut header_file)
-        .take(COG_HEADER_SIZE as u64)
-        .read_to_end(&mut header)?;
-    if header.len() < 59 {
+    let input_name = format!("Input band {} ({})", input_index + 1, path.display());
+    let metadata = GeoTiffMetadata::from_file(path)?;
+    if !metadata.gdal_ghost_data.as_ref().is_some_and(GdalGhostData::is_cog) {
         return Err(Error::InvalidArgument(format!(
-            "{} is too small to contain TIFF and COG headers",
-            input_name()
+            "{input_name} is not a compatible COG or is marked as modified"
         )));
     }
-
-    let ghost = GdalGhostData::from_tiff_header_buffer(&header)
-        .ok_or_else(|| Error::InvalidArgument(format!("{} has no valid GDAL COG structural metadata", input_name())))?;
-    if !ghost.is_cog() {
-        return Err(Error::InvalidArgument(format!(
-            "{} is not a compatible COG or is marked as modified",
-            input_name()
-        )));
+    if !metadata.is_tiled() {
+        return Err(Error::InvalidArgument(format!("{input_name} must be a tiled COG")));
     }
 
     let file = File::open(path)?;
-    let mut decoder = Decoder::new(file)?;
-    if decoder.byte_order() != ByteOrder::LittleEndian {
-        return Err(Error::InvalidArgument(format!(
-            "{} is big-endian; only little-endian source COGs are supported",
-            input_name()
-        )));
+    let file_size = file.metadata()?.len();
+    let levels = read_source_levels(file, metadata.overviews)?;
+    for (level_index, level) in levels.iter().enumerate() {
+        validate_source_level(&format!("{input_name}, IFD {level_index}"), level_index, file_size, level)?;
     }
-
-    let mut levels = Vec::new();
-    loop {
-        let tags = read_current_ifd_tags(&mut decoder)?;
-        let level_index = levels.len();
-        levels.push(parse_source_level(input_index, path, level_index, file_size, tags)?);
-
-        if !decoder.more_images() {
-            break;
-        }
-        decoder.next_image()?;
-    }
-
-    if levels.is_empty() {
-        return Err(Error::InvalidArgument(format!("{} contains no image directories", input_name())));
-    }
-
     Ok(SourceCog {
         path: path.to_path_buf(),
         levels,
     })
 }
 
-fn read_current_ifd_tags(decoder: &mut Decoder<File>) -> Result<BTreeMap<u16, RawTag>> {
-    let entries = {
-        let ifd = decoder.image_ifd();
-        ifd.directory()
-            .iter()
-            .map(|(tag, entry)| (tag, entry.field_type()))
-            .collect::<Vec<_>>()
-    };
-
-    let mut tags = BTreeMap::new();
-    for (tag, field_type) in entries {
-        let mut value = ValueBuffer::empty(field_type);
-        let found = decoder.image_ifd().find_tag_buf(tag, &mut value)?;
-        if found.is_none() {
-            return Err(Error::Runtime(format!(
-                "TIFF tag {} disappeared while reading its IFD",
-                tag.to_u16()
-            )));
-        }
-        value.set_byte_order(ByteOrder::LittleEndian);
-        let raw_tag = RawTag {
-            field_type: value.data_type(),
-            count: value.count(),
-            bytes: value.as_bytes().to_vec(),
-        };
-        validate_raw_tag(&raw_tag).map_err(layout_error)?;
-        tags.insert(tag.to_u16(), raw_tag);
+fn read_source_levels(file: File, overviews: Vec<TiffOverview>) -> Result<Vec<SourceLevel>> {
+    let mut decoder = Decoder::new(file)?.with_limits(tiff::decoder::Limits::unlimited());
+    if decoder.byte_order() != ByteOrder::LittleEndian {
+        return Err(Error::InvalidArgument("Only little-endian source COGs are supported".into()));
     }
-    Ok(tags)
-}
-
-fn parse_source_level(
-    input_index: usize,
-    path: &Path,
-    level_index: usize,
-    file_size: u64,
-    tags: BTreeMap<u16, RawTag>,
-) -> Result<SourceLevel> {
-    let context = || format!("Input band {} ({}), IFD {level_index}", input_index + 1, path.display());
-
-    validate_supported_tags(&tags, &context())?;
-    validate_copied_tags(&tags, &context())?;
-    if level_index > 0 && tags.contains_key(&TAG_GDAL_METADATA) {
-        return Err(Error::InvalidArgument(format!(
-            "{} contains unsupported overview-level GDAL metadata",
-            context()
-        )));
-    }
-
-    let samples_per_pixel = required_scalar_u16(&tags, TAG_SAMPLES_PER_PIXEL, &context())?;
-    if samples_per_pixel != 1 {
-        return Err(Error::InvalidArgument(format!(
-            "{} has SamplesPerPixel={samples_per_pixel}; expected one",
-            context()
-        )));
-    }
-
-    let new_subfile_type = optional_scalar_u32(&tags, TAG_NEW_SUBFILE_TYPE, &context())?.unwrap_or(0);
-    let expected_subfile_type = if level_index == 0 { 0 } else { REDUCED_IMAGE };
-    if new_subfile_type != expected_subfile_type {
-        return Err(Error::InvalidArgument(format!(
-            "{} has NewSubfileType={new_subfile_type}; expected {expected_subfile_type}",
-            context()
-        )));
-    }
-
-    let width = required_scalar_u32(&tags, TAG_IMAGE_WIDTH, &context())?;
-    let height = required_scalar_u32(&tags, TAG_IMAGE_LENGTH, &context())?;
-    let tile_width = required_scalar_u32(&tags, TAG_TILE_WIDTH, &context())?;
-    let tile_length = required_scalar_u32(&tags, TAG_TILE_LENGTH, &context())?;
-    if width == 0 || height == 0 || tile_width == 0 || tile_length == 0 {
-        return Err(Error::InvalidArgument(format!(
-            "{} contains a zero image or tile dimension",
-            context()
-        )));
-    }
-    if tile_width != tile_length {
-        return Err(Error::InvalidArgument(format!(
-            "{} uses non-square tiles ({tile_width}x{tile_length}), which are not supported",
-            context()
-        )));
-    }
-
-    let bits_per_sample = required_scalar_u16(&tags, TAG_BITS_PER_SAMPLE, &context())?;
-    let compression = required_scalar_u16(&tags, TAG_COMPRESSION, &context())?;
-    let photometric = required_scalar_u16(&tags, TAG_PHOTOMETRIC_INTERPRETATION, &context())?;
-    let predictor = optional_scalar_u16(&tags, TAG_PREDICTOR, &context())?.unwrap_or(1);
-    let sample_format = required_scalar_u16(&tags, TAG_SAMPLE_FORMAT, &context())?;
-    let planar_configuration = optional_scalar_u16(&tags, TAG_PLANAR_CONFIGURATION, &context())?.unwrap_or(1);
-
-    if !matches!(
-        compression,
-        COMPRESSION_NONE | COMPRESSION_LZW | COMPRESSION_DEFLATE | COMPRESSION_LERC | COMPRESSION_ZSTD
-    ) {
-        return Err(Error::InvalidArgument(format!(
-            "{} uses unsupported compression {compression}",
-            context()
-        )));
-    }
-    if photometric != PHOTOMETRIC_BLACK_IS_ZERO {
-        return Err(Error::InvalidArgument(format!(
-            "{} uses PhotometricInterpretation={photometric}; only BlackIsZero single-band inputs are supported",
-            context()
-        )));
-    }
-    if !matches!(planar_configuration, 1 | PLANAR_SEPARATE) {
-        return Err(Error::InvalidArgument(format!(
-            "{} has invalid PlanarConfiguration={planar_configuration}",
-            context()
-        )));
-    }
-    if !matches!(predictor, 1..=3) {
-        return Err(Error::InvalidArgument(format!(
-            "{} uses unsupported Predictor={predictor}",
-            context()
-        )));
-    }
-    if !matches!((sample_format, bits_per_sample), (1 | 2, 8 | 16 | 32 | 64) | (3, 32 | 64)) {
-        return Err(Error::InvalidArgument(format!(
-            "{} uses unsupported SampleFormat/BitsPerSample combination {sample_format}/{bits_per_sample}",
-            context()
-        )));
-    }
-    if compression == COMPRESSION_LERC && !tags.contains_key(&TAG_LERC_PARAMETERS) {
-        return Err(Error::InvalidArgument(format!(
-            "{} uses LERC without a LercParameters tag",
-            context()
-        )));
-    }
-    if compression != COMPRESSION_LERC && tags.contains_key(&TAG_LERC_PARAMETERS) {
-        return Err(Error::InvalidArgument(format!(
-            "{} has a LercParameters tag without LERC compression",
-            context()
-        )));
-    }
-
-    let offsets = required_unsigned_vec(&tags, TAG_TILE_OFFSETS, &context())?;
-    let byte_counts = required_unsigned_vec(&tags, TAG_TILE_BYTE_COUNTS, &context())?;
-    if offsets.len() != byte_counts.len() {
-        return Err(Error::InvalidArgument(format!(
-            "{} has {} tile offsets but {} tile byte counts",
-            context(),
-            offsets.len(),
-            byte_counts.len()
-        )));
-    }
-
-    let tiles_across = u64::from(width).div_ceil(u64::from(tile_width));
-    let tiles_down = u64::from(height).div_ceil(u64::from(tile_length));
-    let expected_tile_count = tiles_across
-        .checked_mul(tiles_down)
-        .ok_or_else(|| Error::InvalidArgument(format!("{} tile count overflows u64", context())))?;
-    if offsets.len() as u64 != expected_tile_count {
-        return Err(Error::InvalidArgument(format!(
-            "{} has {} tiles; dimensions require {expected_tile_count}",
-            context(),
-            offsets.len()
-        )));
-    }
-
-    let mut tile_locations = Vec::with_capacity(offsets.len());
-    for (tile_index, (&offset, &size)) in offsets.iter().zip(&byte_counts).enumerate() {
-        if (offset == 0) != (size == 0) {
-            return Err(Error::InvalidArgument(format!(
-                "{} tile {tile_index} has inconsistent sparse offset/count ({offset}/{size})",
-                context()
-            )));
-        }
-        if size > u32::MAX as u64 {
-            return Err(Error::InvalidArgument(format!(
-                "{} tile {tile_index} has {size} payload bytes, exceeding the COG uint32 leader limit",
-                context()
-            )));
-        }
-        if size != 0 && size < 4 {
-            return Err(Error::InvalidArgument(format!(
-                "{} tile {tile_index} is only {size} bytes; a four-byte COG trailer cannot be generated",
-                context()
-            )));
-        }
-        if size != 0 {
-            let end = offset
-                .checked_add(size)
-                .ok_or_else(|| Error::InvalidArgument(format!("{} tile {tile_index} range overflows u64", context())))?;
-            if end > file_size {
-                return Err(Error::InvalidArgument(format!(
-                    "{} tile {tile_index} range {offset}..{end} exceeds file size {file_size}",
-                    context()
-                )));
+    // The shared reader owns raster/chunk discovery. Only assembly-specific IFD
+    // preservation and validation require this separate, private metadata pass.
+    let levels = overviews
+        .into_iter()
+        .enumerate()
+        .map(|(index, overview)| {
+            if index > 0 {
+                decoder.next_image()?;
             }
-        }
-        tile_locations.push(TiffChunkLocation { offset, size });
+            let tiled = decoder.get_chunk_type() == tiff::decoder::ChunkType::Tile;
+            let image_metadata = read_image_metadata(&mut decoder, tiled)?;
+            Ok(SourceLevel {
+                raster_size: overview.raster_size,
+                chunk_locations: overview.chunk_locations,
+                image_metadata,
+            })
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if decoder.more_images() {
+        return Err(Error::InvalidArgument(
+            "Source image directories changed after reading COG metadata".into(),
+        ));
     }
-
-    Ok(SourceLevel {
-        width,
-        height,
-        tile_width,
-        tile_length,
-        bits_per_sample,
-        compression,
-        photometric,
-        predictor,
-        sample_format,
-        tile_locations,
-        tags,
-    })
+    Ok(levels)
 }
 
-fn validate_supported_tags(tags: &BTreeMap<u16, RawTag>, context: &str) -> Result<()> {
-    for &tag in tags.keys() {
-        if !is_supported_input_tag(tag) {
-            let reason = if matches!(
-                tag,
-                TAG_ROWS_PER_STRIP
-                    | TAG_STRIP_BYTE_COUNTS
-                    | TAG_FREE_OFFSETS
-                    | TAG_FREE_BYTE_COUNTS
-                    | TAG_SUB_IFD
-                    | TAG_EXIF_DIRECTORY
-                    | TAG_GPS_DIRECTORY
-            ) {
-                "pointer-bearing or non-tiled layout tag"
-            } else {
-                "tag is not on the assembler preservation allowlist"
-            };
+fn validate_source_level(context: &str, level_index: usize, file_size: u64, overview: &SourceLevel) -> Result<()> {
+    let image = &overview.image_metadata;
+    if !image.unhandled_tag_ids.is_empty() {
+        return Err(Error::InvalidArgument(format!(
+            "{context} contains metadata the assembler cannot preserve: {:?}",
+            image.unhandled_tag_ids
+        )));
+    }
+    if image.samples_per_pixel != 1 || image.bits_per_sample.len() != 1 || image.sample_format.len() != 1 {
+        return Err(Error::InvalidArgument(format!(
+            "{context} must contain exactly one sample per pixel"
+        )));
+    }
+    let expected_subfile_type = if level_index == 0 { 0 } else { REDUCED_IMAGE };
+    if image.new_subfile_type != expected_subfile_type || (level_index > 0 && image.gdal_metadata.is_some()) {
+        return Err(Error::InvalidArgument(format!(
+            "{context} is not a supported base image or reduced-resolution overview"
+        )));
+    }
+    let Some(tile_width) = image.tile_width.filter(|&width| width > 0 && Some(width) == image.tile_length) else {
+        return Err(Error::InvalidArgument(format!("{context} must use nonzero square tiles")));
+    };
+    if image.rows_per_strip.is_some() {
+        return Err(Error::InvalidArgument(format!("{context} contains strip-layout metadata")));
+    }
+    if image.photometric_interpretation != PHOTOMETRIC_BLACK_IS_ZERO || !matches!(image.planar_configuration, 1 | PLANAR_SEPARATE) {
+        return Err(Error::InvalidArgument(format!(
+            "{context} must use BlackIsZero samples and a supported planar configuration"
+        )));
+    }
+    if image.fill_order.is_some_and(|value| value != 1) || image.orientation.is_some_and(|value| value != 1) {
+        return Err(Error::InvalidArgument(format!(
+            "{context} uses a fill order or orientation unsupported by the COG reader"
+        )));
+    }
+    if !matches!(
+        image.compression,
+        COMPRESSION_NONE | COMPRESSION_LZW | COMPRESSION_DEFLATE | COMPRESSION_LERC | COMPRESSION_ZSTD
+    ) || !matches!(image.predictor, 1..=3)
+        || !matches!(
+            (image.sample_format[0], image.bits_per_sample[0]),
+            (1 | 2, 8 | 16 | 32 | 64) | (3, 32 | 64)
+        )
+    {
+        return Err(Error::InvalidArgument(format!("{context} uses unsupported sample encoding")));
+    }
+    if (image.compression == COMPRESSION_LERC) != image.lerc_parameters.is_some()
+        || image.lerc_parameters.is_some_and(|params| params.additional_compression > 2)
+    {
+        return Err(Error::InvalidArgument(format!("{context} has incompatible LERC parameters")));
+    }
+    let width = overview.raster_size.cols.count();
+    let height = overview.raster_size.rows.count();
+    if width <= 0 || height <= 0 {
+        return Err(Error::InvalidArgument(format!("{context} contains invalid dimensions")));
+    }
+    let expected_tiles = u64::from(width as u32).div_ceil(u64::from(tile_width)) * u64::from(height as u32).div_ceil(u64::from(tile_width));
+    if overview.chunk_locations.len() as u64 != expected_tiles {
+        return Err(Error::InvalidArgument(format!(
+            "{context} has {} tiles; dimensions require {expected_tiles}",
+            overview.chunk_locations.len()
+        )));
+    }
+    for (tile_index, &TiffChunkLocation { offset, size }) in overview.chunk_locations.iter().enumerate() {
+        if (offset == 0) != (size == 0) || (size != 0 && !(4..=u64::from(u32::MAX)).contains(&size)) {
             return Err(Error::InvalidArgument(format!(
-                "{context} contains unsupported TIFF tag {tag}: {reason}"
+                "{context} tile {tile_index} has unsupported offset/size {offset}/{size}"
+            )));
+        }
+        if offset.checked_add(size).is_none_or(|end| end > file_size) {
+            return Err(Error::InvalidArgument(format!(
+                "{context} tile {tile_index} exceeds source file size {file_size}"
             )));
         }
     }
     Ok(())
-}
-
-fn validate_copied_tags(tags: &BTreeMap<u16, RawTag>, context: &str) -> Result<()> {
-    for (&tag_id, tag) in tags {
-        let valid = match tag_id {
-            TAG_FILL_ORDER | TAG_ORIENTATION | TAG_RESOLUTION_UNIT => tag.field_type == Type::SHORT && tag.count == 1,
-            TAG_IMAGE_DESCRIPTION
-            | TAG_SOFTWARE
-            | TAG_ARTIST
-            | TAG_HOST_COMPUTER
-            | TAG_COPYRIGHT
-            | TAG_GEO_ASCII_PARAMS
-            | TAG_GDAL_METADATA
-            | TAG_GDAL_NODATA => tag.field_type == Type::ASCII && tag.count > 0,
-            TAG_X_RESOLUTION | TAG_Y_RESOLUTION => tag.field_type == Type::RATIONAL && tag.count == 1,
-            TAG_MODEL_PIXEL_SCALE => tag.field_type == Type::DOUBLE && tag.count == 3,
-            TAG_MODEL_TIEPOINT => tag.field_type == Type::DOUBLE && tag.count >= 6 && tag.count.is_multiple_of(6),
-            TAG_MODEL_TRANSFORMATION => tag.field_type == Type::DOUBLE && tag.count == 16,
-            TAG_ICC_PROFILE => tag.field_type == Type::UNDEFINED && tag.count > 0,
-            TAG_GEO_KEY_DIRECTORY => tag.field_type == Type::SHORT && tag.count >= 4 && (tag.count - 4).is_multiple_of(4),
-            TAG_GEO_DOUBLE_PARAMS => tag.field_type == Type::DOUBLE,
-            TAG_LERC_PARAMETERS => tag.field_type == Type::LONG && tag.count == 2,
-            _ => true,
-        };
-
-        if !valid {
-            return Err(Error::InvalidArgument(format!(
-                "{context} TIFF tag {tag_id} has unsupported type/count {:?}[{}]",
-                tag.field_type, tag.count
-            )));
-        }
-        if matches!(tag.field_type, Type::IFD | Type::IFD8) {
-            return Err(Error::InvalidArgument(format!(
-                "{context} TIFF tag {tag_id} contains an unsupported directory pointer"
-            )));
-        }
-    }
-
-    Ok(())
-}
-
-fn is_supported_input_tag(tag: u16) -> bool {
-    matches!(
-        tag,
-        TAG_NEW_SUBFILE_TYPE
-            | TAG_IMAGE_WIDTH
-            | TAG_IMAGE_LENGTH
-            | TAG_BITS_PER_SAMPLE
-            | TAG_COMPRESSION
-            | TAG_PHOTOMETRIC_INTERPRETATION
-            | TAG_FILL_ORDER
-            | TAG_IMAGE_DESCRIPTION
-            | TAG_ORIENTATION
-            | TAG_SAMPLES_PER_PIXEL
-            | TAG_X_RESOLUTION
-            | TAG_Y_RESOLUTION
-            | TAG_PLANAR_CONFIGURATION
-            | TAG_RESOLUTION_UNIT
-            | TAG_SOFTWARE
-            | TAG_ARTIST
-            | TAG_HOST_COMPUTER
-            | TAG_PREDICTOR
-            | TAG_TILE_WIDTH
-            | TAG_TILE_LENGTH
-            | TAG_TILE_OFFSETS
-            | TAG_TILE_BYTE_COUNTS
-            | TAG_SAMPLE_FORMAT
-            | TAG_COPYRIGHT
-            | TAG_MODEL_PIXEL_SCALE
-            | TAG_MODEL_TIEPOINT
-            | TAG_MODEL_TRANSFORMATION
-            | TAG_ICC_PROFILE
-            | TAG_GEO_KEY_DIRECTORY
-            | TAG_GEO_DOUBLE_PARAMS
-            | TAG_GEO_ASCII_PARAMS
-            | TAG_GDAL_METADATA
-            | TAG_GDAL_NODATA
-            | TAG_LERC_PARAMETERS
-    )
 }
 
 fn validate_compatibility(sources: &[SourceCog]) -> Result<()> {
     let reference = &sources[0];
-    for (band_index, source) in sources.iter().enumerate().skip(1) {
-        if source.levels.len() != reference.levels.len() {
+    let reference_levels = reference.levels();
+    for (band_index, source) in sources.iter().enumerate() {
+        if source.levels().len() != reference_levels.len() {
             return Err(Error::InvalidArgument(format!(
-                "Input band {} ({}) has {} IFD levels; input band 1 ({}) has {}",
+                "Input band {} ({}) has a different number of overview levels",
                 band_index + 1,
-                source.path.display(),
-                source.levels.len(),
-                reference.path.display(),
-                reference.levels.len()
+                source.path.display()
             )));
         }
-    }
-
-    for level_index in 0..reference.levels.len() {
-        let reference_level = &reference.levels[level_index];
-        if level_index > 0 {
-            let previous = &reference.levels[level_index - 1];
-            if reference_level.width > previous.width
-                || reference_level.height > previous.height
-                || (reference_level.width == previous.width && reference_level.height == previous.height)
-            {
-                return Err(Error::InvalidArgument(format!(
-                    "Input band 1 ({}) IFD {level_index} is not a reduced-resolution overview",
-                    reference.path.display()
-                )));
-            }
-        }
-
-        for (band_index, source) in sources.iter().enumerate().skip(1) {
-            let level = &source.levels[level_index];
-            let mismatch = if level.width != reference_level.width || level.height != reference_level.height {
-                Some(format!(
-                    "dimensions {}x{} differ from {}x{}",
-                    level.width, level.height, reference_level.width, reference_level.height
-                ))
-            } else if level.tile_width != reference_level.tile_width || level.tile_length != reference_level.tile_length {
-                Some(format!(
-                    "tile dimensions {}x{} differ from {}x{}",
-                    level.tile_width, level.tile_length, reference_level.tile_width, reference_level.tile_length
-                ))
-            } else if level.tile_locations.len() != reference_level.tile_locations.len() {
-                Some(format!(
-                    "tile count {} differs from {}",
-                    level.tile_locations.len(),
-                    reference_level.tile_locations.len()
-                ))
-            } else if level.bits_per_sample != reference_level.bits_per_sample {
-                Some(format!(
-                    "BitsPerSample {} differs from {}",
-                    level.bits_per_sample, reference_level.bits_per_sample
-                ))
-            } else if level.sample_format != reference_level.sample_format {
-                Some(format!(
-                    "SampleFormat {} differs from {}",
-                    level.sample_format, reference_level.sample_format
-                ))
-            } else if level.compression != reference_level.compression {
-                Some(format!(
-                    "Compression {} differs from {}",
-                    level.compression, reference_level.compression
-                ))
-            } else if level.predictor != reference_level.predictor {
-                Some(format!("Predictor {} differs from {}", level.predictor, reference_level.predictor))
-            } else if level.photometric != reference_level.photometric {
-                Some(format!(
-                    "PhotometricInterpretation {} differs from {}",
-                    level.photometric, reference_level.photometric
-                ))
-            } else {
-                None
+        for (level_index, (level, expected)) in source.levels().iter().zip(reference_levels).enumerate() {
+            let image = &level.image_metadata;
+            let main = &source.levels()[0].image_metadata;
+            let encoding = |image: &ImageMetadata| {
+                (
+                    image.bits_per_sample[0],
+                    image.sample_format[0],
+                    image.compression,
+                    image.predictor,
+                    image.tile_width,
+                    image.tile_length,
+                    image.lerc_parameters,
+                )
             };
-
-            if let Some(mismatch) = mismatch {
+            if encoding(image) != encoding(main) || encoding(image) != encoding(&expected.image_metadata) {
                 return Err(Error::InvalidArgument(format!(
-                    "Input band {} ({}), IFD {level_index} is incompatible with input band 1 ({}): {mismatch}",
+                    "Input band {} ({}) IFD {level_index} has incompatible data encoding",
                     band_index + 1,
-                    source.path.display(),
-                    reference.path.display()
+                    source.path.display()
                 )));
             }
-        }
-    }
-
-    // The current GeoTIFF reader stores these once and applies them to all overviews.
-    for (level_index, level) in reference.levels.iter().enumerate().skip(1) {
-        let main = &reference.levels[0];
-        if (
-            level.bits_per_sample,
-            level.sample_format,
-            level.compression,
-            level.predictor,
-            level.tile_width,
-            level.tile_length,
-        ) != (
-            main.bits_per_sample,
-            main.sample_format,
-            main.compression,
-            main.predictor,
-            main.tile_width,
-            main.tile_length,
-        ) {
-            return Err(Error::InvalidArgument(format!(
-                "Input overviews use per-level data encoding at IFD {level_index}; the current GeoTIFF reader requires one data type, compression, predictor, and tile size for all levels"
-            )));
-        }
-    }
-
-    for level_index in 0..reference.levels.len() {
-        for &tag in copied_tag_ids() {
-            let expected = reference.levels[level_index].tags.get(&tag);
-            for (band_index, source) in sources.iter().enumerate().skip(1) {
-                let found = source.levels[level_index].tags.get(&tag);
-                if found != expected {
+            if level.raster_size != expected.raster_size {
+                return Err(Error::InvalidArgument(format!(
+                    "Input band {} ({}) IFD {level_index} has incompatible dimensions",
+                    band_index + 1,
+                    source.path.display()
+                )));
+            }
+            if level_index > 0 {
+                let previous = &source.levels()[level_index - 1].raster_size;
+                if level.raster_size.cols.count() > previous.cols.count()
+                    || level.raster_size.rows.count() > previous.rows.count()
+                    || level.raster_size == *previous
+                {
                     return Err(Error::InvalidArgument(format!(
-                        "Input band {} ({}), IFD {level_index} has incompatible TIFF tag {tag} compared with input band 1 ({})",
-                        band_index + 1,
-                        source.path.display(),
-                        reference.path.display()
+                        "Input band {} IFD {level_index} is not a reduced-resolution overview",
+                        band_index + 1
                     )));
                 }
             }
+            if output_metadata_tags(image) != output_metadata_tags(&expected.image_metadata) {
+                return Err(Error::InvalidArgument(format!(
+                    "Input band {} ({}) IFD {level_index} has incompatible georeferencing or document metadata",
+                    band_index + 1,
+                    source.path.display()
+                )));
+            }
         }
     }
-
     Ok(())
 }
 
-fn copied_tag_ids() -> &'static [u16] {
-    &[
-        TAG_FILL_ORDER,
-        TAG_IMAGE_DESCRIPTION,
-        TAG_ORIENTATION,
-        TAG_X_RESOLUTION,
-        TAG_Y_RESOLUTION,
-        TAG_RESOLUTION_UNIT,
-        TAG_SOFTWARE,
-        TAG_ARTIST,
-        TAG_HOST_COMPUTER,
-        TAG_COPYRIGHT,
-        TAG_MODEL_PIXEL_SCALE,
-        TAG_MODEL_TIEPOINT,
-        TAG_MODEL_TRANSFORMATION,
-        TAG_ICC_PROFILE,
-        TAG_GEO_KEY_DIRECTORY,
-        TAG_GEO_DOUBLE_PARAMS,
-        TAG_GEO_ASCII_PARAMS,
-        TAG_GDAL_NODATA,
-        TAG_LERC_PARAMETERS,
-    ]
+// Serialize metadata retained privately by the assembler for the output.
+fn output_metadata_tags(image: &ImageMetadata) -> BTreeMap<u16, EncodedTag> {
+    let mut tags = BTreeMap::new();
+    for (id, value) in [
+        (TAG_FILL_ORDER, image.fill_order),
+        (TAG_ORIENTATION, image.orientation),
+        (TAG_RESOLUTION_UNIT, image.resolution_unit),
+    ] {
+        if let Some(value) = value {
+            tags.insert(id, short_tag(&[value]));
+        }
+    }
+    for (id, value) in [
+        (TAG_IMAGE_DESCRIPTION, &image.image_description),
+        (TAG_SOFTWARE, &image.software),
+        (TAG_ARTIST, &image.artist),
+        (TAG_HOST_COMPUTER, &image.host_computer),
+        (TAG_COPYRIGHT, &image.copyright),
+        (TAG_GEO_ASCII_PARAMS, &image.geo_ascii_params),
+        (TAG_GDAL_NODATA, &image.nodata),
+    ] {
+        if let Some(value) = value {
+            tags.insert(id, ascii_tag(value));
+        }
+    }
+    for (id, value) in [(TAG_X_RESOLUTION, image.x_resolution), (TAG_Y_RESOLUTION, image.y_resolution)] {
+        if let Some(value) = value {
+            let mut tag = long_tag(&[value.numerator, value.denominator]);
+            tag.field_type = Type::RATIONAL;
+            tag.count = 1;
+            tags.insert(id, tag);
+        }
+    }
+    if let Some(profile) = &image.icc_profile {
+        tags.insert(
+            TAG_ICC_PROFILE,
+            EncodedTag {
+                field_type: Type::UNDEFINED,
+                count: profile.len() as u64,
+                bytes: profile.clone(),
+            },
+        );
+    }
+    if let Some(scale) = &image.model_pixel_scale {
+        tags.insert(TAG_MODEL_PIXEL_SCALE, double_tag(scale));
+    }
+    if let Some(tiepoints) = &image.model_tiepoints {
+        tags.insert(TAG_MODEL_TIEPOINT, double_tag(tiepoints.as_flattened()));
+    }
+    if let Some(transform) = &image.model_transformation {
+        tags.insert(TAG_MODEL_TRANSFORMATION, double_tag(transform));
+    }
+    if let Some(directory) = &image.geo_key_directory {
+        tags.insert(TAG_GEO_KEY_DIRECTORY, short_tag(directory));
+    }
+    if let Some(params) = &image.geo_double_params {
+        tags.insert(TAG_GEO_DOUBLE_PARAMS, double_tag(params));
+    }
+    if let Some(params) = image.lerc_parameters {
+        tags.insert(TAG_LERC_PARAMETERS, long_tag(&[params.version, params.additional_compression]));
+    }
+    tags
 }
 
-fn merge_gdal_metadata(sources: &[SourceCog]) -> Result<RawTag> {
-    let mut common_items: Option<Vec<XmlItem>> = None;
+fn merge_gdal_metadata(sources: &[SourceCog]) -> Result<EncodedTag> {
+    let mut common_items: Option<Vec<GdalMetadataItem>> = None;
     let mut output_items = Vec::new();
-
     for (band_index, source) in sources.iter().enumerate() {
-        let items = match source.levels[0].tags.get(&TAG_GDAL_METADATA) {
-            Some(tag) => parse_gdal_xml_tag(tag, band_index, &source.path)?,
-            None => Vec::new(),
-        };
-
+        let metadata = &source.levels()[0].image_metadata.gdal_metadata;
         let mut globals = Vec::new();
-        for mut item in items {
-            if is_interleave_item(&item) {
+        let mut keys = std::collections::BTreeSet::new();
+        for mut item in metadata.iter().flat_map(|metadata| &metadata.items).cloned() {
+            // Canonicalize attribute order, not the order or precedence of duplicate values.
+            item.attributes.sort();
+            let key = (
+                item.attribute("name").map(str::to_owned),
+                item.attribute("domain").map(str::to_owned),
+                item.attribute("sample").map(str::to_owned),
+                item.attribute("role").map(str::to_owned),
+            );
+            if !keys.insert(key) {
+                return Err(Error::InvalidArgument(format!(
+                    "Input band {} ({}) contains duplicate GDAL metadata keys",
+                    band_index + 1,
+                    source.path.display()
+                )));
+            }
+            if item.attribute("name") == Some("INTERLEAVE") && item.attribute("domain") == Some("IMAGE_STRUCTURE") {
                 continue;
             }
-
-            match item_attribute(&item, "sample") {
-                Some(sample) => {
-                    if sample != "0" {
-                        return Err(Error::InvalidArgument(format!(
-                            "Input band {} ({}) GDAL metadata contains sample={sample}; expected sample=0",
-                            band_index + 1,
-                            source.path.display()
-                        )));
-                    }
-                    set_item_attribute(&mut item, "sample", band_index.to_string());
+            match item.attribute("sample") {
+                Some("0") => {
+                    item.set_attribute("sample", band_index.to_string());
                     output_items.push(item);
+                }
+                Some(sample) => {
+                    return Err(Error::InvalidArgument(format!(
+                        "Input band {} GDAL metadata has sample={sample}; expected 0",
+                        band_index + 1
+                    )));
                 }
                 None => globals.push(item),
             }
         }
         globals.sort();
-
         match &common_items {
             None => common_items = Some(globals),
             Some(expected) if expected == &globals => {}
@@ -811,163 +544,24 @@ fn merge_gdal_metadata(sources: &[SourceCog]) -> Result<RawTag> {
             }
         }
     }
-
-    let mut all_items = common_items.unwrap_or_default();
-    all_items.extend(output_items);
-    all_items.push(XmlItem {
+    let mut items = common_items.unwrap_or_default();
+    items.extend(output_items);
+    items.push(GdalMetadataItem {
         attributes: vec![("name".into(), "INTERLEAVE".into()), ("domain".into(), "IMAGE_STRUCTURE".into())],
         text: "TILE".into(),
     });
-
-    let mut xml = String::from("<GDALMetadata>\n");
-    for item in all_items {
-        xml.push_str("  <Item");
-        for (name, value) in item.attributes {
-            xml.push(' ');
-            xml.push_str(&name);
-            xml.push_str("=\"");
-            push_xml_escaped(&mut xml, &value, true);
-            xml.push('"');
-        }
-        xml.push('>');
-        push_xml_escaped(&mut xml, &item.text, false);
-        xml.push_str("</Item>\n");
-    }
-    xml.push_str("</GDALMetadata>\n");
-
-    let mut bytes = xml.into_bytes();
-    bytes.push(0);
-    Ok(RawTag {
-        field_type: Type::ASCII,
-        count: bytes.len() as u64,
-        bytes,
-    })
+    Ok(ascii_tag(&serialize_gdal_metadata(&items)?))
 }
 
-fn parse_gdal_xml_tag(tag: &RawTag, band_index: usize, path: &Path) -> Result<Vec<XmlItem>> {
-    if tag.field_type != Type::ASCII || tag.count as usize != tag.bytes.len() {
-        return Err(Error::InvalidArgument(format!(
-            "Input band {} ({}) has a malformed GDAL metadata tag",
-            band_index + 1,
-            path.display()
-        )));
-    }
-    let xml_bytes = tag.bytes.strip_suffix(&[0]).ok_or_else(|| {
-        Error::InvalidArgument(format!(
-            "Input band {} ({}) GDAL metadata is not NUL-terminated",
-            band_index + 1,
-            path.display()
-        ))
-    })?;
-    let xml = std::str::from_utf8(xml_bytes).map_err(|error| {
-        Error::InvalidArgument(format!(
-            "Input band {} ({}) GDAL metadata is not UTF-8: {error}",
-            band_index + 1,
-            path.display()
-        ))
-    })?;
-
-    let mut items = Vec::new();
-    let mut current: Option<XmlItem> = None;
-    for event in EventReader::from_str(xml) {
-        match event {
-            Ok(XmlEvent::StartElement { name, attributes, .. }) if name.local_name == "Item" => {
-                if current.is_some() {
-                    return Err(Error::InvalidArgument(format!(
-                        "Input band {} ({}) GDAL metadata contains nested Item elements",
-                        band_index + 1,
-                        path.display()
-                    )));
-                }
-                current = Some(XmlItem {
-                    attributes: attributes
-                        .into_iter()
-                        .map(|attribute| (attribute.name.local_name, attribute.value))
-                        .collect(),
-                    text: String::new(),
-                });
-            }
-            Ok(XmlEvent::Characters(text) | XmlEvent::CData(text) | XmlEvent::Whitespace(text)) => {
-                if let Some(item) = &mut current {
-                    item.text.push_str(&text);
-                }
-            }
-            Ok(XmlEvent::EndElement { name }) if name.local_name == "Item" => {
-                let mut item = current.take().ok_or_else(|| {
-                    Error::InvalidArgument(format!(
-                        "Input band {} ({}) GDAL metadata closes an Item that was not opened",
-                        band_index + 1,
-                        path.display()
-                    ))
-                })?;
-                item.attributes.sort();
-                items.push(item);
-            }
-            Err(error) => {
-                return Err(Error::InvalidArgument(format!(
-                    "Input band {} ({}) has invalid GDAL metadata XML: {error}",
-                    band_index + 1,
-                    path.display()
-                )));
-            }
-            _ => {}
-        }
-    }
-    if current.is_some() {
-        return Err(Error::InvalidArgument(format!(
-            "Input band {} ({}) GDAL metadata has an unclosed Item",
-            band_index + 1,
-            path.display()
-        )));
-    }
-    Ok(items)
-}
-
-fn item_attribute<'a>(item: &'a XmlItem, name: &str) -> Option<&'a str> {
-    item.attributes
-        .iter()
-        .find_map(|(attribute_name, value)| (attribute_name == name).then_some(value.as_str()))
-}
-
-fn set_item_attribute(item: &mut XmlItem, name: &str, value: String) {
-    if let Some((_, current)) = item.attributes.iter_mut().find(|(attribute_name, _)| attribute_name == name) {
-        *current = value;
-    } else {
-        item.attributes.push((name.into(), value));
-    }
-    item.attributes.sort();
-}
-
-fn is_interleave_item(item: &XmlItem) -> bool {
-    item_attribute(item, "name") == Some("INTERLEAVE") && item_attribute(item, "domain") == Some("IMAGE_STRUCTURE")
-}
-
-fn push_xml_escaped(output: &mut String, value: &str, attribute: bool) {
-    for character in value.chars() {
-        match character {
-            '&' => output.push_str("&amp;"),
-            '<' => output.push_str("&lt;"),
-            '>' => output.push_str("&gt;"),
-            '"' if attribute => output.push_str("&quot;"),
-            '\'' if attribute => output.push_str("&apos;"),
-            _ => output.push(character),
-        }
-    }
-}
-
-fn build_output_ifds(sources: &[SourceCog], variant: TiffVariant, gdal_metadata: &RawTag) -> Result<Vec<OutputIfd>> {
+fn build_output_ifds(sources: &[SourceCog], variant: TiffVariant, gdal_metadata: &EncodedTag) -> Result<Vec<OutputIfd>> {
     let band_count =
         u16::try_from(sources.len()).map_err(|_| Error::InvalidArgument(format!("Band count {} exceeds u16::MAX", sources.len())))?;
     let reference = &sources[0];
-    let mut output = Vec::with_capacity(reference.levels.len());
+    let mut output = Vec::with_capacity(reference.levels().len());
 
-    for (level_index, level) in reference.levels.iter().enumerate() {
-        let mut tags = BTreeMap::new();
-        for &tag_id in copied_tag_ids() {
-            if let Some(tag) = level.tags.get(&tag_id) {
-                tags.insert(tag_id, tag.clone());
-            }
-        }
+    for (level_index, level) in reference.levels().iter().enumerate() {
+        let image = &level.image_metadata;
+        let mut tags = output_metadata_tags(image);
 
         if level_index == 0 {
             tags.insert(TAG_GDAL_METADATA, gdal_metadata.clone());
@@ -976,25 +570,25 @@ fn build_output_ifds(sources: &[SourceCog], variant: TiffVariant, gdal_metadata:
             tags.insert(TAG_NEW_SUBFILE_TYPE, long_tag(&[REDUCED_IMAGE]));
         }
 
-        tags.insert(TAG_IMAGE_WIDTH, long_tag(&[level.width]));
-        tags.insert(TAG_IMAGE_LENGTH, long_tag(&[level.height]));
-        tags.insert(TAG_BITS_PER_SAMPLE, short_tag(&vec![level.bits_per_sample; sources.len()]));
-        tags.insert(TAG_COMPRESSION, short_tag(&[level.compression]));
+        tags.insert(TAG_IMAGE_WIDTH, long_tag(&[level.raster_size.cols.count() as u32]));
+        tags.insert(TAG_IMAGE_LENGTH, long_tag(&[level.raster_size.rows.count() as u32]));
+        tags.insert(TAG_BITS_PER_SAMPLE, short_tag(&vec![image.bits_per_sample[0]; sources.len()]));
+        tags.insert(TAG_COMPRESSION, short_tag(&[image.compression]));
         tags.insert(TAG_PHOTOMETRIC_INTERPRETATION, short_tag(&[PHOTOMETRIC_BLACK_IS_ZERO]));
         tags.insert(TAG_SAMPLES_PER_PIXEL, short_tag(&[band_count]));
         tags.insert(TAG_PLANAR_CONFIGURATION, short_tag(&[PLANAR_SEPARATE]));
-        tags.insert(TAG_PREDICTOR, short_tag(&[level.predictor]));
-        tags.insert(TAG_TILE_WIDTH, long_tag(&[level.tile_width]));
-        tags.insert(TAG_TILE_LENGTH, long_tag(&[level.tile_length]));
+        tags.insert(TAG_PREDICTOR, short_tag(&[image.predictor]));
+        tags.insert(TAG_TILE_WIDTH, long_tag(&[image.tile_width.expect("validated tiled image")]));
+        tags.insert(TAG_TILE_LENGTH, long_tag(&[image.tile_length.expect("validated tiled image")]));
         if sources.len() > 1 {
             // With BlackIsZero, the first sample is the grayscale/color sample and the
             // remaining samples are explicitly marked as unspecified extra channels.
             tags.insert(TAG_EXTRA_SAMPLES, short_tag(&vec![0; sources.len() - 1]));
         }
-        tags.insert(TAG_SAMPLE_FORMAT, short_tag(&vec![level.sample_format; sources.len()]));
+        tags.insert(TAG_SAMPLE_FORMAT, short_tag(&vec![image.sample_format[0]; sources.len()]));
 
         let array_count = level
-            .tile_locations
+            .chunk_locations
             .len()
             .checked_mul(sources.len())
             .ok_or_else(|| Error::InvalidArgument(format!("IFD {level_index} multiband tile array length overflows usize")))?;
@@ -1016,24 +610,24 @@ fn build_output_ifds(sources: &[SourceCog], variant: TiffVariant, gdal_metadata:
 fn plan_layout(sources: &[SourceCog], output_ifds: Vec<OutputIfd>, variant: TiffVariant) -> std::result::Result<LayoutPlan, LayoutError> {
     let ghost = cog_ghost_metadata()?;
     let mut cursor = checked_add(variant.header_size(), ghost.len() as u64, "TIFF header and COG ghost area")?;
-    cursor = align_word(cursor)?;
+    cursor = variant.align_metadata(cursor)?;
     let first_ifd_offset = cursor;
     check_variant_offset(variant, first_ifd_offset, "first IFD")?;
 
     let mut ifds = Vec::with_capacity(output_ifds.len());
     for output_ifd in output_ifds {
-        cursor = align_word(cursor)?;
+        cursor = variant.align_metadata(cursor)?;
         let ifd_offset = cursor;
         check_variant_offset(variant, ifd_offset, "IFD")?;
         cursor = checked_add(cursor, variant.ifd_size(output_ifd.tags.len())?, "IFD extent")?;
 
         let mut tags = BTreeMap::new();
         for (tag_id, value) in output_ifd.tags {
-            validate_raw_tag(&value)?;
+            validate_encoded_tag(&value)?;
             check_variant_tag(variant, &value, tag_id)?;
             let is_tile_array = matches!(tag_id, TAG_TILE_OFFSETS | TAG_TILE_BYTE_COUNTS);
             let value_offset = if value.bytes.len() > variant.offset_size() && !is_tile_array {
-                cursor = align_word(cursor)?;
+                cursor = variant.align_metadata(cursor)?;
                 let offset = cursor;
                 check_variant_offset(variant, offset, &format!("TIFF tag {tag_id} value"))?;
                 cursor = checked_add(cursor, value.bytes.len() as u64, &format!("TIFF tag {tag_id} value"))?;
@@ -1055,7 +649,7 @@ fn plan_layout(sources: &[SourceCog], output_ifds: Vec<OutputIfd>, variant: Tiff
         ifds[index].next_offset = ifds[index + 1].offset;
     }
 
-    cursor = align_word(cursor)?;
+    cursor = variant.align_metadata(cursor)?;
     for ifd in &mut ifds {
         for tag_id in [TAG_TILE_OFFSETS, TAG_TILE_BYTE_COUNTS] {
             let tag = ifd
@@ -1063,7 +657,7 @@ fn plan_layout(sources: &[SourceCog], output_ifds: Vec<OutputIfd>, variant: Tiff
                 .get_mut(&tag_id)
                 .ok_or_else(|| LayoutError::Invalid(format!("Output IFD is missing tag {tag_id}")))?;
             if tag.value.bytes.len() > variant.offset_size() {
-                cursor = align_word(cursor)?;
+                cursor = variant.align_metadata(cursor)?;
                 tag.value_offset = Some(cursor);
                 check_variant_offset(variant, cursor, &format!("TIFF tag {tag_id} value"))?;
                 cursor = checked_add(cursor, tag.value.bytes.len() as u64, &format!("TIFF tag {tag_id} value"))?;
@@ -1071,10 +665,10 @@ fn plan_layout(sources: &[SourceCog], output_ifds: Vec<OutputIfd>, variant: Tiff
         }
     }
 
-    cursor = align_word(cursor)?;
+    cursor = variant.align_metadata(cursor)?;
     let mut blocks = Vec::new();
     for level_index in (0..ifds.len()).rev() {
-        let tiles_per_band = sources[0].levels[level_index].tile_locations.len();
+        let tiles_per_band = sources[0].levels()[level_index].chunk_locations.len();
         let array_len = tiles_per_band
             .checked_mul(sources.len())
             .ok_or_else(|| LayoutError::Overflow(format!("IFD {level_index} tile array length overflows usize")))?;
@@ -1083,7 +677,7 @@ fn plan_layout(sources: &[SourceCog], output_ifds: Vec<OutputIfd>, variant: Tiff
 
         for tile_index in 0..tiles_per_band {
             for (band_index, source) in sources.iter().enumerate() {
-                let source_tile = source.levels[level_index].tile_locations[tile_index];
+                let source_tile = source.levels()[level_index].chunk_locations[tile_index];
                 if source_tile.size == 0 {
                     continue;
                 }
@@ -1146,11 +740,8 @@ fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan) -> Resu
         .unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-    let source_files = sources
-        .iter()
-        .map(|source| File::open(&source.path))
-        .collect::<std::io::Result<Vec<_>>>()?;
-    let mut source_files = source_files;
+    let mut source_files = VecDeque::new();
+    let mut payload = Vec::new();
 
     {
         let mut writer = BufWriter::new(temporary.as_file_mut());
@@ -1204,24 +795,22 @@ fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan) -> Resu
                 )));
             }
 
-            let source = &mut source_files[block.source_index];
-            let trailer_offset = block
-                .source
-                .offset
-                .checked_add(block.source.size - 4)
-                .ok_or_else(|| Error::Runtime(format!("Source tile trailer offset overflows for band {}", block.source_index + 1)))?;
-            source.seek(SeekFrom::Start(trailer_offset))?;
-            let mut trailer = [0u8; 4];
-            source.read_exact(&mut trailer)?;
-
-            source.seek(SeekFrom::Start(block.source.offset))?;
-            copy_exact(source, &mut writer, block.source.size)?;
-            position = position
-                .checked_add(block.source.size)
-                .ok_or_else(|| Error::Runtime("Output position overflow while copying tile payload".into()))?;
-            write_bytes(&mut writer, &trailer, &mut position)?;
+            let source = source_file(&mut source_files, sources, block.source_index)?;
+            let size =
+                usize::try_from(block.source.size).map_err(|_| Error::Runtime("Tile payload size exceeds addressable memory".into()))?;
+            payload.clear();
+            payload
+                .try_reserve(size)
+                .map_err(|error| Error::Runtime(format!("Cannot buffer tile payload: {error}")))?;
+            payload.resize(size, 0);
+            io::read_chunk(&block.source, source, &mut payload)?;
+            write_bytes(&mut writer, &payload, &mut position)?;
+            write_bytes(&mut writer, &payload[size - 4..], &mut position)?;
         }
 
+        if plan.blocks.is_empty() {
+            pad_to(&mut writer, plan.final_size, &mut position)?;
+        }
         if position != plan.final_size {
             return Err(Error::Runtime(format!(
                 "COG layout mismatch: planned output size {}, wrote {position}",
@@ -1309,21 +898,19 @@ fn write_ifd(writer: &mut impl Write, ifd: &PlannedIfd, variant: TiffVariant, po
     Ok(())
 }
 
-fn copy_exact(reader: &mut impl Read, writer: &mut impl Write, mut remaining: u64) -> Result<()> {
-    let mut buffer = vec![0u8; 64 * 1024];
-    while remaining > 0 {
-        let to_read = usize::try_from(remaining.min(buffer.len() as u64)).expect("bounded by buffer length");
-        let read = reader.read(&mut buffer[..to_read])?;
-        if read == 0 {
-            return Err(Error::IOError(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                format!("Source tile ended with {remaining} bytes remaining"),
-            )));
+fn source_file<'a>(files: &'a mut VecDeque<(usize, File)>, sources: &[SourceCog], source_index: usize) -> Result<&'a mut File> {
+    // A TIFF can have far more bands than the process has available file descriptors.
+    const MAX_OPEN_SOURCES: usize = 32;
+    let entry = if let Some(index) = files.iter().position(|(index, _)| *index == source_index) {
+        files.remove(index).expect("located source file")
+    } else {
+        if files.len() == MAX_OPEN_SOURCES {
+            files.pop_front();
         }
-        writer.write_all(&buffer[..read])?;
-        remaining -= read as u64;
-    }
-    Ok(())
+        (source_index, File::open(&sources[source_index].path)?)
+    };
+    files.push_back(entry);
+    Ok(&mut files.back_mut().expect("source file was inserted").1)
 }
 
 fn write_bytes(writer: &mut impl Write, bytes: &[u8], position: &mut u64) -> Result<()> {
@@ -1373,7 +960,7 @@ fn cog_ghost_metadata() -> std::result::Result<Vec<u8>, LayoutError> {
     Ok(result)
 }
 
-fn validate_raw_tag(tag: &RawTag) -> std::result::Result<(), LayoutError> {
+fn validate_encoded_tag(tag: &EncodedTag) -> std::result::Result<(), LayoutError> {
     let width =
         type_width(tag.field_type).ok_or_else(|| LayoutError::Invalid(format!("Unsupported TIFF field type {:?}", tag.field_type)))?;
     let expected = tag
@@ -1401,7 +988,7 @@ fn type_width(field_type: Type) -> Option<usize> {
     }
 }
 
-fn check_variant_tag(variant: TiffVariant, tag: &RawTag, tag_id: u16) -> std::result::Result<(), LayoutError> {
+fn check_variant_tag(variant: TiffVariant, tag: &EncodedTag, tag_id: u16) -> std::result::Result<(), LayoutError> {
     if variant == TiffVariant::Classic && tag.count > u32::MAX as u64 {
         return Err(LayoutError::Overflow(format!(
             "Classic TIFF tag {tag_id} count {} exceeds u32::MAX",
@@ -1436,120 +1023,317 @@ fn checked_mul(left: u64, right: u64, description: &str) -> std::result::Result<
         .ok_or_else(|| LayoutError::Overflow(format!("{description} overflows u64")))
 }
 
-fn align_word(value: u64) -> std::result::Result<u64, LayoutError> {
-    if value.is_multiple_of(2) {
-        Ok(value)
-    } else {
-        checked_add(value, 1, "TIFF word alignment")
-    }
-}
-
 fn layout_error(error: LayoutError) -> Error {
     match error {
         LayoutError::Overflow(message) | LayoutError::Invalid(message) => Error::InvalidArgument(message),
     }
 }
 
-fn short_tag(values: &[u16]) -> RawTag {
-    RawTag {
+fn ascii_tag(value: &str) -> EncodedTag {
+    let mut bytes = value.as_bytes().to_vec();
+    bytes.push(0);
+    EncodedTag {
+        field_type: Type::ASCII,
+        count: bytes.len() as u64,
+        bytes,
+    }
+}
+
+fn double_tag(values: &[f64]) -> EncodedTag {
+    EncodedTag {
+        field_type: Type::DOUBLE,
+        count: values.len() as u64,
+        bytes: values.iter().flat_map(|value| value.to_le_bytes()).collect(),
+    }
+}
+
+fn short_tag(values: &[u16]) -> EncodedTag {
+    EncodedTag {
         field_type: Type::SHORT,
         count: values.len() as u64,
         bytes: values.iter().flat_map(|value| value.to_le_bytes()).collect(),
     }
 }
 
-fn long_tag(values: &[u32]) -> RawTag {
-    RawTag {
+fn long_tag(values: &[u32]) -> EncodedTag {
+    EncodedTag {
         field_type: Type::LONG,
         count: values.len() as u64,
         bytes: values.iter().flat_map(|value| value.to_le_bytes()).collect(),
     }
 }
 
-fn long8_tag(values: &[u64]) -> RawTag {
-    RawTag {
+fn long8_tag(values: &[u64]) -> EncodedTag {
+    EncodedTag {
         field_type: Type::LONG8,
         count: values.len() as u64,
         bytes: values.iter().flat_map(|value| value.to_le_bytes()).collect(),
     }
 }
 
-fn required_scalar_u16(tags: &BTreeMap<u16, RawTag>, tag_id: u16, context: &str) -> Result<u16> {
-    optional_scalar_u16(tags, tag_id, context)?
-        .ok_or_else(|| Error::InvalidArgument(format!("{context} is missing required TIFF tag {tag_id}")))
-}
+#[cfg(test)]
+mod layout_tests {
+    use std::io::{Read, Seek, SeekFrom};
 
-fn optional_scalar_u16(tags: &BTreeMap<u16, RawTag>, tag_id: u16, context: &str) -> Result<Option<u16>> {
-    let Some(tag) = tags.get(&tag_id) else {
-        return Ok(None);
-    };
-    if tag.count != 1 || tag.field_type != Type::SHORT || tag.bytes.len() != 2 {
-        return Err(Error::InvalidArgument(format!(
-            "{context} TIFF tag {tag_id} must be one SHORT, found {:?}[{}]",
-            tag.field_type, tag.count
-        )));
+    use crate::{Columns, testutils};
+
+    use super::*;
+
+    fn source_fixture(change: impl FnOnce(&mut Vec<SourceLevel>)) -> Result<SourceCog> {
+        let path = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
+        let metadata = GeoTiffMetadata::from_file(&path)?;
+        let bands = metadata.band_count as usize;
+        let mut levels = read_source_levels(File::open(&path)?, metadata.overviews)?;
+        for level in &mut levels {
+            level.chunk_locations.truncate(level.chunk_locations.len() / bands);
+            let image = &mut level.image_metadata;
+            image.samples_per_pixel = 1;
+            image.bits_per_sample.truncate(1);
+            image.sample_format.truncate(1);
+            image.gdal_metadata = None;
+        }
+        change(&mut levels);
+        Ok(SourceCog { path, levels })
     }
-    Ok(Some(u16::from_le_bytes(tag.bytes[..2].try_into().expect("two bytes"))))
-}
 
-fn required_scalar_u32(tags: &BTreeMap<u16, RawTag>, tag_id: u16, context: &str) -> Result<u32> {
-    optional_scalar_u32(tags, tag_id, context)?
-        .ok_or_else(|| Error::InvalidArgument(format!("{context} is missing required TIFF tag {tag_id}")))
-}
-
-fn optional_scalar_u32(tags: &BTreeMap<u16, RawTag>, tag_id: u16, context: &str) -> Result<Option<u32>> {
-    let Some(tag) = tags.get(&tag_id) else {
-        return Ok(None);
-    };
-    if tag.count != 1 {
-        return Err(Error::InvalidArgument(format!(
-            "{context} TIFF tag {tag_id} must contain one value, found {}",
-            tag.count
-        )));
+    fn one_tile(levels: &mut Vec<SourceLevel>) {
+        let size = levels[0].image_metadata.tile_width.expect("tiled fixture") as i32;
+        levels.truncate(1);
+        levels[0].raster_size = RasterSize::square(size);
+        levels[0].chunk_locations.truncate(1);
     }
-    match tag.field_type {
-        Type::SHORT if tag.bytes.len() == 2 => Ok(Some(u16::from_le_bytes(tag.bytes[..2].try_into().expect("two bytes")) as u32)),
-        Type::LONG if tag.bytes.len() == 4 => Ok(Some(u32::from_le_bytes(tag.bytes[..4].try_into().expect("four bytes")))),
-        _ => Err(Error::InvalidArgument(format!(
-            "{context} TIFF tag {tag_id} must be one SHORT or LONG, found {:?}[{}]",
-            tag.field_type, tag.count
-        ))),
-    }
-}
 
-fn required_unsigned_vec(tags: &BTreeMap<u16, RawTag>, tag_id: u16, context: &str) -> Result<Vec<u64>> {
-    let tag = tags
-        .get(&tag_id)
-        .ok_or_else(|| Error::InvalidArgument(format!("{context} is missing required TIFF tag {tag_id}")))?;
-    match tag.field_type {
-        Type::SHORT => tag
-            .bytes
-            .chunks_exact(2)
-            .map(|bytes| Ok(u16::from_le_bytes(bytes.try_into().expect("two-byte chunk")) as u64))
-            .collect(),
-        Type::LONG => tag
-            .bytes
-            .chunks_exact(4)
-            .map(|bytes| Ok(u32::from_le_bytes(bytes.try_into().expect("four-byte chunk")) as u64))
-            .collect(),
-        Type::LONG8 => tag
-            .bytes
-            .chunks_exact(8)
-            .map(|bytes| Ok(u64::from_le_bytes(bytes.try_into().expect("eight-byte chunk"))))
-            .collect(),
-        _ => Err(Error::InvalidArgument(format!(
-            "{context} TIFF tag {tag_id} must contain unsigned integers, found {:?}",
-            tag.field_type
-        ))),
+    fn layout(sources: &[SourceCog], variant: TiffVariant) -> Result<LayoutPlan> {
+        let metadata = merge_gdal_metadata(sources)?;
+        plan_layout(sources, build_output_ifds(sources, variant, &metadata)?, variant).map_err(layout_error)
+    }
+
+    #[test]
+    fn bigtiff_aligns_all_directories_and_indirect_values() -> Result<()> {
+        let sources = [source_fixture(|levels| {
+            for overview in levels {
+                overview.image_metadata.software = Some("odd-sized-value!".into());
+            }
+        })?];
+        let plan = layout(&sources, TiffVariant::Big)?;
+        for ifd in &plan.ifds {
+            assert_eq!(ifd.offset % 8, 0);
+            for tag in ifd.tags.values() {
+                if let Some(offset) = tag.value_offset {
+                    assert_eq!(offset % 8, 0);
+                }
+            }
+        }
+        let directory = tempfile::tempdir()?;
+        let output = directory.path().join("big.tif");
+        write_output(&sources, &output, &plan)?;
+        let metadata = GeoTiffMetadata::from_file(&output)?;
+        assert_eq!(metadata.overviews.len(), sources[0].levels().len());
+        for (actual, expected) in metadata.overviews.iter().zip(sources[0].levels()) {
+            assert_eq!(actual.raster_size, expected.raster_size);
+            let mut input = File::open(&sources[0].path)?;
+            let mut output_file = File::open(&output)?;
+            for (actual, expected) in actual.chunk_locations.iter().zip(&expected.chunk_locations) {
+                assert_eq!(actual.size, expected.size);
+                if !actual.is_sparse() {
+                    let mut a = vec![0; actual.size as usize];
+                    let mut b = vec![0; expected.size as usize];
+                    io::read_chunk(actual, &mut output_file, &mut a)?;
+                    io::read_chunk(expected, &mut input, &mut b)?;
+                    assert_eq!(a, b);
+                }
+            }
+        }
+        #[cfg(feature = "gdal")]
+        {
+            let input = crate::raster::formats::gdal::open_dataset_read_only(&sources[0].path)?;
+            let output = crate::raster::formats::gdal::open_dataset_read_only(&output)?;
+            let input_band = input.rasterband(1)?;
+            let output_band = output.rasterband(1)?;
+            for level in 0..sources[0].levels().len() {
+                let expected = if level == 0 {
+                    input.rasterband(1)?
+                } else {
+                    input_band.overview(level - 1)?
+                };
+                let actual = if level == 0 {
+                    output.rasterband(1)?
+                } else {
+                    output_band.overview(level - 1)?
+                };
+                let expected = expected.read_band_as::<f64>()?;
+                let actual = actual.read_band_as::<f64>()?;
+                assert_eq!(actual.shape(), expected.shape());
+                assert!(actual.data().iter().zip(expected.data()).all(|(a, b)| a.to_bits() == b.to_bits()));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn all_sparse_single_tile_outputs_include_final_padding() -> Result<()> {
+        for variant in [TiffVariant::Classic, TiffVariant::Big] {
+            for nodata in ["-1", "-12"] {
+                let sources = [source_fixture(|levels| {
+                    one_tile(levels);
+                    levels[0].chunk_locations.fill(TiffChunkLocation { offset: 0, size: 0 });
+                    levels[0].image_metadata.nodata = Some(nodata.into());
+                })?];
+                let plan = layout(&sources, variant)?;
+                assert!(plan.blocks.is_empty());
+                let directory = tempfile::tempdir()?;
+                let output = directory.path().join("sparse.tif");
+                write_output(&sources, &output, &plan)?;
+                assert_eq!(std::fs::metadata(&output)?.len(), plan.final_size);
+                let metadata = GeoTiffMetadata::from_file(&output)?;
+                assert!(metadata.overviews[0].chunk_locations[0].is_sparse());
+                assert_eq!(
+                    read_source_cog(0, &output)?.levels()[0].image_metadata.nodata.as_deref(),
+                    Some(nodata)
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn classic_overflow_promotes_to_64_bit_tile_offsets_without_writing_large_payloads() -> Result<()> {
+        let sources = [source_fixture(|levels| {
+            one_tile(levels);
+            let width = levels[0].image_metadata.tile_width.expect("tiled fixture") as i32 * 2;
+            let overview = &mut levels[0];
+            overview.raster_size.cols = Columns(width);
+            overview.chunk_locations = vec![
+                TiffChunkLocation {
+                    offset: 8,
+                    size: u64::from(u32::MAX),
+                },
+                TiffChunkLocation { offset: 8, size: 4 },
+            ];
+        })?];
+        let metadata = merge_gdal_metadata(&sources)?;
+        let classic = build_output_ifds(&sources, TiffVariant::Classic, &metadata)?;
+        assert!(matches!(
+            plan_layout(&sources, classic, TiffVariant::Classic),
+            Err(LayoutError::Overflow(_))
+        ));
+        let plan = layout(&sources, TiffVariant::Big)?;
+        assert!(plan.final_size > u64::from(u32::MAX));
+        assert!(plan.blocks[1].payload_offset > u64::from(u32::MAX));
+        assert_eq!(plan.ifds[0].tags[&TAG_TILE_OFFSETS].value.field_type, Type::LONG8);
+        Ok(())
+    }
+
+    #[test]
+    fn leaders_and_trailers_frame_exact_native_payloads() -> Result<()> {
+        for bytes in [b"abcd".as_slice(), b"abcde".as_slice()] {
+            let directory = tempfile::tempdir()?;
+            let input = directory.path().join("payload.bin");
+            let mut contents = vec![0; 8];
+            contents.extend_from_slice(bytes);
+            std::fs::write(&input, contents)?;
+            let mut source = source_fixture(|levels| {
+                one_tile(levels);
+                levels[0].chunk_locations[0] = TiffChunkLocation {
+                    offset: 8,
+                    size: bytes.len() as u64,
+                };
+            })?;
+            source.path = input;
+            let sources = [source];
+            let plan = layout(&sources, TiffVariant::Classic)?;
+            let output = directory.path().join("framed.tif");
+            write_output(&sources, &output, &plan)?;
+            let mut file = File::open(output)?;
+            file.seek(SeekFrom::Start(plan.blocks[0].payload_offset - 4))?;
+            let mut framed = vec![0; bytes.len() + 8];
+            file.read_exact(&mut framed)?;
+            assert_eq!(&framed[..4], &(bytes.len() as u32).to_le_bytes());
+            assert_eq!(&framed[4..4 + bytes.len()], bytes);
+            assert_eq!(&framed[4 + bytes.len()..], &bytes[bytes.len() - 4..]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn truncated_payload_does_not_replace_destination_or_leave_temporary_files() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let input = directory.path().join("truncated.bin");
+        std::fs::write(&input, [0; 8])?;
+        let mut source = source_fixture(|levels| {
+            one_tile(levels);
+            levels[0].chunk_locations[0] = TiffChunkLocation { offset: 8, size: 4 };
+        })?;
+        source.path = input;
+        let sources = [source];
+        let plan = layout(&sources, TiffVariant::Classic)?;
+        let output = directory.path().join("existing.tif");
+        std::fs::write(&output, b"existing destination")?;
+        assert!(write_output(&sources, &output, &plan).is_err());
+        assert_eq!(std::fs::read(&output)?, b"existing destination");
+        assert_eq!(std::fs::read_dir(directory.path())?.count(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn assembly_preserves_native_non_xyz_resolution_and_counted_ascii() -> Result<()> {
+        let sources = [source_fixture(|levels| {
+            let image = &mut levels[0].image_metadata;
+            image.model_pixel_scale = Some([30.0, 30.0, 0.0]);
+            image.image_description = Some("first\0second".into());
+            image.software = Some("é".into());
+        })?];
+        let directory = tempfile::tempdir()?;
+        let input = directory.path().join("non-xyz.tif");
+        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?)?;
+        let output = directory.path().join("assembled.tif");
+        assemble_band_cogs(&[input], &output)?;
+        let metadata = GeoTiffMetadata::from_file(&output)?;
+        assert_eq!(metadata.geo_reference.cell_size_x(), 30.0);
+        assert_eq!(metadata.overviews.len(), sources[0].levels().len());
+        assert_eq!(
+            read_source_cog(0, &output)?.levels()[0].image_metadata.image_description.as_deref(),
+            Some("first\0second")
+        );
+        assert_eq!(
+            read_source_cog(0, &output)?.levels()[0].image_metadata.software.as_deref(),
+            Some("é")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn metadata_compatibility_checks_text_after_embedded_nuls() -> Result<()> {
+        let sources = [
+            source_fixture(|levels| levels[0].image_metadata.image_description = Some("first\0a".into()))?,
+            source_fixture(|levels| levels[0].image_metadata.image_description = Some("first\0b".into()))?,
+        ];
+        assert!(validate_compatibility(&sources).is_err());
+        Ok(())
+    }
+
+    #[test]
+    fn source_file_cache_is_bounded_and_reopens_evicted_sources() -> Result<()> {
+        let source = source_fixture(one_tile)?;
+        let sources = (0..128)
+            .map(|_| SourceCog {
+                path: source.path.clone(),
+                levels: source.levels.clone(),
+            })
+            .collect::<Vec<_>>();
+        let mut cache = VecDeque::new();
+        for index in (0..sources.len()).chain([0, 127, 0]) {
+            source_file(&mut cache, &sources, index)?;
+            assert!(cache.len() <= 32);
+            assert_eq!(cache.back().map(|entry| entry.0), Some(index));
+        }
+        Ok(())
     }
 }
 
 #[cfg(all(test, feature = "gdal"))]
 mod tests {
-    use std::{
-        fs::File,
-        io::{Read, Seek, SeekFrom},
-    };
+    use std::fs::File;
 
     use crate::{
         BandIndex, GeoReference,
@@ -1559,6 +1343,30 @@ mod tests {
     };
 
     use super::*;
+
+    #[test_log::test]
+    fn source_levels_match_cog_metadata() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog.tif");
+        let options = CogCreationOptions {
+            tile_size: 128,
+            ..Default::default()
+        };
+        let (_staging, band_cogs) = create_temporary_band_cogs(&input.to_string_lossy(), options, None, None)?;
+        let metadata = GeoTiffMetadata::from_file(&band_cogs[0])?;
+        let source = read_source_cog(0, &band_cogs[0])?;
+
+        assert!(
+            metadata.overviews.len() > 1,
+            "Expected a base image and reduced-resolution overviews"
+        );
+        assert_eq!(source.levels().len(), metadata.overviews.len());
+        for (level, overview) in source.levels().iter().zip(&metadata.overviews) {
+            assert_eq!(level.raster_size.cols, overview.raster_size.cols);
+            assert_eq!(level.raster_size.rows, overview.raster_size.rows);
+            assert_eq!(level.chunk_locations, overview.chunk_locations);
+        }
+        Ok(())
+    }
 
     #[test_log::test]
     fn assembles_staged_band_cogs_without_changing_pixels() -> Result<()> {
@@ -1635,9 +1443,8 @@ mod tests {
             return Ok(Vec::new());
         }
 
-        file.seek(SeekFrom::Start(location.offset))?;
         let mut payload = vec![0; location.size as usize];
-        file.read_exact(&mut payload)?;
+        io::read_chunk(&location, file, &mut payload)?;
         Ok(payload)
     }
 }

@@ -16,7 +16,6 @@ use std::{
 use crate::{LatLonBounds, RasterSize, Tile, crs};
 
 use inf::allocate::AlignedVecUnderConstruction;
-use num::NumCast;
 #[derive(Debug, Clone)]
 pub enum TileSource {
     Aligned(TiffChunkLocation),
@@ -61,48 +60,111 @@ fn warp_web_mercator_bounds_to_lat_lon(bounds: &GeoReference) -> LatLonBounds {
     LatLonBounds::hull(top_left, bottom_right)
 }
 
+// Scale the standard resolution directly: the shared tile-size offset assumes
+// tiles of at least 256 pixels and underflows for 128-pixel tiles.
+fn web_tile_pixel_size(zoom_level: i32, tile_size: u32) -> f64 {
+    Tile::pixel_size_at_zoom_level(zoom_level, Tile::TILE_SIZE) * f64::from(Tile::TILE_SIZE) / f64::from(tile_size)
+}
+
+fn native_tile_grid_size(overview: &TiffOverview, tile_size: u32, band_count: u32) -> Result<(usize, usize)> {
+    if tile_size == 0 || tile_size > i32::MAX as u32 || band_count == 0 {
+        return Err(Error::InvalidArgument(
+            "COG tile size and band count must be positive and tile size must fit in i32".into(),
+        ));
+    }
+    let rows = overview.raster_size.rows.count();
+    let cols = overview.raster_size.cols.count();
+    if rows <= 0 || cols <= 0 {
+        return Err(Error::InvalidArgument(format!("Invalid COG overview dimensions {cols}x{rows}")));
+    }
+    let tiles_wide = (cols as u32).div_ceil(tile_size) as usize;
+    let tiles_high = (rows as u32).div_ceil(tile_size) as usize;
+    let expected_chunks = tiles_wide
+        .checked_mul(tiles_high)
+        .and_then(|count| count.checked_mul(band_count as usize))
+        .ok_or_else(|| Error::InvalidArgument("COG overview chunk count overflows usize".into()))?;
+    if overview.chunk_locations.len() != expected_chunks {
+        return Err(Error::InvalidArgument(format!(
+            "Expected {expected_chunks} chunks for {tiles_wide}x{tiles_high} tiles and {band_count} bands, got {}",
+            overview.chunk_locations.len()
+        )));
+    }
+    Ok((tiles_wide, tiles_high))
+}
+
 impl WebTiles {
     pub fn from_cog_metadata(meta: &GeoTiffMetadata) -> Result<Self> {
-        let mut zoom_levels = vec![ZoomLevelInfo::default(); 22];
-
         let tile_size = meta.chunk_row_length();
-        let mut zoom_level = Tile::zoom_level_for_pixel_size(meta.geo_reference.cell_size_x(), ZoomLevelStrategy::Closest, tile_size);
-        if (Tile::pixel_size_at_zoom_level(zoom_level, tile_size) - meta.geo_reference.cell_size_x()).abs() > 1e-6 {
-            return Err(Error::Runtime(format!(
-                "The main COG file content is not scaled to match a web zoom level, COG pixel size {}, zoom level {zoom_level} pixel size {}",
-                Tile::pixel_size_at_zoom_level(zoom_level, tile_size),
-                meta.geo_reference.cell_size_x()
+        if tile_size == 0 || tile_size > i32::MAX as u32 || meta.band_count == 0 || meta.overviews.is_empty() {
+            return Err(Error::InvalidArgument(
+                "COG requires a positive tile size, band count, and at least one image level".into(),
+            ));
+        }
+        let raster_size = meta.geo_reference.raster_size();
+        if raster_size.rows.count() <= 0 || raster_size.cols.count() <= 0 {
+            return Err(Error::InvalidArgument("COG raster dimensions must be positive".into()));
+        }
+        let cell_size = meta.geo_reference.cell_size();
+        if !cell_size.x().is_finite() || !cell_size.y().is_finite() || cell_size.x() <= 0.0 || cell_size.y() >= 0.0 {
+            return Err(Error::InvalidArgument(
+                "COG requires finite, positive-width, north-up pixel sizes".into(),
+            ));
+        }
+        let bottom_right = meta.geo_reference.bottom_right();
+        if !meta.geo_reference.geo_transform().coefficients().into_iter().all(f64::is_finite)
+            || !bottom_right.x().is_finite()
+            || !bottom_right.y().is_finite()
+        {
+            return Err(Error::InvalidArgument("COG georeferencing must be finite".into()));
+        }
+        let standard_pixel_size = cell_size.x() * f64::from(tile_size) / f64::from(Tile::TILE_SIZE);
+        if !standard_pixel_size.is_finite() || standard_pixel_size <= 0.0 {
+            return Err(Error::InvalidArgument(
+                "COG pixel size cannot be represented at the requested tile size".into(),
+            ));
+        }
+        let max_zoom = Tile::zoom_level_for_pixel_size(standard_pixel_size, ZoomLevelStrategy::Closest, Tile::TILE_SIZE);
+        // Tile bounds add one to signed 32-bit XYZ coordinates.
+        if !(0..=30).contains(&max_zoom) {
+            return Err(Error::InvalidArgument(format!(
+                "COG zoom level {max_zoom} is outside the supported range 0..=30"
             )));
         }
-
-        let cell_size = meta.geo_reference.cell_size();
+        if meta.overviews.len() > max_zoom as usize + 1 {
+            return Err(Error::InvalidArgument(format!(
+                "COG has {} image levels starting at zoom {max_zoom}; overview zoom levels would become negative",
+                meta.overviews.len()
+            )));
+        }
+        let expected_pixel_size = web_tile_pixel_size(max_zoom, tile_size);
+        if (expected_pixel_size - cell_size.x()).abs() > 1e-6 {
+            return Err(Error::Runtime(format!(
+                "The main COG file content is not scaled to match a web zoom level, COG pixel size {expected_pixel_size}, zoom level {max_zoom} pixel size {}",
+                cell_size.x()
+            )));
+        }
+        let mut zoom_levels = vec![ZoomLevelInfo::default(); max_zoom as usize + 1];
 
         // Offset to get the center of the bottom right pixel
         // Otherwise the bottom right coordinate is exactly at the edge of the tile and the next one will be taken
         let offset = Point::new(cell_size.x() / 2.0, cell_size.y() / 2.0);
 
-        for overview in &meta.overviews {
+        for (level_index, overview) in meta.overviews.iter().enumerate() {
+            native_tile_grid_size(overview, tile_size, meta.band_count)?;
+            let zoom_level = max_zoom - level_index as i32;
             let top_left_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.top_left());
-            let bottom_right_center_coordinate = crs::web_mercator_to_lat_lon(meta.geo_reference.bottom_right() - offset);
+            let bottom_right_center_coordinate = crs::web_mercator_to_lat_lon(bottom_right - offset);
             let top_left_tile = Tile::for_coordinate(top_left_coordinate, zoom_level);
             let bottom_right_tile = Tile::for_coordinate(bottom_right_center_coordinate, zoom_level);
 
             let tl_diff = meta.geo_reference.top_left() - crs::lat_lon_to_web_mercator(top_left_tile.upper_left());
-            let br_diff = meta.geo_reference.bottom_right() - crs::lat_lon_to_web_mercator(bottom_right_tile.lower_right());
+            let br_diff = bottom_right - crs::lat_lon_to_web_mercator(bottom_right_tile.lower_right());
 
             let top_left_aligned = tl_diff.x().abs() < 1e-6 && tl_diff.y().abs() < 1e-6;
             let bottom_right_aligned = br_diff.x().abs() < 1e-6 && br_diff.y().abs() < 1e-6;
             let tile_aligned = top_left_aligned && bottom_right_aligned;
 
-            if zoom_level as usize >= zoom_levels.len() {
-                zoom_levels.resize(zoom_level as usize + 1, ZoomLevelInfo::default());
-            }
-
             zoom_levels[zoom_level as usize].tile_aligned = tile_aligned;
-            if overview.chunk_locations.len() % (meta.band_count as usize) != 0 {
-                return Err(Error::Runtime("Only cogs with band interleaved chunks are supported".to_string()));
-            }
-
             if tile_aligned {
                 let tiles = generate_tiles_for_extent(meta.geo_reference.geo_transform(), overview.raster_size, tile_size, zoom_level);
                 if meta.band_count == 1 {
@@ -114,7 +176,6 @@ impl WebTiles {
                 } else {
                     // The chunk_locations list is always ordered by band first: tile0_band0, tile1_band0, ..., tile0_band1, tile1_band1, ...
                     // So we iterate strided to combine the chunks of all the bands per tile
-                    debug_assert!(overview.chunk_locations.len().is_multiple_of(meta.band_count as usize));
                     let chunks_per_band = overview.chunk_locations.len() / meta.band_count as usize;
                     tiles
                         .into_iter()
@@ -126,50 +187,56 @@ impl WebTiles {
                         });
                 }
             } else {
+                let overview_cell_size = CellSize::square(web_tile_pixel_size(zoom_level, tile_size));
                 let overview_geo_ref = GeoReference::with_bottom_left_origin(
                     "EPSG:3857",
                     overview.raster_size,
                     meta.geo_reference.bottom_left(),
-                    CellSize::square(Tile::pixel_size_at_zoom_level(zoom_level, tile_size)),
+                    overview_cell_size,
                     Option::<f64>::None,
                 );
 
                 let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level, tile_size);
-                if let Ok(cog_tile_bounds) =
-                    create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size, meta.band_count)
-                {
-                    for tile in &tiles {
-                        let mut tile_sources = Vec::new();
-                        let web_tile_georef = GeoReference::from_tile(tile, tile_size as usize, 1);
+                let cog_tile_bounds =
+                    create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size, meta.band_count)?;
+                for tile in &tiles {
+                    let mut tile_sources = Vec::new();
+                    let web_tile_georef = GeoReference::with_bottom_left_origin(
+                        "EPSG:3857",
+                        RasterSize::square(tile_size as i32),
+                        crs::lat_lon_to_web_mercator(tile.bounds().southwest()),
+                        overview_cell_size,
+                        Some(f64::NAN),
+                    );
 
-                        for (cog_tiles, bounds) in &cog_tile_bounds {
-                            if web_tile_georef.intersects(bounds)?
-                                && let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef)
-                            {
-                                tile_sources.push((cog_tiles.clone(), cutout));
-                            }
+                    for (cog_tiles, bounds) in &cog_tile_bounds {
+                        if web_tile_georef.intersects(bounds)?
+                            && let Ok(cutout) = intersect_georeference(bounds, &web_tile_georef)
+                        {
+                            tile_sources.push((cog_tiles.clone(), cutout));
                         }
+                    }
 
-                        if !tile_sources.is_empty() {
-                            if meta.band_count == 1 {
-                                let tile_sources = tile_sources.into_iter().map(|(ts, cutout)| (ts[0], cutout)).collect();
-                                zoom_levels[tile.z as usize]
-                                    .tiles
-                                    .insert(*tile, TileSource::Unaligned(tile_sources));
-                            } else {
-                                zoom_levels[tile.z as usize]
-                                    .tiles
-                                    .insert(*tile, TileSource::MultiBandUnaligned(tile_sources));
-                            }
+                    if !tile_sources.is_empty() {
+                        if meta.band_count == 1 {
+                            let tile_sources = tile_sources.into_iter().map(|(ts, cutout)| (ts[0], cutout)).collect();
+                            zoom_levels[tile.z as usize]
+                                .tiles
+                                .insert(*tile, TileSource::Unaligned(tile_sources));
+                        } else {
+                            zoom_levels[tile.z as usize]
+                                .tiles
+                                .insert(*tile, TileSource::MultiBandUnaligned(tile_sources));
                         }
                     }
                 }
             }
-
-            zoom_level -= 1;
         }
 
         trim_empty_zoom_levels(&mut zoom_levels);
+        if zoom_levels.is_empty() {
+            return Err(Error::InvalidArgument("COG extent does not map to any web tiles".into()));
+        }
 
         Ok(WebTiles {
             zoom_levels,
@@ -284,7 +351,7 @@ fn generate_tiles_for_extent(geo_transform: GeoTransform, raster_size: RasterSiz
     tiles
 }
 
-fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, zoom_level: i32, tile_size: u32) -> Vec<Tile> {
+fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, zoom_level: i32, _tile_size: u32) -> Vec<Tile> {
     // The geo_transform is from the highest zoom level, the origin does not match unaligned zoom levels
 
     let top_left = crs::web_mercator_to_lat_lon(geo_ref.top_left());
@@ -292,12 +359,6 @@ fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, zoom_level: i32, 
 
     let top_left_tile = Tile::for_coordinate(top_left, zoom_level);
     let bottom_right_tile = Tile::for_coordinate(bottom_right, zoom_level);
-
-    assert!(
-        tile_size.is_multiple_of(Tile::TILE_SIZE),
-        "Tile size must be a factor of {}",
-        Tile::TILE_SIZE
-    );
 
     let tiles_wide = bottom_right_tile.x - top_left_tile.x + 1;
     let tiles_high = bottom_right_tile.y - top_left_tile.y + 1;
@@ -330,41 +391,21 @@ fn create_cog_tile_web_mercator_bounds(
     tile_size: u32,
     band_count: u32,
 ) -> Result<Vec<(Vec<TiffChunkLocation>, GeoReference)>> {
-    let mut web_tiles = Vec::with_capacity(overview.chunk_locations.len());
+    let (tiles_wide, tiles_high) = native_tile_grid_size(overview, tile_size, band_count)?;
+    let mut web_tiles = Vec::with_capacity(tiles_wide * tiles_high);
 
-    let cell_size = CellSize::square(Tile::pixel_size_at_zoom_level(zoom_level, tile_size));
+    let cell_size = CellSize::square(web_tile_pixel_size(zoom_level, tile_size));
     let geo_ref_zoom_level = geotiff::utils::change_georef_cell_size(geo_reference, cell_size);
-
-    let tiles_wide = (overview.raster_size.cols.count() as u32).div_ceil(tile_size) as usize;
-    let tiles_high = (overview.raster_size.rows.count() as u32).div_ceil(tile_size) as usize;
-
-    if tiles_wide * tiles_high * band_count as usize != overview.chunk_locations.len() {
-        return Err(Error::InvalidArgument(format!(
-            "Expected {} tiles, but got {}",
-            tiles_wide * tiles_high * band_count as usize,
-            overview.chunk_locations.len()
-        )));
-    }
 
     let chunks_per_band = overview.chunk_locations.len() / band_count as usize;
     let tile_size = tile_size as i32;
     for ty in 0..tiles_high {
         let mut current_source_cell = Cell::from_row_col(ty as i32 * tile_size, 0);
-        let tile_height = Rows(if current_source_cell.row + tile_size > overview.raster_size.rows.count() {
-            debug_assert!(ty + 1 == tiles_high);
-            overview.raster_size.rows.count() - current_source_cell.row
-        } else {
-            tile_size
-        });
+        let tile_height = Rows((overview.raster_size.rows.count() - current_source_cell.row).min(tile_size));
 
         for tx in 0..tiles_wide {
             current_source_cell.col = tx as i32 * tile_size;
-            let tile_width = Columns(if current_source_cell.col + tile_size > overview.raster_size.cols.count() {
-                debug_assert!(tx + 1 == tiles_wide);
-                overview.raster_size.cols.count() - current_source_cell.col
-            } else {
-                tile_size
-            });
+            let tile_width = Columns((overview.raster_size.cols.count() - current_source_cell.col).min(tile_size));
 
             let lower_left_cell = Cell::from_row_col(current_source_cell.row + tile_height.count() - 1, current_source_cell.col);
 
@@ -414,6 +455,19 @@ impl WebTilesReader {
         self.cog_meta.data_type
     }
 
+    pub fn cog_metadata(&self) -> &GeoTiffMetadata {
+        &self.cog_meta
+    }
+
+    /// Returns native TIFF image levels in IFD order, with the base image first.
+    ///
+    /// The returned slice borrows the high-level overview dimensions and original
+    /// chunk locations. An unaligned native chunk can contribute to several XYZ
+    /// tiles, so traversing the web tile mappings would duplicate payloads.
+    pub fn native_overviews(&self) -> &[TiffOverview] {
+        &self.cog_meta.overviews
+    }
+
     pub fn new(cog_meta: GeoTiffMetadata) -> Result<Self> {
         let web_tiles = WebTiles::from_cog_metadata(&cog_meta)?;
 
@@ -446,10 +500,6 @@ impl WebTilesReader {
         self.web_tiles.data_bounds()
     }
 
-    pub fn cog_metadata(&self) -> &GeoTiffMetadata {
-        &self.cog_meta
-    }
-
     /// For a given tile, returns which cog tiles are used to construct the tile data.
     /// In case of an aligned overview, this will be a single cog tile.
     /// In case of an unaligned overview, this will be a list of cog tiles with their cutout information.
@@ -462,8 +512,8 @@ impl WebTilesReader {
     }
 
     pub fn overview(&self, zoom_level: i32) -> Option<&TiffOverview> {
-        let overview_index = (self.web_tiles.max_zoom() - zoom_level) as usize;
-        self.cog_metadata().overviews.get(overview_index)
+        let overview_index = usize::try_from(self.web_tiles.max_zoom().checked_sub(zoom_level)?).ok()?;
+        self.native_overviews().get(overview_index)
     }
 
     /// Returns the most suitable overview for the given square area in pixels.
@@ -743,7 +793,7 @@ impl WebTilesReader {
                 TileSource::Unaligned(tile_sources) => {
                     let cog_chunks: Vec<Vec<u8>> = tile_sources
                         .iter()
-                        .flat_map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
+                        .map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
                             if cog_tile_offset.is_sparse() {
                                 return Ok(vec![]);
                             }
@@ -752,7 +802,7 @@ impl WebTilesReader {
                             io::read_chunk(cog_tile_offset, reader, &mut chunk)?;
                             Ok(chunk)
                         })
-                        .collect();
+                        .collect::<Result<_>>()?;
 
                     let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
                     Ok(Some(self.merge_tile_sources(tile_sources, &cog_chunk_refs)?))
@@ -786,7 +836,7 @@ impl WebTilesReader {
 
                     let cog_chunks: Vec<Vec<u8>> = tile_sources
                         .iter()
-                        .flat_map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
+                        .map(|(cog_tile_offset, _)| -> Result<Vec<u8>> {
                             if cog_tile_offset.is_sparse() {
                                 return Ok(vec![]);
                             }
@@ -795,7 +845,7 @@ impl WebTilesReader {
                             io::read_chunk(cog_tile_offset, reader, &mut chunk)?;
                             Ok(chunk)
                         })
-                        .collect();
+                        .collect::<Result<_>>()?;
 
                     let cog_chunk_refs: Vec<&[u8]> = cog_chunks.iter().map(|chunk| chunk.as_slice()).collect();
                     Ok(Some(self.merge_tile_sources(&tile_sources, &cog_chunk_refs)?))
@@ -844,7 +894,7 @@ impl WebTilesReader {
         let tile_size = self.cog_metadata().chunk_row_length() as usize;
         let tile_raster_size = RasterSize::square(tile_size as i32);
 
-        let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(tile_raster_size, NumCast::from(T::NODATA)));
+        let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(tile_raster_size, num::NumCast::from(T::NODATA)));
 
         for ((cog_location, cutout), cog_chunck) in tile_sources.iter().zip(cog_chunks) {
             if cog_location.is_sparse() {
@@ -856,6 +906,311 @@ impl WebTilesReader {
         }
 
         Ok(arr)
+    }
+}
+
+#[cfg(test)]
+mod mapping_tests {
+    use std::io::{Cursor, ErrorKind, SeekFrom};
+
+    use crate::{FIRST_BAND, geotiff::ChunkDataLayout, testutils};
+
+    use super::*;
+
+    fn mapping_metadata(tile_size: u32, band_count: u32, unaligned: bool) -> Result<GeoTiffMetadata> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile_google_maps_compatible.tif");
+        let mut meta = GeoTiffMetadata::from_file(&input)?;
+        let tile = Tile { z: 2, x: 1, y: 1 };
+        let pixel_size = web_tile_pixel_size(tile.z, tile_size);
+        let mut top_left = crs::lat_lon_to_web_mercator(tile.upper_left());
+        if unaligned {
+            let shift = pixel_size * f64::from(tile_size) / 2.0;
+            top_left += Point::new(shift, -shift);
+        }
+        let size = RasterSize::square(tile_size as i32);
+        meta.geo_reference = GeoReference::with_top_left_origin("EPSG:3857", size, top_left, CellSize::square(pixel_size), Some(255_u8));
+        meta.data_layout = ChunkDataLayout::Tiled(tile_size);
+        meta.band_count = band_count;
+        meta.data_type = ArrayDataType::Uint8;
+        meta.compression = None;
+        meta.predictor = None;
+        meta.overviews.truncate(1);
+        meta.overviews[0].raster_size = size;
+        let chunk_size = u64::from(tile_size).pow(2);
+        meta.overviews[0].chunk_locations = (0..band_count)
+            .map(|band| TiffChunkLocation {
+                offset: 1 + u64::from(band) * chunk_size,
+                size: chunk_size,
+            })
+            .collect();
+        Ok(meta)
+    }
+
+    #[test]
+    fn rejects_zero_tile_size_band_count_and_missing_levels() -> Result<()> {
+        let meta = mapping_metadata(256, 1, false)?;
+        let mut invalid = meta.clone();
+        invalid.data_layout = ChunkDataLayout::Tiled(0);
+        assert!(matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))));
+        let mut invalid = meta.clone();
+        invalid.band_count = 0;
+        assert!(matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))));
+        let mut invalid = meta;
+        invalid.overviews.clear();
+        assert!(matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_nonpositive_raster_and_overview_dimensions() -> Result<()> {
+        let meta = mapping_metadata(256, 1, false)?;
+        for (rows, cols) in [(0, 256), (-1, 256), (256, 0), (256, -1)] {
+            let size = RasterSize::with_rows_cols(Rows(rows), Columns(cols));
+            let mut invalid = meta.clone();
+            invalid.geo_reference = GeoReference::new("EPSG:3857", size, meta.geo_reference.geo_transform(), None, None);
+            assert!(matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))));
+            let mut invalid = meta.clone();
+            invalid.overviews[0].raster_size = size;
+            assert!(matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_invalid_pixel_sizes() -> Result<()> {
+        let meta = mapping_metadata(256, 1, false)?;
+        for size in [0.0, -1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut invalid = meta.clone();
+            invalid.geo_reference.set_cell_size_x(size);
+            assert!(
+                matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))),
+                "pixel width {size}"
+            );
+        }
+        for size in [0.0, 1.0, f64::NAN, f64::INFINITY, f64::NEG_INFINITY] {
+            let mut invalid = meta.clone();
+            invalid.geo_reference.set_cell_size_y(size);
+            assert!(
+                matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))),
+                "pixel height {size}"
+            );
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_nonfinite_georeferencing() -> Result<()> {
+        let meta = mapping_metadata(256, 1, false)?;
+        for index in [0, 2, 3, 4] {
+            let mut coefficients = meta.geo_reference.geo_transform().coefficients();
+            coefficients[index] = f64::NAN;
+            let mut invalid = meta.clone();
+            invalid.geo_reference = GeoReference::new("EPSG:3857", meta.geo_reference.raster_size(), coefficients.into(), None, None);
+            assert!(matches!(WebTilesReader::new(invalid), Err(Error::InvalidArgument(_))));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_unrepresentable_zoom_and_overview_underflow() -> Result<()> {
+        let meta = mapping_metadata(256, 1, false)?;
+        for zoom in [-1, 31] {
+            let mut invalid = meta.clone();
+            invalid
+                .geo_reference
+                .set_cell_size(CellSize::square(web_tile_pixel_size(zoom, 256)));
+            let error = WebTilesReader::new(invalid).unwrap_err();
+            assert!(matches!(error, Error::InvalidArgument(message) if message.contains("zoom level")));
+        }
+        let mut invalid = meta;
+        invalid.geo_reference.set_cell_size(CellSize::square(web_tile_pixel_size(0, 256)));
+        invalid.overviews.push(invalid.overviews[0].clone());
+        let error = WebTilesReader::new(invalid).unwrap_err();
+        assert!(matches!(error, Error::InvalidArgument(message) if message.contains("would become negative")));
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_aligned_chunk_count_mismatches_without_zip_truncation() -> Result<()> {
+        for band_count in [1, 3] {
+            let meta = mapping_metadata(256, band_count, false)?;
+            let valid = WebTilesReader::new(meta.clone())?;
+            assert!(valid.web_tiles.zoom_levels[2].tile_aligned);
+            for extra in [false, true] {
+                let mut invalid = meta.clone();
+                if extra {
+                    invalid.overviews[0]
+                        .chunk_locations
+                        .extend_from_slice(&meta.overviews[0].chunk_locations);
+                } else {
+                    invalid.overviews[0].chunk_locations.clear();
+                }
+                let error = WebTilesReader::new(invalid).unwrap_err();
+                assert!(matches!(error, Error::InvalidArgument(message) if message.contains("Expected")));
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_unaligned_chunk_count_mismatches() -> Result<()> {
+        for band_count in [1, 3] {
+            let mut meta = mapping_metadata(256, band_count, true)?;
+            meta.overviews[0].chunk_locations.clear();
+            let error = WebTilesReader::new(meta).unwrap_err();
+            assert!(matches!(error, Error::InvalidArgument(message) if message.contains("Expected")));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn native_overviews_preserve_ifd_order_and_metadata() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile.tif");
+        let meta = GeoTiffMetadata::from_file(&input)?;
+        let expected = meta.overviews.clone();
+        let reader = WebTilesReader::new(meta)?;
+        assert!(std::ptr::eq(reader.native_overviews(), reader.cog_metadata().overviews.as_slice()));
+        assert_eq!(reader.native_overviews().len(), expected.len());
+        for (actual, expected) in reader.native_overviews().iter().zip(expected) {
+            assert_eq!(actual.raster_size, expected.raster_size);
+            assert_eq!(actual.chunk_locations, expected.chunk_locations);
+        }
+        assert!(reader.overview(i32::MIN).is_none());
+        assert!(reader.overview(i32::MAX).is_none());
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_non_xyz_resolution() -> Result<()> {
+        let mut meta = mapping_metadata(256, 1, false)?;
+        meta.geo_reference.set_cell_size(CellSize::square(30.0));
+        let error = WebTilesReader::new(meta).unwrap_err();
+        assert!(matches!(error, Error::Runtime(message) if message.contains("not scaled to match a web zoom level")));
+        Ok(())
+    }
+
+    #[test]
+    fn native_overviews_do_not_duplicate_unaligned_128_pixel_chunks() -> Result<()> {
+        for band_count in [1, 3] {
+            let reader = WebTilesReader::new(mapping_metadata(128, band_count, true)?)?;
+            let native_chunks = &reader.native_overviews()[0].chunk_locations;
+            assert_eq!(native_chunks.len(), band_count as usize);
+            let sources = reader.zoom_level_tile_sources(2).unwrap();
+            assert!(sources.len() > 1);
+            for source in sources.values() {
+                match source {
+                    TileSource::Unaligned(chunks) => assert!(chunks.iter().all(|(chunk, _)| chunk == &native_chunks[0])),
+                    TileSource::MultiBandUnaligned(chunks) => assert!(chunks.iter().all(|(chunk, _)| chunk == native_chunks)),
+                    other => panic!("Expected an unaligned tile source, got {other:?}"),
+                }
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unaligned_reads_propagate_truncated_chunks() -> Result<()> {
+        for band_count in [1, 3] {
+            let reader = WebTilesReader::new(mapping_metadata(128, band_count, true)?)?;
+            let tile = reader.zoom_level_tile_sources(2).unwrap().keys().next().unwrap();
+            let band = BandIndex::new(band_count as usize).unwrap();
+            let error = reader
+                .read_tile_data_as::<u8>(tile, band, &mut Cursor::new(Vec::<u8>::new()))
+                .unwrap_err();
+            assert!(matches!(error, Error::IOError(error) if error.kind() == ErrorKind::UnexpectedEof));
+        }
+        Ok(())
+    }
+
+    struct FailedSeek;
+
+    impl Read for FailedSeek {
+        fn read(&mut self, _: &mut [u8]) -> std::io::Result<usize> {
+            panic!("Read must not occur after a failed seek");
+        }
+    }
+
+    impl Seek for FailedSeek {
+        fn seek(&mut self, _: SeekFrom) -> std::io::Result<u64> {
+            Err(ErrorKind::PermissionDenied.into())
+        }
+    }
+
+    #[test]
+    fn unaligned_reads_propagate_seek_errors() -> Result<()> {
+        for band_count in [1, 3] {
+            let reader = WebTilesReader::new(mapping_metadata(128, band_count, true)?)?;
+            let tile = reader.zoom_level_tile_sources(2).unwrap().keys().next().unwrap();
+            let band = BandIndex::new(band_count as usize).unwrap();
+            let error = reader.read_tile_data_as::<u8>(tile, band, &mut FailedSeek).unwrap_err();
+            assert!(matches!(error, Error::IOError(error) if error.kind() == ErrorKind::PermissionDenied));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unaligned_reads_keep_sparse_chunks_and_cutouts_in_order() -> Result<()> {
+        let tile_size = 128;
+        let chunk_size = u64::from(tile_size).pow(2);
+        let chunks = [
+            TiffChunkLocation { offset: 0, size: 0 },
+            TiffChunkLocation {
+                offset: 1,
+                size: chunk_size,
+            },
+            TiffChunkLocation {
+                offset: 1 + chunk_size,
+                size: chunk_size,
+            },
+        ];
+        let cutouts = [
+            CutOut::default(),
+            CutOut {
+                rows: 128,
+                cols: 64,
+                ..Default::default()
+            },
+            CutOut {
+                rows: 128,
+                cols: 64,
+                dst_col_offset: 64,
+                ..Default::default()
+            },
+        ];
+        let mut data = vec![0];
+        data.extend(vec![11; chunk_size as usize]);
+        data.extend(vec![22; chunk_size as usize]);
+        let expected = (0..128)
+            .flat_map(|_| (0..128).map(|col| if col < 64 { 11 } else { 22 }))
+            .collect::<Vec<_>>();
+        for band_count in [1, 3] {
+            let mut reader = WebTilesReader::new(mapping_metadata(tile_size, band_count, true)?)?;
+            let tile = *reader.zoom_level_tile_sources(2).unwrap().keys().next().unwrap();
+            let source = if band_count == 1 {
+                TileSource::Unaligned(chunks.into_iter().zip(cutouts.iter().cloned()).collect())
+            } else {
+                TileSource::MultiBandUnaligned(
+                    chunks
+                        .iter()
+                        .zip(&cutouts)
+                        .map(|(chunk, cutout)| {
+                            let mut bands = vec![chunks[0]; band_count as usize];
+                            bands[band_count as usize - 1] = *chunk;
+                            (bands, cutout.clone())
+                        })
+                        .collect(),
+                )
+            };
+            reader.web_tiles.zoom_levels[2].tiles.insert(tile, source);
+            let band = if band_count == 1 {
+                FIRST_BAND
+            } else {
+                BandIndex::new(band_count as usize).unwrap()
+            };
+            let actual = reader.read_tile_data_as::<u8>(&tile, band, &mut Cursor::new(&data))?.unwrap();
+            assert_eq!(actual.as_slice(), expected);
+        }
+        Ok(())
     }
 }
 

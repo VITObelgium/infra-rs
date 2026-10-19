@@ -153,17 +153,26 @@ impl Seek for CogHeaderReader {
     }
 }
 
+/// Reads exactly one nonempty raw TIFF chunk into a matching-size buffer.
+///
+/// Returns an error for an empty chunk, a mismatched buffer, an overflowing
+/// source range, or a seek/read failure. Sparse chunks must be handled by the caller.
 pub fn read_chunk(cog_location: &TiffChunkLocation, reader: &mut (impl Read + Seek), buf: &mut [u8]) -> Result<()> {
-    let chunk_range = cog_location.range_to_fetch();
-    debug_assert!(chunk_range.start != chunk_range.end, "Empty chunk passed to read_cog_chunk");
-    debug_assert!(
-        buf.len() == (chunk_range.end - chunk_range.start) as usize,
-        "Buffer size does not match chunk size {} <-> {}",
-        buf.len(),
-        chunk_range.end - chunk_range.start
-    );
+    if cog_location.size == 0 {
+        return Err(Error::InvalidArgument("Cannot read an empty TIFF chunk".into()));
+    }
+    if cog_location.size != buf.len() as u64 {
+        return Err(Error::InvalidArgument(format!(
+            "Buffer size {} does not match TIFF chunk size {}",
+            buf.len(),
+            cog_location.size
+        )));
+    }
+    if cog_location.offset.checked_add(cog_location.size).is_none() {
+        return Err(Error::InvalidArgument("TIFF chunk range overflows u64".into()));
+    }
 
-    reader.seek(SeekFrom::Start(chunk_range.start))?;
+    reader.seek(SeekFrom::Start(cog_location.offset))?;
     reader.read_exact(buf)?;
 
     Ok(())
@@ -528,7 +537,58 @@ fn deflate_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Resu
 
 #[cfg(test)]
 mod tests {
+    use std::io::{Cursor, ErrorKind};
+
     use super::*;
+
+    #[test]
+    fn read_chunk_reads_exact_payload_at_offset() -> Result<()> {
+        let mut reader = Cursor::new([10, 11, 12, 13, 14, 15]);
+        let mut payload = [0; 3];
+        read_chunk(&TiffChunkLocation { offset: 2, size: 3 }, &mut reader, &mut payload)?;
+        assert_eq!(payload, [12, 13, 14]);
+        assert_eq!(reader.position(), 5);
+        Ok(())
+    }
+
+    #[test]
+    fn read_chunk_rejects_buffer_size_mismatch_before_io() {
+        let chunk = TiffChunkLocation { offset: 2, size: 2 };
+        for size in [1, 3] {
+            let mut reader = Cursor::new([10, 11, 12, 13, 14, 15]);
+            reader.set_position(1);
+            let error = read_chunk(&chunk, &mut reader, &mut vec![0; size]).unwrap_err();
+            assert!(matches!(error, Error::InvalidArgument(_)));
+            assert_eq!(reader.position(), 1);
+        }
+    }
+
+    #[test]
+    fn read_chunk_rejects_empty_chunks_before_io() {
+        for offset in [0, 2] {
+            let mut reader = Cursor::new([10, 11]);
+            reader.set_position(1);
+            let error = read_chunk(&TiffChunkLocation { offset, size: 0 }, &mut reader, &mut []).unwrap_err();
+            assert!(matches!(error, Error::InvalidArgument(_)));
+            assert_eq!(reader.position(), 1);
+        }
+    }
+
+    #[test]
+    fn read_chunk_rejects_overflowing_range_before_io() {
+        let mut reader = Cursor::new([10, 11]);
+        reader.set_position(1);
+        let error = read_chunk(&TiffChunkLocation { offset: u64::MAX, size: 1 }, &mut reader, &mut [0]).unwrap_err();
+        assert!(matches!(error, Error::InvalidArgument(message) if message.contains("overflows")));
+        assert_eq!(reader.position(), 1);
+    }
+
+    #[test]
+    fn read_chunk_propagates_unexpected_eof() {
+        let mut reader = Cursor::new([10, 11, 12]);
+        let error = read_chunk(&TiffChunkLocation { offset: 2, size: 3 }, &mut reader, &mut [0; 3]).unwrap_err();
+        assert!(matches!(error, Error::IOError(error) if error.kind() == ErrorKind::UnexpectedEof));
+    }
 
     #[test]
     fn lerc_decompress_uses_metadata_nodata() {
