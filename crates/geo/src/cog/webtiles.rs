@@ -196,7 +196,7 @@ impl WebTiles {
                     Option::<f64>::None,
                 );
 
-                let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level, tile_size);
+                let tiles = generate_tiles_for_extent_unaligned(&meta.geo_reference, zoom_level);
                 let cog_tile_bounds =
                     create_cog_tile_web_mercator_bounds(overview, &overview_geo_ref, zoom_level, tile_size, meta.band_count)?;
                 for tile in &tiles {
@@ -351,7 +351,7 @@ fn generate_tiles_for_extent(geo_transform: GeoTransform, raster_size: RasterSiz
     tiles
 }
 
-fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, zoom_level: i32, _tile_size: u32) -> Vec<Tile> {
+fn generate_tiles_for_extent_unaligned(geo_ref: &GeoReference, zoom_level: i32) -> Vec<Tile> {
     // The geo_transform is from the highest zoom level, the origin does not match unaligned zoom levels
 
     let top_left = crs::web_mercator_to_lat_lon(geo_ref.top_left());
@@ -1853,7 +1853,7 @@ mod tests {
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE)?;
         let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
-        let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, 7, COG_TILE_SIZE);
+        let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, 7);
         assert_eq!(tiles.len(), 6);
         assert_eq!(
             tiles,
@@ -1876,7 +1876,7 @@ mod tests {
         let cog_path = create_unaligned_test_cog(tmp.path(), COG_TILE_SIZE * 2)?;
         let cog = WebTilesReader::new(GeoTiffMetadata::from_file(&cog_path)?)?;
 
-        let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, 7, COG_TILE_SIZE * 2);
+        let tiles = super::generate_tiles_for_extent_unaligned(&cog.cog_metadata().geo_reference, 7);
         assert_eq!(tiles.len(), 6);
         assert_eq!(
             tiles,
