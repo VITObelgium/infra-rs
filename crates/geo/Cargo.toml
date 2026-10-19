@@ -90,7 +90,7 @@ rayon = { version = "1.12", optional = true }
 ruzstd = { version = "0.9", optional = true }
 serde = { version = "1.0", features = ["derive"], optional = true }
 
-specta = { version = "=2.0.0-rc.22", features = ["derive"], optional = true }
+specta = { version = "=2.0.0-rc.25", features = ["derive"], optional = true }
 thiserror = "2.0"
 tempfile = "3"
 tiff = { version = "0.11.3", default-features = false, optional = true }
