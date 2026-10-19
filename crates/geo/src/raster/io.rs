@@ -49,19 +49,11 @@ pub fn write_raster_band<T: ArrayNum>(
     _data: &[T],
     options: WriteRasterOptions,
 ) -> Result<()> {
-    match T::TYPE {
-        ArrayDataType::Uint8 | ArrayDataType::Uint16 | ArrayDataType::Uint32 | ArrayDataType::Uint64
-            if georef.nodata().is_some_and(|v| v < 0.0) =>
-        {
-            return Err(Error::InvalidArgument(
-                "Trying to store a raster with unsigned data type using a negative nodata value".to_string(),
-            ));
-        }
-        _ => {}
-    }
+    validate_nodata_for_data_type(T::TYPE, georef.nodata()).map_err(|message| Error::InvalidArgument(message.into()))?;
 
     let format = match &options {
         WriteRasterOptions::GeoTiff(_) => RasterFileFormat::GeoTiff,
+        WriteRasterOptions::NetCdf(_) => RasterFileFormat::Netcdf,
         WriteRasterOptions::Default => RasterFileFormat::guess_from_path(path.as_ref()),
     };
 
@@ -89,6 +81,64 @@ pub fn write_raster_band<T: ArrayNum>(
             )))
         }
     }
+}
+
+/// Write raw raster bands to one file, in the order supplied.
+///
+/// Bands must have positive, identical dimensions and exactly matching projection strings
+/// and geotransforms. Each buffer must contain one value per cell. Nodata and scale/offset
+/// metadata are copied per band without transforming the samples, subject to the output
+/// format's limitations (for example, GeoTIFF stores a shared nodata value).
+/// Multiple bands require the `gdal` feature; a single band uses the ordinary raster writer.
+pub fn write_raster_bands<T: ArrayNum>(path: impl AsRef<Path>, bands: &[(&GeoReference, &[T])], options: WriteRasterOptions) -> Result<()> {
+    let Some(&(first, _)) = bands.first() else {
+        return Err(Error::InvalidArgument("At least one raster band is required".into()));
+    };
+
+    for (index, &(georef, data)) in bands.iter().enumerate() {
+        let band = index + 1;
+        let size = georef.raster_size();
+        if size.rows.count() <= 0 || size.cols.count() <= 0 {
+            return Err(Error::InvalidArgument(format!("Band {band}: raster dimensions must be positive")));
+        }
+        if size != first.raster_size() || georef.projection() != first.projection() || georef.geo_transform() != first.geo_transform() {
+            return Err(Error::InvalidArgument(format!(
+                "Band {band}: raster size, projection and geotransform must match the first band"
+            )));
+        }
+        let cell_count = (size.rows.count() as usize)
+            .checked_mul(size.cols.count() as usize)
+            .ok_or_else(|| Error::InvalidArgument(format!("Band {band}: raster dimensions are too large")))?;
+        if data.len() != cell_count {
+            return Err(Error::InvalidArgument(format!(
+                "Band {band}: expected {cell_count} samples, got {}",
+                data.len()
+            )));
+        }
+        validate_nodata_for_data_type(T::TYPE, georef.nodata())
+            .map_err(|message| Error::InvalidArgument(format!("Band {band}: {message}")))?;
+    }
+
+    if let [(georef, data)] = bands {
+        return write_raster_band(path, georef, data, options);
+    }
+
+    #[cfg(feature = "gdal")]
+    return formats::gdal::write_raster_bands(path, bands, options);
+
+    #[cfg(not(feature = "gdal"))]
+    Err(Error::Runtime("Multiband raster writing requires the gdal feature".into()))
+}
+
+fn validate_nodata_for_data_type(data_type: ArrayDataType, nodata: Option<f64>) -> std::result::Result<(), &'static str> {
+    if matches!(
+        data_type,
+        ArrayDataType::Uint8 | ArrayDataType::Uint16 | ArrayDataType::Uint32 | ArrayDataType::Uint64
+    ) && nodata.is_some_and(|value| value < 0.0)
+    {
+        return Err("cannot store negative nodata with an unsigned data type");
+    }
+    Ok(())
 }
 
 pub fn read_raster_band_region<T: ArrayNum>(

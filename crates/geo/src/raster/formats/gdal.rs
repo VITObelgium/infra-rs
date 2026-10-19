@@ -251,6 +251,24 @@ impl RasterFormat for GdalRasterIO {
     }
 }
 
+pub(crate) fn write_raster_bands<T: ArrayNum>(
+    path: impl AsRef<Path>,
+    bands: &[(&GeoReference, &[T])],
+    options: WriteRasterOptions,
+) -> Result<()> {
+    let path = path.as_ref();
+    create_output_directory_if_needed(path)?;
+
+    // The caller validates the bands. Their borrowed buffers outlive both the copy
+    // to disk and this pointer-backed memory dataset, which never escapes this call.
+    let mut ds = create_in_memory_dataset(bands[0].0.raster_size())?;
+    for (index, &(georef, data)) in bands.iter().enumerate() {
+        add_band_from_data_ptr(&mut ds, data)?;
+        metadata_to_dataset_band(&mut ds, georef, index + 1)?;
+    }
+    write_to_disk(&mut ds, path, &write_raster_options_to_gdal(options), &[])
+}
+
 /// Open a GDAL raster dataset for reading
 pub fn open_dataset_read_only(path: impl AsRef<Path>) -> Result<gdal::Dataset> {
     let options = gdal::DatasetOptions {
@@ -264,6 +282,9 @@ pub fn open_dataset_read_only(path: impl AsRef<Path>) -> Result<gdal::Dataset> {
 fn write_raster_options_to_gdal(options: WriteRasterOptions) -> Vec<String> {
     match options {
         WriteRasterOptions::Default => Vec::default(),
+        WriteRasterOptions::NetCdf(netcdf_opts) => {
+            vec![format!("WRITE_BOTTOMUP={}", if netcdf_opts.write_bottom_up { "YES" } else { "NO" })]
+        }
         WriteRasterOptions::GeoTiff(tiff_opts) => {
             let mut opts = Vec::default();
             opts.push(format!(

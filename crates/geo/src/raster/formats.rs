@@ -49,6 +49,7 @@ impl RasterFileFormat {
                 "mbtiles" | "db" => return RasterFileFormat::MBTiles,
                 "gpkg" => return RasterFileFormat::GeoPackage,
                 "grib" => return RasterFileFormat::Grib,
+                "vrt" => return RasterFileFormat::Vrt,
                 _ => {}
             }
         }
@@ -171,3 +172,15 @@ pub trait RasterFormatGeneric: RasterFormatDyn {
 
 // Make sure boxed trait objects are also RasterFormatGeneric
 impl<R: RasterFormatDyn + ?Sized> RasterFormatGeneric for R {}
+
+#[cfg(test)]
+mod tests {
+    use super::RasterFileFormat;
+
+    #[test]
+    fn vrt_extensions_are_recognized_case_insensitively() {
+        for path in ["input.vrt", "input.VRT"] {
+            assert_eq!(RasterFileFormat::guess_from_path(path), RasterFileFormat::Vrt);
+        }
+    }
+}

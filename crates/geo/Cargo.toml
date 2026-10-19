@@ -63,7 +63,7 @@ geos = { version = "11.1", features = ["geo", "v3_14_0"], optional = true }
 glob = "0.3"
 inf = { path = "../inf" }
 itertools = "0.15"
-lerc-rs = { version = "0.5", optional = true }
+lerc-rs = { version = "0.7", optional = true }
 log = "0.4"
 num = "0.4"
 paste = "1.0"
