@@ -2,6 +2,40 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, ensure};
 
+use crate::netcdf;
+
+/// A GDAL-readable raster input, optionally backed by a temporary `NetCDF` view.
+pub struct PreparedInput {
+    pub input: String,
+    pub(super) _directory: Option<tempfile::TempDir>,
+}
+
+/// Prepare local `NetCDF` selections; leave other raster formats and GDAL connection strings unchanged.
+pub fn prepare_input(input: &str, variables: &[String], dimensions: &[String], source_srs: Option<&str>) -> Result<PreparedInput> {
+    let (path, variables) = netcdf::parse_input_path(input, variables)?;
+    let Some(paths) = resolve_local_input_paths(input, &path)? else {
+        ensure!(
+            variables.is_empty(),
+            "NetCDF variable selection requires a local input file: {}",
+            path.display()
+        );
+        return Ok(PreparedInput {
+            input: input.to_owned(),
+            _directory: None,
+        });
+    };
+
+    if netcdf::is_netcdf(&paths[0])? {
+        return netcdf::prepare_input(&paths, variables, dimensions, source_srs);
+    }
+
+    ensure!(variables.is_empty(), "--variable is only supported for NetCDF inputs");
+    Ok(PreparedInput {
+        input: input.to_owned(),
+        _directory: None,
+    })
+}
+
 /// Resolve a local file or sorted glob matches; return `None` for inputs left to GDAL.
 /// `path` may be extracted from a subdataset, while `input` is the original connection string.
 pub fn resolve_local_input_paths(input: &str, path: &Path) -> Result<Option<Vec<PathBuf>>> {

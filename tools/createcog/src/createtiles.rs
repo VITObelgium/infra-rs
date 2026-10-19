@@ -4,7 +4,7 @@ use geo::raster::Compression;
 use std::path::{Path, PathBuf};
 use strum::EnumString;
 
-use crate::{Result, netcdf, unscale};
+use crate::{Result, input, unscale};
 use geo::{ArrayDataType, ZoomLevelStrategy, geotiff};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString)]
@@ -69,25 +69,28 @@ fn create_opts(opts: &TileCreationOptions) -> Result<geo::cog::CogCreationOption
 }
 
 struct PreparedRasterInput {
-    netcdf: netcdf::PreparedInput,
+    source: input::PreparedInput,
     unscaled: Option<unscale::PreparedInput>,
 }
 
 impl PreparedRasterInput {
     fn new(input: &str, opts: &TileCreationOptions) -> Result<Self> {
-        let netcdf = netcdf::prepare_input(input, &opts.variables, &opts.dimensions, opts.source_srs.as_deref())?;
+        let prepared_input = input::prepare_input(input, &opts.variables, &opts.dimensions, opts.source_srs.as_deref())?;
         let unscaled = if opts.unscale {
-            Some(unscale::prepare_input(&netcdf.input)?)
+            Some(unscale::prepare_input(&prepared_input.input)?)
         } else {
             None
         };
-        Ok(Self { netcdf, unscaled })
+        Ok(Self {
+            source: prepared_input,
+            unscaled,
+        })
     }
 
     fn as_str(&self) -> &str {
         match &self.unscaled {
             Some(unscaled) => &unscaled.input,
-            None => &self.netcdf.input,
+            None => &self.source.input,
         }
     }
 
@@ -102,6 +105,12 @@ impl PreparedRasterInput {
         if let Some(unscaled) = &self.unscaled
             && unscaled.multi_band
         {
+            return Ok(true);
+        }
+        if let Some(paths) = input::resolve_local_input_paths(self.as_str(), self.as_path())?
+            && (paths.len() > 1 || !self.as_path().is_file())
+        {
+            // The per-band pipeline expands globs, including those matching only one file.
             return Ok(true);
         }
         Ok(geo::raster::formats::gdal::open_dataset_read_only(self.as_path())?.raster_count() > 1)

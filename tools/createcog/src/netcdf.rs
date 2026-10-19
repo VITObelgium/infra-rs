@@ -6,43 +6,15 @@ use gdal::{
     raster::{Dimension, Group, MDArray},
 };
 
-use crate::input::resolve_local_input_paths;
-
-pub struct PreparedInput {
-    pub input: String,
-    _directory: Option<tempfile::TempDir>,
-}
+use crate::input::PreparedInput;
 
 /// Expose named `NetCDF` dimensions as a lazy raster view, without copying the cube.
-pub fn prepare_input(input: &str, variables: &[String], dimensions: &[String], source_srs: Option<&str>) -> Result<PreparedInput> {
-    let (path, variables) = parse_input_path(input, variables)?;
-    let Some(paths) = resolve_local_input_paths(input, &path)? else {
-        // Leave GDAL connection strings to the existing raster pipeline.
-        ensure!(
-            variables.is_empty(),
-            "NetCDF variable selection requires a local input file: {}",
-            path.display()
-        );
-        return Ok(PreparedInput {
-            input: input.to_owned(),
-            _directory: None,
-        });
-    };
-
-    if !is_netcdf(&paths[0])? {
-        ensure!(variables.is_empty(), "--variable is only supported for NetCDF inputs");
-        return Ok(PreparedInput {
-            input: input.to_owned(),
-            _directory: None,
-        });
-    }
-
+pub fn prepare_input(paths: &[PathBuf], variables: Vec<String>, dimensions: &[String], source_srs: Option<&str>) -> Result<PreparedInput> {
     validate_dimensions(dimensions)?;
-    let vrt = build_vrt(&paths, variables, dimensions, source_srs)?;
-    vrt.write_input()
+    build_vrt(paths, variables, dimensions, source_srs)?.write_input()
 }
 
-fn parse_input_path(input: &str, variables: &[String]) -> Result<(PathBuf, Vec<String>)> {
+pub fn parse_input_path(input: &str, variables: &[String]) -> Result<(PathBuf, Vec<String>)> {
     let Some(subdataset) = input.strip_prefix("NETCDF:") else {
         return Ok((PathBuf::from(input), variables.to_vec()));
     };
@@ -56,7 +28,7 @@ fn parse_input_path(input: &str, variables: &[String]) -> Result<(PathBuf, Vec<S
     Ok((PathBuf::from(filename.trim_matches('"')), vec![variable.to_owned()]))
 }
 
-fn is_netcdf(path: &Path) -> Result<bool> {
+pub fn is_netcdf(path: &Path) -> Result<bool> {
     let dataset = Dataset::open_ex(
         path,
         DatasetOptions {
@@ -379,6 +351,7 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+    use crate::input::prepare_input;
 
     fn fixture() -> PathBuf {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/data/uc-small.nc")
