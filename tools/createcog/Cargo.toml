@@ -11,6 +11,8 @@ dependencies = ["gdal[core,netcdf]"]
 anyhow = "1.0"
 clap = { version = "4.6", features = ["derive"] }
 env_logger = { version = "0.11" }
+gdal = "0.19"
+glob = "0.3"
 geo = { path = "../../crates/geo", features = [
   "gdal-static",
   "raster-io-geotiff",
@@ -21,6 +23,7 @@ kdam = { version = "0.6", features = ["rich"] }
 log = "0.4"
 rayon = "1.12"
 strum = { version = "0.28", features = ["derive"] }
+tempfile = "3"
 thiserror = "2.0"
 
 [features]

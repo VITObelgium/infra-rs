@@ -1253,12 +1253,15 @@ dependencies = [
  "anyhow",
  "clap",
  "env_logger",
+ "gdal",
  "geo",
+ "glob",
  "inf",
  "kdam",
  "log",
  "rayon",
  "strum",
+ "tempfile",
  "thiserror 2.0.21",
 ]
 

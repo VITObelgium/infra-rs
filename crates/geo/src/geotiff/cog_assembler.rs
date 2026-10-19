@@ -1549,11 +1549,10 @@ mod tests {
     use std::{
         fs::File,
         io::{Read, Seek, SeekFrom},
-        num::NonZeroUsize,
     };
 
     use crate::{
-        GeoReference,
+        BandIndex, GeoReference,
         cog::{CogCreationOptions, create_temporary_band_cogs},
         geotiff::{GeoTiffReader, metadata::Interleave},
         raster, testutils,
@@ -1622,7 +1621,7 @@ mod tests {
                 let expected = source.read_overview_band_as::<u8, GeoReference>(overview_index, super::super::FIRST_BAND)?;
                 let actual = assembled.read_overview_band_as::<u8, GeoReference>(
                     overview_index,
-                    NonZeroUsize::new(band_index + 1).expect("one-based band index"),
+                    BandIndex::new(band_index + 1).expect("one-based band index"),
                 )?;
                 assert_eq!(actual, expected);
             }
