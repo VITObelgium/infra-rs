@@ -23,7 +23,8 @@ them.
 The `packaging` environment contains the packaging tools. The
 `pixi-build-rattler-build` backend creates separate conda **build** and **host**
 environments from `recipe.yaml`: Rust 1.95, the C/C++ compilers, Python, Git, and
-pkg-config are build tools; GDAL, PROJ, and SQLite come from the host environment.
+pkg-config (pkgconf on Windows) are build tools; GDAL, PROJ, and SQLite come from
+the host environment.
 The existing Pixi Python-testing environment is unchanged.
 
 `conda-build` invokes `pixi publish --target-dir`, which builds a local artifact;
@@ -50,6 +51,12 @@ and test dependency.
   avoiding AVX2, static MSVC CRT, and macOS 15-specific release flags.
 - GDAL is constrained to 3.12 because `gdal-sys` 0.12 ships pre-generated bindings
   through that version. PROJ must be at least 9.6.2 for `proj-sys` 0.27.
+- Windows explicitly uses the build environment's `pkgconf.exe` for both Rust
+  dependency discovery and preflight checks. Unlike Windows `pkg-config`, its
+  shared-library probes exclude PROJ's private/static curl and TIFF link closure.
+  Target-specific pkg-config overrides are cleared so probes use the host prefix.
+- Build-script regression tests run with `python -m unittest discover -s conda
+  -p test_build.py`; they exercise Windows configuration without a Windows linker.
 - The GDAL NetCDF plugin is an explicit runtime dependency. ABI-compatible GDAL,
   PROJ, SQLite, and compiler runtime requirements are supplied by conda run exports.
 - The MIT license and aggregated Rust dependency licenses are included.

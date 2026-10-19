@@ -28,7 +28,9 @@ requirements:
       then: ${{ stdlib('c') }}
     - rust 1.95.*
     - python 3.13.*
-    - pkg-config
+    - if: win
+      then: pkgconf
+      else: pkg-config
     - git
     - cargo-bundle-licenses
   host:

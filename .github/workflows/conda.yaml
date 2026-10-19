@@ -36,6 +36,7 @@ jobs:
             - name: Build and test conda package
               shell: bash
               run: |
+                  pixi run --locked -e packaging python -m unittest discover -s conda -p test_build.py
                   pixi run --locked -e packaging conda-build
                   pixi run --locked -e packaging conda-test
                   pixi run --locked -e packaging conda-channel-test
