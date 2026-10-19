@@ -39,7 +39,7 @@ name = "simd"
 
 [dependencies]
 approx = "0.5"
-arrow = { version = "59", optional = true }
+arrow = { version = "60", optional = true }
 bon = { version = "3.9", optional = true }
 bytemuck = { version = "1.25" }
 calamine = { version = "0.36", features = ["dates"], optional = true }
