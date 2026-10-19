@@ -102,17 +102,20 @@ impl PreparedRasterInput {
         if opts.multi_band {
             return Ok(true);
         }
+
         if let Some(unscaled) = &self.unscaled
             && unscaled.multi_band
         {
             return Ok(true);
         }
+
         if let Some(paths) = input::resolve_local_input_paths(self.as_str(), self.as_path())?
             && (paths.len() > 1 || !self.as_path().is_file())
         {
             // The per-band pipeline expands globs, including those matching only one file.
             return Ok(true);
         }
+
         Ok(geo::raster::formats::gdal::open_dataset_read_only(self.as_path())?.raster_count() > 1)
     }
 }
@@ -130,29 +133,22 @@ pub fn print_gdal_translate_command(input: &str, opts: TileCreationOptions) -> R
     Ok(())
 }
 
-pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, mut progress: Option<&mut dyn FnMut(f64)>) -> Result<()> {
+pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, progress: &mut dyn FnMut(f64)) -> Result<()> {
     let cog_create_opts = create_opts(&opts)?;
+    // Prepare the input, possibly creating temporary VRTs for unscaling or NetCDF variable selection.
     let prepared = PreparedRasterInput::new(input, &opts)?;
 
     if prepared.uses_multiband_pipeline(&opts)? {
-        if let Some(progress) = progress.as_mut() {
-            progress(0.0);
-        }
-        let mut warp_progress = |fraction: f64| {
-            if let Some(progress) = progress.as_mut() {
-                progress(fraction * 0.9);
-            }
-        };
-        let (_temporary_directory, band_cogs) = cog::create_temporary_band_cogs(
+        progress(0.0);
+        let mut warp_progress = |fraction: f64| progress(fraction * 0.9);
+        let (_temp_dir, band_cogs) = cog::create_temporary_band_cogs(
             prepared.as_str(),
             cog_create_opts,
             opts.source_srs.as_deref(),
             Some(&mut warp_progress),
         )?;
         geotiff::assemble_band_cogs(&band_cogs, &output)?;
-        if let Some(progress) = progress.as_mut() {
-            progress(1.0);
-        }
+        progress(1.0);
         Ok(())
     } else {
         Ok(cog::create_cog_tiles(prepared.as_path(), &output, cog_create_opts)?)
@@ -323,7 +319,7 @@ mod tests {
                 expected
             );
             assert_eq!(
-                create_cog_tiles(input, PathBuf::from("unused-output.tif"), invalid_options(), None)
+                create_cog_tiles(input, PathBuf::from("unused-output.tif"), invalid_options(), &mut |_| {})
                     .unwrap_err()
                     .to_string(),
                 expected
