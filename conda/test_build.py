@@ -110,14 +110,11 @@ class BuildEnvironmentTests(unittest.TestCase):
             build.main()
         commands = [call.args[0] for call in run.call_args_list]
         pkg_config = env["PKG_CONFIG"]
-        self.assertEqual(commands[:5], [
+        self.assertEqual(commands, [
             [pkg_config, "--atleast-version=9.6.2", "proj"],
-            [pkg_config, "--modversion", "gdal"],
-            [pkg_config, "--modversion", "proj"],
-            [pkg_config, "--modversion", "sqlite3"],
-            [pkg_config, "--libs", "--cflags", "proj"],
+            ["cargo", "build", "--release", "--locked", "--package", "createcog", "--no-default-features"],
+            ["cargo-bundle-licenses", "--format", "yaml", "--output", "THIRDPARTY.yml"],
         ])
-        self.assertEqual(commands[5][0], "cargo")
         for call in run.call_args_list:
             self.assertIs(call.kwargs["env"], env)
             self.assertTrue(call.kwargs["check"])

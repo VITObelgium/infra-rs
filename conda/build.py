@@ -28,9 +28,8 @@ def build_environment(source, prefix, build_prefix, windows):
         env.pop(variable, None)
 
     if windows:
-        # Windows pkg-config includes private/static dependencies by default even
-        # without --static. Select pkgconf explicitly so PROJ's DLL does not pull
-        # in its private curl/TIFF dependencies as direct Rust link requirements.
+        # Unlike Windows pkg-config, pkgconf excludes private link dependencies
+        # when probing shared libraries.
         env["PKG_CONFIG"] = str(build_prefix / "Library" / "bin" / "pkgconf.exe")
         env["GDAL_LIB_DIR"] = str(library / "lib")
         env["GDAL_INCLUDE_DIR"] = str(library / "include")
@@ -59,13 +58,8 @@ def main():
     if version != os.environ["PKG_VERSION"]:
         raise RuntimeError(f"Cargo version {version} does not match package version {os.environ['PKG_VERSION']}")
 
-    # Use the same executable for preflight checks and Rust dependency probes.
-    pkg_config = env["PKG_CONFIG"]
     # Fail early rather than allowing proj-sys to fall back to building bundled PROJ.
-    subprocess.run([pkg_config, "--atleast-version=9.6.2", "proj"], env=env, check=True)
-    for package in ("gdal", "proj", "sqlite3"):
-        subprocess.run([pkg_config, "--modversion", package], env=env, check=True)
-    subprocess.run([pkg_config, "--libs", "--cflags", "proj"], env=env, check=True)
+    subprocess.run([env["PKG_CONFIG"], "--atleast-version=9.6.2", "proj"], env=env, check=True)
 
     subprocess.run(
         ["cargo", "build", "--release", "--locked", "--package", "createcog", "--no-default-features"],
