@@ -436,6 +436,70 @@ impl GeoTiffReader {
     }
 }
 
+#[cfg(test)]
+mod strip_tests {
+    use std::io::Cursor;
+
+    use tiff::{encoder::TiffEncoder, tags::Tag};
+
+    use crate::array::Array;
+
+    use super::*;
+
+    #[test]
+    fn striped_layout_defaults_and_clamps_to_height_for_full_and_region_reads() -> Result<()> {
+        const WIDTH: u32 = 8;
+        const HEIGHT: u32 = 3;
+        let pixels: Vec<u8> = (1..=24).collect();
+        for rows_per_strip in [None, Some(1_u32), Some(2), Some(HEIGHT), Some(100), Some(u32::MAX)] {
+            let mut stream = Cursor::new(Vec::new());
+            {
+                let mut encoder = TiffEncoder::new(&mut stream)?;
+                let mut directory = encoder.image_directory()?;
+                directory.write_tag(Tag::ImageWidth, WIDTH)?;
+                directory.write_tag(Tag::ImageLength, HEIGHT)?;
+                directory.write_tag(Tag::SamplesPerPixel, 1_u16)?;
+                directory.write_tag(Tag::BitsPerSample, 8_u16)?;
+                directory.write_tag(Tag::SampleFormat, 1_u16)?;
+                directory.write_tag(Tag::Compression, 1_u16)?;
+                directory.write_tag(Tag::PhotometricInterpretation, 1_u16)?;
+                directory.write_tag(Tag::ModelPixelScaleTag, [1.0_f64, 1.0, 0.0])?;
+                directory.write_tag(Tag::ModelTiepointTag, [0.0_f64, 0.0, 0.0, 0.0, HEIGHT as f64, 0.0])?;
+                if let Some(rows) = rows_per_strip {
+                    directory.write_tag(Tag::RowsPerStrip, rows)?;
+                }
+                let effective_rows = rows_per_strip.unwrap_or(HEIGHT).min(HEIGHT);
+                let mut offsets = Vec::new();
+                let mut counts = Vec::new();
+                for strip in pixels.chunks((WIDTH * effective_rows) as usize) {
+                    offsets.push(u32::try_from(directory.write_data(strip)?).expect("small test strip offset"));
+                    counts.push(strip.len() as u32);
+                }
+                directory.write_tag(Tag::StripOffsets, offsets.as_slice())?;
+                directory.write_tag(Tag::StripByteCounts, counts.as_slice())?;
+                directory.finish()?;
+            }
+            let file = tempfile::NamedTempFile::new()?;
+            std::fs::write(file.path(), stream.into_inner())?;
+            let mut reader = GeoTiffReader::from_file(file.path())?;
+            assert_eq!(
+                reader.metadata().data_layout,
+                ChunkDataLayout::Striped(rows_per_strip.unwrap_or(HEIGHT).min(HEIGHT))
+            );
+            let full = reader.read_raster_as::<u8, GeoReference>()?;
+            assert_eq!(full.as_slice(), pixels, "Full read, RowsPerStrip={rows_per_strip:?}");
+
+            let region = reader.metadata().geo_reference.clone();
+            let mut buffer = vec![MaybeUninit::new(255_u8); pixels.len()];
+            reader.read_band_region_into_buffer::<u8, GeoReference>(FIRST_BAND, &region, &mut buffer)?;
+            // SAFETY: Every element was initialized before the region read.
+            let actual: Vec<_> = buffer.into_iter().map(|value| unsafe { value.assume_init() }).collect();
+            assert_eq!(actual, pixels, "Region read, RowsPerStrip={rows_per_strip:?}");
+        }
+        Ok(())
+    }
+}
+
 #[cfg(feature = "gdal")]
 #[cfg(test)]
 mod tests {

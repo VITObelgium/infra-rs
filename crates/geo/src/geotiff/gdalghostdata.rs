@@ -39,7 +39,7 @@ pub struct GdalGhostData {
 
 impl GdalGhostData {
     pub fn from_tiff_header_buffer(header: &[u8]) -> Option<GdalGhostData> {
-        let is_big_tiff = match header[2] {
+        let is_big_tiff = match *header.get(2)? {
             0x2a => false, // Classic TIFF magic number
             0x2b => true,  // BigTIFF magic number
             _ => return None,
@@ -50,34 +50,16 @@ impl GdalGhostData {
         } else {
             CLASSIC_TIFF_GHOST_DATA_OFFSET
         };
-        debug_assert!(
-            header.len() >= offset + GDAL_METADATA_HEADER_LINE_SIZE,
-            "Provided header is too small to contain GDAL metadata"
-        );
+        let metadata_start = offset + GDAL_METADATA_HEADER_LINE_SIZE;
 
         // GDAL_STRUCTURAL_METADATA_SIZE=XXXXXX bytes\n
-        if let Ok(first_line) = std::str::from_utf8(&header[offset..offset + GDAL_METADATA_HEADER_LINE_SIZE]) {
-            // The header size is at bytes 30..36 (6 bytes)
-            let header_size_str = &first_line[30..36];
-            let header_size: usize = match header_size_str.trim().parse() {
-                Ok(size) => size,
-                Err(_) => return None, // Return None if header size is malformed
-            };
+        let first_line = std::str::from_utf8(header.get(offset..metadata_start)?).ok()?;
+        // The header size is at bytes 30..36 (6 bytes)
+        let header_size: usize = first_line.get(30..36)?.trim().parse().ok()?;
+        let metadata_end = metadata_start.checked_add(header_size)?;
 
-            // Check bounds to prevent buffer overflow
-            let metadata_start = offset + GDAL_METADATA_HEADER_LINE_SIZE;
-            let metadata_end = metadata_start + header_size;
-
-            if metadata_end > header.len() {
-                // Size is larger than available buffer, return None for malformed data
-                return None;
-            }
-
-            let header_str = String::from_utf8_lossy(&header[metadata_start..metadata_end]);
-            parse_ghost_metadata(&header_str)
-        } else {
-            None
-        }
+        let header_str = String::from_utf8_lossy(header.get(metadata_start..metadata_end)?);
+        parse_ghost_metadata(&header_str)
     }
 
     pub fn is_cog(&self) -> bool {
@@ -362,9 +344,35 @@ mod tests {
 
     #[test]
     fn test_from_tiff_header_buffer_header_too_small() {
-        let header = vec![0u8; 20]; // Too small to contain ghost data
-        let result = GdalGhostData::from_tiff_header_buffer(&header);
-        assert!(result.is_none());
+        for (mut header, offset) in [
+            (create_classic_tiff_header(), CLASSIC_TIFF_GHOST_DATA_OFFSET),
+            (create_bigtiff_header(), BIGTIFF_GHOST_DATA_OFFSET),
+        ] {
+            let metadata = "LAYOUT=IFDS_BEFORE_DATA\n";
+            add_ghost_data(&mut header, offset, metadata);
+            let metadata_end = offset + GDAL_METADATA_HEADER_LINE_SIZE + metadata.len();
+
+            for length in 0..metadata_end {
+                assert!(
+                    GdalGhostData::from_tiff_header_buffer(&header[..length]).is_none(),
+                    "Expected truncated header of length {length} with ghost offset {offset} to be rejected"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_from_tiff_header_buffer_size_field_splits_utf8_character() {
+        for boundary in [30, 36] {
+            let mut header = create_classic_tiff_header();
+            add_ghost_data(&mut header, CLASSIC_TIFF_GHOST_DATA_OFFSET, "");
+            let start = CLASSIC_TIFF_GHOST_DATA_OFFSET + boundary - 1;
+            header[start..start + 2].copy_from_slice("é".as_bytes());
+
+            let end = CLASSIC_TIFF_GHOST_DATA_OFFSET + GDAL_METADATA_HEADER_LINE_SIZE;
+            assert!(std::str::from_utf8(&header[CLASSIC_TIFF_GHOST_DATA_OFFSET..end]).is_ok());
+            assert!(GdalGhostData::from_tiff_header_buffer(&header).is_none());
+        }
     }
 
     #[test]
