@@ -19,13 +19,13 @@ jobs:
         steps:
             - name: Enable Git long paths
               run: git config --system core.longpaths true
-            - uses: actions/checkout@v6
-            - uses: jdx/mise-action@v4
+            - uses: actions/checkout@v7
+            - uses: jdx/mise-action@v5
               with:
                   cache_key: "mise-{{platform}}-{{file_hash}}"
             - name: Cache vcpkg packages
               id: cache-vcpkg
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                   path: |
                       ~/.cache/vcpkg
@@ -48,7 +48,7 @@ jobs:
               run: mise -E vcpkg run test_py
             - name: Archive build logs
               if: ${{ failure() }}
-              uses: actions/upload-artifact@v6
+              uses: actions/upload-artifact@v7
               with:
                   name: ${{ matrix.cfg.id }}-build-logs
                   path: |

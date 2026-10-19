@@ -4,7 +4,38 @@ channels    = ["conda-forge"]
 description = "Python environment for testing python bindings related code"
 name        = "test_env"
 platforms   = ["linux-64", "osx-64", "osx-arm64", "win-64"]
+preview     = ["pixi-build"]
 version     = "0.1.0"
+
+[package]
+name = "sas-raster-tools"
+version = "2026.9.14"
+
+[package.build.backend]
+name = "pixi-build-rattler-build"
+version = "==0.4.7"
+channels = ["https://prefix.dev/conda-forge"]
+
+[package.build.config]
+recipe = "conda/recipe.yaml"
+experimental = true
+
+[environments]
+packaging = { features = ["packaging"], no-default-feature = true }
+
+[feature.packaging]
+platforms = ["linux-64", "osx-arm64", "win-64"]
+
+[feature.packaging.dependencies]
+python = "3.13.*"
+rattler-build = "0.77.*"
+conda-index = ">=0.13.0,<0.14"
+
+[feature.packaging.tasks]
+conda-build = { cmd = "pixi publish --path . --target-dir conda/output --force", description = "Build sas-raster-tools from source using conda native dependencies" }
+conda-test = { cmd = "python conda/test_artifacts.py", description = "Test the built sas-raster-tools packages for the current version" }
+conda-channel-update = { cmd = "python conda/update_channel.py", description = "Copy local packages to ../conda-channel and regenerate its index (no commit or push)" }
+conda-channel-test = { cmd = "python -m unittest discover -s conda -p test_update_channel.py", description = "Test channel staging and immutable package checks" }
 
 [tasks]
 test_debug   = "cargo nextest run --profile ci  --workspace --config .cargo/config.vcpkg.toml --all-features"
@@ -12,6 +43,8 @@ test_release = { cmd = "cargo nextest run --profile ci --workspace --config .car
 
 [dependencies]
 pyarrow = ">=19.0.0,<20"
+python = ">=3.12.15,<3.14"
+conda-index = ">=0.13.0,<0.14"
 
 # on mac/linux the LIBRARY PATH needs to be set to the conda prefix
 # see: https://github.com/PyO3/pyo3/issues/4155
