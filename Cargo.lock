@@ -1272,6 +1272,7 @@ dependencies = [
  "inf",
  "kdam",
  "log",
+ "parking_lot",
  "rayon",
  "strum",
  "tempfile",

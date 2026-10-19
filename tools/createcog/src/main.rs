@@ -1,13 +1,14 @@
 use std::{
     io::{self, IsTerminal, Write},
     path::PathBuf,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use clap::Parser;
 use createtiles::TileCreationOptions;
 use env_logger::{Env, Target, TimestampPrecision, WriteStyle};
 use kdam::{BarExt, Column, RichProgress, tqdm};
+use parking_lot::Mutex;
 
 use crate::createtiles::{ZoomLevelSelection, create_cog_tiles, print_gdal_translate_command};
 
@@ -28,11 +29,7 @@ impl Write for ProgressWriter {
         let message = message.trim_end_matches(['\r', '\n']);
 
         if !message.is_empty() {
-            self.progress
-                .lock()
-                .map_err(|_| io::Error::other("progress bar lock poisoned"))?
-                .write(message)
-                .map_err(io::Error::other)?;
+            self.progress.lock().write(message).map_err(io::Error::other)?;
         }
 
         Ok(buffer.len())
@@ -203,17 +200,12 @@ fn main() -> Result<()> {
         print_gdal_translate_command(&opt.input, tile_opts)?;
     } else {
         let mut update_progress = |fraction: f64| {
-            if let Ok(mut progress) = progress.lock() {
-                let _ = progress.update_to((fraction * 100.0) as usize);
-            }
+            let _ = progress.lock().update_to((fraction * 100.0) as usize);
         };
         let progress_callback: Option<&mut dyn FnMut(f64)> = show_progress.then_some(&mut update_progress);
 
         create_cog_tiles(&opt.input, opt.output, tile_opts, progress_callback)?;
-        progress
-            .lock()
-            .map_err(|_| anyhow::anyhow!("progress bar lock poisoned"))?
-            .update_to(100)?;
+        progress.lock().update_to(100)?;
         if show_progress {
             eprintln!();
         }
