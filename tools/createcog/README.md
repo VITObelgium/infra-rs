@@ -7,6 +7,29 @@ NetCDF data. Existing raster/TIFF inputs need no NetCDF selection flags:
 createcog --input input.tif --output output.tif
 ```
 
+## Conda package
+
+The `sas-raster-tools` conda package contains `createcog`. From the repository
+root, build and test it with Pixi in a normal shell outside devenv; the build
+obtains its toolchain and native dependencies from conda-forge:
+
+```sh
+pixi run --locked -e packaging conda-build
+pixi run --locked -e packaging conda-test
+```
+
+Packages are written to `conda/output/` relative to the repository root. Tagged
+builds publish to [VITO-RMA/conda-channel](https://github.com/VITO-RMA/conda-channel),
+not GitHub Release assets. After the first publication, install with:
+
+```sh
+conda install -c https://raw.githubusercontent.com/VITO-RMA/conda-channel/main \
+  -c conda-forge sas-raster-tools
+```
+
+See the [conda packaging README](../../conda/README.md) for platform requirements,
+channel publishing credentials, and local channel updates.
+
 ## Output type and scale/offset decoding
 
 Use `--output-data-type TYPE` to choose the output sample

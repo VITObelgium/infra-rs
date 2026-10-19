@@ -21,7 +21,7 @@ jobs:
                       }
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - uses: cachix/install-nix-action@v31
             - uses: cachix/cachix-action@v17
               with:
@@ -30,7 +30,7 @@ jobs:
             - name: Install pinned devenv
               run: nix profile add --accept-flake-config github:cachix/devenv/v2.2.2
             - name: Configure sccache
-              uses: actions/github-script@v8
+              uses: actions/github-script@v9
               with:
                   script: |
                       core.exportVariable('ACTIONS_RESULTS_URL', process.env.ACTIONS_RESULTS_URL || '');

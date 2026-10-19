@@ -1,6 +1,10 @@
 target
 .DS_Store
 .pixi
+
+/conda/output/
+
+/conda/channel/
 .direnv
 .devenv*
 /.agents/skills/rust-best-practices

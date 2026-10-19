@@ -17,7 +17,7 @@ jobs:
         outputs:
             tag_name: ${{ steps.tag.outputs.tag_name }}
         steps:
-            - uses: actions/checkout@v5
+            - uses: actions/checkout@v7
 
             - name: Get tag name
               id: tag
@@ -32,6 +32,7 @@ jobs:
                     --prerelease=false
               env:
                   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
     build-nix:
         needs: create-release
@@ -52,7 +53,7 @@ jobs:
         runs-on: ${{ matrix.os }}
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
             - uses: cachix/install-nix-action@v31
             - uses: cachix/cachix-action@v17
               with:
@@ -96,14 +97,14 @@ jobs:
         runs-on: windows-2025
 
         steps:
-            - uses: actions/checkout@v6
+            - uses: actions/checkout@v7
 
-            - uses: jdx/mise-action@v4
+            - uses: jdx/mise-action@v5
               with:
                   cache_key: "mise-{{platform}}-{{file_hash}}"
 
             - name: Cache vcpkg packages
-              uses: actions/cache@v5
+              uses: actions/cache@v6
               with:
                   path: |
                       ~/.cache/vcpkg

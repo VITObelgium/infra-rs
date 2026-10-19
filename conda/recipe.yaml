@@ -1,0 +1,63 @@
+context:
+  version: ${{ load_from_file('../Cargo.toml').workspace.package.version }}
+
+package:
+  name: sas-raster-tools
+  version: ${{ version }}
+
+source:
+  path: ..
+  filter:
+    - Cargo.toml
+    - Cargo.lock
+    - LICENSE
+    - crates/**
+    - tools/**
+    - src/**
+
+build:
+  number: 0
+  skip: target_platform == 'osx-64'
+  script: build.py
+
+requirements:
+  build:
+    - ${{ compiler('c') }}
+    - ${{ compiler('cxx') }}
+    - ${{ stdlib('c') }}
+    - rust 1.95.*
+    - python 3.13.*
+    - pkg-config
+    - git
+    - cargo-bundle-licenses
+  host:
+    - libgdal-core >=3.12,<3.13
+    - proj >=9.6.2
+    - libsqlite
+  run:
+    - libgdal-netcdf >=3.12,<3.13
+
+tests:
+  - package_contents:
+      bin:
+        - createcog
+  - script:
+      - createcog --help
+      - createcog --version
+  - script: test_package.py
+    requirements:
+      run:
+        - python 3.13.*
+        - gdal >=3.12,<3.13
+
+about:
+  homepage: https://github.com/VITO-RMA/infra-rs
+  repository: https://github.com/VITO-RMA/infra-rs
+  license: MIT
+  license_file:
+    - LICENSE
+    - THIRDPARTY.yml
+  summary: Raster tools for creating Cloud Optimized GeoTIFFs
+  description: |
+    Contains the createcog command-line executable, built from source against
+    conda-forge GDAL and PROJ. Includes GDAL NetCDF input support.

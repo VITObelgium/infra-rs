@@ -15,13 +15,13 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Export GitHub Actions cache environment variables
-              uses: actions/github-script@v8
+              uses: actions/github-script@v9
               with:
                   script: |
                       core.exportVariable('ACTIONS_CACHE_URL', process.env.ACTIONS_CACHE_URL || '');
                       core.exportVariable('ACTIONS_RUNTIME_TOKEN', process.env.ACTIONS_RUNTIME_TOKEN || '');
             - name: Checkout repository
-              uses: actions/checkout@v6
+              uses: actions/checkout@v7
             - uses: cachix/install-nix-action@v31
             - name: Install devenv.sh
               run: nix profile add nixpkgs#devenv
@@ -29,7 +29,7 @@ jobs:
               uses: Swatinem/rust-cache@v2
             - name: Setup pages
               id: pages
-              uses: actions/configure-pages@v5
+              uses: actions/configure-pages@v6
             - name: Clean docs folder
               shell: devenv --profile nightly shell bash -- -e {0}
               run: cargo clean --doc
@@ -47,7 +47,7 @@ jobs:
               run: echo '<meta http-equiv="refresh" content="0;url=geo/index.html">' > target/doc/index.html
 
             - name: Upload artifact
-              uses: actions/upload-pages-artifact@v3
+              uses: actions/upload-pages-artifact@v5
               with:
                   path: target/doc
     deploy:
