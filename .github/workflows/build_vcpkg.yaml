@@ -32,7 +32,7 @@ jobs:
               with:
                   cache_key: "mise-{{platform}}-{{file_hash}}"
             - name: Install NuGet
-              uses: NuGet/setup-nuget@v2
+              uses: NuGet/setup-nuget@v4
               with:
                   nuget-version: "6.x"
             - name: Configure vcpkg binary cache credentials

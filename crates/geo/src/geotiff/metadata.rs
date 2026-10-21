@@ -35,7 +35,8 @@ pub struct GeoTiffMetadata {
     pub overviews: Vec<TiffOverview>,
     pub interleave: Interleave,
     pub gdal_ghost_data: Option<GdalGhostData>, // Additional GDAL ghost metadata if the file was created with GDAL
-    /// Per-band metadata (description, scale, offset) from GDAL metadata XML
+    /// Per-band metadata (description, scale, offset) from GDAL metadata XML.
+    /// Always contains one entry per band; vector position is the zero-based band index, with defaults for missing metadata.
     pub band_metadata: Vec<BandMetadata>,
     /// Valid-data AABB in WGS84: `[west, south, east, north]`.
     pub data_bounds: Option<[f64; 4]>,
@@ -47,6 +48,24 @@ pub enum ParseFromBufferError {
 }
 
 impl GeoTiffMetadata {
+    /// Appends defaults for missing bands, preserving existing entries at their zero-based band positions.
+    ///
+    /// # Errors
+    /// Returns [`Error::InvalidArgument`] without modifying metadata if the number of entries exceeds `band_count`.
+    pub(crate) fn normalize_band_metadata(&mut self) -> Result<()> {
+        let band_count = self.band_count as usize;
+        if self.band_metadata.len() > band_count {
+            return Err(Error::InvalidArgument(format!(
+                "Band metadata has {} entries, exceeding band count {}",
+                self.band_metadata.len(),
+                self.band_count
+            )));
+        }
+
+        self.band_metadata.resize_with(band_count, BandMetadata::default);
+        Ok(())
+    }
+
     pub fn from_file(path: &Path) -> Result<Self> {
         let mut file_reader = File::open(path)?;
 
@@ -114,6 +133,112 @@ impl GeoTiffMetadata {
 
     pub fn is_tiled(&self) -> bool {
         matches!(self.data_layout, ChunkDataLayout::Tiled(_))
+    }
+}
+
+#[cfg(test)]
+mod band_metadata_tests {
+    use super::*;
+    use crate::{RasterScale, RasterSize};
+
+    fn metadata(band_count: u32, band_metadata: Vec<BandMetadata>) -> GeoTiffMetadata {
+        GeoTiffMetadata {
+            data_layout: ChunkDataLayout::Tiled(1),
+            band_count,
+            data_type: ArrayDataType::Uint8,
+            compression: None,
+            predictor: None,
+            statistics: None,
+            geo_reference: GeoReference::without_spatial_reference(RasterSize::square(1), None),
+            overviews: Vec::new(),
+            interleave: Interleave::Band,
+            gdal_ghost_data: None,
+            band_metadata,
+            data_bounds: None,
+        }
+    }
+
+    fn band_values(bands: &[BandMetadata]) -> Vec<(Option<&str>, Option<RasterScale>)> {
+        bands.iter().map(|band| (band.description.as_deref(), band.scale)).collect()
+    }
+
+    #[test]
+    fn empty_source_gets_defaults_for_every_band() -> Result<()> {
+        for band_count in [0, 3] {
+            let mut meta = metadata(band_count, Vec::new());
+            meta.normalize_band_metadata()?;
+            assert_eq!(band_values(&meta.band_metadata), vec![(None, None); band_count as usize]);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn shorter_metadata_preserves_entries_and_interior_default_gaps() -> Result<()> {
+        let scale = RasterScale { scale: 0.5, offset: -10.0 };
+        let mut meta = metadata(
+            4,
+            vec![
+                BandMetadata {
+                    description: Some("Red".into()),
+                    ..Default::default()
+                },
+                BandMetadata::default(),
+                BandMetadata {
+                    description: Some("Infrared".into()),
+                    scale: Some(scale),
+                },
+            ],
+        );
+        meta.normalize_band_metadata()?;
+        assert_eq!(
+            band_values(&meta.band_metadata),
+            vec![(Some("Red"), None), (None, None), (Some("Infrared"), Some(scale)), (None, None)]
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn already_dense_metadata_is_unchanged_without_reallocation() -> Result<()> {
+        let bands = vec![
+            BandMetadata {
+                description: Some("Red".into()),
+                scale: Some(RasterScale { scale: 2.0, offset: 1.0 }),
+            },
+            BandMetadata::default(),
+        ];
+        let mut meta = metadata(2, bands.clone());
+        let pointer = meta.band_metadata.as_ptr();
+        let capacity = meta.band_metadata.capacity();
+        meta.normalize_band_metadata()?;
+        assert_eq!(meta.band_metadata.as_ptr(), pointer);
+        assert_eq!(meta.band_metadata.capacity(), capacity);
+        assert_eq!(band_values(&meta.band_metadata), band_values(&bands));
+        Ok(())
+    }
+
+    #[test]
+    fn oversized_metadata_is_rejected_without_mutation() {
+        for band_count in [0, 1] {
+            let bands = vec![
+                BandMetadata {
+                    description: Some("Keep me".into()),
+                    scale: Some(RasterScale { scale: 0.5, offset: -2.0 }),
+                },
+                BandMetadata::default(),
+            ];
+            let mut meta = metadata(band_count, bands.clone());
+            let pointer = meta.band_metadata.as_ptr();
+            let capacity = meta.band_metadata.capacity();
+            let error = meta.normalize_band_metadata().expect_err("oversized metadata must be rejected");
+            assert!(matches!(
+                error,
+                Error::InvalidArgument(message)
+                    if message.contains("2 entries") && message.contains(&format!("count {band_count}"))
+            ));
+            assert_eq!(meta.band_metadata.as_ptr(), pointer);
+            assert_eq!(meta.band_metadata.capacity(), capacity);
+            assert_eq!(band_values(&meta.band_metadata), band_values(&bands));
+        }
     }
 }
 

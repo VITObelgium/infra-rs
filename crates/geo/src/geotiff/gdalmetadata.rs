@@ -1,4 +1,4 @@
-use crate::Error;
+use crate::{Error, RasterScale};
 use xml::{
     common::is_whitespace_str,
     reader::{ParserConfig, XmlEvent},
@@ -23,14 +23,11 @@ pub struct TiffStats {
 /// Band-specific metadata including offset, scale, and description values
 #[derive(Debug, Clone, Default)]
 pub struct BandMetadata {
-    /// The band/sample index (0-based)
-    pub sample: u32,
     /// Human-readable band description
     pub description: Option<String>,
-    /// Offset value for the band
-    pub offset: Option<f64>,
-    /// Scale value for the band
-    pub scale: Option<f64>,
+    /// The scale and offset of the raster values. The value of a pixel can be calculated as `value * scale + offset`.
+    /// Missing components default to scale 1 and offset 0; `None` means neither component was parsed.
+    pub scale: Option<RasterScale>,
 }
 
 struct XmlItem {
@@ -49,7 +46,7 @@ impl XmlItem {
 pub struct GdalMetadata {
     /// Statistical information (min, max, mean, stddev, etc.)
     pub statistics: Option<TiffStats>,
-    /// Per-band metadata (description, offset, scale)
+    /// Per-band metadata (description, offset, scale), indexed by zero-based band/sample index.
     pub band_metadata: Vec<BandMetadata>,
     /// Interleave mode from `IMAGE_STRUCTURE` domain
     pub interleave: Option<Interleave>,
@@ -85,20 +82,6 @@ fn parse_bounds_array(raw: &str) -> Option<[f64; 4]> {
     Some(values)
 }
 
-impl GdalMetadata {
-    fn band_metadata_mut(&mut self, sample: u32) -> &mut BandMetadata {
-        if let Some(index) = self.band_metadata.iter().position(|band| band.sample == sample) {
-            return &mut self.band_metadata[index];
-        }
-
-        self.band_metadata.push(BandMetadata {
-            sample,
-            ..Default::default()
-        });
-        self.band_metadata.last_mut().expect("band metadata was just added")
-    }
-}
-
 // GDAL metadata can have various formats:
 // <GDALMetadata>
 //   <Item name="STATISTICS_MAXIMUM" sample="0">254</Item>
@@ -119,28 +102,45 @@ impl GdalMetadata {
 /// Extracts statistics, band descriptions/offset/scale values, interleave mode,
 /// zoom level, and data bounds. Item text is accumulated across text, CDATA, and
 /// entity boundaries before deriving these values; unknown metadata is ignored.
+/// Scale and offset are combined per band, defaulting missing components to 1 and 0,
+/// respectively. Invalid scale/offset numbers are treated as absent.
+/// Band metadata contains exactly `band_count` entries in sample order, with defaults
+/// for bands without metadata. Sample indices must be less than `band_count`.
 /// Only an unnamespaced `GDALMetadata` root without attributes and direct, text-only
 /// `Item` children are supported. Malformed XML and invalid sample indices return errors.
 ///
 /// # Arguments
 /// * `xml` - The XML string containing GDAL metadata
+/// * `band_count` - The number of raster bands
 ///
 /// # Returns
 /// * `Ok(GdalMetadata)` if parsing succeeds
-/// * `Err` if XML parsing fails
-pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
+/// * `Err` if XML parsing fails or sample indices are invalid
+pub fn parse_gdal_metadata(xml: &str, band_count: u32) -> crate::Result<GdalMetadata> {
     let items = parse_gdal_metadata_items(xml)?;
-    let mut metadata = GdalMetadata::default();
+    let mut metadata = GdalMetadata {
+        band_metadata: vec![BandMetadata::default(); band_count as usize],
+        ..Default::default()
+    };
+    let mut band_scaling = vec![(None, None); band_count as usize];
     let mut stats = TiffStats::default();
     let mut has_statistics = false;
 
     for item in &items {
-        let sample = item.attribute("sample").map(str::parse::<u32>).transpose().map_err(|e| {
-            Error::Runtime(format!(
-                "Invalid GDAL metadata sample attribute {:?}: {e}",
-                item.attribute("sample")
-            ))
-        })?;
+        let sample = item
+            .attribute("sample")
+            .map(|value| {
+                let sample = value
+                    .parse::<u32>()
+                    .map_err(|e| Error::InvalidArgument(format!("Invalid GDAL metadata sample attribute {value:?}: {e}")))?;
+                if sample >= band_count {
+                    return Err(Error::InvalidArgument(format!(
+                        "GDAL metadata sample index {sample} is out of range for {band_count} bands"
+                    )));
+                }
+                Ok(sample as usize)
+            })
+            .transpose()?;
         let domain = item.attribute("domain");
         let role = item.attribute("role");
         let data = &item.text;
@@ -174,17 +174,17 @@ pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
             }
             Some("DESCRIPTION") => {
                 if let Some(sample) = sample {
-                    metadata.band_metadata_mut(sample).description = Some(data.clone());
+                    metadata.band_metadata[sample].description = Some(data.clone());
                 }
             }
             Some("OFFSET") if role == Some("offset") => {
                 if let Some(sample) = sample {
-                    metadata.band_metadata_mut(sample).offset = data.parse::<f64>().ok();
+                    band_scaling[sample].1 = data.parse::<f64>().ok();
                 }
             }
             Some("SCALE") if role == Some("scale") => {
                 if let Some(sample) = sample {
-                    metadata.band_metadata_mut(sample).scale = data.parse::<f64>().ok();
+                    band_scaling[sample].0 = data.parse::<f64>().ok();
                 }
             }
             Some("INTERLEAVE") if domain == Some("IMAGE_STRUCTURE") => {
@@ -197,8 +197,14 @@ pub fn parse_gdal_metadata(xml: &str) -> crate::Result<GdalMetadata> {
         }
     }
 
-    // Band metadata is returned in sample order, regardless of XML item order.
-    metadata.band_metadata.sort_by_key(|b| b.sample);
+    // Combine components after parsing so an invalid duplicate still clears the previous value.
+    for (band, (scale, offset)) in metadata.band_metadata.iter_mut().zip(band_scaling) {
+        band.scale = (scale.is_some() || offset.is_some()).then_some(RasterScale {
+            scale: scale.unwrap_or(1.0),
+            offset: offset.unwrap_or(0.0),
+        });
+    }
+
     metadata.statistics = has_statistics.then_some(stats);
 
     Ok(metadata)
@@ -296,8 +302,15 @@ mod tests {
     <Item name="ZOOM_LEVEL" domain="TILING_SCHEME">10</Item>
 </GDALMetadata>
        "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 2).expect("Should parse successfully");
 
+        assert_eq!(metadata.band_metadata.len(), 2);
+        assert!(
+            metadata
+                .band_metadata
+                .iter()
+                .all(|band| band.description.is_none() && band.scale.is_none())
+        );
         assert!(metadata.statistics.is_some());
         let stats = metadata.statistics.unwrap();
         assert_eq!(stats.minimum_value, 0.0);
@@ -323,14 +336,14 @@ mod tests {
   <Item name="DESCRIPTION" sample="2" role="description">Blue</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 3).expect("Should parse successfully");
 
         assert_eq!(metadata.band_metadata.len(), 3);
 
-        for (i, band) in metadata.band_metadata.iter().enumerate() {
-            assert_eq!(band.sample, i as u32);
-            assert_eq!(band.offset, Some(0.0));
-            assert_abs_diff_eq!(band.scale.unwrap(), 0.0313725490196);
+        for band in &metadata.band_metadata {
+            let scale = band.scale.unwrap();
+            assert_eq!(scale.offset, 0.0);
+            assert_abs_diff_eq!(scale.scale, 0.0313725490196);
         }
         assert_eq!(metadata.band_metadata[0].description.as_deref(), Some("Red"));
         assert_eq!(metadata.band_metadata[1].description.as_deref(), Some("Green"));
@@ -344,7 +357,7 @@ mod tests {
   <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">TILE</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 1).expect("Should parse successfully");
 
         assert_eq!(metadata.interleave, Some(Interleave::Tile));
     }
@@ -366,15 +379,15 @@ mod tests {
   <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">TILE</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 5).expect("Should parse successfully");
 
         assert_eq!(metadata.band_metadata.len(), 5);
         assert_eq!(metadata.interleave, Some(Interleave::Tile));
 
-        for (i, band) in metadata.band_metadata.iter().enumerate() {
-            assert_eq!(band.sample, i as u32);
-            assert_eq!(band.offset, Some(0.0));
-            assert_abs_diff_eq!(band.scale.unwrap(), 0.0313725490196);
+        for band in &metadata.band_metadata {
+            let scale = band.scale.unwrap();
+            assert_eq!(scale.offset, 0.0);
+            assert_abs_diff_eq!(scale.scale, 0.0313725490196);
         }
     }
 
@@ -392,50 +405,158 @@ mod tests {
     <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">PIXEL</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 1).expect("Should parse successfully");
 
         assert!(metadata.statistics.is_some());
         assert_eq!(metadata.band_metadata.len(), 1);
         assert_eq!(metadata.interleave, Some(Interleave::Pixel));
 
         let band = &metadata.band_metadata[0];
-        assert_eq!(band.sample, 0);
-        assert_eq!(band.offset, Some(10.0));
-        assert_abs_diff_eq!(band.scale.unwrap(), 2.5, epsilon = 1e-10);
+        let scale = band.scale.unwrap();
+        assert_eq!(scale.offset, 10.0);
+        assert_abs_diff_eq!(scale.scale, 2.5, epsilon = 1e-10);
     }
 
     #[test]
-    fn parse_gdal_metadata_partial_band_data() {
+    fn parse_gdal_metadata_partial_band_data_fills_gaps_and_trailing_bands() {
         let xml = r#"
 <GDALMetadata>
   <Item name="OFFSET" sample="0" role="offset">5</Item>
   <Item name="SCALE" sample="2" role="scale">1.5</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 5).expect("Should parse successfully");
 
-        assert_eq!(metadata.band_metadata.len(), 2);
+        assert_eq!(
+            metadata
+                .band_metadata
+                .iter()
+                .map(|band| (band.description.as_deref(), band.scale))
+                .collect::<Vec<_>>(),
+            vec![
+                (None, Some(RasterScale { scale: 1.0, offset: 5.0 })),
+                (None, None),
+                (None, Some(RasterScale { scale: 1.5, offset: 0.0 })),
+                (None, None),
+                (None, None)
+            ]
+        );
+    }
 
-        // Band 0 has only offset
-        assert_eq!(metadata.band_metadata[0].sample, 0);
-        assert_eq!(metadata.band_metadata[0].offset, Some(5.0));
-        assert_eq!(metadata.band_metadata[0].scale, None);
+    #[test]
+    fn parse_gdal_metadata_descriptions_without_scaling() {
+        let xml = r#"<GDALMetadata>
+  <Item name="DESCRIPTION" sample="0" role="description">Red</Item>
+  <Item name="DESCRIPTION" sample="2" role="description">Blue</Item>
+</GDALMetadata>"#;
+        let metadata = parse_gdal_metadata(xml, 3).expect("Should parse successfully");
 
-        // Band 2 has only scale
-        assert_eq!(metadata.band_metadata[1].sample, 2);
-        assert_eq!(metadata.band_metadata[1].offset, None);
-        assert_abs_diff_eq!(metadata.band_metadata[1].scale.unwrap(), 1.5, epsilon = 1e-10);
+        assert_eq!(
+            metadata
+                .band_metadata
+                .iter()
+                .map(|band| (band.description.as_deref(), band.scale))
+                .collect::<Vec<_>>(),
+            vec![(Some("Red"), None), (None, None), (Some("Blue"), None)]
+        );
+    }
+
+    #[test]
+    fn parse_gdal_metadata_combines_scaling_in_either_order_per_band() {
+        let xml = r#"<GDALMetadata>
+  <Item name="DESCRIPTION" sample="2" role="description">Blue</Item>
+  <Item name="SCALE" sample="2" role="scale">3.5</Item>
+  <Item name="OFFSET" sample="0" role="offset">-10</Item>
+  <Item name="DESCRIPTION" sample="0" role="description">Red</Item>
+  <Item name="SCALE" sample="0" role="scale">2.5</Item>
+  <Item name="OFFSET" sample="2" role="offset">20</Item>
+</GDALMetadata>"#;
+        let metadata = parse_gdal_metadata(xml, 3).expect("Should parse successfully");
+
+        assert_eq!(
+            metadata
+                .band_metadata
+                .iter()
+                .map(|band| (band.description.as_deref(), band.scale))
+                .collect::<Vec<_>>(),
+            vec![
+                (Some("Red"), Some(RasterScale { scale: 2.5, offset: -10.0 })),
+                (None, None),
+                (Some("Blue"), Some(RasterScale { scale: 3.5, offset: 20.0 }))
+            ]
+        );
+    }
+
+    #[test]
+    fn parse_gdal_metadata_preserves_explicit_identity_scaling() {
+        for (name, role, value) in [("SCALE", "scale", 1), ("OFFSET", "offset", 0)] {
+            let xml = format!(r#"<GDALMetadata><Item name="{name}" sample="0" role="{role}">{value}</Item></GDALMetadata>"#);
+            let metadata = parse_gdal_metadata(&xml, 1).expect("Should parse successfully");
+
+            assert_eq!(metadata.band_metadata[0].scale, Some(RasterScale::default()));
+        }
+    }
+
+    #[test]
+    fn parse_gdal_metadata_invalid_scaling_values_are_absent() {
+        for (scale, offset, expected) in [
+            ("invalid", "invalid", None),
+            ("", "", None),
+            (" 2.5 ", " 10 ", None),
+            ("2.5", "invalid", Some(RasterScale { scale: 2.5, offset: 0.0 })),
+            ("invalid", "10", Some(RasterScale { scale: 1.0, offset: 10.0 })),
+        ] {
+            let xml = format!(
+                r#"<GDALMetadata>
+  <Item name="OFFSET" sample="0" role="offset">{offset}</Item>
+  <Item name="SCALE" sample="0" role="scale">{scale}</Item>
+</GDALMetadata>"#
+            );
+            let metadata = parse_gdal_metadata(&xml, 1).expect("Invalid scaling should not fail parsing");
+
+            assert_eq!(metadata.band_metadata.len(), 1);
+            assert_eq!(metadata.band_metadata[0].scale, expected, "scale={scale:?}, offset={offset:?}");
+        }
+    }
+
+    #[test]
+    fn parse_gdal_metadata_duplicate_scaling_uses_last_value_even_if_invalid() {
+        for (scale, offset, expected) in [
+            ("invalid", "invalid", None),
+            ("3.5", "invalid", Some(RasterScale { scale: 3.5, offset: 0.0 })),
+            ("invalid", "20", Some(RasterScale { scale: 1.0, offset: 20.0 })),
+        ] {
+            let xml = format!(
+                r#"<GDALMetadata>
+  <Item name="OFFSET" sample="0" role="offset">10</Item>
+  <Item name="SCALE" sample="0" role="scale">2.5</Item>
+  <Item name="SCALE" sample="0" role="scale">{scale}</Item>
+  <Item name="OFFSET" sample="0" role="offset">{offset}</Item>
+</GDALMetadata>"#
+            );
+            let metadata = parse_gdal_metadata(&xml, 1).expect("Invalid scaling should not fail parsing");
+
+            assert_eq!(metadata.band_metadata[0].scale, expected, "scale={scale:?}, offset={offset:?}");
+        }
     }
 
     #[test]
     fn parse_gdal_metadata_empty() {
-        let xml = r#"<GDALMetadata></GDALMetadata>"#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        for band_count in [0, 1, 3] {
+            let xml = r#"<GDALMetadata></GDALMetadata>"#;
+            let metadata = parse_gdal_metadata(xml, band_count).expect("Should parse successfully");
 
-        assert!(metadata.statistics.is_none());
-        assert!(metadata.band_metadata.is_empty());
-        assert!(metadata.interleave.is_none());
-        assert!(metadata.data_bounds.is_none());
+            assert!(metadata.statistics.is_none());
+            assert_eq!(metadata.band_metadata.len(), band_count as usize);
+            assert!(
+                metadata
+                    .band_metadata
+                    .iter()
+                    .all(|band| band.description.is_none() && band.scale.is_none())
+            );
+            assert!(metadata.interleave.is_none());
+            assert!(metadata.data_bounds.is_none());
+        }
     }
 
     #[test]
@@ -445,7 +566,7 @@ mod tests {
   <Item name="data_bounds">[4.6600340395095525,52.22028643027196,5.132071086172366,52.50897297186259]</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 1).expect("Should parse successfully");
 
         let wgs84 = metadata.data_bounds.expect("data_bounds_4326");
         assert_abs_diff_eq!(wgs84[0], 4.6600340395095525, epsilon = 1e-12);
@@ -468,7 +589,7 @@ mod tests {
   <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">BAND</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 1).expect("Should parse successfully");
 
         assert_eq!(metadata.interleave, Some(Interleave::Band));
     }
@@ -480,7 +601,7 @@ mod tests {
   <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">INVALID</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 1).expect("Should parse successfully");
 
         assert_eq!(metadata.interleave, None);
     }
@@ -492,7 +613,7 @@ mod tests {
   <Item name="INTERLEAVE" domain="OTHER_DOMAIN">TILE</Item>
 </GDALMetadata>
         "#;
-        let metadata = parse_gdal_metadata(xml).expect("Should parse successfully");
+        let metadata = parse_gdal_metadata(xml, 1).expect("Should parse successfully");
 
         // Should not parse interleave from wrong domain
         assert_eq!(metadata.interleave, None);
@@ -505,10 +626,16 @@ mod tests {
   <Item name="DESCRIPTION" SAMPLE="0">Ignored</Item>
   <Item name="DESCRIPTION" sample="1">Green</Item>
 </GDALMetadata>"#;
-        let metadata = parse_gdal_metadata(xml).unwrap();
-        assert_eq!(metadata.band_metadata.len(), 1);
-        assert_eq!(metadata.band_metadata[0].sample, 1);
-        assert_eq!(metadata.band_metadata[0].description.as_deref(), Some("Green"));
+        let metadata = parse_gdal_metadata(xml, 3).unwrap();
+        assert_eq!(
+            metadata
+                .band_metadata
+                .iter()
+                .map(|band| band.description.as_deref())
+                .collect::<Vec<_>>(),
+            vec![None, Some("Green"), None]
+        );
+        assert!(metadata.band_metadata.iter().all(|band| band.scale.is_none()));
     }
 
     #[test]
@@ -518,16 +645,22 @@ mod tests {
   <Item role="another_role" sample="1" name="CUSTOM" domain="OTHER_DOMAIN">second</Item>
   <Item custom="nameless">third</Item>
 </GDALMetadata>"#;
-        let metadata = parse_gdal_metadata(xml).expect("Should accept unknown metadata");
+        let metadata = parse_gdal_metadata(xml, 3).expect("Should accept unknown metadata");
         assert!(metadata.statistics.is_none());
-        assert!(metadata.band_metadata.is_empty());
+        assert_eq!(metadata.band_metadata.len(), 3);
+        assert!(
+            metadata
+                .band_metadata
+                .iter()
+                .all(|band| band.description.is_none() && band.scale.is_none())
+        );
         assert!(metadata.interleave.is_none());
         assert!(metadata.max_zoom.is_none());
         assert!(metadata.data_bounds.is_none());
     }
 
     #[test]
-    fn parse_sorts_band_metadata_by_sample() {
+    fn parse_assigns_band_metadata_by_sample_regardless_of_item_order() {
         let xml = r#"<GDALMetadata>
   <Item name="DESCRIPTION" sample="2" role="description">Blue</Item>
   <Item name="STATISTICS_MINIMUM" sample="2">3.25</Item>
@@ -535,21 +668,21 @@ mod tests {
   <Item name="STATISTICS_MINIMUM" sample="0">1.5</Item>
   <Item name="DESCRIPTION" sample="1" role="description">Green</Item>
 </GDALMetadata>"#;
-        let metadata = parse_gdal_metadata(xml).unwrap();
+        let metadata = parse_gdal_metadata(xml, 4).unwrap();
         assert_eq!(
             metadata
                 .band_metadata
                 .iter()
-                .map(|band| (band.sample, band.description.as_deref()))
+                .map(|band| band.description.as_deref())
                 .collect::<Vec<_>>(),
-            vec![(0, Some("Red")), (1, Some("Green")), (2, Some("Blue"))]
+            vec![Some("Red"), Some("Green"), Some("Blue"), None]
         );
     }
 
     #[test]
     fn parse_accumulates_characters_cdata_entities_and_whitespace() {
         let xml = "<GDALMetadata><Item name=\"DESCRIPTION\" sample=\"0\"> \t<![CDATA[<raw>&]]>before<!-- split -->after&amp;end<![CDATA[\n\t]]> </Item></GDALMetadata>";
-        let metadata = parse_gdal_metadata(xml).unwrap();
+        let metadata = parse_gdal_metadata(xml, 1).unwrap();
         assert_eq!(
             metadata.band_metadata[0].description.as_deref(),
             Some(" \t<raw>&beforeafter&end\n\t ")
@@ -568,12 +701,11 @@ mod tests {
   <Item name="INTERLEAVE" domain="IMAGE_STRUCTURE">PI<![CDATA[X]]>EL</Item>
   <Item name="data_bounds">[1,2,<![CDATA[3,4]]>]</Item>
 </GDALMetadata>"#;
-        let metadata = parse_gdal_metadata(xml).unwrap();
+        let metadata = parse_gdal_metadata(xml, 1).unwrap();
         assert_eq!(metadata.statistics.unwrap().minimum_value, 12.5);
         assert_eq!(metadata.max_zoom, Some(12));
         assert_eq!(metadata.band_metadata[0].description.as_deref(), Some("Red & green"));
-        assert_eq!(metadata.band_metadata[0].offset, Some(10.0));
-        assert_eq!(metadata.band_metadata[0].scale, Some(2.5));
+        assert_eq!(metadata.band_metadata[0].scale, Some(RasterScale { scale: 2.5, offset: 10.0 }));
         assert_eq!(metadata.interleave, Some(Interleave::Pixel));
         assert_eq!(metadata.data_bounds, Some([1.0, 2.0, 3.0, 4.0]));
     }
@@ -581,7 +713,7 @@ mod tests {
     #[test]
     fn parse_retains_empty_and_whitespace_only_descriptions() {
         let xml = "<GDALMetadata><Item name=\"CUSTOM\"/><Item/><Item name=\"DESCRIPTION\" sample=\"0\"></Item><Item name=\"DESCRIPTION\" sample=\"1\"> \t\n&#xD;</Item></GDALMetadata>";
-        let metadata = parse_gdal_metadata(xml).unwrap();
+        let metadata = parse_gdal_metadata(xml, 2).unwrap();
         assert_eq!(metadata.band_metadata.len(), 2);
         assert_eq!(metadata.band_metadata[0].description.as_deref(), Some(""));
         assert_eq!(metadata.band_metadata[1].description.as_deref(), Some(" \t\n\r"));
@@ -591,11 +723,37 @@ mod tests {
     fn parse_rejects_malformed_sample_attributes_even_for_unknown_items() {
         for sample in ["", "invalid", "-1", "4294967296", "1.5", " 0", "0 "] {
             let xml = format!("<GDALMetadata><Item name=\"UNKNOWN\" sample=\"{sample}\"/></GDALMetadata>");
-            let error = parse_gdal_metadata(&xml).expect_err("Malformed sample should not be silently ignored");
+            let error = parse_gdal_metadata(&xml, 1).expect_err("Malformed sample should not be silently ignored");
+            assert!(
+                matches!(&error, Error::InvalidArgument(_)),
+                "Unexpected error for {sample:?}: {error}"
+            );
             assert!(
                 error.to_string().contains("sample attribute"),
                 "Unexpected error for {sample:?}: {error}"
             );
+        }
+    }
+
+    #[test]
+    fn parse_rejects_out_of_range_samples_even_for_unknown_items() {
+        for (name, role) in [
+            ("DESCRIPTION", "description"),
+            ("SCALE", "scale"),
+            ("OFFSET", "offset"),
+            ("STATISTICS_MINIMUM", ""),
+            ("UNKNOWN", ""),
+        ] {
+            for (sample, band_count) in [("0", 0), ("1", 1), ("3", 3), ("4294967295", 3), ("18446744073709551615", 3)] {
+                let xml = format!(r#"<GDALMetadata><Item name="{name}" sample="{sample}" role="{role}">2.5</Item></GDALMetadata>"#);
+                let error = parse_gdal_metadata(&xml, band_count).expect_err("Out-of-range samples should be rejected");
+
+                assert!(
+                    matches!(&error, Error::InvalidArgument(_)),
+                    "Unexpected error for {name}, sample={sample}, band_count={band_count}: {error}"
+                );
+                assert!(error.to_string().contains(sample), "Error should identify sample {sample}: {error}");
+            }
         }
     }
 
@@ -618,7 +776,7 @@ mod tests {
             "<GDALMetadata><?custom lost?></GDALMetadata>",
             "<!DOCTYPE GDALMetadata><GDALMetadata/>",
         ] {
-            assert!(parse_gdal_metadata(xml).is_err(), "Should reject unsupported XML: {xml}");
+            assert!(parse_gdal_metadata(xml, 0).is_err(), "Should reject unsupported XML: {xml}");
         }
     }
 
@@ -633,7 +791,7 @@ mod tests {
             "<GDALMetadata/><GDALMetadata/>",
             "<GDALMetadata/>trailing text",
         ] {
-            assert!(parse_gdal_metadata(xml).is_err(), "Should reject malformed XML: {xml}");
+            assert!(parse_gdal_metadata(xml, 0).is_err(), "Should reject malformed XML: {xml}");
         }
     }
 }

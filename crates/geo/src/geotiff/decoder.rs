@@ -6,7 +6,7 @@ use tiff::{
 };
 
 use crate::{
-    ArrayDataType, Columns, Error, GeoReference, RasterScale, RasterSize, Result, Rows, crs,
+    ArrayDataType, Columns, Error, GeoReference, RasterSize, Result, Rows, crs,
     geotiff::{
         ChunkDataLayout, GeoTiffMetadata, TiffChunkLocation, gdalmetadata, metadata::Interleave, projectioninfo::ModelType,
         reader::TiffOverview,
@@ -272,7 +272,7 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         .and_then(|projection| projection.epsg().map(|epsg| epsg.to_string()))
         .unwrap_or_default();
     let gdal_metadata = optional_ascii(decoder, Tag::Unknown(42112))?
-        .map(|xml| gdalmetadata::parse_gdal_metadata(&xml))
+        .map(|xml| gdalmetadata::parse_gdal_metadata(&xml, band_count))
         .transpose()?
         .unwrap_or_default();
     let planar_configuration = decoder.find_tag_unsigned::<u16>(Tag::PlanarConfiguration)?.unwrap_or(1);
@@ -281,15 +281,7 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
     } else {
         Interleave::Band
     });
-    let raster_scale = gdal_metadata
-        .band_metadata
-        .first()
-        .and_then(|band| match (band.scale, band.offset) {
-            (Some(scale), Some(offset)) => Some(RasterScale { scale, offset }),
-            (Some(scale), None) => Some(RasterScale { scale, offset: 0.0 }),
-            (None, Some(offset)) => Some(RasterScale { scale: 1.0, offset }),
-            (None, None) => None,
-        });
+    let raster_scale = gdal_metadata.band_metadata.first().and_then(|band| band.scale);
 
     let mut overviews = Vec::new();
     loop {
@@ -333,7 +325,7 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         decoder.next_image()?;
     }
 
-    Ok(GeoTiffMetadata {
+    let mut metadata = GeoTiffMetadata {
         data_layout,
         data_type,
         band_count,
@@ -346,7 +338,9 @@ fn parse_cog_header<R: Read + Seek>(decoder: &mut Decoder<R>) -> Result<GeoTiffM
         gdal_ghost_data: None,
         band_metadata: gdal_metadata.band_metadata,
         data_bounds: gdal_metadata.data_bounds,
-    })
+    };
+    metadata.normalize_band_metadata()?;
+    Ok(metadata)
 }
 
 #[cfg(test)]
@@ -359,7 +353,10 @@ mod tests {
         encoder::{DirectoryEncoder, TiffEncoder, TiffKind, TiffKindBig, TiffKindStandard},
     };
 
-    use crate::geotiff::{ParseFromBufferError, io::COG_HEADER_SIZE};
+    use crate::{
+        RasterScale,
+        geotiff::{ParseFromBufferError, io::COG_HEADER_SIZE},
+    };
 
     use super::*;
 
@@ -535,8 +532,7 @@ mod tests {
         assert_eq!(metadata.compression, None);
         assert_eq!(metadata.predictor, None);
         assert_eq!(metadata.band_metadata[0].description.as_deref(), Some("é € 🙂"));
-        assert_eq!(metadata.band_metadata[0].scale, Some(2.5));
-        assert_eq!(metadata.band_metadata[0].offset, Some(10.0));
+        assert_eq!(metadata.band_metadata[0].scale, Some(RasterScale { scale: 2.5, offset: 10.0 }));
         assert_eq!(metadata.geo_reference.scale(), Some(RasterScale { scale: 2.5, offset: 10.0 }));
         assert_eq!(metadata.geo_reference.nodata(), Some(255.0));
         assert_eq!(metadata.geo_reference.projection(), crs::epsg::WGS84_WEB_MERCATOR.to_string());
@@ -545,6 +541,67 @@ mod tests {
         assert_eq!(metadata.overviews.len(), 2);
         assert!(metadata.overviews[0].chunk_locations.iter().all(TiffChunkLocation::is_sparse));
         assert_eq!(metadata.overviews[1].raster_size, RasterSize::with_rows_cols(Rows(4), Columns(8)));
+        Ok(())
+    }
+
+    #[test]
+    fn band_metadata_contains_defaults_without_gdal_metadata() -> Result<()> {
+        for band_count in [1_u16, 3] {
+            for xml in [None, Some("<GDALMetadata/>")] {
+                let bytes = test_tiff(1, |_, directory| {
+                    directory.write_tag(Tag::SamplesPerPixel, band_count)?;
+                    directory.write_tag(Tag::BitsPerSample, vec![8_u16; band_count as usize].as_slice())?;
+                    directory.write_tag(Tag::SampleFormat, vec![1_u16; band_count as usize].as_slice())?;
+                    if let Some(xml) = xml {
+                        directory.write_tag(Tag::Unknown(42112), xml)?;
+                    }
+                    Ok(())
+                })?;
+                let metadata = parse_geotiff_metadata(Cursor::new(bytes))?;
+                assert_eq!(metadata.band_metadata.len(), metadata.band_count as usize);
+                assert!(
+                    metadata
+                        .band_metadata
+                        .iter()
+                        .all(|band| band.description.is_none() && band.scale.is_none())
+                );
+            }
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_metadata_sample_outside_band_count() -> Result<()> {
+        let bytes = test_tiff(1, |_, directory| {
+            directory.write_tag(
+                Tag::Unknown(42112),
+                "<GDALMetadata><Item name=\"DESCRIPTION\" sample=\"1\">Missing band</Item></GDALMetadata>",
+            )?;
+            Ok(())
+        })?;
+        assert!(
+            matches!(parse_geotiff_metadata(Cursor::new(bytes)), Err(Error::InvalidArgument(message)) if message.contains("sample index 1"))
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn georeference_does_not_use_another_bands_scale() -> Result<()> {
+        let bytes = test_tiff(1, |_, directory| {
+            directory.write_tag(Tag::SamplesPerPixel, 2_u16)?;
+            directory.write_tag(Tag::BitsPerSample, [8_u16; 2])?;
+            directory.write_tag(Tag::SampleFormat, [1_u16; 2])?;
+            directory.write_tag(
+                Tag::Unknown(42112),
+                "<GDALMetadata><Item name=\"SCALE\" sample=\"1\" role=\"scale\">2.5</Item></GDALMetadata>",
+            )?;
+            Ok(())
+        })?;
+        let metadata = parse_geotiff_metadata(Cursor::new(bytes))?;
+        assert_eq!(metadata.geo_reference.scale(), None);
+        assert_eq!(metadata.band_metadata.len(), metadata.band_count as usize);
+        assert_eq!(metadata.band_metadata[0].scale, None);
+        assert_eq!(metadata.band_metadata[1].scale, Some(RasterScale { scale: 2.5, offset: 0.0 }));
         Ok(())
     }
 
