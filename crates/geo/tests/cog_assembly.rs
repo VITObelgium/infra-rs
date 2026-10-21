@@ -378,13 +378,19 @@ fn assert_metadata_domain_survives_assembly(band_domain: &str) -> Result<()> {
 
     for (band, input) in inputs.iter().enumerate() {
         let source = web_reader(input)?;
-        assert_eq!(assembled.tile_info().band_names[band], source.tile_info().band_names[0]);
+        let assembled_info = assembled.tile_info();
+        let source_info = source.tile_info();
+        assert_eq!(
+            assembled_info.band_metadata[band].description,
+            source_info.band_metadata[0].description
+        );
+        assert_eq!(assembled_info.band_metadata[band].scale, source_info.band_metadata[0].scale);
         let source_metadata = &source.cog_metadata().band_metadata[0];
         let output_metadata = &assembled.cog_metadata().band_metadata[band];
-        assert_eq!(output_metadata.sample as usize, band);
+
         assert_eq!(output_metadata.description, source_metadata.description);
         assert_eq!(output_metadata.scale, source_metadata.scale);
-        assert_eq!(output_metadata.offset, source_metadata.offset);
+
         let source_dataset = Dataset::open(input)?;
         let source_band = source_dataset.rasterband(1)?;
         let output_band = output_dataset.rasterband(band + 1)?;

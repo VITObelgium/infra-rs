@@ -1,8 +1,8 @@
 use crate::{
     AnyDenseArray, Array as _, ArrayDataType, ArrayInterop, ArrayMetadata as _, ArrayNum, Cell, CellSize, Columns, DenseArray, Error,
-    GeoReference, GeoTransform, Point, RasterMetadata, RasterScale, Result, Rows, ZoomLevelStrategy,
+    GeoReference, GeoTransform, Point, RasterMetadata, Result, Rows, ZoomLevelStrategy,
     geotiff::{
-        self, BandIndex, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
+        self, BandIndex, BandMetadata, GeoTiffMetadata, TiffChunkLocation, TiffOverview, TiffStats, io,
         tileio::{self},
         utils,
     },
@@ -434,13 +434,14 @@ pub struct WebTileInfo {
     pub max_zoom: i32,
     pub tile_size: u32,
     pub band_count: u32,
-    pub band_names: Vec<Option<String>>,
     pub data_type: ArrayDataType,
     /// The bounding box of the webtiles that contain raster data
     pub tile_bounds: LatLonBounds,
     /// The bounding box on pixel level that contains raster data (typically used to configure a map view camera to show the data)
     pub data_bounds: Option<LatLonBounds>,
-    pub scale: Option<RasterScale>,
+    /// Per-band metadata (description, scale, offset), indexed by zero-based band.
+    /// Always contains `band_count` entries, with defaults for bands without metadata.
+    pub band_metadata: Vec<BandMetadata>,
     pub statistics: Option<TiffStats>,
 }
 
@@ -468,30 +469,23 @@ impl WebTilesReader {
         &self.cog_meta.overviews
     }
 
-    pub fn new(cog_meta: GeoTiffMetadata) -> Result<Self> {
+    pub fn new(mut cog_meta: GeoTiffMetadata) -> Result<Self> {
         let web_tiles = WebTiles::from_cog_metadata(&cog_meta)?;
+        cog_meta.normalize_band_metadata()?;
 
         Ok(Self { web_tiles, cog_meta })
     }
 
     pub fn tile_info(&self) -> WebTileInfo {
-        let mut band_names = vec![None; self.cog_meta.band_count as usize];
-        for band in &self.cog_meta.band_metadata {
-            if let Some(band_name) = band_names.get_mut(band.sample as usize) {
-                *band_name = band.description.clone();
-            }
-        }
-
         WebTileInfo {
             min_zoom: self.web_tiles.min_zoom(),
             max_zoom: self.web_tiles.max_zoom(),
             tile_size: self.cog_meta.chunk_row_length(),
             band_count: self.cog_meta.band_count,
-            band_names,
             data_type: self.data_type(),
-            scale: None, // TODO: extract scale info from the COG
             tile_bounds: self.data_bounds(),
             data_bounds: self.cog_meta.data_bounds.map(LatLonBounds::from),
+            band_metadata: self.cog_meta.band_metadata.clone(),
             statistics: self.cog_meta.statistics.clone(),
         }
     }
@@ -931,6 +925,7 @@ mod mapping_tests {
         meta.geo_reference = GeoReference::with_top_left_origin("EPSG:3857", size, top_left, CellSize::square(pixel_size), Some(255_u8));
         meta.data_layout = ChunkDataLayout::Tiled(tile_size);
         meta.band_count = band_count;
+        meta.band_metadata.resize_with(band_count as usize, BandMetadata::default);
         meta.data_type = ArrayDataType::Uint8;
         meta.compression = None;
         meta.predictor = None;
@@ -944,6 +939,46 @@ mod mapping_tests {
             })
             .collect();
         Ok(meta)
+    }
+
+    #[test]
+    fn reader_pads_incomplete_band_metadata() -> Result<()> {
+        for existing_bands in [0, 1] {
+            let mut meta = mapping_metadata(128, 3, false)?;
+            meta.band_metadata = vec![
+                BandMetadata {
+                    description: Some("Red".into()),
+                    scale: Some(crate::RasterScale { scale: 0.5, offset: 10.0 }),
+                };
+                existing_bands
+            ];
+            let reader = WebTilesReader::new(meta)?;
+            let metadata = reader.cog_metadata();
+            assert_eq!(metadata.band_metadata.len(), metadata.band_count as usize);
+            if existing_bands == 1 {
+                assert_eq!(metadata.band_metadata[0].description.as_deref(), Some("Red"));
+                assert_eq!(
+                    metadata.band_metadata[0].scale,
+                    Some(crate::RasterScale { scale: 0.5, offset: 10.0 })
+                );
+            }
+            assert!(
+                metadata.band_metadata[existing_bands..]
+                    .iter()
+                    .all(|band| band.description.is_none() && band.scale.is_none())
+            );
+            let tile_info = reader.tile_info();
+            assert_eq!(tile_info.band_metadata.len(), tile_info.band_count as usize);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn reader_rejects_excess_band_metadata() -> Result<()> {
+        let mut meta = mapping_metadata(128, 1, false)?;
+        meta.band_metadata.push(BandMetadata::default());
+        assert!(matches!(WebTilesReader::new(meta), Err(Error::InvalidArgument(message)) if message.contains("Band metadata")));
+        Ok(())
     }
 
     #[test]
@@ -2160,20 +2195,19 @@ mod tests {
     }
 
     #[test_log::test]
-    fn tile_info_includes_band_names_from_cog_metadata() -> Result<()> {
+    fn tile_info_includes_band_metadata_from_cog_metadata() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("multiband_cog_interleave_tile.tif");
         let mut metadata = GeoTiffMetadata::from_file(&input)?;
         let band_count = metadata.band_count;
         metadata.band_metadata = vec![
             crate::geotiff::BandMetadata {
-                sample: 0,
                 description: Some("Red".to_string()),
-                ..Default::default()
+                scale: Some(crate::RasterScale { scale: 0.5, offset: 10.0 }),
             },
+            crate::geotiff::BandMetadata::default(),
             crate::geotiff::BandMetadata {
-                sample: 2,
                 description: Some("Blue".to_string()),
-                ..Default::default()
+                scale: Some(crate::RasterScale { scale: 2.0, offset: -5.0 }),
             },
         ];
         let data_bounds = [4.66, 52.22, 5.13, 52.51];
@@ -2181,10 +2215,20 @@ mod tests {
 
         let tile_info = WebTilesReader::new(metadata)?.tile_info();
 
-        assert_eq!(tile_info.band_names.len(), band_count as usize);
-        assert_eq!(tile_info.band_names[0].as_deref(), Some("Red"));
-        assert_eq!(tile_info.band_names[1].as_deref(), None);
-        assert_eq!(tile_info.band_names[2].as_deref(), Some("Blue"));
+        assert_eq!(tile_info.band_count, band_count);
+        assert_eq!(tile_info.band_metadata.len(), band_count as usize);
+        assert_eq!(tile_info.band_metadata[0].description.as_deref(), Some("Red"));
+        assert_eq!(
+            tile_info.band_metadata[0].scale,
+            Some(crate::RasterScale { scale: 0.5, offset: 10.0 })
+        );
+        assert_eq!(tile_info.band_metadata[1].description, None);
+        assert_eq!(tile_info.band_metadata[1].scale, None);
+        assert_eq!(tile_info.band_metadata[2].description.as_deref(), Some("Blue"));
+        assert_eq!(
+            tile_info.band_metadata[2].scale,
+            Some(crate::RasterScale { scale: 2.0, offset: -5.0 })
+        );
         assert_eq!(tile_info.data_bounds, Some(data_bounds.into()));
 
         Ok(())

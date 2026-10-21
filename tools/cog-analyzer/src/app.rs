@@ -357,11 +357,9 @@ impl App {
 
     /// Get the GDAL description for a 1-based band index.
     pub fn band_name(&self, band: usize) -> Option<&str> {
-        let sample = u32::try_from(band.checked_sub(1)?).ok()?;
         self.cog_metadata
             .band_metadata
-            .iter()
-            .find(|metadata| metadata.sample == sample)
+            .get(band.checked_sub(1)?)
             .and_then(|metadata| metadata.description.as_deref())
     }
 

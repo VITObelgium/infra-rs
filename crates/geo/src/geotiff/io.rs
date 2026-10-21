@@ -373,17 +373,8 @@ pub fn merge_overview_into_buffer<T: ArrayNum, M: ArrayMetadata>(
 
     let band_index0 = band_index.get() - 1; // to 0-based index
 
-    // Apply band-specific scale/offset if available
-    if let Some(band_meta) = meta.band_metadata.get(band_index0) {
-        let band_scale = match (band_meta.scale, band_meta.offset) {
-            (Some(scale), Some(offset)) => Some(crate::RasterScale { scale, offset }),
-            (Some(scale), None) => Some(crate::RasterScale { scale, offset: 0.0 }),
-            (None, Some(offset)) => Some(crate::RasterScale { scale: 1.0, offset }),
-            (None, None) => None,
-        };
-
-        geo_reference.set_scale(band_scale);
-    }
+    let band_scale = meta.band_metadata.get(band_index0).and_then(|band| band.scale);
+    geo_reference.set_scale(band_scale);
 
     let chunk_iter = chunks.iter().skip(band_index0 * tile_count).take(tile_count).enumerate();
 
@@ -539,7 +530,62 @@ fn deflate_decompress_to<T: ArrayNum>(data: &[u8], decode_buf: &mut [T]) -> Resu
 mod tests {
     use std::io::{Cursor, ErrorKind};
 
+    use crate::{
+        GeoReference, RasterScale, RasterSize,
+        geotiff::{BandMetadata, ChunkDataLayout},
+    };
+
     use super::*;
+
+    #[test]
+    fn merge_overview_uses_scale_for_requested_band() -> Result<()> {
+        let first_scale = RasterScale { scale: 0.5, offset: 10.0 };
+        let third_scale = RasterScale { scale: 2.0, offset: -5.0 };
+        let raster_size = RasterSize::square(1);
+        let mut geo_reference = GeoReference::without_spatial_reference(raster_size, Some(255.0));
+        geo_reference.set_scale(Some(first_scale));
+        let overview = TiffOverview {
+            raster_size,
+            chunk_locations: vec![TiffChunkLocation { offset: 0, size: 0 }; 4],
+        };
+        let meta = GeoTiffMetadata {
+            data_layout: ChunkDataLayout::Tiled(1),
+            band_count: 4,
+            data_type: ArrayDataType::Uint8,
+            compression: None,
+            predictor: None,
+            statistics: None,
+            geo_reference,
+            overviews: vec![overview.clone()],
+            interleave: Interleave::Band,
+            gdal_ghost_data: None,
+            band_metadata: vec![
+                BandMetadata {
+                    description: None,
+                    scale: Some(first_scale),
+                },
+                BandMetadata::default(),
+                BandMetadata {
+                    description: None,
+                    scale: Some(third_scale),
+                },
+                BandMetadata {
+                    description: Some("Unscaled".into()),
+                    scale: None,
+                },
+            ],
+            data_bounds: None,
+        };
+
+        for (sample, expected) in [Some(first_scale), None, Some(third_scale), None].into_iter().enumerate() {
+            let georef =
+                merge_overview_into_buffer::<u8, GeoReference>(&meta, &overview, BandIndex::new(sample + 1).unwrap(), 1, &mut [0], |_| {
+                    panic!("Sparse chunks must not require I/O")
+                })?;
+            assert_eq!(georef.scale(), expected, "sample {sample}");
+        }
+        Ok(())
+    }
 
     #[test]
     fn read_chunk_reads_exact_payload_at_offset() -> Result<()> {
