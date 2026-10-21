@@ -1,6 +1,10 @@
 name: Vcpkg build
 on: [push]
 
+permissions:
+    contents: read
+    packages: write
+
 jobs:
     compile:
         name: ${{ matrix.cfg.id }}
@@ -16,6 +20,10 @@ jobs:
                           target: x86_64-pc-windows-msvc,
                       }
 
+        env:
+            VCPKG_BINARY_SOURCES: "clear;nuget,https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json,readwrite"
+            VCPKG_NUGET_REPOSITORY: ${{ github.server_url }}/${{ github.repository }}.git
+
         steps:
             - name: Enable Git long paths
               run: git config --system core.longpaths true
@@ -23,16 +31,25 @@ jobs:
             - uses: jdx/mise-action@v5
               with:
                   cache_key: "mise-{{platform}}-{{file_hash}}"
-            - name: Cache vcpkg packages
-              id: cache-vcpkg
-              uses: actions/cache@v6
+            - name: Install NuGet
+              uses: NuGet/setup-nuget@v2
               with:
-                  path: |
-                      ~/.cache/vcpkg
-                      ~/AppData/Local/vcpkg/archives
-                  key: ${{ matrix.cfg.os }}-${{ hashFiles('**/Cargo.toml') }}
+                  nuget-version: "6.x"
+            - name: Configure vcpkg binary cache credentials
+              shell: pwsh
+              env:
+                  FEED_URL: https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json
+                  FEED_USERNAME: ${{ github.repository_owner }}
+                  FEED_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  # The vcpkg-acquired NuGet also reads this user-level configuration.
+                  nuget sources add -Name GitHubPackages -Source "$env:FEED_URL" -UserName "$env:FEED_USERNAME" -Password "$env:FEED_TOKEN" -StorePasswordInClearText -NonInteractive
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+                  nuget setapikey "$env:FEED_TOKEN" -Source "$env:FEED_URL" -NonInteractive
+                  if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
             - name: Build the C++ dependencies using vcpkg
               run: mise -E vcpkg run bootstrap --target ${{ matrix.cfg.target }} --triplet ${{ matrix.cfg.triplet }}
+
             - name: Install the python environment with pixi
               env:
                 MISE_GITHUB_SLSA: "false"
