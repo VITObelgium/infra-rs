@@ -16,7 +16,7 @@ source:
     - src/**
 
 build:
-  number: 0
+  number: 1
   skip: target_platform == 'osx-64'
   script: build.py
 
@@ -44,9 +44,12 @@ tests:
   - package_contents:
       bin:
         - createcog
+        - cog-analyzer
   - script:
       - createcog --help
       - createcog --version
+      - cog-analyzer --help
+      - cog-analyzer --version
   - script: test_package.py
     requirements:
       run:
@@ -60,7 +63,8 @@ about:
   license_file:
     - LICENSE
     - THIRDPARTY.yml
-  summary: Raster tools for creating Cloud Optimized GeoTIFFs
+  summary: Raster tools for creating and analyzing Cloud Optimized GeoTIFFs
   description: |
-    Contains the createcog command-line executable, built from source against
-    conda-forge GDAL and PROJ. Includes GDAL NetCDF input support.
+    Contains the createcog command-line executable and cog-analyzer terminal UI,
+    built from source against conda-forge GDAL and PROJ. Includes GDAL NetCDF
+    input support.

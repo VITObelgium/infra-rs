@@ -10,8 +10,8 @@ anyhow = "1.0"
 clap = { version = "4.6", features = ["derive"] }
 crossterm = { version = "0.29" }
 env_logger = "0.11"
-geo = { path = "../../crates/geo", features = [
-  "gdal-static",
+geo = { path = "../../crates/geo", default-features = false, features = [
+  "gdal",
   "raster-io-geotiff",
 ] }
 image = "0.25"
@@ -23,3 +23,7 @@ ratatui-image = { version = "11.0", default-features = false, features = [
   "crossterm",
 ] }
 reqwest = { version = "0.13", features = ["blocking"] }
+
+[features]
+default = ["geo/default", "gdal-static"]
+gdal-static = ["geo/gdal-static"]

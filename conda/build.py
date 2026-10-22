@@ -1,4 +1,4 @@
-"""Build createcog using only the conda build/host prefixes."""
+"""Build raster tools using only the conda build/host prefixes."""
 
 import os
 import shutil
@@ -62,7 +62,7 @@ def main():
     subprocess.run([env["PKG_CONFIG"], "--atleast-version=9.6.2", "proj"], env=env, check=True)
 
     subprocess.run(
-        ["cargo", "build", "--release", "--locked", "--package", "createcog", "--no-default-features"],
+        ["cargo", "build", "--release", "--locked", "--package", "createcog", "--package", "cog-analyzer", "--no-default-features"],
         env=env,
         check=True,
     )
@@ -71,10 +71,11 @@ def main():
         env=env,
         check=True,
     )
-    name = "createcog.exe" if windows else "createcog"
     bindir = library / "bin"
     bindir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(source / "target" / "release" / name, bindir / name)
+    for tool in ("createcog", "cog-analyzer"):
+        name = f"{tool}.exe" if windows else tool
+        shutil.copy2(source / "target" / "release" / name, bindir / name)
 
 
 if __name__ == "__main__":
