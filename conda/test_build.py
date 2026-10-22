@@ -105,19 +105,25 @@ class BuildEnvironmentTests(unittest.TestCase):
             mock.patch.object(build.Path, "cwd", return_value=self.source),
             mock.patch.object(build, "build_environment", return_value=env),
             mock.patch.object(build.subprocess, "run") as run,
-            mock.patch.object(build.shutil, "copy2"),
+            mock.patch.object(build.shutil, "copy2") as copy,
         ):
             build.main()
         commands = [call.args[0] for call in run.call_args_list]
         pkg_config = env["PKG_CONFIG"]
         self.assertEqual(commands, [
             [pkg_config, "--atleast-version=9.6.2", "proj"],
-            ["cargo", "build", "--release", "--locked", "--package", "createcog", "--no-default-features"],
+            ["cargo", "build", "--release", "--locked", "--package", "createcog", "--package", "cog-analyzer", "--no-default-features"],
             ["cargo-bundle-licenses", "--format", "yaml", "--output", "THIRDPARTY.yml"],
         ])
         for call in run.call_args_list:
             self.assertIs(call.kwargs["env"], env)
             self.assertTrue(call.kwargs["check"])
+        library = self.library if os.name == "nt" else self.prefix
+        suffix = ".exe" if os.name == "nt" else ""
+        self.assertEqual(copy.call_args_list, [
+            mock.call(self.source / "target" / "release" / f"{tool}{suffix}", library / "bin" / f"{tool}{suffix}")
+            for tool in ("createcog", "cog-analyzer")
+        ])
 
     @unittest.skipUnless(shutil.which("pkgconf"), "pkgconf is not installed in the test environment")
     def test_pkgconf_shared_probe_excludes_private_dependency_closure(self):

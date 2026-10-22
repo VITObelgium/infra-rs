@@ -1,6 +1,7 @@
 # sas-raster-tools conda package
 
-`sas-raster-tools` contains the `createcog` executable. It is built **from source**
+`sas-raster-tools` contains the `createcog` executable and the `cog-analyzer`
+terminal UI. It is built **from source**
 using Pixi and conda-forge native dependencies, independently of Nix/devenv and
 vcpkg. Supported native build platforms are Linux x86-64, macOS ARM64,
 and Windows x86-64.
@@ -36,7 +37,7 @@ conda/output/sas-raster-tools-2026.9.14-<build>.conda
 ```
 
 `conda-test` installs the package into isolated conda environments. It checks the
-CLI, GDAL NetCDF driver availability, and conversion of a georeferenced raster
+help and version output for both tools, GDAL NetCDF driver availability, and conversion of a georeferenced raster
 into a Web Mercator COG, including use of PROJ's CRS database. Tests disable PROJ
 network access. Native dependencies are runtime conda packages, not libraries
 copied from the build machine. End users do not need Python; it is only a build
@@ -44,9 +45,9 @@ and test dependency.
 
 ## Build details
 
-- Only `createcog` is built, using `cargo build --release --locked
-  --package createcog --no-default-features`. Existing default Cargo builds retain
-  their previous feature set.
+- Both tools are built using `cargo build --release --locked --package createcog
+  --package cog-analyzer --no-default-features`. Existing default Cargo builds
+  retain their previous feature set.
 - The repository's `.cargo/config.toml` is excluded from the conda source tree,
   avoiding AVX2, static MSVC CRT, and macOS 15-specific release flags.
 - GDAL is constrained to 3.12 because `gdal-sys` 0.12 ships pre-generated bindings
@@ -120,6 +121,7 @@ After the first successful publication:
 conda install -c https://raw.githubusercontent.com/VITO-RMA/conda-channel/main \
   -c conda-forge sas-raster-tools
 createcog --help
+cog-analyzer --help
 ```
 
 The public GitHub raw URL serves the indexed channel directly; GitHub Pages is
