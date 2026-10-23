@@ -12,7 +12,7 @@ use gdal::{
     raster::{GdalDataType, GdalType},
 };
 use geo::{
-    Array, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize,
+    Array, ArrayInterop, ArrayMetadata, ArrayNum, DenseArray, RasterMetadata, RasterSize,
     raster::formats::{self, RasterFileFormat, RasterOpenOptions},
 };
 use geo::{CellSize, Columns, GeoReference, LatLonBounds, Rows, Tile, constants, crs, raster, srs::SpatialReference};
@@ -88,10 +88,18 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
 ) -> Result<DenseArray<T>> {
     let bounds = tile.web_mercator_bounds();
     let scaled_size = (tile_size * dpi_ratio as u32) as i32;
+    let src_ds = Dataset::open(raster_path)?;
+    // Translate otherwise pads out-of-extent pixels with valid zero values.
+    let nodata = src_ds
+        .rasterband(band_nr)?
+        .no_data_value()
+        .map_or_else(|| T::NODATA.to_string(), |value| value.to_string());
 
     let options: Vec<String> = vec![
         "-b".to_string(),
         band_nr.to_string(),
+        "-a_nodata".to_string(),
+        nodata,
         "-ot".to_string(),
         type_string::<T>().to_string(),
         "-of".to_string(),
@@ -108,11 +116,11 @@ pub fn read_raster_tile<T: ArrayNum + GdalType>(
 
     let output_path = PathBuf::from(format!("/vsimem/{}_{}_{}.mem", tile.x(), tile.y(), tile.z()));
     let meta = RasterMetadata::sized_for_type::<T>(RasterSize::square(scaled_size));
-    let ds = raster::algo::gdal::translate_file(raster_path, &output_path, &options)?;
+    let ds = raster::algo::gdal::translate(&src_ds, &output_path, &options)?;
 
     let mut data = AlignedVecUnderConstruction::new(meta.raster_size.cell_count());
     let meta = formats::gdal::GdalRasterIO::from_dataset(ds).read_raster_band_as(1, data.as_uninit_slice_mut())?;
-    Ok(DenseArray::new(RasterMetadata::with_geo_reference(meta), unsafe {
+    Ok(DenseArray::new_init_nodata(RasterMetadata::with_geo_reference(meta), unsafe {
         data.assume_init()
     })?)
 }
