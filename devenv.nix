@@ -59,7 +59,6 @@ let
       cargoLock = {
         lockFile = ./Cargo.lock;
         outputHashes = {
-          "proj4wkt-0.1.0" = "sha256-EXhy17+PoYmhaM0Ip6IzG7g2qNTYlDtUD5ohOP7/mjw=";
           "tiff-0.11.3" = "sha256-lwtmCvF6TgtFKLh6BqArS48OjJoiP20IzmMWzAalrNU=";
         };
       };
