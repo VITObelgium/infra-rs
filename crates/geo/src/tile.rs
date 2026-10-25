@@ -143,6 +143,15 @@ impl Tile {
         )
     }
 
+    /// Returns the containing tile one zoom level lower, or `None` at zoom zero.
+    pub fn parent(&self) -> Option<Tile> {
+        (self.z > 0).then(|| Tile {
+            z: self.z - 1,
+            x: self.x / 2,
+            y: self.y / 2,
+        })
+    }
+
     pub fn direct_children(&self) -> [Tile; 4] {
         [
             Tile {
@@ -299,6 +308,24 @@ mod tests {
     use approx::assert_relative_eq;
 
     use super::*;
+
+    #[test]
+    fn parent_returns_none_at_zoom_zero() {
+        assert_eq!(Tile { x: 0, y: 0, z: 0 }.parent(), None);
+    }
+
+    #[test]
+    fn parent_returns_the_containing_tile() {
+        assert_eq!(Tile { x: 7, y: 5, z: 3 }.parent(), Some(Tile { x: 3, y: 2, z: 2 }));
+    }
+
+    #[test]
+    fn parent_of_each_direct_child_is_the_original_tile() {
+        let tile = Tile { x: 3, y: 2, z: 2 };
+        for child in tile.direct_children() {
+            assert_eq!(child.parent(), Some(tile));
+        }
+    }
 
     #[test]
     fn tile_test() {
