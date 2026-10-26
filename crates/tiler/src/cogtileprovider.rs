@@ -49,6 +49,7 @@ impl CogTileProvider {
             source_is_web_mercator: true,
             supports_dpi_ratio: false,
             nodata: meta.geo_reference.nodata(),
+            scale: meta.geo_reference.scale(),
             min_value: meta.statistics.as_ref().map_or(f64::NAN, |stat| stat.minimum_value) as f32,
             max_value: meta.statistics.as_ref().map_or(f64::NAN, |stat| stat.maximum_value) as f32,
             data_type: meta.data_type,

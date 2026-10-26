@@ -56,6 +56,10 @@ pub struct LayerMetadata {
     pub source_is_web_mercator: bool,
     pub min_value: f32,
     pub max_value: f32,
+    /// Source coefficients for `physical = raw * scale + offset`, or `None` when both are absent.
+    /// Missing coefficients default to 1 for scale and 0 for offset; explicit identity is preserved.
+    /// Tile values and min/max statistics remain raw.
+    pub scale: Option<geo::RasterScale>,
     pub min_zoom: i32,
     pub max_zoom: i32,
     pub nodata: Option<f64>,

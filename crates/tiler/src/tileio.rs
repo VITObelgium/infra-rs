@@ -316,6 +316,13 @@ pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptio
             max_zoom: zoom_level,
             min_zoom: if over_view_count > 0 { zoom_level - over_view_count } else { 0 },
             nodata: meta.nodata(),
+            scale: match (raster_band.scale(), raster_band.offset()) {
+                (None, None) => None,
+                (scale, offset) => Some(geo::RasterScale {
+                    scale: scale.unwrap_or(1.0),
+                    offset: offset.unwrap_or(0.0),
+                }),
+            },
             supports_dpi_ratio: true,
             tile_size: None, // Tile size is determined by the request
             tile_format: TileFormat::Png,

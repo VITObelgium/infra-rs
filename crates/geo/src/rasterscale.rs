@@ -1,4 +1,6 @@
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
 pub struct RasterScale {
     pub scale: f64,
     pub offset: f64,
