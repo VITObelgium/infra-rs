@@ -134,8 +134,8 @@ pub fn create_string_list(options: &[String]) -> Result<CslStringList> {
 
 pub fn create_output_directory_if_needed(p: impl AsRef<Path>) -> Result<()> {
     let p = p.as_ref();
-    if p.starts_with("/vsi") {
-        // this is a gdal virtual filesystem path
+    if p.to_string_lossy().starts_with("/vsi") {
+        // VSI handlers are prefixes such as /vsimem and /vsizip, not a /vsi path component.
         return Ok(());
     }
 
@@ -251,6 +251,17 @@ impl Drop for MemoryFile {
 #[cfg(test)]
 mod tests {
     use super::MemoryFile;
+
+    #[test]
+    fn virtual_output_paths_do_not_create_disk_directories() {
+        for path in [
+            "/vsimem/geo-output-test/features.geojson",
+            "/vsizip/geo-output-test.zip/features.geojson",
+        ] {
+            super::create_output_directory_if_needed(path).unwrap();
+            assert!(!std::path::Path::new(path).parent().unwrap().exists());
+        }
+    }
 
     #[test]
     fn empty_memory_file() {
