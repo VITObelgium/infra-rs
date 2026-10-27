@@ -43,6 +43,8 @@ pub enum VectorFileFormat {
     Xlsx,
     GeoJson,
     GeoPackage,
+    PMTiles,
+    MBTiles,
     SQLite,
     PostgreSQL,
     Wfs,
@@ -53,7 +55,7 @@ pub enum VectorFileFormat {
 }
 
 impl VectorFileFormat {
-    /// Given a file path, guess the raster type based on the file extension
+    /// Given a file path, guess the vector type based on the file extension
     pub fn guess_from_path(file_path: &std::path::Path) -> VectorFileFormat {
         let ext = file_path.extension().map(|ext| ext.to_string_lossy().to_lowercase());
 
@@ -65,6 +67,8 @@ impl VectorFileFormat {
                 "xlsx" => return VectorFileFormat::Xlsx,
                 "json" | "geojson" => return VectorFileFormat::GeoJson,
                 "gpkg" => return VectorFileFormat::GeoPackage,
+                "pmtiles" => return VectorFileFormat::PMTiles,
+                "mbtiles" => return VectorFileFormat::MBTiles,
                 "db" | "sqlite" => return VectorFileFormat::SQLite,
                 "vrt" => return VectorFileFormat::Vrt,
                 "parquet" => return VectorFileFormat::Parquet,

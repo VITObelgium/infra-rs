@@ -11,6 +11,8 @@ impl VectorFileFormat {
             VectorFileFormat::Xlsx => "XLSX",
             VectorFileFormat::GeoJson => "GeoJSON",
             VectorFileFormat::GeoPackage => "GPKG",
+            VectorFileFormat::PMTiles => "PMTiles",
+            VectorFileFormat::MBTiles => "MBTiles",
             VectorFileFormat::SQLite => "SQLite",
             VectorFileFormat::PostgreSQL => "PostgreSQL",
             VectorFileFormat::Wfs => "WFS",
@@ -28,6 +30,25 @@ mod tests {
     use std::path::Path;
 
     use super::*;
+
+    #[test]
+    fn vectorformat_tiled_gdal_driver_names() {
+        for (format, expected) in [(VectorFileFormat::PMTiles, "PMTiles"), (VectorFileFormat::MBTiles, "MBTiles")] {
+            assert_eq!(format.gdal_driver_name(), expected);
+        }
+    }
+
+    #[test]
+    fn vectorformat_guess_tiled_formats_from_path() {
+        for (path, expected) in [
+            ("test.pmtiles", VectorFileFormat::PMTiles),
+            ("test.PMTILES", VectorFileFormat::PMTiles),
+            ("test.mbtiles", VectorFileFormat::MBTiles),
+            ("test.MBTILES", VectorFileFormat::MBTiles),
+        ] {
+            assert_eq!(VectorFileFormat::guess_from_path(Path::new(path)), expected);
+        }
+    }
 
     #[test]
     fn vectorformat_guess_from_path() {
