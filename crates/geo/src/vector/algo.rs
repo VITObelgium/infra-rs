@@ -1,4 +1,9 @@
-use std::path::Path;
+use std::{
+    any::Any,
+    ffi::{c_char, c_int, c_void},
+    panic::{AssertUnwindSafe, catch_unwind},
+    path::Path,
+};
 
 use crate::vector::gdalio::{self, FeatureDefinitionExtension as _};
 use crate::{Error, Result, gdalinterop};
@@ -46,10 +51,50 @@ pub fn translate_cli_opts(ds: &gdal::Dataset, options: &[String]) -> Result<gdal
 /// and match the options of the gdal ogr2ogr command line tool
 /// The dataset is returned in case the user wants to continue working with it but can also be ignored
 pub fn translate_ds_to_disk(ds: &gdal::Dataset, path: &Path, options: &[String]) -> Result<gdal::Dataset> {
+    translate_ds_to_disk_with_progress(ds, path, options, None)
+}
+
+/// Translate a GDAL vector dataset to disk with optional GDAL progress reporting.
+///
+/// Options match the `ogr2ogr` command line tool, as in [`translate_ds_to_disk`].
+/// The callback runs synchronously on the calling thread with completion fractions
+/// from 0.0 to 1.0 and is not retained after this function returns. GDAL may disable
+/// progress reporting for source layers without fast feature counts.
+///
+/// # Errors
+/// Returns an error if translation fails or the callback panics while unwinding is
+/// enabled. A callback panic interrupts translation without unwinding through GDAL;
+/// a partially written output may remain on disk.
+pub fn translate_ds_to_disk_with_progress(
+    ds: &gdal::Dataset,
+    path: &Path,
+    options: &[String],
+    progress: Option<&mut dyn FnMut(f64)>,
+) -> Result<gdal::Dataset> {
     gdalinterop::create_output_directory_if_needed(path)?;
     let path_str = std::ffi::CString::new(path.to_string_lossy().to_string())?;
-    let mut opts = VectorTranslateOptionsWrapper::new(options)?;
-    let mut usage_error: std::ffi::c_int = 0;
+    let mut progress = progress.map(|callback| VectorTranslateProgress {
+        callback,
+        panic_payload: None,
+    });
+    let mut opts = if progress.is_some() {
+        VectorTranslateOptionsWrapper::new_with_progress(options)?
+    } else {
+        VectorTranslateOptionsWrapper::new(options)?
+    };
+    let mut usage_error: c_int = 0;
+
+    if let Some(progress) = progress.as_mut() {
+        // SAFETY: GDALVectorTranslate calls back synchronously, and the context
+        // stays at this address until it returns. The options do not outlive it.
+        unsafe {
+            gdal_sys::GDALVectorTranslateOptionsSetProgress(
+                opts.c_options(),
+                Some(vector_translate_progress_trampoline),
+                std::ptr::from_mut(progress).cast::<c_void>(),
+            );
+        }
+    }
 
     let handle = unsafe {
         gdal_sys::GDALVectorTranslate(
@@ -62,13 +107,49 @@ pub fn translate_ds_to_disk(ds: &gdal::Dataset, path: &Path, options: &[String])
         )
     };
 
+    // Own any returned dataset before checking callback errors so it is closed
+    // even if a driver returns a handle after the callback requested interruption.
+    let translated_ds =
+        gdalinterop::check_pointer(handle, "GDALVectorTranslate").map(|handle| unsafe { gdal::Dataset::from_c_dataset(handle) });
+
+    if progress.as_ref().is_some_and(|progress| progress.panic_payload.is_some()) {
+        return Err(Error::Runtime("Vector translate: progress callback panicked".to_string()));
+    }
+
     if usage_error == gdalinterop::TRUE {
         return Err(Error::InvalidArgument("Vector translate: invalid arguments".to_string()));
     }
 
-    gdalinterop::check_pointer(handle, "GDALVectorTranslate")?;
+    Ok(translated_ds?)
+}
 
-    Ok(unsafe { gdal::Dataset::from_c_dataset(handle) })
+struct VectorTranslateProgress<'a> {
+    callback: &'a mut dyn FnMut(f64),
+    // Retain the payload until GDAL returns: even its destructor may panic.
+    panic_payload: Option<Box<dyn Any + Send>>,
+}
+
+unsafe extern "C" fn vector_translate_progress_trampoline(complete: f64, _message: *const c_char, user_data: *mut c_void) -> c_int {
+    if user_data.is_null() {
+        return gdalinterop::TRUE;
+    }
+
+    // SAFETY: Only installed with a live, exclusively borrowed context for the
+    // duration of the synchronous GDALVectorTranslate call.
+    let progress = unsafe { &mut *user_data.cast::<VectorTranslateProgress<'_>>() };
+    if progress.panic_payload.is_some() {
+        return gdalinterop::FALSE;
+    }
+
+    // The callback is never reused after a panic, so its unwind safety is not
+    // required. No Rust unwind (including payload destruction) may cross C.
+    match catch_unwind(AssertUnwindSafe(|| (progress.callback)(complete))) {
+        Ok(()) => gdalinterop::TRUE,
+        Err(payload) => {
+            progress.panic_payload = Some(payload);
+            gdalinterop::FALSE
+        }
+    }
 }
 
 #[derive(Default, Debug)]
@@ -157,10 +238,10 @@ struct VectorTranslateOptionsWrapper {
 }
 
 impl VectorTranslateOptionsWrapper {
-    fn new(opts: &[String]) -> Result<Self> {
+    fn new(opts: impl IntoIterator<Item = impl AsRef<str>>) -> Result<Self> {
         let mut c_opts = gdal::cpl::CslStringList::new();
         for opt in opts {
-            c_opts.add_string(opt)?;
+            c_opts.add_string(opt.as_ref())?;
         }
 
         let options = unsafe { gdal_sys::GDALVectorTranslateOptionsNew(c_opts.as_ptr(), std::ptr::null_mut()) };
@@ -169,6 +250,13 @@ impl VectorTranslateOptionsWrapper {
         }
 
         Ok(Self { options })
+    }
+
+    fn new_with_progress(opts: &[String]) -> Result<Self> {
+        // GDAL's progress setter only installs the callback; ogr2ogr also needs
+        // -progress to enable feature counting and progress notifications.
+        let progress_option = (!opts.iter().any(|opt| opt.eq_ignore_ascii_case("-progress"))).then_some("-progress");
+        Self::new(progress_option.into_iter().chain(opts.iter().map(String::as_str)))
     }
 
     fn c_options(&mut self) -> *mut gdal_sys::GDALVectorTranslateOptions {
@@ -190,6 +278,112 @@ mod tests {
     use crate::Result;
 
     use super::*;
+
+    fn point_dataset() -> Result<gdal::Dataset> {
+        let mut ds = gdalio::dataset::create_in_memory()?;
+        let srs = gdal::spatial_ref::SpatialRef::from_epsg(4326)?;
+        let mut layer = ds.create_layer(gdal::vector::LayerOptions {
+            name: "points",
+            srs: Some(&srs),
+            ty: gdal_sys::OGRwkbGeometryType::wkbPoint,
+            ..Default::default()
+        })?;
+        for _ in 0..128 {
+            layer.create_feature(gdal::vector::Geometry::from_wkt("POINT (4 50)")?)?;
+        }
+        Ok(ds)
+    }
+
+    fn reprojection_options() -> Vec<String> {
+        // Small transactions also bound Arrow batch sizes, so progress remains
+        // intermediate if GDAL chooses the batched translation path.
+        ["-f", "GPKG", "-t_srs", "EPSG:3857", "-gt", "16"]
+            .into_iter()
+            .map(String::from)
+            .collect()
+    }
+
+    #[test]
+    fn translate_ds_to_disk_with_progress_reports_intermediate_values_and_completion() -> Result<()> {
+        let ds = point_dataset()?;
+        let directory = tempfile::tempdir()?;
+        let mut values = Vec::new();
+        let translated = translate_ds_to_disk_with_progress(
+            &ds,
+            &directory.path().join("translated.gpkg"),
+            &reprojection_options(),
+            Some(&mut |value| values.push(value)),
+        )?;
+
+        assert!(values.iter().any(|&value| value > 0.0 && value < 1.0), "{values:?}");
+        assert_eq!(values.last(), Some(&1.0));
+        assert!(values.iter().all(|value| (0.0..=1.0).contains(value)), "{values:?}");
+        assert!(values.windows(2).all(|pair| pair[0] <= pair[1]), "{values:?}");
+        let mut layer = translated.layer(0)?;
+        assert_eq!(layer.feature_count(), 128);
+        assert_eq!(layer.spatial_ref().unwrap().auth_code()?, 3857);
+        let feature = layer.features().next().unwrap();
+        let point = feature.geometry().unwrap().get_point(0);
+        approx::assert_abs_diff_eq!(point.0, 445_277.963_173, epsilon = 0.001);
+        approx::assert_abs_diff_eq!(point.1, 6_446_275.841_017, epsilon = 0.001);
+        Ok(())
+    }
+
+    #[test]
+    fn translate_ds_to_disk_with_progress_accepts_existing_progress_option() -> Result<()> {
+        let ds = point_dataset()?;
+        let directory = tempfile::tempdir()?;
+        let mut options = reprojection_options();
+        options.push("-progress".to_string());
+        let mut complete = false;
+        let _translated = translate_ds_to_disk_with_progress(
+            &ds,
+            &directory.path().join("translated.gpkg"),
+            &options,
+            Some(&mut |value| complete |= value == 1.0),
+        )?;
+
+        assert!(complete);
+        Ok(())
+    }
+
+    #[test]
+    fn translate_ds_to_disk_preserves_translation_without_progress() -> Result<()> {
+        let ds = point_dataset()?;
+        let directory = tempfile::tempdir()?;
+        let options = reprojection_options();
+        let translated = translate_ds_to_disk(&ds, &directory.path().join("legacy.gpkg"), &options)?;
+        let without_progress = translate_ds_to_disk_with_progress(&ds, &directory.path().join("no_progress.gpkg"), &options, None)?;
+
+        assert_eq!(translated.layer(0)?.feature_count(), 128);
+        assert_eq!(without_progress.layer(0)?.feature_count(), 128);
+        Ok(())
+    }
+
+    #[test]
+    fn translate_ds_to_disk_with_progress_returns_error_when_callback_panics() -> Result<()> {
+        let ds = point_dataset()?;
+        let directory = tempfile::tempdir()?;
+        for panic_at in [0.0, 1.0] {
+            let mut panics = 0;
+            let error = translate_ds_to_disk_with_progress(
+                &ds,
+                &directory.path().join(format!("panic_{panic_at}.gpkg")),
+                &reprojection_options(),
+                Some(&mut |value| {
+                    if value >= panic_at {
+                        panics += 1;
+                        panic!("progress callback panic at {value}");
+                    }
+                }),
+            )
+            .expect_err("callback panics must be converted to an error");
+
+            assert!(matches!(error, Error::Runtime(ref message) if message == "Vector translate: progress callback panicked"));
+            assert_eq!(panics, 1, "a panicked callback must not be called again");
+        }
+        Ok(())
+    }
 
     fn layer_surface_area(layer: &mut gdal::vector::Layer) -> f64 {
         layer.features().map(|f| f.geometry().unwrap().area()).sum::<f64>()
