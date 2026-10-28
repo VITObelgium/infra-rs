@@ -21,5 +21,8 @@ pub use multiband_creation::create_temporary_band_cogs;
 mod webtiles;
 
 #[cfg(feature = "raster-io-geotiff")]
+mod tileio;
+
+#[cfg(feature = "raster-io-geotiff")]
 #[cfg_attr(docsrs, doc(cfg(feature = "raster-io-geotiff")))]
 pub use webtiles::{TileSource, WebTileInfo, WebTilesReader};

@@ -21,18 +21,22 @@ use crate::{
     tileproviderfactory::TileProviderOptions,
 };
 
+fn check_cancelled(cancelled: &impl Fn() -> bool) -> Result<()> {
+    if cancelled() { Err(geo::Error::Cancelled.into()) } else { Ok(()) }
+}
+
 pub struct CogTileProvider {
-    meta: LayerMetadata,
+    meta: Vec<LayerMetadata>,
 }
 
 impl CogTileProvider {
     pub fn new(path: &Path, _opts: &TileProviderOptions) -> Result<Self> {
-        let cog = WebTilesReader::new(GeoTiffMetadata::from_file(path)?)?;
+        let cog = Arc::new(WebTilesReader::new(GeoTiffMetadata::from_file(path)?)?);
         let meta = cog.cog_metadata();
         let tile_info = cog.tile_info();
         let wgs84_meta = meta.geo_reference.warped_to_epsg(crs::epsg::WGS84)?;
 
-        let meta = LayerMetadata {
+        let base_meta = LayerMetadata {
             id: unique_layer_id(),
             path: PathBuf::from(path),
             min_zoom: tile_info.min_zoom,
@@ -56,17 +60,33 @@ impl CogTileProvider {
             source_format: LayerSourceType::CloudOptimizedGeoTiff,
             scheme: "xyz".into(),
             additional_data: HashMap::new(),
-            band_nr: Some(1), // Default to band 1 for single-band COGs
-            tileprovider_data: Some(Box::new(Arc::new(cog))),
+            band_nr: Some(1),
+            tileprovider_data: Some(Box::new(cog.clone())),
         };
 
         log::info!(
             "[TILE] Serving {} [{}] ({})",
-            meta.name,
-            meta.tile_format,
+            base_meta.name,
+            base_meta.tile_format,
             path.file_name().unwrap_or_default().to_string_lossy()
         );
 
+        let meta = tile_info
+            .band_metadata
+            .iter()
+            .enumerate()
+            .map(|(index, band)| {
+                let mut meta = base_meta.clone();
+                meta.id = unique_layer_id();
+                meta.band_nr = Some(index + 1);
+                meta.description = band.description.clone().unwrap_or_default();
+                meta.scale = band.scale;
+                if tile_info.band_count > 1 {
+                    meta.name = format!("{} Band {}", meta.name, index + 1);
+                }
+                meta
+            })
+            .collect();
         Ok(CogTileProvider { meta })
     }
 
@@ -82,17 +102,74 @@ impl CogTileProvider {
         let band = meta.band_nr.unwrap_or(1);
         let band =
             geotiff::BandIndex::new(band).ok_or_else(|| Error::InvalidArgument("Band index is 1-based and must be >= 1".to_string()))?;
-        let tile = meta
-            .tileprovider_data
-            .as_ref()
-            .and_then(|data| data.downcast_ref::<WebTilesReader>())
-            .map(|cog| cog.read_tile_data_as::<T>(tile, band, &mut std::fs::File::open(&meta.path)?));
+        Ok(Self::reader(meta)?
+            .read_tile_data_as::<T>(tile, band, &mut std::fs::File::open(&meta.path)?)?
+            .unwrap_or_else(DenseArray::empty))
+    }
 
-        match tile {
-            Some(Ok(Some(tile_data))) => Ok(tile_data),
-            Some(Err(e)) => Err(Error::Runtime(format!("Failed to read tile data: {e}"))),
-            None | Some(Ok(None)) => Ok(DenseArray::empty()),
+    fn reader(meta: &LayerMetadata) -> Result<&WebTilesReader> {
+        meta.tileprovider_data
+            .as_deref()
+            .and_then(|data| data.as_ref().downcast_ref::<WebTilesReader>())
+            .ok_or_else(|| Error::InvalidArgument("Missing COG reader in layer metadata".into()))
+    }
+
+    pub fn multiband_tile_cancellable(
+        meta: &LayerMetadata,
+        req: &TileRequest,
+        bands: Range<usize>,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<Vec<DenseArray<f32>>> {
+        let cog = Self::reader(meta)?;
+        Self::validate_multiband_request(cog, req, &bands)?;
+        check_cancelled(&cancelled)?;
+
+        if req.tile.z() < cog.tile_info().min_zoom {
+            // Below the min zoom level requires a warp instead of direct tile read
+            let arrays = tileio::read_multiband_cog_tile_warped(&meta.path, req, bands)?;
+            check_cancelled(&cancelled)?;
+            return Ok(arrays);
         }
+
+        let band_count = bands.len();
+        let arrays = cog.read_multi_band_tile_data_cancellable(&req.tile, bands, &mut std::fs::File::open(&meta.path)?, &cancelled)?;
+        let Some(arrays) = arrays else {
+            return Ok((0..band_count).map(|_| DenseArray::empty()).collect());
+        };
+        Self::convert_multiband_arrays(arrays, &cancelled)
+    }
+
+    fn convert_multiband_arrays(arrays: Vec<geo::AnyDenseArray>, cancelled: &impl Fn() -> bool) -> Result<Vec<DenseArray<f32>>> {
+        let arrays = arrays
+            .into_iter()
+            .map(|array| {
+                check_cancelled(cancelled)?;
+                let array = array.cast_into_dense_array::<f32>();
+                Ok(if array.contains_data() { array } else { DenseArray::empty() })
+            })
+            .collect::<Result<Vec<_>>>()?;
+        check_cancelled(cancelled)?;
+        Ok(arrays)
+    }
+
+    fn validate_multiband_request(cog: &WebTilesReader, req: &TileRequest, bands: &Range<usize>) -> Result<()> {
+        if bands.start == 0 || bands.is_empty() || bands.end - 1 > cog.cog_metadata().band_count as usize {
+            return Err(Error::InvalidArgument(format!("Invalid 1-based COG band range: {bands:?}")));
+        }
+        if req.tile_size != cog.cog_metadata().chunk_row_length() || req.dpi_ratio != 1 {
+            return Err(Error::InvalidArgument("COG tiles require native tile size and DPI ratio 1".into()));
+        }
+        if req.tile.z() < 0 {
+            return Err(Error::InvalidArgument("Tile zoom must be nonnegative".into()));
+        }
+        Ok(())
+    }
+
+    fn layer_ref(&self, id: LayerId) -> Result<&LayerMetadata> {
+        self.meta
+            .iter()
+            .find(|meta| meta.id == id)
+            .ok_or_else(|| Error::InvalidArgument(format!("Invalid layer id: {id}")))
     }
 
     fn read_vrt_tile<T: ArrayNum>(meta: &LayerMetadata, tile: &Tile, tile_size: u32) -> Result<TileData> {
@@ -215,13 +292,15 @@ impl CogTileProvider {
 }
 
 impl TileProvider for CogTileProvider {
-    fn extent_value_range(&self, _layer_id: LayerId, extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
-        tileio::detect_raster_range(&self.meta.path, 1, extent)
+    fn extent_value_range(&self, layer_id: LayerId, extent: LatLonBounds, _zoom: Option<i32>) -> Result<Range<f64>> {
+        let meta = self.layer_ref(layer_id)?;
+        tileio::detect_raster_range(&meta.path, meta.band_nr.unwrap_or(1), extent)
     }
 
     fn get_raster_value(&self, layer_id: LayerId, coord: Coordinate, dpi_ratio: u8) -> Result<Option<f32>> {
-        let tile = Tile::for_coordinate(coord, self.meta.max_zoom);
-        let tile_size = self.meta.tile_size.unwrap_or(256);
+        let meta = self.layer_ref(layer_id)?;
+        let tile = Tile::for_coordinate(coord, meta.max_zoom);
+        let tile_size = meta.tile_size.unwrap_or(256);
 
         let tile_data = self.get_tile(
             layer_id,
@@ -244,28 +323,19 @@ impl TileProvider for CogTileProvider {
     }
 
     fn get_tile(&self, layer_id: LayerId, req: &TileRequest) -> Result<TileData> {
-        if layer_id != self.meta.id {
-            return Err(Error::Runtime("Layer ID does not match the provider's layer ID".to_string()));
-        }
-
-        log::debug!("Get tile {}/{}/{}", req.tile.z(), req.tile.x(), req.tile.y());
-        Self::tile(&self.meta, req)
+        Self::tile(self.layer_ref(layer_id)?, req)
     }
 
     fn get_tile_color_mapped(&self, layer_id: LayerId, req: &ColorMappedTileRequest) -> Result<TileData> {
-        if layer_id != self.meta.id {
-            return Err(Error::Runtime("Layer ID does not match the provider's layer ID".to_string()));
-        }
-
-        Self::tile_color_mapped(&self.meta, req)
+        Self::tile_color_mapped(self.layer_ref(layer_id)?, req)
     }
 
     fn layers(&self) -> Vec<LayerMetadata> {
-        vec![self.meta.clone()]
+        self.meta.clone()
     }
 
-    fn layer(&self, _id: LayerId) -> Result<LayerMetadata> {
-        Ok(self.meta.clone())
+    fn layer(&self, id: LayerId) -> Result<LayerMetadata> {
+        Ok(self.layer_ref(id)?.clone())
     }
 }
 

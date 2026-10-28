@@ -187,6 +187,56 @@ pub fn read_raster_tile_warped<T: ArrayNum + GdalType>(
     Ok(data)
 }
 
+/// Synthesize a COG tile below its native minimum zoom with one warp for all bands.
+/// The caller validates the band range, tile size and DPI ratio.
+pub(crate) fn read_multiband_cog_tile_warped(
+    path: &std::path::Path,
+    req: &crate::TileRequest,
+    bands: Range<usize>,
+) -> Result<Vec<DenseArray<f32>>> {
+    let src = formats::gdal::open_dataset_read_only(path)?;
+    let size = req.tile_size as usize;
+    let mut dst = multiband_tile_destination(req, bands.len())?;
+    let mut options = vec![
+        "-r".into(),
+        "near".into(),
+        "-ovr".into(),
+        "AUTO".into(),
+        "-dstnodata".into(),
+        "nan".into(),
+    ];
+    for band in bands.clone() {
+        options.extend(["-b".into(), band.to_string()]);
+    }
+    let warp_options = vec![("INIT_DEST".into(), "NO_DATA".into()), ("UNIFIED_SRC_NODATA".into(), "NO".into())];
+    raster::algo::gdal::warp_cli(&src, &mut dst, &options, &warp_options)?;
+    (1..=bands.len())
+        .map(|band| {
+            let buffer = dst.rasterband(band)?.read_as::<f32>((0, 0), (size, size), (size, size), None)?;
+            let array = DenseArray::new_init_nodata(
+                RasterMetadata::sized_with_nodata(RasterSize::square(req.tile_size as i32), Some(f64::NAN)),
+                inf::allocate::aligned_vec_from_iter(buffer.into_shape_and_vec().1),
+            )?;
+            Ok(if array.contains_data() { array } else { DenseArray::empty() })
+        })
+        .collect()
+}
+
+fn multiband_tile_destination(req: &crate::TileRequest, band_count: usize) -> Result<Dataset> {
+    let size = req.tile_size as usize;
+    let georef = GeoReference::from_tile(&req.tile, size, 1);
+    let mut dst = gdal::DriverManager::get_driver_by_name("MEM")?.create_with_band_type::<f32, _>("", size, size, band_count)?;
+    dst.set_geo_transform(&georef.geo_transform().into())?;
+    dst.set_projection(georef.projection())?;
+    for band in 1..=band_count {
+        let mut band = dst.rasterband(band)?;
+        band.set_no_data_value(Some(f64::NAN))?;
+        // GDAL can skip fully masked source regions, leaving the destination untouched.
+        band.fill(f64::NAN, None)?;
+    }
+    Ok(dst)
+}
+
 /// Read the raw tile data, result is a tuple with the raw data and the nodata value
 pub fn read_tile_data<T: ArrayNum + Num + GdalType>(
     meta: &LayerMetadata,

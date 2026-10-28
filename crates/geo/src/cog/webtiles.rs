@@ -11,11 +11,17 @@ use crate::{
 use std::{
     collections::HashMap,
     io::{Read, Seek},
+    ops::{Bound, Range, RangeBounds},
 };
 
 use crate::{LatLonBounds, RasterSize, Tile, crs};
 
 use inf::allocate::AlignedVecUnderConstruction;
+
+pub(super) fn check_cancelled(cancelled: &impl Fn() -> bool) -> Result<()> {
+    if cancelled() { Err(Error::Cancelled) } else { Ok(()) }
+}
+
 #[derive(Debug, Clone)]
 pub enum TileSource {
     Aligned(TiffChunkLocation),
@@ -596,6 +602,16 @@ impl WebTilesReader {
     // - `TileSource::Aligned` and `TileSource::MultiBandAligned`: exactly one chunk (the selected band)
     // - `TileSource::Unaligned` and `TileSource::MultiBandUnaligned`: one chunk per tile source for the selected band
     pub fn parse_tile_data(&self, tile_source: &TileSource, band: BandIndex, cog_chunks: &[&[u8]]) -> Result<AnyDenseArray> {
+        self.parse_tile_data_cancellable(tile_source, band, cog_chunks, &|| false)
+    }
+
+    pub(super) fn parse_tile_data_cancellable(
+        &self,
+        tile_source: &TileSource,
+        band: BandIndex,
+        cog_chunks: &[&[u8]],
+        cancelled: &impl Fn() -> bool,
+    ) -> Result<AnyDenseArray> {
         if band.get() > self.cog_meta.band_count as usize {
             return Err(Error::InvalidArgument(format!(
                 "Band index out of range: requested band {}, but COG has {} bands (bands are 1-indexed)",
@@ -604,7 +620,8 @@ impl WebTilesReader {
             )));
         }
 
-        match tile_source {
+        check_cancelled(cancelled)?;
+        let array = match tile_source {
             TileSource::Aligned(_) | TileSource::MultiBandAligned(_) => {
                 assert_eq!(
                     cog_chunks.len(),
@@ -612,18 +629,7 @@ impl WebTilesReader {
                     "Aligned tile parsing requires exactly one selected-band chunk, got {}",
                     cog_chunks.len()
                 );
-                Ok(match self.data_type() {
-                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.parse_tile_data_as::<u8>(cog_chunks[0])?),
-                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.parse_tile_data_as::<u16>(cog_chunks[0])?),
-                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.parse_tile_data_as::<u32>(cog_chunks[0])?),
-                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.parse_tile_data_as::<u64>(cog_chunks[0])?),
-                    ArrayDataType::Int8 => AnyDenseArray::I8(self.parse_tile_data_as::<i8>(cog_chunks[0])?),
-                    ArrayDataType::Int16 => AnyDenseArray::I16(self.parse_tile_data_as::<i16>(cog_chunks[0])?),
-                    ArrayDataType::Int32 => AnyDenseArray::I32(self.parse_tile_data_as::<i32>(cog_chunks[0])?),
-                    ArrayDataType::Int64 => AnyDenseArray::I64(self.parse_tile_data_as::<i64>(cog_chunks[0])?),
-                    ArrayDataType::Float32 => AnyDenseArray::F32(self.parse_tile_data_as::<f32>(cog_chunks[0])?),
-                    ArrayDataType::Float64 => AnyDenseArray::F64(self.parse_tile_data_as::<f64>(cog_chunks[0])?),
-                })
+                crate::dispatch_datatype!(self.data_type(), T, self.parse_tile_data_as::<T>(cog_chunks[0])?)
             }
             TileSource::Unaligned(tile_sources) => {
                 assert_eq!(
@@ -633,18 +639,11 @@ impl WebTilesReader {
                     tile_sources.len(),
                     cog_chunks.len()
                 );
-                Ok(match self.data_type() {
-                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                    ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(tile_sources, cog_chunks)?),
-                })
+                crate::dispatch_datatype!(
+                    self.data_type(),
+                    T,
+                    self.merge_tile_sources_cancellable::<T>(tile_sources, cog_chunks, cancelled)?
+                )
             }
             TileSource::MultiBandUnaligned(band_tile_sources) => {
                 let band_index = band.get() - 1;
@@ -655,27 +654,41 @@ impl WebTilesReader {
                     band_tile_sources.len(),
                     cog_chunks.len()
                 );
-
-                let mut band_cog_chunks: Vec<(TiffChunkLocation, CutOut)> = Vec::new();
-                for (tile_band_locations, cutout) in band_tile_sources.iter() {
-                    let chunk_location = tile_band_locations[band_index];
-                    band_cog_chunks.push((chunk_location, cutout.clone()));
-                }
-
-                Ok(match self.data_type() {
-                    ArrayDataType::Uint8 => AnyDenseArray::U8(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Uint16 => AnyDenseArray::U16(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Uint32 => AnyDenseArray::U32(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Uint64 => AnyDenseArray::U64(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Int8 => AnyDenseArray::I8(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Int16 => AnyDenseArray::I16(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Int32 => AnyDenseArray::I32(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Int64 => AnyDenseArray::I64(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Float32 => AnyDenseArray::F32(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                    ArrayDataType::Float64 => AnyDenseArray::F64(self.merge_tile_sources(&band_cog_chunks, cog_chunks)?),
-                })
+                let band_cog_chunks = band_tile_sources
+                    .iter()
+                    .map(|(locations, cutout)| (locations[band_index], cutout.clone()))
+                    .collect::<Vec<_>>();
+                crate::dispatch_datatype!(
+                    self.data_type(),
+                    T,
+                    self.merge_tile_sources_cancellable::<T>(&band_cog_chunks, cog_chunks, cancelled)?
+                )
             }
+        };
+        check_cancelled(cancelled)?;
+        Ok(array)
+    }
+
+    /// Normalizes a nonempty, 1-indexed band selection to an exclusive range.
+    pub(super) fn normalize_band_range(&self, band_range: impl RangeBounds<usize>) -> Result<Range<usize>> {
+        let invalid_range = || Error::InvalidArgument("Band range must be nonempty, 1-indexed, and within the COG band count".into());
+        let band_limit = (self.cog_meta.band_count as usize).checked_add(1).ok_or_else(invalid_range)?;
+        let band_start = match band_range.start_bound() {
+            Bound::Included(&start) => Some(start),
+            Bound::Excluded(&start) => start.checked_add(1),
+            Bound::Unbounded => Some(1),
         }
+        .ok_or_else(invalid_range)?;
+        let band_end = match band_range.end_bound() {
+            Bound::Included(&end) => end.checked_add(1),
+            Bound::Excluded(&end) => Some(end),
+            Bound::Unbounded => Some(band_limit),
+        }
+        .ok_or_else(invalid_range)?;
+        if !(1..band_end).contains(&band_start) || band_end > band_limit {
+            return Err(invalid_range());
+        }
+        Ok(band_start..band_end)
     }
 
     // `band_range` supports all `RangeBounds<usize>` forms, including inclusive ranges.
@@ -690,25 +703,29 @@ impl WebTilesReader {
         tile_source: &TileSource,
         cog_chunks: &[&[u8]],
     ) -> Result<Vec<AnyDenseArray>> {
+        self.parse_multi_band_tile_data_cancellable(band_range, tile_source, cog_chunks, || false)
+    }
+
+    /// Parses selected bands using the same decoder as [`Self::parse_tile_data`].
+    ///
+    /// Cancellation is checked before and after each band decode and between
+    /// native chunk decodes. Cancellation discards all partially decoded output.
+    /// Invalid or overflowing band ranges return [`Error::InvalidArgument`].
+    pub fn parse_multi_band_tile_data_cancellable<R: RangeBounds<usize>>(
+        &self,
+        band_range: R,
+        tile_source: &TileSource,
+        cog_chunks: &[&[u8]],
+        cancelled: impl Fn() -> bool,
+    ) -> Result<Vec<AnyDenseArray>> {
         if !matches!(tile_source, TileSource::MultiBandAligned(_) | TileSource::MultiBandUnaligned(_)) {
             return Err(Error::InvalidArgument(
                 "parse_multi_band_tile_data requires a multiband tile source".to_string(),
             ));
         }
 
-        let band_count = self.cog_meta.band_count as usize;
-        let band_start = match band_range.start_bound() {
-            std::ops::Bound::Included(&start) => start,
-            std::ops::Bound::Excluded(&start) => start.checked_add(1).unwrap(),
-            std::ops::Bound::Unbounded => 1,
-        };
-        let band_end = match band_range.end_bound() {
-            std::ops::Bound::Included(&end) => end.checked_add(1).unwrap(),
-            std::ops::Bound::Excluded(&end) => end,
-            std::ops::Bound::Unbounded => band_count + 1,
-        };
-        let band_range = band_start..band_end;
-        let band_range_valid = band_range.start >= 1 && band_range.end <= band_count + 1;
+        let band_range = self.normalize_band_range(band_range)?;
+        let band_start = band_range.start;
         let requested_band_count = band_range.len();
         let chunks_valid = match tile_source {
             TileSource::MultiBandAligned(_) => cog_chunks.len() == requested_band_count,
@@ -716,10 +733,10 @@ impl WebTilesReader {
             _ => unreachable!("non-multiband tile sources are rejected above"),
         };
         assert!(
-            band_range_valid && chunks_valid,
+            chunks_valid,
             "Invalid multiband tile parse precondition: band_range={:?}, band_count={}, chunk_count={}",
             band_range,
-            band_count,
+            self.cog_meta.band_count,
             cog_chunks.len()
         );
 
@@ -728,7 +745,7 @@ impl WebTilesReader {
                 .zip(cog_chunks.iter())
                 .map(|(band, chunk)| {
                     let band = BandIndex::new(band).unwrap();
-                    self.parse_tile_data(tile_source, band, &[*chunk])
+                    self.parse_tile_data_cancellable(tile_source, band, &[*chunk], &cancelled)
                 })
                 .collect::<Result<Vec<_>>>(),
             TileSource::MultiBandUnaligned(band_tile_sources) => {
@@ -744,7 +761,7 @@ impl WebTilesReader {
                             .take(tile_count)
                             .copied()
                             .collect::<Vec<_>>();
-                        self.parse_tile_data(tile_source, band, &band_chunks)
+                        self.parse_tile_data_cancellable(tile_source, band, &band_chunks, &cancelled)
                     })
                     .collect::<Result<Vec<_>>>()
             }
@@ -885,17 +902,28 @@ impl WebTilesReader {
     }
 
     fn merge_tile_sources<T: ArrayNum>(&self, tile_sources: &[(TiffChunkLocation, CutOut)], cog_chunks: &[&[u8]]) -> Result<DenseArray<T>> {
+        self.merge_tile_sources_cancellable(tile_sources, cog_chunks, &|| false)
+    }
+
+    fn merge_tile_sources_cancellable<T: ArrayNum>(
+        &self,
+        tile_sources: &[(TiffChunkLocation, CutOut)],
+        cog_chunks: &[&[u8]],
+        cancelled: &impl Fn() -> bool,
+    ) -> Result<DenseArray<T>> {
         let tile_size = self.cog_metadata().chunk_row_length() as usize;
         let tile_raster_size = RasterSize::square(tile_size as i32);
 
         let mut arr = DenseArray::filled_with_nodata(RasterMetadata::sized_with_nodata(tile_raster_size, num::NumCast::from(T::NODATA)));
 
         for ((cog_location, cutout), cog_chunck) in tile_sources.iter().zip(cog_chunks) {
+            check_cancelled(cancelled)?;
             if cog_location.is_sparse() {
                 continue; // Skip sparse tiles, they are already filled with nodata
             }
 
             let tile_cutout = self.parse_tile_data_as::<T>(cog_chunck)?;
+            check_cancelled(cancelled)?;
             utils::merge_tile_chunk_into_buffer(cutout, &tile_cutout, arr.as_mut_slice(), tile_raster_size);
         }
 
@@ -939,6 +967,113 @@ mod mapping_tests {
             })
             .collect();
         Ok(meta)
+    }
+
+    #[test]
+    fn normalize_band_range_supports_all_bound_forms() -> Result<()> {
+        let reader = WebTilesReader::new(mapping_metadata(256, 3, false)?)?;
+        for (bounds, expected) in [
+            ((Bound::Unbounded, Bound::Unbounded), 1..4),
+            ((Bound::Included(1), Bound::Included(3)), 1..4),
+            ((Bound::Excluded(1), Bound::Excluded(4)), 2..4),
+            ((Bound::Included(2), Bound::Unbounded), 2..4),
+            ((Bound::Unbounded, Bound::Excluded(2)), 1..2),
+        ] {
+            assert_eq!(reader.normalize_band_range(bounds)?, expected);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn normalize_band_range_rejects_empty_out_of_bounds_and_overflow() -> Result<()> {
+        let reader = WebTilesReader::new(mapping_metadata(256, 3, false)?)?;
+        for bounds in [
+            (Bound::Included(0), Bound::Excluded(2)),
+            (Bound::Included(2), Bound::Excluded(2)),
+            (Bound::Included(3), Bound::Excluded(1)),
+            (Bound::Included(1), Bound::Included(4)),
+            (Bound::Included(4), Bound::Unbounded),
+            (Bound::Unbounded, Bound::Excluded(0)),
+            (Bound::Excluded(usize::MAX), Bound::Unbounded),
+            (Bound::Unbounded, Bound::Included(usize::MAX)),
+        ] {
+            assert!(matches!(reader.normalize_band_range(bounds), Err(Error::InvalidArgument(_))));
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn multiband_parser_rejects_invalid_range_before_decoding() -> Result<()> {
+        let reader = WebTilesReader::new(mapping_metadata(256, 3, false)?)?;
+        let source = TileSource::MultiBandAligned(reader.cog_metadata().overviews[0].chunk_locations.clone());
+        assert!(matches!(
+            reader.parse_multi_band_tile_data(0..2, &source, &[&[1], &[2]]),
+            Err(Error::InvalidArgument(_))
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parser_checks_cancellation_before_decoding_truncated_band() -> Result<()> {
+        let reader = WebTilesReader::new(mapping_metadata(256, 1, false)?)?;
+        let source = TileSource::Aligned(reader.cog_metadata().overviews[0].chunk_locations[0]);
+        assert!(matches!(
+            reader.parse_tile_data_cancellable(&source, FIRST_BAND, &[&[1]], &|| true),
+            Err(Error::Cancelled)
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn parser_discards_decoded_band_when_cancelled_after_decode() -> Result<()> {
+        let reader = WebTilesReader::new(mapping_metadata(256, 1, false)?)?;
+        let source = TileSource::Aligned(reader.cog_metadata().overviews[0].chunk_locations[0]);
+        let checks = std::cell::Cell::new(0);
+        let result = reader.parse_tile_data_cancellable(&source, FIRST_BAND, &[&[]], &|| {
+            checks.set(checks.get() + 1);
+            checks.get() == 2
+        });
+        assert!(matches!(result, Err(Error::Cancelled)));
+        assert_eq!(checks.get(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn multiband_parser_cancels_after_first_band_or_before_truncated_second_band() -> Result<()> {
+        let reader = WebTilesReader::new(mapping_metadata(256, 3, false)?)?;
+        let source = TileSource::MultiBandAligned(reader.cog_metadata().overviews[0].chunk_locations.clone());
+        let first_chunk = vec![11; 256 * 256];
+        for cancel_at in [2, 3] {
+            let checks = std::cell::Cell::new(0);
+            let result = reader.parse_multi_band_tile_data_cancellable(1..3, &source, &[&first_chunk, &[1]], || {
+                checks.set(checks.get() + 1);
+                checks.get() == cancel_at
+            });
+            assert!(matches!(result, Err(Error::Cancelled)));
+            assert_eq!(checks.get(), cancel_at);
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn unaligned_parser_checks_cancellation_between_native_chunk_decodes() -> Result<()> {
+        let reader = WebTilesReader::new(mapping_metadata(128, 1, true)?)?;
+        let location = reader.cog_metadata().overviews[0].chunk_locations[0];
+        let cutout = CutOut {
+            rows: 128,
+            cols: 64,
+            ..Default::default()
+        };
+        let source = TileSource::Unaligned(vec![(location, cutout.clone()), (location, cutout)]);
+        let first_chunk = vec![11; 128 * 128];
+        let checks = std::cell::Cell::new(0);
+        let result = reader.parse_tile_data_cancellable(&source, FIRST_BAND, &[&first_chunk, &[1]], &|| {
+            checks.set(checks.get() + 1);
+            checks.get() == 4
+        });
+        assert!(matches!(result, Err(Error::Cancelled)));
+        assert_eq!(checks.get(), 4);
+        Ok(())
     }
 
     #[test]

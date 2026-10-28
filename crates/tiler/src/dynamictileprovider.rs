@@ -102,6 +102,58 @@ impl DynamicTileProvider {
         }
     }
 
+    /// Read raw COG bands as `f32`, ordered by the 1-based half-open `bands` range.
+    ///
+    /// Nodata and masked pixels are NaNs; source scale/offset are not applied.
+    /// Each band without data is an empty array, so the result always has
+    /// `bands.len()` entries, including for sparse tiles and missing coverage.
+    /// Native tiles group nearby compressed chunks in bounded reads (coalesced
+    /// groups up to 8 MiB, gaps up to 64 KiB, at most 2x payload amplification).
+    /// Distant BAND-interleaved chunks use separate groups. Individually oversized
+    /// chunks are isolated and read in 8 MiB steps, never spanning large gaps.
+    /// Zooms below the native minimum use one batched GDAL warp;
+    /// zooms above the native maximum return empty arrays.
+    ///
+    /// `tile_format` is ignored. Native tile size and DPI ratio 1 are required.
+    /// `meta.band_nr` does not restrict the range, which addresses the source file.
+    ///
+    /// # Errors
+    /// Empty, reversed, zero-based and out-of-range band ranges are rejected.
+    /// Non-COG providers, missing reader metadata, invalid tile requests and I/O
+    /// or decoding failures return explicit errors.
+    pub fn get_multiband_tile_for_layer(meta: &LayerMetadata, req: &TileRequest, bands: Range<usize>) -> Result<Vec<DenseArray<f32>>> {
+        Self::get_multiband_tile_for_layer_cancellable(meta, req, bands, || false)
+    }
+
+    /// Cancellable raw multiband COG read; otherwise the same contract as
+    /// [`Self::get_multiband_tile_for_layer`].
+    ///
+    /// Checks the callback between compressed read groups/steps, individual
+    /// band/native-chunk decodes and f32 conversions. Reader calls and codec
+    /// decodes already in progress cannot be interrupted. Below native minimum
+    /// zoom the GDAL operation is uninterruptible; cancellation is checked before
+    /// and after it and the result is discarded if cancelled.
+    ///
+    /// # Errors
+    /// Cancellation returns `Error::GeoError(geo::Error::Cancelled)`, not empty
+    /// arrays or partial output. Other errors match the non-cancellable API.
+    pub fn get_multiband_tile_for_layer_cancellable(
+        meta: &LayerMetadata,
+        req: &TileRequest,
+        bands: Range<usize>,
+        cancelled: impl Fn() -> bool,
+    ) -> Result<Vec<DenseArray<f32>>> {
+        if cancelled() {
+            return Err(geo::Error::Cancelled.into());
+        }
+        if meta.source_format != LayerSourceType::CloudOptimizedGeoTiff {
+            return Err(Error::InvalidArgument(
+                "Multiband tiles are currently supported only for COG sources".into(),
+            ));
+        }
+        CogTileProvider::multiband_tile_cancellable(meta, req, bands, cancelled)
+    }
+
     pub fn get_diff_tile(&self, id_lhs: LayerId, id_rhs: LayerId, tile_req: &TileRequest) -> Result<TileData> {
         let mut diff_tile_req = tile_req.clone();
         diff_tile_req.tile_format = crate::TileFormat::RasterTile;
