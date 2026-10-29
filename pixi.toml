@@ -27,7 +27,7 @@ packaging = { features = ["packaging"], no-default-feature = true }
 platforms = ["linux-64", "osx-arm64", "win-64"]
 
 [feature.packaging.dependencies]
-python = "3.13.*"
+python = ">=3.11"
 rattler-build = "0.77.*"
 conda-index = ">=0.13.0,<0.14"
 

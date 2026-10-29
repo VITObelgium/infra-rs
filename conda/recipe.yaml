@@ -16,7 +16,7 @@ source:
     - src/**
 
 build:
-  number: 1
+  number: 2
   skip: target_platform == 'osx-64'
   script: build.py
 
@@ -27,7 +27,7 @@ requirements:
     - if: unix
       then: ${{ stdlib('c') }}
     - rust 1.95.*
-    - python 3.13.*
+    - python >=3.11
     - if: win
       then: pkgconf
       else: pkg-config
@@ -53,7 +53,7 @@ tests:
   - script: test_package.py
     requirements:
       run:
-        - python 3.13.*
+        - python >=3.11
         - gdal >=3.12,<3.13
 
 about:
