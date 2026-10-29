@@ -16,7 +16,7 @@ source:
     - src/**
 
 build:
-  number: 2
+  number: 3
   skip: target_platform == 'osx-64'
   script: build.py
 
@@ -27,6 +27,8 @@ requirements:
     - if: unix
       then: ${{ stdlib('c') }}
     - rust 1.95.*
+    - libclang
+    - clang
     - python >=3.11
     - if: win
       then: pkgconf
@@ -34,11 +36,11 @@ requirements:
     - git
     - cargo-bundle-licenses
   host:
-    - libgdal-core >=3.12,<3.13
+    - libgdal-core >=3.12,<3.14
     - proj >=9.6.2
     - libsqlite
   run:
-    - libgdal-netcdf >=3.12,<3.13
+    - libgdal-netcdf >=3.12,<3.14
 
 tests:
   - package_contents:
@@ -54,7 +56,7 @@ tests:
     requirements:
       run:
         - python >=3.11
-        - gdal >=3.12,<3.13
+        - gdal >=3.12,<3.14
 
 about:
   homepage: https://github.com/VITO-RMA/infra-rs

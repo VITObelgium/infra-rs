@@ -46,12 +46,16 @@ and test dependency.
 ## Build details
 
 - Both tools are built using `cargo build --release --locked --package createcog
-  --package cog-analyzer --no-default-features`. Existing default Cargo builds
+  --package cog-analyzer --no-default-features --features gdal/bindgen`. Existing default Cargo builds
   retain their previous feature set.
 - The repository's `.cargo/config.toml` is excluded from the conda source tree,
   avoiding AVX2, static MSVC CRT, and macOS 15-specific release flags.
-- GDAL is constrained to 3.12 because `gdal-sys` 0.12 ships pre-generated bindings
-  through that version. PROJ must be at least 9.6.2 for `proj-sys` 0.27.
+- GDAL 3.12 and 3.13 are allowed. Conda builds enable `gdal/bindgen` and use
+  build-environment Clang/libclang to generate bindings from the host GDAL headers,
+  rather than relying on `gdal-sys` 0.12's pre-generated bindings (which stop at
+  3.12). Runtime ABI requirements still come from GDAL's conda run exports; a
+  single build is not necessarily compatible with both minor versions.
+  PROJ must be at least 9.6.2 for `proj-sys` 0.27.
 - Windows explicitly uses the build environment's `pkgconf.exe` for both Rust
   dependency discovery and preflight checks. Unlike Windows `pkg-config`, its
   shared-library probes exclude PROJ's private/static curl and TIFF link closure.

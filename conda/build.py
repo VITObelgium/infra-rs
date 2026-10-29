@@ -16,6 +16,7 @@ def build_environment(source, prefix, build_prefix, windows):
     env["RUSTFLAGS"] = "-C strip=symbols"
     env["CARGO_INCREMENTAL"] = "0"
     env["CARGO_HOME"] = str(build_prefix / "cargo-home")
+    env["LIBCLANG_PATH"] = str(build_prefix / "Library" / "bin" if windows else build_prefix / "lib")
     env["CARGO_TARGET_DIR"] = str(source / "target")
     env.pop("CARGO_BUILD_TARGET", None)
     for variable in list(env):
@@ -62,7 +63,7 @@ def main():
     subprocess.run([env["PKG_CONFIG"], "--atleast-version=9.6.2", "proj"], env=env, check=True)
 
     subprocess.run(
-        ["cargo", "build", "--release", "--locked", "--package", "createcog", "--package", "cog-analyzer", "--no-default-features"],
+        ["cargo", "build", "--release", "--locked", "--package", "createcog", "--package", "cog-analyzer", "--no-default-features", "--features", "gdal/bindgen"],
         env=env,
         check=True,
     )

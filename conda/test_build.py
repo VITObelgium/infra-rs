@@ -57,6 +57,7 @@ class BuildEnvironmentTests(unittest.TestCase):
         self.assertEqual(env["GDAL_INCLUDE_DIR"], str(self.library / "include"))
         self.assertEqual(env["GDAL_DYNAMIC"], "1")
         self.assertEqual(env["CARGO_HOME"], str(self.build_prefix / "cargo-home"))
+        self.assertEqual(env["LIBCLANG_PATH"], str(self.build_prefix / "Library" / "bin"))
         self.assertEqual(env["CARGO_TARGET_DIR"], str(self.source / "target"))
         # Retain pcfiledir-relative paths and metadata; only fix PROJ's import name.
         contents = self.proj_pc.read_text()
@@ -94,6 +95,7 @@ class BuildEnvironmentTests(unittest.TestCase):
         self.assertEqual(env["PKG_CONFIG"], "pkg-config")
         self.assertEqual(env["PKG_CONFIG_PATH"], str(self.prefix / "lib" / "pkgconfig"))
         self.assertEqual(env["CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER"], "conda-cc")
+        self.assertEqual(env["LIBCLANG_PATH"], str(self.build_prefix / "lib"))
         self.assertNotIn("GDAL_DYNAMIC", env)
         self.assertIn("-lproj_9", self.proj_pc.read_text())
 
@@ -112,7 +114,7 @@ class BuildEnvironmentTests(unittest.TestCase):
         pkg_config = env["PKG_CONFIG"]
         self.assertEqual(commands, [
             [pkg_config, "--atleast-version=9.6.2", "proj"],
-            ["cargo", "build", "--release", "--locked", "--package", "createcog", "--package", "cog-analyzer", "--no-default-features"],
+            ["cargo", "build", "--release", "--locked", "--package", "createcog", "--package", "cog-analyzer", "--no-default-features", "--features", "gdal/bindgen"],
             ["cargo-bundle-licenses", "--format", "yaml", "--output", "THIRDPARTY.yml"],
         ])
         for call in run.call_args_list:
