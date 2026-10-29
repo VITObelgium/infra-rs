@@ -42,14 +42,30 @@
             inherit pname version;
             src = ./.;
 
-            cargoLock = {
-              lockFile = ./Cargo.lock;
-              outputHashes = {
-                # gdal-sys shares this Git source and does not need a separate hash.
-                "gdal-0.19.0" = "sha256-VSroO0yEM6vAMqUEbU2hRx4u/bb11JeHzMHDAqOPG1g=";
-                "tiff-0.11.3" = "sha256-lwtmCvF6TgtFKLh6BqArS48OjJoiP20IzmMWzAalrNU=";
-              };
-            };
+            cargoDeps =
+              (pkgs.rustPlatform.importCargoLock.override {
+                fetchgit =
+                  args:
+                  if args.url == "https://github.com/georust/gdal.git" then
+                    # Link to Nix's GDAL, not gdal-src; omit its unused C/C++ submodule.
+                    # An archive also avoids platform-dependent Git checkout hashes.
+                    pkgs.fetchFromGitHub {
+                      owner = "georust";
+                      repo = "gdal";
+                      inherit (args) rev;
+                      hash = args.sha256;
+                    }
+                  else
+                    pkgs.fetchgit args;
+              })
+                {
+                  lockFile = ./Cargo.lock;
+                  outputHashes = {
+                    # gdal-sys shares this Git source and does not need a separate hash.
+                    "gdal-0.19.0" = "sha256-oMiHIi6v5vlVu/gpp5GVK+Y2Rzf9clCG0+OWbHJj9Dc=";
+                    "tiff-0.11.3" = "sha256-lwtmCvF6TgtFKLh6BqArS48OjJoiP20IzmMWzAalrNU=";
+                  };
+                };
 
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = with pkgs; [
