@@ -73,6 +73,7 @@ vector = ["geo/vector-io", "geo/vector-io-csv", "geo/vector-io-xlsx"]
 
 [patch.crates-io]
 # GDAL 3.13 renamed GDT_Byte; use the upstream compatibility fix until released.
+# Remove this patch when gdal-rs supports GDAL 3.13 (release 0.20)
 gdal = { git = "https://github.com/georust/gdal.git", rev = "c0a6266b987a2c2d44aea9956c2cae1ed71445cf" }
 gdal-sys = { git = "https://github.com/georust/gdal.git", rev = "c0a6266b987a2c2d44aea9956c2cae1ed71445cf" }
 # https://github.com/image-rs/image-tiff/issues/253

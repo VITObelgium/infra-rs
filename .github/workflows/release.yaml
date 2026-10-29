@@ -97,6 +97,8 @@ jobs:
         runs-on: windows-2025
 
         steps:
+            - name: Enable Git long paths
+              run: git config --global core.longpaths true
             - uses: actions/checkout@v7
 
             - uses: jdx/mise-action@v5

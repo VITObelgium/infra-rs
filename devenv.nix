@@ -59,6 +59,8 @@ let
       cargoLock = {
         lockFile = ./Cargo.lock;
         outputHashes = {
+          # gdal-sys shares this Git source and does not need a separate hash.
+          "gdal-0.19.0" = "sha256-VSroO0yEM6vAMqUEbU2hRx4u/bb11JeHzMHDAqOPG1g=";
           "tiff-0.11.3" = "sha256-lwtmCvF6TgtFKLh6BqArS48OjJoiP20IzmMWzAalrNU=";
         };
       };
