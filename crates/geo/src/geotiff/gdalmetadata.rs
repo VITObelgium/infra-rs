@@ -166,7 +166,7 @@ pub fn parse_gdal_metadata(xml: &str, band_count: u32) -> crate::Result<GdalMeta
                 stats.valid_pixel_percentage = data.parse::<f64>().unwrap_or_default();
                 has_statistics = true;
             }
-            Some("NAME") if domain == Some("TILING_SCHEME") && data != "GoogleMapsCompatible" => {
+            Some("NAME") if domain == Some("TILING_SCHEME") && !data.eq_ignore_ascii_case("GoogleMapsCompatible") => {
                 return Err(Error::Runtime(format!("Unsupported TILING_SCHEME: {data}")));
             }
             Some("ZOOM_LEVEL") if domain == Some("TILING_SCHEME") => {
