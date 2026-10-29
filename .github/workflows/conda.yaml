@@ -33,6 +33,12 @@ jobs:
                   pixi-version: v0.82.0
                   environments: packaging
 
+            - name: Enable long Git paths on Windows
+              if: runner.os == 'Windows'
+              shell: bash
+              # Cargo uses libgit2 for checkouts, including GDAL's source submodule.
+              run: git config --global core.longpaths true
+
             - name: Build and test conda package
               shell: bash
               run: |
