@@ -35,6 +35,10 @@ def build_environment(source, prefix, build_prefix, windows):
         env["GDAL_LIB_DIR"] = str(library / "lib")
         env["GDAL_INCLUDE_DIR"] = str(library / "include")
         env["GDAL_DYNAMIC"] = "1"
+        # Match gdal-sys's prebuilt Windows bindings: the Rust wrapper assumes
+        # unsigned C enums. MSVC-targeted Clang emits signed enums instead.
+        # This affects header parsing only; Cargo still builds/links with MSVC.
+        env["BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc"] = "--target=x86_64-pc-windows-gnu"
         # Windows PROJ ships proj.lib, but some builds advertise -lproj_9.
         # Keep the file in place so relative pcfiledir-based prefixes remain valid.
         proj_pc = library / "lib" / "pkgconfig" / "proj.pc"

@@ -56,6 +56,10 @@ class BuildEnvironmentTests(unittest.TestCase):
         self.assertEqual(env["GDAL_LIB_DIR"], str(self.library / "lib"))
         self.assertEqual(env["GDAL_INCLUDE_DIR"], str(self.library / "include"))
         self.assertEqual(env["GDAL_DYNAMIC"], "1")
+        self.assertEqual(
+            env["BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc"],
+            "--target=x86_64-pc-windows-gnu",
+        )
         self.assertEqual(env["CARGO_HOME"], str(self.build_prefix / "cargo-home"))
         self.assertEqual(env["LIBCLANG_PATH"], str(self.build_prefix / "Library" / "bin"))
         self.assertEqual(env["CARGO_TARGET_DIR"], str(self.source / "target"))
@@ -65,6 +69,32 @@ class BuildEnvironmentTests(unittest.TestCase):
         self.assertIn("-lproj\n", contents)
         self.assertNotIn("-lproj_9", contents)
         self.assertIn("Requires.private: libtiff-4 libcurl", contents)
+
+    @unittest.skipUnless(shutil.which("clang"), "clang is not installed in the test environment")
+    def test_windows_binding_target_uses_unsigned_32_bit_enums(self):
+        env = self.environment()
+        target = env["BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc"]
+        probe = """
+            enum GDALDataType { GDT_Unknown = 0, GDT_UInt8 = 1 };
+            enum OGRwkbGeometryType { wkbUnknown = 0, wkbPoint25D = 0x80000001 };
+            _Static_assert(_Generic((enum GDALDataType)0, unsigned int: 1, default: 0), "unsigned enum");
+            _Static_assert(sizeof(enum GDALDataType) == 4, "32-bit enum");
+            _Static_assert(_Alignof(enum GDALDataType) == 4, "enum alignment");
+            _Static_assert(sizeof(enum OGRwkbGeometryType) == 4, "32-bit geometry enum");
+            _Static_assert(wkbPoint25D == 2147483649U, "high-bit geometry constant");
+            _Static_assert(sizeof(long) == 4, "Windows long");
+            _Static_assert(sizeof(void *) == 8, "64-bit Windows pointer");
+            #if !defined(_WIN32) || !defined(_WIN64)
+            #error Expected 64-bit Windows headers
+            #endif
+        """
+        subprocess.run(
+            [shutil.which("clang"), "--target=x86_64-pc-windows-msvc", target, "-x", "c", "-fsyntax-only", "-"],
+            input=probe,
+            text=True,
+            check=True,
+            timeout=10,
+        )
 
     def test_target_specific_and_static_overrides_cannot_escape_host_prefix(self):
         overrides = {
@@ -97,6 +127,7 @@ class BuildEnvironmentTests(unittest.TestCase):
         self.assertEqual(env["CARGO_TARGET_AARCH64_APPLE_DARWIN_LINKER"], "conda-cc")
         self.assertEqual(env["LIBCLANG_PATH"], str(self.build_prefix / "lib"))
         self.assertNotIn("GDAL_DYNAMIC", env)
+        self.assertNotIn("BINDGEN_EXTRA_CLANG_ARGS_x86_64_pc_windows_msvc", env)
         self.assertIn("-lproj_9", self.proj_pc.read_text())
 
     def test_preflight_and_cargo_use_the_same_selected_executable(self):
