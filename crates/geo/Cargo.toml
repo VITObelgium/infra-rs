@@ -42,7 +42,7 @@ approx = "0.5"
 arrow = { version = "60", optional = true }
 bon = { version = "3.9", optional = true }
 bytemuck = { version = "1.25" }
-calamine = { version = "0.36", features = ["dates"], optional = true }
+calamine = { version = "0.37", features = ["dates"], optional = true }
 cfg-if = "1.0"
 chrono = { version = "0.4", optional = true }
 crs-definitions = { version = "0.5", optional = true }
