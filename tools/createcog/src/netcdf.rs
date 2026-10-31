@@ -120,7 +120,13 @@ impl NetcdfVrt {
                 flip_rows,
             }
         };
-        self.append_bands(variable, &data_type, &band_metadata(&array), count, &source);
+        let timestamps = if order.len() == 3 {
+            band_timestamps(group, &dims[order[0]])?
+        } else {
+            None
+        }
+        .unwrap_or_else(|| vec![None; count]);
+        self.append_bands(variable, &data_type, &band_metadata(&array), &source, &timestamps);
         Ok(())
     }
 
@@ -347,13 +353,17 @@ impl NetcdfVrt {
         Ok(())
     }
 
-    fn append_bands(&mut self, variable: &str, data_type: &str, metadata: &str, count: usize, source: &BandSource) {
-        for index in 0..count {
+    fn append_bands(&mut self, variable: &str, data_type: &str, metadata: &str, source: &BandSource, timestamps: &[Option<String>]) {
+        for (index, timestamp) in timestamps.iter().enumerate() {
             let (class, source) = source.xml(index);
+            let description = match timestamp {
+                Some(timestamp) => format!("{variable}: {timestamp}"),
+                None => format!("{variable}[{index}]"),
+            };
             self.band_xml.push(format!(
                 "<VRTRasterBand dataType=\"{data_type}\" band=\"1\"{class}>\
-                 <Description>{}[{index}]</Description>{metadata}{source}</VRTRasterBand>",
-                escape_xml(variable)
+                 <Description>{}</Description>{metadata}{source}</VRTRasterBand>",
+                escape_xml(&description)
             ));
         }
     }
@@ -409,6 +419,90 @@ impl NetcdfVrt {
         }
         Ok(())
     }
+}
+
+/// CF time coordinates are offsets from an epoch, not necessarily Unix timestamps.
+fn band_timestamps(group: &Group<'_>, dimension: &Dimension<'_>) -> Result<Option<Vec<Option<String>>>> {
+    let Ok(coordinate) = group.open_md_array(&dimension.name(), Default::default()) else {
+        return Ok(None);
+    };
+    let Some((epoch, seconds_per_unit)) = parse_time_units(&coordinate.unit()) else {
+        return Ok(None);
+    };
+    let calendar = coordinate.attribute("calendar").ok().map(|value| value.read_as_string());
+    if !matches!(calendar.as_deref(), None | Some("standard" | "gregorian" | "proleptic_gregorian")) {
+        log::warn!(
+            "Cannot format NetCDF time coordinate {} with calendar {calendar:?}",
+            dimension.name()
+        );
+        return Ok(None);
+    }
+    if coordinate.num_dimensions() != 1 || coordinate.num_elements() != dimension.size() as u64 {
+        return Ok(None);
+    }
+    let scale = coordinate.attribute("scale_factor").map_or(1.0, |value| value.read_as_f64());
+    let offset = coordinate.attribute("add_offset").map_or(0.0, |value| value.read_as_f64());
+    let nodata = coordinate.no_data_value_as_double();
+    let timestamps = coordinate
+        .read_as::<f64>(vec![0], vec![dimension.size()])?
+        .into_iter()
+        .map(|value| {
+            if nodata == Some(value) {
+                return None;
+            }
+            let seconds = (value * scale + offset) * seconds_per_unit;
+            if !seconds.is_finite() {
+                return None;
+            }
+            let duration = chrono::TimeDelta::try_seconds(seconds.trunc() as i64)?
+                .checked_add(&chrono::TimeDelta::nanoseconds((seconds.fract() * 1e9).round() as i64))?;
+            // Chrono uses a proleptic Gregorian calendar; do not mislabel historical CF dates.
+            let timestamp = epoch.checked_add_signed(duration)?;
+            if calendar.as_deref() != Some("proleptic_gregorian")
+                && (epoch.date_naive() < chrono::NaiveDate::from_ymd_opt(1582, 10, 15)?
+                    || timestamp.date_naive() < chrono::NaiveDate::from_ymd_opt(1582, 10, 15)?)
+            {
+                return None;
+            }
+            Some(timestamp.to_rfc3339_opts(chrono::SecondsFormat::AutoSi, true))
+        })
+        .collect();
+    Ok(Some(timestamps))
+}
+
+fn parse_time_units(units: &str) -> Option<(chrono::DateTime<chrono::Utc>, f64)> {
+    let (unit, epoch) = units.split_once(" since ")?;
+    let seconds = match unit.trim().to_ascii_lowercase().as_str() {
+        "microsecond" | "microseconds" | "us" => 0.000001,
+        "millisecond" | "milliseconds" | "ms" => 0.001,
+        "second" | "seconds" | "sec" | "s" => 1.0,
+        "minute" | "minutes" | "min" => 60.0,
+        "hour" | "hours" | "hr" | "h" => 3600.0,
+        "day" | "days" | "d" => 86400.0,
+        _ => return None,
+    };
+    let epoch = epoch.trim();
+    if let Ok(date) = chrono::DateTime::parse_from_rfc3339(epoch) {
+        return Some((date.with_timezone(&chrono::Utc), seconds));
+    }
+    for format in ["%Y-%m-%d %H:%M:%S%.f %:z", "%Y-%m-%d %H:%M:%S%.f%:z"] {
+        if let Ok(date) = chrono::DateTime::parse_from_str(epoch, format) {
+            return Some((date.with_timezone(&chrono::Utc), seconds));
+        }
+    }
+    let epoch = epoch.trim_end_matches("UTC").trim_end_matches('Z').trim();
+    for format in ["%Y-%m-%d %H:%M:%S%.f", "%Y-%m-%dT%H:%M:%S%.f", "%Y-%m-%d %H:%M"] {
+        if let Ok(date) = chrono::NaiveDateTime::parse_from_str(epoch, format) {
+            return Some((date.and_utc(), seconds));
+        }
+    }
+    Some((
+        chrono::NaiveDate::parse_from_str(epoch, "%Y-%m-%d")
+            .ok()?
+            .and_hms_opt(0, 0, 0)?
+            .and_utc(),
+        seconds,
+    ))
 }
 
 fn band_metadata(array: &MDArray<'_>) -> String {

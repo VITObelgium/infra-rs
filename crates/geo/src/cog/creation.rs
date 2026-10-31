@@ -1,5 +1,7 @@
 use std::path::{Path, PathBuf};
 
+use gdal::Metadata;
+
 use crate::{
     ArrayDataType, Error, GeoReference, Result, Tile, ZoomLevelStrategy, crs,
     raster::{self, Compression},
@@ -358,6 +360,7 @@ fn create_vrt_with_nodata(src_ds: gdal::Dataset, band_nr: usize) -> Result<gdal:
 
 fn create_single_band_vrt(src_ds: gdal::Dataset, band_nr: usize) -> Result<gdal::Dataset> {
     let band = src_ds.rasterband(band_nr)?;
+    let description = band.description()?;
     let mut options = vec!["-b".to_string(), band_nr.to_string()];
     if band.no_data_value().is_none() {
         let nodata_value = ArrayDataType::try_from(band.band_type())?.default_nodata_value();
@@ -366,7 +369,9 @@ fn create_single_band_vrt(src_ds: gdal::Dataset, band_nr: usize) -> Result<gdal:
 
     let datasets = vec![src_ds];
     let vrt_options = gdal::programs::raster::BuildVRTOptions::new(options)?;
-    Ok(gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?)
+    let vrt = gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?;
+    vrt.rasterband(1)?.set_description(&description)?;
+    Ok(vrt)
 }
 
 pub(super) fn create_cog_tiles_for_band(

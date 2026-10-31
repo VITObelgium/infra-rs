@@ -216,6 +216,10 @@ fn create_time_series_netcdf(path: &Path, bases: &[i32]) -> TestResult {
 }
 
 fn create_time_series_netcdf_with_row_order(path: &Path, bases: &[i32], bottom_up: bool) -> TestResult {
+    create_time_series_netcdf_with_metadata(path, bases, bottom_up, &[])
+}
+
+fn create_time_series_netcdf_with_metadata(path: &Path, bases: &[i32], bottom_up: bool, metadata: &[(&str, &str)]) -> TestResult {
     let mut source = DriverManager::get_driver_by_name("MEM")?.create_with_band_type::<i32, _>("", 5, 4, bases.len())?;
     write_sample_bands(&mut source, bases)?;
     // GDAL's NetCDF CreateCopy maps these bands onto one 3D variable, Band1(time,y,x).
@@ -226,6 +230,9 @@ fn create_time_series_netcdf_with_row_order(path: &Path, bases: &[i32], bottom_u
     source.set_metadata_item("NETCDF_DIM_time_VALUES", &format!("{{{times}}}"), "")?;
     source.set_metadata_item("time#units", "hours since 2024-01-01 00:00:00", "")?;
     source.set_metadata_item("time#standard_name", "time", "")?;
+    for &(key, value) in metadata {
+        source.set_metadata_item(key, value, "")?;
+    }
     let driver = DriverManager::get_driver_by_name("netCDF")?;
     let options = RasterCreationOptions::from_iter([if bottom_up { "WRITE_BOTTOMUP=YES" } else { "WRITE_BOTTOMUP=NO" }]);
     source.create_copy(&driver, path, &options)?.close()?;
@@ -349,7 +356,61 @@ fn generated_netcdf_time_slices_preserve_raw_samples() -> TestResult {
     let path = directory.path().join("series.tif");
     let output = run_createcog_with_input(&input, &path, &["--variable", "Band1", "--dimensions", "time,y,x"]);
     assert!(output.status.success(), "{}", command_diagnostics(&output));
-    assert_generated_cog(&path, &[1000, 2000, 3000], "generated time slices")
+    assert_generated_cog(&path, &[1000, 2000, 3000], "generated time slices")?;
+    let dataset = Dataset::open(&path)?;
+    for (index, hour) in [2, 1, 0].into_iter().enumerate() {
+        assert_eq!(
+            dataset.rasterband(index + 1)?.description()?,
+            format!("Band1: 2024-01-01T{hour:02}:00:00Z")
+        );
+    }
+    Ok(())
+}
+
+#[test]
+fn netcdf_band_descriptions_decode_time_units_and_preserve_fallback_labels() -> TestResult {
+    let cases: [(&str, &[(&str, &str)], &[&str]); 7] = [
+        (
+            "fractional_negative_days",
+            &[("time#units", "days since 2024-01-01"), ("NETCDF_DIM_time_VALUES", "{-0.5,0.25}")],
+            &["Band1: 2023-12-31T12:00:00Z", "Band1: 2024-01-01T06:00:00Z"],
+        ),
+        (
+            "milliseconds",
+            &[
+                ("time#units", "milliseconds since 2024-01-01T00:00:00Z"),
+                ("NETCDF_DIM_time_VALUES", "{-500,1250}"),
+            ],
+            &["Band1: 2023-12-31T23:59:59.500Z", "Band1: 2024-01-01T00:00:01.250Z"],
+        ),
+        (
+            "timezone",
+            &[("time#units", "hours since 2024-01-01 02:00:00 +02:00")],
+            &["Band1: 2024-01-01T01:00:00Z", "Band1: 2024-01-01T00:00:00Z"],
+        ),
+        ("unsupported_calendar", &[("time#calendar", "360_day")], &["Band1[0]", "Band1[1]"]),
+        (
+            "unsupported_units",
+            &[("time#units", "months since 2024-01-01")],
+            &["Band1[0]", "Band1[1]"],
+        ),
+        ("non_time_dimension", &[("time#units", "metres")], &["Band1[0]", "Band1[1]"]),
+        ("invalid_epoch", &[("time#units", "hours since invalid")], &["Band1[0]", "Band1[1]"]),
+    ];
+    for (case, metadata, descriptions) in cases {
+        let directory = tempfile::tempdir()?;
+        let input = directory.path().join("series.nc");
+        create_time_series_netcdf_with_metadata(&input, &[1000, 2000], false, metadata)?;
+        let path = directory.path().join("series.tif");
+        let output = run_createcog_with_input(&input, &path, &["--variable", "Band1", "--multi-band"]);
+        assert!(output.status.success(), "{case}: {}", command_diagnostics(&output));
+        let dataset = Dataset::open(&path)?;
+        assert_cog_layout(&dataset, &path)?;
+        for (index, expected) in descriptions.iter().enumerate() {
+            assert_eq!(dataset.rasterband(index + 1)?.description()?, *expected, "{case}, band {index}");
+        }
+    }
+    Ok(())
 }
 
 #[test]

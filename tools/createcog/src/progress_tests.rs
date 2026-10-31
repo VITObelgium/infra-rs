@@ -52,16 +52,14 @@ fn assembly_progress_is_monotonic_and_ignores_nonfinite_updates() {
 }
 
 #[test]
-fn startup_message_does_not_advance_progress() {
+fn starting_reporter_does_not_advance_progress() {
     let reporter = ProgressReporter::start(true).unwrap();
-    reporter.phase("Starting conversion");
     assert_eq!(position(&reporter), 0);
 }
 
 #[test]
 fn disabled_progress_remains_hidden_and_unchanged() {
     let reporter = ProgressReporter::start(false).unwrap();
-    reporter.phase("Starting conversion");
     reporter.bands(1.0);
     reporter.assembly(1.0);
     reporter.finish();

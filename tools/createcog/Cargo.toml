@@ -10,6 +10,7 @@ dependencies = ["gdal[core,netcdf]"]
 [dependencies]
 anyhow = "1.0"
 bytemuck = "1.25"
+chrono = "0.4"
 clap = { version = "4.6", features = ["derive"] }
 env_logger = { version = "0.11" }
 gdal = "0.19"

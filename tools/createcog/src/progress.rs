@@ -42,12 +42,6 @@ impl ProgressReporter {
         })
     }
 
-    pub(crate) fn phase(&self, message: impl Into<String>) {
-        if self.enabled && !self.display.lock().terminal {
-            log_status(&message.into());
-        }
-    }
-
     pub(crate) fn bands(&self, fraction: f64) {
         if fraction.is_finite() {
             self.update(fraction.clamp(0.0, 1.0) * BAND_UNITS as f64);

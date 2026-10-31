@@ -192,8 +192,8 @@ enum LayoutError {
 }
 
 /// Merge compatible staged single-band COGs into one tile-interleaved multiband
-/// COG without decoding or recompressing tiles, reporting progress as a fraction
-/// from 0.0 to 1.0 based on copied tiles.
+/// COG without decoding or recompressing tiles, reporting 0.0 at the start and
+/// 1.0 after successful completion.
 /// Inputs must be little-endian, tiled, single-band COGs with matching image and
 /// overview layouts, data types, compression settings, georeferencing, and
 /// dataset-level metadata. Unsupported pointer-bearing and image-layout tags are
@@ -216,7 +216,9 @@ pub fn assemble_band_cogs(inputs: &[PathBuf], output: &Path, progress: &mut dyn 
     let sources = read_sources(inputs)?;
     validate_compatibility(&sources)?;
     let plan = assembly_layout(&sources)?;
-    write_output(&sources, output, &plan, progress)
+    write_output(&sources, output, &plan)?;
+    progress(1.0);
+    Ok(())
 }
 
 fn read_sources(inputs: &[PathBuf]) -> Result<Vec<SourceCog>> {
@@ -743,7 +745,7 @@ fn plan_layout(sources: &[SourceCog], output_ifds: Vec<OutputIfd>, variant: Tiff
     })
 }
 
-fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan, progress: &mut dyn FnMut(f64)) -> Result<()> {
+fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan) -> Result<()> {
     let parent = output
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
@@ -787,7 +789,7 @@ fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan, progres
             }
         }
 
-        write_payloads(&mut writer, sources, plan, &mut position, progress)?;
+        write_payloads(&mut writer, sources, plan, &mut position)?;
 
         if plan.blocks.is_empty() {
             pad_to(&mut writer, plan.final_size, &mut position)?;
@@ -803,27 +805,16 @@ fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan, progres
     }
     temporary.as_file().sync_all()?;
     temporary.persist(output).map_err(|error| Error::IOError(error.error))?;
-    progress(1.0);
     Ok(())
 }
 
-fn write_payloads(
-    writer: &mut impl Write,
-    sources: &[SourceCog],
-    plan: &LayoutPlan,
-    position: &mut u64,
-    progress: &mut dyn FnMut(f64),
-) -> Result<()> {
+fn write_payloads(writer: &mut impl Write, sources: &[SourceCog], plan: &LayoutPlan, position: &mut u64) -> Result<()> {
     let mut source_files = VecDeque::new();
     let mut payload = Vec::new();
 
-    for (index, block) in plan.blocks.iter().enumerate() {
+    for block in &plan.blocks {
         let source = source_file(&mut source_files, sources, block.source_index)?;
         copy_payload(writer, block, source, &mut payload, position)?;
-        let completed = index + 1;
-        if completed % 128 == 0 && completed < plan.blocks.len() {
-            progress(completed as f64 / plan.blocks.len() as f64);
-        }
     }
     Ok(())
 }
@@ -1162,7 +1153,7 @@ mod layout_tests {
         }
         let directory = tempfile::tempdir()?;
         let output = directory.path().join("big.tif");
-        write_output(&sources, &output, &plan, &mut |_| {})?;
+        write_output(&sources, &output, &plan)?;
         let metadata = GeoTiffMetadata::from_file(&output)?;
         assert_eq!(metadata.overviews.len(), sources[0].levels().len());
         for (actual, expected) in metadata.overviews.iter().zip(sources[0].levels()) {
@@ -1219,7 +1210,7 @@ mod layout_tests {
                 assert!(plan.blocks.is_empty());
                 let directory = tempfile::tempdir()?;
                 let output = directory.path().join("sparse.tif");
-                write_output(&sources, &output, &plan, &mut |_| {})?;
+                write_output(&sources, &output, &plan)?;
                 assert_eq!(std::fs::metadata(&output)?.len(), plan.final_size);
                 let metadata = GeoTiffMetadata::from_file(&output)?;
                 assert!(metadata.overviews[0].chunk_locations[0].is_sparse());
@@ -1288,7 +1279,7 @@ mod layout_tests {
             let sources = [source];
             let plan = layout(&sources, TiffVariant::Classic)?;
             let output = directory.path().join("framed.tif");
-            write_output(&sources, &output, &plan, &mut |_| {})?;
+            write_output(&sources, &output, &plan)?;
             let mut file = File::open(output)?;
             file.seek(SeekFrom::Start(plan.blocks[0].payload_offset - 4))?;
             let mut framed = vec![0; bytes.len() + 8];
@@ -1314,9 +1305,7 @@ mod layout_tests {
         let plan = layout(&sources, TiffVariant::Classic)?;
         let output = directory.path().join("existing.tif");
         std::fs::write(&output, b"existing destination")?;
-        let mut fractions = Vec::new();
-        assert!(write_output(&sources, &output, &plan, &mut |fraction| fractions.push(fraction)).is_err());
-        assert!(!fractions.contains(&1.0));
+        assert!(write_output(&sources, &output, &plan).is_err());
         assert_eq!(std::fs::read(&output)?, b"existing destination");
         assert_eq!(std::fs::read_dir(directory.path())?.count(), 2);
         Ok(())
@@ -1327,7 +1316,7 @@ mod layout_tests {
         let sources = [source_fixture(one_tile)?];
         let directory = tempfile::tempdir()?;
         let input = directory.path().join("input.tif");
-        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?, &mut |_| {})?;
+        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?)?;
         let output = directory.path().join("destination-directory");
         std::fs::create_dir(&output)?;
         let mut fractions = Vec::new();
@@ -1339,7 +1328,7 @@ mod layout_tests {
     }
 
     #[test]
-    fn assembly_progress_reports_throttled_tile_copy_fractions() -> Result<()> {
+    fn writes_all_tile_payloads_without_progress_callbacks() -> Result<()> {
         let source = source_fixture(one_tile)?;
         let sources = (0..257)
             .map(|_| SourceCog {
@@ -1351,9 +1340,8 @@ mod layout_tests {
         let input = directory.path().join("input.tif");
         let plan = layout(&sources, TiffVariant::Classic)?;
         assert_eq!(plan.blocks.len(), 257);
-        let mut fractions = Vec::new();
-        write_output(&sources, &input, &plan, &mut |fraction| fractions.push(fraction))?;
-        assert_eq!(fractions, [128.0 / 257.0, 256.0 / 257.0, 1.0]);
+        write_output(&sources, &input, &plan)?;
+        assert_eq!(std::fs::metadata(&input)?.len(), plan.final_size);
         Ok(())
     }
 
@@ -1367,7 +1355,7 @@ mod layout_tests {
         })?];
         let directory = tempfile::tempdir()?;
         let input = directory.path().join("non-xyz.tif");
-        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?, &mut |_| {})?;
+        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?)?;
         let output = directory.path().join("assembled.tif");
         assemble_band_cogs(&[input], &output, &mut |_| {})?;
         let metadata = GeoTiffMetadata::from_file(&output)?;
