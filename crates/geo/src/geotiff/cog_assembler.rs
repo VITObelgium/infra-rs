@@ -1216,7 +1216,7 @@ mod layout_tests {
                 assert!(metadata.overviews[0].chunk_locations[0].is_sparse());
                 let assembled = directory.path().join("assembled-sparse.tif");
                 let mut fractions = Vec::new();
-                assemble_band_cogs(&[output.clone()], &assembled, &mut |fraction| {
+                assemble_band_cogs(std::slice::from_ref(&output), &assembled, &mut |fraction| {
                     if fraction == 1.0 {
                         assert!(GeoTiffMetadata::from_file(&assembled).is_ok());
                     }

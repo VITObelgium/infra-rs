@@ -121,7 +121,13 @@ fn create_gdal_warp_args_for_band(input: &Path, opts: CogCreationOptions, band_i
     let mut overview_option = "IGNORE_EXISTING";
 
     let mut options = cog_creation_options(&opts);
-    options.extend(["-co".to_string(), "TILING_SCHEME=GoogleMapsCompatible".to_string()]);
+    options.extend([
+        "-co".to_string(),
+        "TILING_SCHEME=GoogleMapsCompatible".to_string(),
+        // Prevent GDAL's mosaic shortcut from dropping source VRT metadata.
+        "-t_srs".to_string(),
+        "EPSG:3857".to_string(),
+    ]);
 
     match opts.zoom_level_strategy {
         ZoomLevelStrategy::Manual(zoom) => {
@@ -328,7 +334,7 @@ pub fn create_multiband_cog_tiles(
 
     let vrt_options = gdal::programs::raster::BuildVRTOptions::new(["-separate", "-strict"])?;
     let src_ds = gdal::programs::raster::build_vrt(None, &datasets, Some(vrt_options))?;
-
+    let src_ds = with_data_bounds(&src_ds, None)?;
     let options = create_gdal_warp_args(&file_paths[0], opts)?;
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], progress)?;
 
@@ -337,6 +343,49 @@ pub fn create_multiband_cog_tiles(
     }
 
     Ok(())
+}
+
+fn with_data_bounds(source: &gdal::Dataset, source_srs: Option<&str>) -> Result<gdal::Dataset> {
+    use gdal::spatial_ref::{AxisMappingStrategy, CoordTransform, SpatialRef};
+
+    let mut source_ref = match source_srs {
+        Some(definition) => SpatialRef::from_definition(definition)?,
+        None => source.spatial_ref()?,
+    };
+    source_ref.set_axis_mapping_strategy(AxisMappingStrategy::TraditionalGisOrder);
+    let mut target_ref = SpatialRef::from_epsg(4326)?;
+    target_ref.set_axis_mapping_strategy(AxisMappingStrategy::TraditionalGisOrder);
+    let transform = CoordTransform::new(&source_ref, &target_ref)?;
+    let gt = source.geo_transform()?;
+    let (width, height) = source.raster_size();
+    let mut x = Vec::new();
+    let mut y = Vec::new();
+    // Sample the actual raster perimeter, including rotation and curved projected edges.
+    for step in 0..=22 {
+        let fraction = f64::from(step) / 22.0;
+        for (col, row) in [
+            (fraction * width as f64, 0.0),
+            (fraction * width as f64, height as f64),
+            (0.0, fraction * height as f64),
+            (width as f64, fraction * height as f64),
+        ] {
+            x.push(gt[0] + col * gt[1] + row * gt[2]);
+            y.push(gt[3] + col * gt[4] + row * gt[5]);
+        }
+    }
+    transform.transform_coords(&mut x, &mut y, &mut [])?;
+    if x.iter().chain(&y).any(|value| !value.is_finite()) {
+        return Err(Error::Runtime("Input raster extent cannot be transformed to EPSG:4326".into()));
+    }
+    let west = x.iter().copied().fold(f64::INFINITY, f64::min);
+    let east = x.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+    let south = y.iter().copied().fold(f64::INFINITY, f64::min);
+    let north = y.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+
+    // Set metadata before writing the COG, without modifying the input or the finished COG layout.
+    let mut vrt = raster::algo::gdal::translate(source, Path::new(""), &["-of".into(), "VRT".into()])?;
+    vrt.set_metadata_item("data_bounds", &format!("[{west},{south},{east},{north}]"), "")?;
+    Ok(vrt)
 }
 
 /// Creates a VRT wrapper around a source dataset that adds a nodata value if it doesn't have one already.
@@ -388,6 +437,7 @@ pub(super) fn create_cog_tiles_for_band(
 
     let src_ds = raster::formats::gdal::open_dataset_read_only(input)?;
     let src_ds = create_single_band_vrt(src_ds, band_index)?;
+    let src_ds = with_data_bounds(&src_ds, source_srs)?;
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], None)?;
     if opts.scale {
         scale_cog(output, opts)?;
@@ -402,6 +452,7 @@ pub fn create_cog_tiles(input: &Path, output: &Path, opts: CogCreationOptions) -
     // If the source doesn't have a nodata value, create a VRT wrapper that adds it
     // This way we don't modify the read-only source dataset.
     let src_ds = create_vrt_with_nodata(src_ds, 1)?;
+    let src_ds = with_data_bounds(&src_ds, None)?;
 
     raster::algo::gdal::warp_to_disk_cli(&src_ds, output, &options, &vec![("INIT_DEST".into(), "NO_DATA".into())], None)?;
     if opts.scale {
@@ -422,6 +473,79 @@ mod tests {
     use approx::assert_relative_eq;
 
     use super::*;
+
+    #[test]
+    fn created_cogs_should_include_input_extent_in_wgs84() -> Result<()> {
+        use crate::{CellSize, Point, RasterSize, geotiff::GeoTiffMetadata};
+
+        let tmp = tempfile::tempdir()?;
+        let input = tmp.path().join("input.tif");
+        let georef = GeoReference::with_top_left_origin(
+            "EPSG:3857",
+            RasterSize::square(3),
+            Point::new(0.0, 111_325.142_866_385_1),
+            CellSize::square(111_319.490_793_273_57 / 3.0),
+            Some(255.0),
+        );
+        {
+            let mut dataset = raster::formats::gdal::create_in_memory_dataset_with_data(&georef, &[1_u8, 2, 3, 4, 5, 6, 7, 8, 9])?;
+            dataset.set_metadata_item("data_bounds", "[-180,-90,180,90]", "")?;
+            raster::algo::gdal::translate(&dataset, &input, &["-of".into(), "GTiff".into()])?;
+        }
+        let expected_south = 0.000_050_773_436_630_05;
+        for scale in [false, true] {
+            let opts = CogCreationOptions {
+                tile_size: 256,
+                zoom_level_strategy: ZoomLevelStrategy::Manual(4),
+                scale,
+                ..Default::default()
+            };
+            for pipeline in ["single", "band", "multiband", "assembled"] {
+                let output = tmp.path().join(format!("{pipeline}-{scale}.tif"));
+                match pipeline {
+                    "single" => create_cog_tiles(&input, &output, opts)?,
+                    "band" => create_cog_tiles_for_band(&input, &output, opts, 1, Some("EPSG:3857"))?,
+                    "multiband" => create_multiband_cog_tiles(&input.to_string_lossy(), &output, opts, None)?,
+                    "assembled" => {
+                        let (_directory, cogs) = super::super::create_temporary_band_cogs(&input.to_string_lossy(), opts, None, None)?;
+                        crate::geotiff::assemble_band_cogs(&[cogs[0].clone(), cogs[0].clone()], &output, &mut |_| {})?;
+                    }
+                    _ => unreachable!(),
+                }
+
+                let bounds = GeoTiffMetadata::from_file(&output)?
+                    .data_bounds
+                    .unwrap_or_else(|| panic!("data_bounds must be embedded in {pipeline} COG (scale={scale})"));
+                for (actual, expected) in bounds.into_iter().zip([0.0, expected_south, 1.0, 1.0]) {
+                    assert_relative_eq!(actual, expected, epsilon = 1e-10);
+                }
+            }
+        }
+        assert_eq!(
+            raster::formats::gdal::open_dataset_read_only(&input)?
+                .metadata_item("data_bounds", "")
+                .as_deref(),
+            Some("[-180,-90,180,90]")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn data_bounds_should_use_source_srs_override() -> Result<()> {
+        use crate::{CellSize, Point, RasterSize};
+
+        let georef = GeoReference::with_top_left_origin(
+            "EPSG:3857",
+            RasterSize::square(2),
+            Point::new(4.0, 52.0),
+            CellSize::square(0.5),
+            None::<f64>,
+        );
+        let source = raster::formats::gdal::create_in_memory_dataset_with_data(&georef, &[1_u8; 4])?;
+        let vrt = with_data_bounds(&source, Some("EPSG:4326"))?;
+        assert_eq!(vrt.metadata_item("data_bounds", "").as_deref(), Some("[4,51,5,52]"));
+        Ok(())
+    }
 
     #[test]
     fn cog_creation_256px() -> Result<()> {
@@ -507,9 +631,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(10, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(10, meta.chunk_row_length()),
+                max_relative = 1e-12
             );
             assert_eq!(meta.overviews.len(), 5); // 5 levels from 6 to 10
             assert_eq!(meta.chunk_row_length(), 256);
@@ -533,9 +658,10 @@ mod tests {
             let cog = GeoTiffReader::from_file(&output)?;
             let meta = cog.metadata();
 
-            assert_eq!(
+            assert_relative_eq!(
                 meta.geo_reference.cell_size_x(),
-                Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length())
+                Tile::pixel_size_at_zoom_level(9, meta.chunk_row_length()),
+                max_relative = 1e-12
             );
             assert_eq!(meta.overviews.len(), 3); // 5 levels from 7 to 9
             assert_eq!(meta.chunk_row_length(), 256);
