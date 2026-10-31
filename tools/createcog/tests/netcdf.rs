@@ -212,6 +212,10 @@ fn create_sample_raster(path: &Path, driver: &str, bases: &[i32]) -> TestResult 
 }
 
 fn create_time_series_netcdf(path: &Path, bases: &[i32]) -> TestResult {
+    create_time_series_netcdf_with_row_order(path, bases, false)
+}
+
+fn create_time_series_netcdf_with_row_order(path: &Path, bases: &[i32], bottom_up: bool) -> TestResult {
     let mut source = DriverManager::get_driver_by_name("MEM")?.create_with_band_type::<i32, _>("", 5, 4, bases.len())?;
     write_sample_bands(&mut source, bases)?;
     // GDAL's NetCDF CreateCopy maps these bands onto one 3D variable, Band1(time,y,x).
@@ -223,7 +227,7 @@ fn create_time_series_netcdf(path: &Path, bases: &[i32]) -> TestResult {
     source.set_metadata_item("time#units", "hours since 2024-01-01 00:00:00", "")?;
     source.set_metadata_item("time#standard_name", "time", "")?;
     let driver = DriverManager::get_driver_by_name("netCDF")?;
-    let options = RasterCreationOptions::from_iter(["WRITE_BOTTOMUP=NO"]);
+    let options = RasterCreationOptions::from_iter([if bottom_up { "WRITE_BOTTOMUP=YES" } else { "WRITE_BOTTOMUP=NO" }]);
     source.create_copy(&driver, path, &options)?.close()?;
     Ok(())
 }
@@ -346,6 +350,18 @@ fn generated_netcdf_time_slices_preserve_raw_samples() -> TestResult {
     let output = run_createcog_with_input(&input, &path, &["--variable", "Band1", "--dimensions", "time,y,x"]);
     assert!(output.status.success(), "{}", command_diagnostics(&output));
     assert_generated_cog(&path, &[1000, 2000, 3000], "generated time slices")
+}
+
+#[test]
+fn bottom_up_netcdf_time_slices_are_flipped_north_up_for_multiband_cogs() -> TestResult {
+    let directory = tempfile::tempdir()?;
+    let input = directory.path().join("series.nc");
+    create_time_series_netcdf_with_row_order(&input, &[1000, 2000, 3000], true)?;
+    let path = directory.path().join("series.tif");
+    // gdalbuildvrt -separate rejects a positive NS resolution, so the rows must be reversed.
+    let output = run_createcog_with_input(&input, &path, &["--variable", "Band1", "--dimensions", "time,y,x", "--multi-band"]);
+    assert!(output.status.success(), "{}", command_diagnostics(&output));
+    assert_generated_cog(&path, &[1000, 2000, 3000], "bottom-up time slices")
 }
 
 #[test]

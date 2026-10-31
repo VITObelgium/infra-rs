@@ -7,6 +7,7 @@ use gdal::{
 };
 
 use crate::input::PreparedInput;
+use crate::netcdf_cache;
 
 /// Expose named `NetCDF` dimensions as a lazy raster view, without copying the cube.
 pub fn prepare_input(paths: &[PathBuf], variables: Vec<String>, dimensions: &[String], source_srs: Option<&str>) -> Result<PreparedInput> {
@@ -54,9 +55,18 @@ fn validate_dimensions(dimensions: &[String]) -> Result<()> {
 }
 
 fn build_vrt(paths: &[PathBuf], mut variables: Vec<String>, dimensions: &[String], source_srs: Option<&str>) -> Result<NetcdfVrt> {
-    let mut vrt = NetcdfVrt::default();
-
+    let mut vrt = NetcdfVrt {
+        directory: Some(tempfile::tempdir()?),
+        ..Default::default()
+    };
     for path in paths {
+        vrt.append_file(path, &mut variables, dimensions, source_srs)?;
+    }
+    Ok(vrt)
+}
+
+impl NetcdfVrt {
+    fn append_file(&mut self, path: &Path, variables: &mut Vec<String>, dimensions: &[String], source_srs: Option<&str>) -> Result<()> {
         let dataset = Dataset::open_ex(
             path,
             DatasetOptions {
@@ -69,27 +79,84 @@ fn build_vrt(paths: &[PathBuf], mut variables: Vec<String>, dimensions: &[String
 
         let group = dataset.root_group()?;
         if variables.is_empty() {
-            variables = select_variables(&group, dimensions)?;
+            *variables = select_variables(&group, dimensions)?;
         }
 
         let path = path.canonicalize()?;
         let filename = escape_xml(path.to_str().context("NetCDF input path is not valid UTF-8")?);
-        for variable in &variables {
-            let array = group
-                .open_md_array(variable, Default::default())
-                .with_context(|| format!("Cannot open NetCDF variable {variable} in {}", path.display()))?;
-            ensure!(array.datatype().class().is_numeric(), "NetCDF variable {variable} must be numeric");
-            let dims = array.dimensions()?;
-            let order = resolve_dimension_indices(variable, &dims, dimensions)?;
-            let grid = Grid::from_variable(&group, &array, variable, &dims, &order, source_srs)?;
-            vrt.check_grid(grid, &path)?;
-
-            let data_type = gdal::raster::GdalDataType::try_from(array.datatype().numeric_datatype())?.name();
-            vrt.check_sample_encoding(&data_type, array.no_data_value_as_double(), &path)?;
-            vrt.append_bands(&array, variable, &filename, &data_type, &dims, &order);
+        for variable in variables.iter() {
+            self.append_variable(&group, variable, &filename, &path, dimensions, source_srs)?;
         }
+        Ok(())
     }
-    Ok(vrt)
+
+    fn append_variable(
+        &mut self,
+        group: &Group<'_>,
+        variable: &str,
+        filename: &str,
+        path: &Path,
+        dimensions: &[String],
+        source_srs: Option<&str>,
+    ) -> Result<()> {
+        let array = numeric_array(group, variable, path)?;
+        let dims = array.dimensions()?;
+        let order = resolve_dimension_indices(variable, &dims, dimensions)?;
+        let grid = Grid::from_variable(group, &array, variable, &dims, &order, source_srs)?;
+        let flip_rows = grid.flip_rows;
+        self.check_grid(grid, path)?;
+
+        let data_type = gdal::raster::GdalDataType::try_from(array.datatype().numeric_datatype())?.name();
+        self.check_sample_encoding(&data_type, array.no_data_value_as_double(), path)?;
+        let count = order[..order.len() - 2].iter().map(|&axis| dims[axis].size()).product::<usize>();
+        let source = if count > 1 {
+            self.cache_band_source(&array, path, variable, &dims, &order, flip_rows)?
+        } else {
+            BandSource::Array {
+                filename: filename.to_owned(),
+                name: escape_xml(&format!("/{}", variable.trim_start_matches('/'))),
+                transpose: order.iter().map(usize::to_string).collect::<Vec<_>>().join(","),
+                dimensions: order.len(),
+                flip_rows,
+            }
+        };
+        self.append_bands(variable, &data_type, &band_metadata(&array), count, &source);
+        Ok(())
+    }
+
+    fn cache_band_source(
+        &self,
+        array: &MDArray<'_>,
+        path: &Path,
+        variable: &str,
+        dims: &[Dimension<'_>],
+        order: &[usize],
+        flip_rows: bool,
+    ) -> Result<BandSource> {
+        let directory = self.directory.as_ref().context("Missing NetCDF staging directory")?;
+        let cached = directory.path().join(format!("array-{:08}.raw", self.band_xml.len()));
+        netcdf_cache::stage(array, path, variable, &cached, order, flip_rows)?;
+        let bytes = gdal::raster::GdalDataType::try_from(array.datatype().numeric_datatype())?.bytes() as usize;
+        Ok(BandSource::Raw {
+            filename: escape_xml(
+                cached
+                    .file_name()
+                    .and_then(|name| name.to_str())
+                    .context("NetCDF cache name is not UTF-8")?,
+            ),
+            width: dims[order[2]].size(),
+            height: dims[order[1]].size(),
+            bytes,
+        })
+    }
+}
+
+fn numeric_array<'a>(group: &'a Group<'_>, variable: &str, path: &Path) -> Result<MDArray<'a>> {
+    let array = group
+        .open_md_array(variable, Default::default())
+        .with_context(|| format!("Cannot open NetCDF variable {variable} in {}", path.display()))?;
+    ensure!(array.datatype().class().is_numeric(), "NetCDF variable {variable} must be numeric");
+    Ok(array)
 }
 
 fn select_variables(group: &Group<'_>, dimensions: &[String]) -> Result<Vec<String>> {
@@ -141,8 +208,11 @@ fn resolve_dimension_indices(variable: &str, dims: &[Dimension<'_>], dimensions:
 struct Grid {
     width: usize,
     height: usize,
+    /// Always north-up: GDAL tooling (e.g. `gdalbuildvrt`) rejects a positive NS resolution.
     transform: [f64; 6],
     srs: String,
+    /// Whether the stored rows run south to north and must be reversed to match `transform`.
+    flip_rows: bool,
 }
 
 impl Grid {
@@ -157,13 +227,19 @@ impl Grid {
         let y = &dims[order[order.len() - 2]];
         let x = &dims[order[order.len() - 1]];
         let (x_origin, x_step) = coordinate_grid(group, &x.name(), x.size())?;
-        let (y_origin, y_step) = coordinate_grid(group, &y.name(), y.size())?;
+        let (mut y_origin, mut y_step) = coordinate_grid(group, &y.name(), y.size())?;
         let srs = variable_srs(array, variable, source_srs)?;
+        let flip_rows = y_step > 0.0;
+        if flip_rows {
+            y_origin += y_step * y.size() as f64;
+            y_step = -y_step;
+        }
         Ok(Self {
             width: x.size(),
             height: y.size(),
             transform: [x_origin, x_step, 0.0, y_origin, 0.0, y_step],
             srs,
+            flip_rows,
         })
     }
 }
@@ -180,10 +256,67 @@ fn variable_srs(array: &MDArray<'_>, variable: &str, source_srs: Option<&str>) -
 
 #[derive(Default)]
 struct NetcdfVrt {
-    band_xml: String,
-    band_index: usize,
+    band_xml: Vec<String>,
     grid: Option<Grid>,
     sample_encoding: Option<(String, Option<String>)>,
+    directory: Option<tempfile::TempDir>,
+}
+
+enum BandSource {
+    Array {
+        filename: String,
+        name: String,
+        transpose: String,
+        dimensions: usize,
+        flip_rows: bool,
+    },
+    Raw {
+        filename: String,
+        width: usize,
+        height: usize,
+        bytes: usize,
+    },
+}
+
+impl BandSource {
+    fn xml(&self, index: usize) -> (&'static str, String) {
+        match self {
+            Self::Array {
+                filename,
+                name,
+                transpose,
+                dimensions,
+                flip_rows,
+            } => {
+                let view = slice_view(*dimensions, index, *flip_rows);
+                (
+                    "",
+                    format!(
+                        "<ArraySource><DerivedArray><SingleSourceArray>\
+                    <SourceFilename relativeToVRT=\"0\">{filename}</SourceFilename><SourceArray>{name}</SourceArray>\
+                    </SingleSourceArray><Step><Transpose newOrder=\"{transpose}\"/></Step>{view}</DerivedArray></ArraySource>"
+                    ),
+                )
+            }
+            Self::Raw {
+                filename,
+                width,
+                height,
+                bytes,
+            } => {
+                let offset = index as u64 * *width as u64 * *height as u64 * *bytes as u64;
+                let row_bytes = *width as u64 * *bytes as u64;
+                let order = if cfg!(target_endian = "little") { "LSB" } else { "MSB" };
+                (
+                    " subClass=\"VRTRawRasterBand\"",
+                    format!(
+                        "<SourceFilename relativeToVRT=\"1\">{filename}</SourceFilename>\
+                    <ImageOffset>{offset}</ImageOffset><PixelOffset>{bytes}</PixelOffset><LineOffset>{row_bytes}</LineOffset><ByteOrder>{order}</ByteOrder>"
+                    ),
+                )
+            }
+        }
+    }
 }
 
 impl NetcdfVrt {
@@ -214,57 +347,67 @@ impl NetcdfVrt {
         Ok(())
     }
 
-    fn append_bands(
-        &mut self,
-        array: &MDArray<'_>,
-        variable: &str,
-        filename: &str,
-        data_type: &str,
-        dims: &[Dimension<'_>],
-        order: &[usize],
-    ) {
-        let transpose = order.iter().map(usize::to_string).collect::<Vec<_>>().join(",");
-        let count = if order.len() == 3 { dims[order[0]].size() } else { 1 };
-        let metadata = band_metadata(array);
-        let source_array = escape_xml(&format!("/{}", variable.trim_start_matches('/')));
+    fn append_bands(&mut self, variable: &str, data_type: &str, metadata: &str, count: usize, source: &BandSource) {
         for index in 0..count {
-            self.band_index += 1;
-            let band_index = self.band_index;
-            let view = slice_view(order.len(), index);
-            // The multidimensional API retains stored row order, unlike the classic
-            // NetCDF driver. Signed coordinate spacing supplies the matching grid.
-            self.band_xml.push_str(&format!(
-                "<VRTRasterBand dataType=\"{data_type}\" band=\"{band_index}\">\
-                 <Description>{}[{index}]</Description>{metadata}\
-                 <ArraySource><DerivedArray><SingleSourceArray>\
-                 <SourceFilename relativeToVRT=\"0\">{filename}</SourceFilename><SourceArray>{source_array}</SourceArray>\
-                 </SingleSourceArray><Step><Transpose newOrder=\"{transpose}\"/></Step>{view}\
-                 </DerivedArray></ArraySource></VRTRasterBand>",
+            let (class, source) = source.xml(index);
+            self.band_xml.push(format!(
+                "<VRTRasterBand dataType=\"{data_type}\" band=\"1\"{class}>\
+                 <Description>{}[{index}]</Description>{metadata}{source}</VRTRasterBand>",
                 escape_xml(variable)
             ));
         }
     }
 
-    fn write_input(self) -> Result<PreparedInput> {
+    fn write_input(mut self) -> Result<PreparedInput> {
         let Grid {
             width,
             height,
             transform,
             srs,
-        } = self.grid.context("No NetCDF variables selected")?;
+            flip_rows: _,
+        } = self.grid.take().context("No NetCDF variables selected")?;
         let transform = transform.iter().map(f64::to_string).collect::<Vec<_>>().join(",");
-        let band_xml = self.band_xml;
-        let xml = format!(
-            "<VRTDataset rasterXSize=\"{width}\" rasterYSize=\"{height}\"><SRS>{}</SRS><GeoTransform>{transform}</GeoTransform>{band_xml}</VRTDataset>",
+        let header = format!(
+            "<VRTDataset rasterXSize=\"{width}\" rasterYSize=\"{height}\"><SRS>{}</SRS><GeoTransform>{transform}</GeoTransform>",
             escape_xml(&srs)
         );
-        let directory = tempfile::tempdir()?;
+        let directory = self.directory.take().context("Missing NetCDF staging directory")?;
+        self.write_band_views(directory.path(), &header)?;
+
+        let bands: String = self
+            .band_xml
+            .iter()
+            .enumerate()
+            .map(|(index, xml)| xml.replacen(" band=\"1\"", &format!(" band=\"{}\"", index + 1), 1))
+            .collect();
+        let xml = format!("{header}{bands}</VRTDataset>");
         let vrt = directory.path().join("netcdf.vrt");
         std::fs::write(&vrt, xml)?;
+
         Ok(PreparedInput {
             input: vrt.to_string_lossy().into_owned(),
+            band_input: Some(
+                directory
+                    .path()
+                    .join(if self.band_xml.len() == 1 {
+                        "band-00000000.vrt"
+                    } else {
+                        "band-*.vrt"
+                    })
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
             _directory: Some(directory),
         })
+    }
+
+    fn write_band_views(&self, directory: &Path, header: &str) -> Result<()> {
+        for (index, band) in self.band_xml.iter().enumerate() {
+            // Reference the NetCDF array directly, never the large combined VRT.
+            let path = directory.join(format!("band-{index:08}.vrt"));
+            std::fs::write(path, format!("{header}{band}</VRTDataset>"))?;
+        }
+        Ok(())
     }
 }
 
@@ -285,11 +428,13 @@ fn band_metadata(array: &MDArray<'_>) -> String {
     format!("{nodata}{scale}{offset}<UnitType>{unit}</UnitType>")
 }
 
-fn slice_view(dimension_count: usize, index: usize) -> String {
-    if dimension_count == 3 {
-        return format!("<Step><View expr=\"[{index},:,:]\"/></Step>");
+fn slice_view(dimension_count: usize, index: usize, flip_rows: bool) -> String {
+    let rows = if flip_rows { "::-1" } else { ":" };
+    match (dimension_count, flip_rows) {
+        (3, _) => format!("<Step><View expr=\"[{index},{rows},:]\"/></Step>"),
+        (_, true) => format!("<Step><View expr=\"[{rows},:]\"/></Step>"),
+        _ => String::new(),
     }
-    String::new()
 }
 
 fn coordinate_grid(group: &Group<'_>, name: &str, size: usize) -> Result<(f64, f64)> {
@@ -359,6 +504,39 @@ mod tests {
 
     fn dimensions() -> Vec<String> {
         ["time", "y", "x"].map(str::to_owned).to_vec()
+    }
+
+    #[test]
+    fn conversion_views_reference_staged_samples_without_reopening_the_combined_vrt() -> Result<()> {
+        let prepared = prepare_input(fixture().to_str().unwrap(), &["WBGT".into()], &dimensions(), None)?;
+        let combined = Dataset::open(&prepared.input)?;
+        let mut paths = glob::glob(prepared.conversion_input())?.collect::<std::result::Result<Vec<_>, _>>()?;
+        paths.sort();
+        assert_eq!(paths.len(), combined.raster_count());
+        for (index, path) in paths.iter().enumerate() {
+            let xml = std::fs::read_to_string(path)?;
+            assert_eq!(xml.matches("<VRTRasterBand ").count(), 1);
+            assert!(!xml.contains(&prepared.input));
+            assert!(xml.contains("subClass=\"VRTRawRasterBand\""));
+            assert!(!xml.contains("<ArraySource>"));
+            let view = Dataset::open(path)?;
+            assert_eq!(view.raster_count(), 1);
+            assert_conversion_pixels(&view, &combined, index + 1)?;
+        }
+        Ok(())
+    }
+
+    fn assert_conversion_pixels(view: &Dataset, combined: &Dataset, source_band: usize) -> Result<()> {
+        assert_eq!(view.geo_transform()?, combined.geo_transform()?);
+        let actual = view.rasterband(1)?;
+        let expected = combined.rasterband(source_band)?;
+        assert_eq!(actual.scale(), expected.scale());
+        let size = view.raster_size();
+        assert_eq!(
+            actual.read_as::<f64>((0, 0), size, size, None)?.data(),
+            expected.read_as::<f64>((0, 0), size, size, None)?.data()
+        );
+        Ok(())
     }
 
     #[test]
@@ -467,16 +645,12 @@ mod tests {
         let dataset = Dataset::open(&prepared.input)?;
         assert_eq!(dataset.raster_count(), 1);
         assert_eq!(dataset.raster_size(), (5, 4));
-        assert_eq!(dataset.geo_transform()?, [5723000.0, 100.0, 0.0, 2984600.0, 0.0, 100.0]);
+        assert_eq!(dataset.geo_transform()?, [5723000.0, 100.0, 0.0, 2985000.0, 0.0, -100.0]);
         assert_eq!(dataset.spatial_ref()?.auth_code()?, 3857);
-        // GDAL's NetCDF writer stores rows bottom-up, so the signed coordinate
-        // spacing and the sample order must agree rather than assuming north-up.
+        // GDAL's NetCDF writer stores rows bottom-up; the VRT reverses them so the
+        // dataset stays north-up, which gdalbuildvrt requires.
         let values = dataset.rasterband(1)?.read_as::<i32>((0, 0), (5, 4), (5, 4), None)?;
-        let expected = (0..4)
-            .rev()
-            .flat_map(|row| (0..5).map(move |column| row * 5 + column))
-            .collect::<Vec<_>>();
-        assert_eq!(values.data(), &expected);
+        assert_eq!(values.data(), &samples);
         Ok(())
     }
 

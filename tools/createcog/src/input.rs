@@ -7,7 +7,15 @@ use crate::netcdf;
 /// A GDAL-readable raster input, optionally backed by a temporary `NetCDF` view.
 pub struct PreparedInput {
     pub input: String,
+    pub(super) band_input: Option<String>,
     pub(super) _directory: Option<tempfile::TempDir>,
+}
+
+impl PreparedInput {
+    /// Conversions use small per-band views; the combined view is retained for inspection.
+    pub fn conversion_input(&self) -> &str {
+        self.band_input.as_deref().unwrap_or(&self.input)
+    }
 }
 
 /// Prepare local `NetCDF` selections; leave other raster formats and GDAL connection strings unchanged.
@@ -21,6 +29,7 @@ pub fn prepare_input(input: &str, variables: &[String], dimensions: &[String], s
         );
         return Ok(PreparedInput {
             input: input.to_owned(),
+            band_input: None,
             _directory: None,
         });
     };
@@ -32,6 +41,7 @@ pub fn prepare_input(input: &str, variables: &[String], dimensions: &[String], s
     ensure!(variables.is_empty(), "--variable is only supported for NetCDF inputs");
     Ok(PreparedInput {
         input: input.to_owned(),
+        band_input: None,
         _directory: None,
     })
 }

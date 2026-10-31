@@ -4,6 +4,7 @@ use geo::raster::Compression;
 use std::path::{Path, PathBuf};
 use strum::EnumString;
 
+use crate::progress::ProgressReporter;
 use crate::{Result, input, unscale};
 use geo::{ArrayDataType, ZoomLevelStrategy, geotiff};
 
@@ -77,7 +78,7 @@ impl PreparedRasterInput {
     fn new(input: &str, opts: &TileCreationOptions) -> Result<Self> {
         let prepared_input = input::prepare_input(input, &opts.variables, &opts.dimensions, opts.source_srs.as_deref())?;
         let unscaled = if opts.unscale {
-            Some(unscale::prepare_input(&prepared_input.input)?)
+            Some(unscale::prepare_input(prepared_input.conversion_input())?)
         } else {
             None
         };
@@ -90,7 +91,7 @@ impl PreparedRasterInput {
     fn as_str(&self) -> &str {
         match &self.unscaled {
             Some(unscaled) => &unscaled.input,
-            None => &self.source.input,
+            None => self.source.conversion_input(),
         }
     }
 
@@ -133,31 +134,85 @@ pub fn print_gdal_translate_command(input: &str, opts: TileCreationOptions) -> R
     Ok(())
 }
 
-pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, progress: &mut dyn FnMut(f64)) -> Result<()> {
+pub fn create_cog_tiles(input: &str, output: PathBuf, opts: TileCreationOptions, status: &ProgressReporter) -> Result<()> {
     let cog_create_opts = create_opts(&opts)?;
     // Prepare the input, possibly creating temporary VRTs for unscaling or NetCDF variable selection.
     let prepared = PreparedRasterInput::new(input, &opts)?;
 
     if prepared.uses_multiband_pipeline(&opts)? {
-        progress(0.0);
-        let mut warp_progress = |fraction: f64| progress(fraction * 0.9);
         let (_temp_dir, band_cogs) = cog::create_temporary_band_cogs(
             prepared.as_str(),
             cog_create_opts,
             opts.source_srs.as_deref(),
-            Some(&mut warp_progress),
+            Some(&mut |fraction| status.bands(fraction)),
         )?;
-        geotiff::assemble_band_cogs(&band_cogs, &output)?;
-        progress(1.0);
+
+        geotiff::assemble_band_cogs(&band_cogs, &output, &mut |fraction| status.assembly(fraction))?;
         Ok(())
     } else {
-        Ok(cog::create_cog_tiles(prepared.as_path(), &output, cog_create_opts)?)
+        cog::create_cog_tiles(prepared.as_path(), &output, cog_create_opts)?;
+        status.bands(1.0);
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use anyhow::Context as _;
+
+    #[test]
+    #[ignore = "requires CREATECOG_TEST_NETCDF and optionally CREATECOG_TEST_SOURCE_SRS; run in release mode"]
+    fn local_netcdf_staging_and_first_cog_timings() -> Result<()> {
+        let input = std::env::var("CREATECOG_TEST_NETCDF")?;
+        let opts = TileCreationOptions {
+            source_srs: std::env::var("CREATECOG_TEST_SOURCE_SRS").ok(),
+            ..options(Some(8))
+        };
+        let started = std::time::Instant::now();
+        let prepared = PreparedRasterInput::new(&input, &opts)?;
+        let paths = input::resolve_local_input_paths(prepared.as_str(), prepared.as_path())?.context("No prepared inputs")?;
+        eprintln!("Prepared {} single-band inputs in {:?}", paths.len(), started.elapsed());
+        let directory = tempfile::tempdir()?;
+        let output = directory.path().join("first.cog.tif");
+        let first = paths.first().context("No bands selected")?;
+        let conversion = std::time::Instant::now();
+        cog::create_cog_tiles(first, &output, create_opts(&opts)?)?;
+        eprintln!(
+            "First scaled COG {:?}; preparation plus conversion {:?}",
+            conversion.elapsed(),
+            started.elapsed()
+        );
+        assert_eq!(gdal::Dataset::open(&output)?.raster_count(), 1);
+        Ok(())
+    }
+
+    #[test]
+    #[ignore = "manual full conversion; requires CREATECOG_TEST_NETCDF and optionally CREATECOG_TEST_SOURCE_SRS"]
+    fn local_netcdf_full_conversion_timings() -> Result<()> {
+        let input = std::env::var("CREATECOG_TEST_NETCDF")?;
+        let expected = gdal::Dataset::open(&input)?.raster_count();
+        let opts = TileCreationOptions {
+            source_srs: std::env::var("CREATECOG_TEST_SOURCE_SRS").ok(),
+            ..options(Some(8))
+        };
+        let directory = tempfile::tempdir()?;
+        let output = directory.path().join("complete.cog.tif");
+        let status = ProgressReporter::start(true)?;
+        let started = std::time::Instant::now();
+        create_cog_tiles(&input, output.clone(), opts, &status)?;
+        status.finish();
+        let result = gdal::Dataset::open(&output)?;
+        eprintln!(
+            "Full conversion: {} bands, {:?}, {} bytes",
+            result.raster_count(),
+            started.elapsed(),
+            std::fs::metadata(&output)?.len()
+        );
+        assert_eq!(result.raster_count(), expected);
+        assert_eq!(result.rasterband(1)?.band_type(), gdal::raster::GdalDataType::UInt8);
+        Ok(())
+    }
 
     fn options(scale: Option<u8>) -> TileCreationOptions {
         TileCreationOptions {
@@ -306,6 +361,7 @@ mod tests {
 
     #[test]
     fn both_entrypoints_validate_type_mismatches_before_preparing_or_opening_input() {
+        let status = ProgressReporter::start(false).unwrap();
         for unscale in [false, true] {
             let expected = "--output-data-type float32 does not match --scale 8; expected uint8";
             let invalid_options = || TileCreationOptions {
@@ -319,7 +375,7 @@ mod tests {
                 expected
             );
             assert_eq!(
-                create_cog_tiles(input, PathBuf::from("unused-output.tif"), invalid_options(), &mut |_| {})
+                create_cog_tiles(input, PathBuf::from("unused-output.tif"), invalid_options(), &status)
                     .unwrap_err()
                     .to_string(),
                 expected

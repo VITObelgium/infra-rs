@@ -1,14 +1,8 @@
-use std::{
-    io::{self, IsTerminal, Write},
-    path::PathBuf,
-    sync::Arc,
-};
+use std::{io::IsTerminal, path::PathBuf};
 
 use clap::Parser;
 use createtiles::TileCreationOptions;
 use env_logger::{Env, Target, TimestampPrecision, WriteStyle};
-use kdam::{BarExt, Column, RichProgress, tqdm};
-use parking_lot::Mutex;
 
 use crate::createtiles::{ZoomLevelSelection, create_cog_tiles, print_gdal_translate_command};
 
@@ -17,28 +11,9 @@ pub type Result<T> = anyhow::Result<T>;
 mod createtiles;
 mod input;
 mod netcdf;
+mod netcdf_cache;
+mod progress;
 mod unscale;
-
-struct ProgressWriter {
-    progress: Arc<Mutex<RichProgress>>,
-}
-
-impl Write for ProgressWriter {
-    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        let message = String::from_utf8_lossy(buffer);
-        let message = message.trim_end_matches(['\r', '\n']);
-
-        if !message.is_empty() {
-            self.progress.lock().write(message).map_err(io::Error::other)?;
-        }
-
-        Ok(buffer.len())
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        Ok(())
-    }
-}
 
 #[derive(Parser, Debug)]
 #[clap(name = "createcog", about = "Create Cloud Optimized GeoTIFF")]
@@ -99,6 +74,7 @@ pub struct Opt {
     #[arg(long = "aligned-levels")]
     pub aligned_levels: Option<i32>,
 
+    /// Hide the progress bar and phase messages.
     #[arg(long = "noprogress")]
     pub no_progress: bool,
 
@@ -142,35 +118,9 @@ fn main() -> Result<()> {
     rayon::ThreadPoolBuilder::new().num_threads(rayon_threads).build_global()?;
 
     let stderr_is_terminal = std::io::stderr().is_terminal();
-    kdam::term::init(stderr_is_terminal);
-
     let show_progress = !opt.no_progress && !opt.print_command;
-    let progress = Arc::new(Mutex::new(RichProgress::new(
-        tqdm!(total = 100, disable = !show_progress),
-        vec![
-            Column::Text("[bold blue]Creating COG".to_owned()),
-            Column::Animation,
-            Column::Percentage(1),
-            Column::Text("•".to_owned()),
-            Column::ElapsedTime,
-            Column::Text("•".to_owned()),
-            Column::RemainingTime,
-        ],
-    )));
-
-    let mut logger = env_logger::Builder::from_env(Env::default().default_filter_or("warn"));
-    logger.format_timestamp(Some(TimestampPrecision::Millis));
-    if show_progress {
-        logger.target(Target::Pipe(Box::new(ProgressWriter {
-            progress: Arc::clone(&progress),
-        })));
-
-        let use_terminal_colors = std::env::var("RUST_LOG_STYLE").map_or(true, |style| style.eq_ignore_ascii_case("auto"));
-        if stderr_is_terminal && use_terminal_colors {
-            logger.write_style(WriteStyle::Always);
-        }
-    }
-    logger.init();
+    let status = progress::ProgressReporter::start(show_progress)?;
+    init_logging(&status, show_progress, stderr_is_terminal);
     log::debug!("Using {rayon_threads} Rayon threads ({available_cores} cores available)");
 
     let gdal_config = geo::RuntimeConfiguration::builder()
@@ -199,18 +149,27 @@ fn main() -> Result<()> {
     if opt.print_command {
         print_gdal_translate_command(&opt.input, tile_opts)?;
     } else {
-        let progress_callback: &mut dyn FnMut(f64) = &mut |fraction: f64| {
-            let _ = progress.lock().update_to((fraction * 100.0) as usize);
-        };
-
-        create_cog_tiles(&opt.input, opt.output, tile_opts, progress_callback)?;
-        progress.lock().update_to(100)?;
+        create_cog_tiles(&opt.input, opt.output, tile_opts, &status)?;
+        status.finish();
         if show_progress {
             eprintln!();
         }
     }
 
     Ok(())
+}
+
+fn init_logging(status: &progress::ProgressReporter, show_progress: bool, stderr_is_terminal: bool) {
+    let mut logger = env_logger::Builder::from_env(Env::default().default_filter_or("warn"));
+    logger.format_timestamp(Some(TimestampPrecision::Millis));
+    if show_progress && stderr_is_terminal {
+        logger.target(Target::Pipe(Box::new(status.log_writer())));
+        let use_terminal_colors = std::env::var("RUST_LOG_STYLE").map_or(true, |style| style.eq_ignore_ascii_case("auto"));
+        if stderr_is_terminal && use_terminal_colors {
+            logger.write_style(WriteStyle::Always);
+        }
+    }
+    logger.init();
 }
 
 #[cfg(test)]

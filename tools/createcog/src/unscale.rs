@@ -23,8 +23,13 @@ pub fn prepare_input(input: &str) -> Result<PreparedInput> {
         ensure!(band_count > 0, "Input {} has no raster bands to unscale", path.display());
         for band_index in 1..=band_count {
             let band = dataset.rasterband(band_index)?;
-            validate_scaling(band.scale(), band.offset())
-                .with_context(|| format!("Cannot --unscale input {} band {band_index}", path.display()))?;
+            validate_scaling(band.scale(), band.offset()).with_context(|| {
+                format!(
+                    "Cannot --unscale input {} band {band_index} (output band {})",
+                    path.display(),
+                    total_bands + band_index
+                )
+            })?;
         }
         total_bands += band_count;
 

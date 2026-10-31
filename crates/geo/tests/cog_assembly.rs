@@ -251,7 +251,7 @@ fn assert_unaligned_sparse_assembly(aligned_levels: i32) -> Result<()> {
     );
 
     let output = directory.path().join("assembled.tif");
-    assemble_band_cogs(&inputs, &output)?;
+    assemble_band_cogs(&inputs, &output, &mut |_| {})?;
     let assembled = web_reader(&output)?;
     assert!(
         assembled
@@ -362,7 +362,7 @@ fn assert_metadata_domain_survives_assembly(band_domain: &str) -> Result<()> {
         inputs.push(input);
     }
     let output = directory.path().join("metadata_assembled.tif");
-    assemble_band_cogs(&inputs, &output)?;
+    assemble_band_cogs(&inputs, &output, &mut |_| {})?;
     let assembled = web_reader(&output)?;
     let output_dataset = Dataset::open(&output)?;
     for &domain in &domains {
@@ -415,12 +415,12 @@ fn assert_metadata_domain_survives_assembly(band_domain: &str) -> Result<()> {
             assert_eq!(output_band.metadata_item(name, band_domain), Some(expected), "Band {band}, {name}");
         }
         let roundtrip = directory.path().join(format!("roundtrip_{band}.tif"));
-        assemble_band_cogs(std::slice::from_ref(input), &roundtrip)?;
+        assemble_band_cogs(std::slice::from_ref(input), &roundtrip, &mut |_| {})?;
         assert_native_payloads_and_decodes(std::slice::from_ref(input), &roundtrip)?;
         roundtrip_inputs.push(roundtrip);
     }
     let roundtrip_output = directory.path().join("roundtrip_assembled.tif");
-    assemble_band_cogs(&roundtrip_inputs, &roundtrip_output)?;
+    assemble_band_cogs(&roundtrip_inputs, &roundtrip_output, &mut |_| {})?;
     let roundtrip_dataset = Dataset::open(&roundtrip_output)?;
     for &domain in &domains {
         assert_eq!(
@@ -442,7 +442,7 @@ fn assert_metadata_domain_survives_assembly(band_domain: &str) -> Result<()> {
 
 fn assert_rejected_without_replacing(inputs: &[PathBuf], output: &Path, message: &str) -> Result<()> {
     fs::write(output, SENTINEL)?;
-    let error = assemble_band_cogs(inputs, output).expect_err("Incompatible assembly must fail");
+    let error = assemble_band_cogs(inputs, output, &mut |_| {}).expect_err("Incompatible assembly must fail");
     assert!(error.to_string().contains(message), "Expected {message:?}, got {error}");
     assert_eq!(
         fs::read(output)?,
@@ -451,7 +451,7 @@ fn assert_rejected_without_replacing(inputs: &[PathBuf], output: &Path, message:
     );
     let absent = output.with_extension("absent.tif");
     assert!(!absent.exists());
-    assert!(assemble_band_cogs(inputs, &absent).is_err());
+    assert!(assemble_band_cogs(inputs, &absent, &mut |_| {}).is_err());
     assert!(!absent.exists(), "Validation failure must not create a destination");
     Ok(())
 }

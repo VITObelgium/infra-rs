@@ -191,14 +191,18 @@ enum LayoutError {
     Invalid(String),
 }
 
-/// Merge compatible staged single-band COGs into one planar-separate,
-/// tile-interleaved multiband COG without decoding or recompressing tiles.
-///
+/// Merge compatible staged single-band COGs into one tile-interleaved multiband
+/// COG without decoding or recompressing tiles, reporting progress as a fraction
+/// from 0.0 to 1.0 based on copied tiles.
 /// Inputs must be little-endian, tiled, single-band COGs with matching image and
 /// overview layouts, data types, compression settings, georeferencing, and
 /// dataset-level metadata. Unsupported pointer-bearing and image-layout tags are
 /// rejected rather than copied unsafely.
-pub fn assemble_band_cogs(inputs: &[PathBuf], output: &Path) -> Result<()> {
+/// Callbacks run synchronously, and 1.0 is reported only after syncing and
+/// atomically publishing the output file.
+/// Pass `&mut |_| {}` when progress reporting is not needed.
+pub fn assemble_band_cogs(inputs: &[PathBuf], output: &Path, progress: &mut dyn FnMut(f64)) -> Result<()> {
+    progress(0.0);
     if inputs.is_empty() {
         return Err(Error::InvalidArgument("At least one input band COG is required".into()));
     }
@@ -209,26 +213,32 @@ pub fn assemble_band_cogs(inputs: &[PathBuf], output: &Path) -> Result<()> {
         )));
     }
 
-    let sources = inputs
+    let sources = read_sources(inputs)?;
+    validate_compatibility(&sources)?;
+    let plan = assembly_layout(&sources)?;
+    write_output(&sources, output, &plan, progress)
+}
+
+fn read_sources(inputs: &[PathBuf]) -> Result<Vec<SourceCog>> {
+    inputs
         .iter()
         .enumerate()
         .map(|(index, path)| read_source_cog(index, path))
-        .collect::<Result<Vec<_>>>()?;
+        .collect()
+}
 
-    validate_compatibility(&sources)?;
-    let merged_gdal_metadata = merge_gdal_metadata(&sources)?;
-
-    let classic_ifds = build_output_ifds(&sources, TiffVariant::Classic, &merged_gdal_metadata)?;
-    let plan = match plan_layout(&sources, classic_ifds, TiffVariant::Classic) {
+fn assembly_layout(sources: &[SourceCog]) -> Result<LayoutPlan> {
+    let merged_gdal_metadata = merge_gdal_metadata(sources)?;
+    let classic_ifds = build_output_ifds(sources, TiffVariant::Classic, &merged_gdal_metadata)?;
+    let plan = match plan_layout(sources, classic_ifds, TiffVariant::Classic) {
         Ok(plan) => plan,
         Err(LayoutError::Overflow(_)) => {
-            let big_ifds = build_output_ifds(&sources, TiffVariant::Big, &merged_gdal_metadata)?;
-            plan_layout(&sources, big_ifds, TiffVariant::Big).map_err(layout_error)?
+            let big_ifds = build_output_ifds(sources, TiffVariant::Big, &merged_gdal_metadata)?;
+            return plan_layout(sources, big_ifds, TiffVariant::Big).map_err(layout_error);
         }
         Err(error) => return Err(layout_error(error)),
     };
-
-    write_output(&sources, output, &plan)
+    Ok(plan)
 }
 
 fn read_source_cog(input_index: usize, path: &Path) -> Result<SourceCog> {
@@ -733,15 +743,13 @@ fn plan_layout(sources: &[SourceCog], output_ifds: Vec<OutputIfd>, variant: Tiff
     })
 }
 
-fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan) -> Result<()> {
+fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan, progress: &mut dyn FnMut(f64)) -> Result<()> {
     let parent = output
         .parent()
         .filter(|path| !path.as_os_str().is_empty())
         .unwrap_or_else(|| Path::new("."));
     std::fs::create_dir_all(parent)?;
     let mut temporary = tempfile::NamedTempFile::new_in(parent)?;
-    let mut source_files = VecDeque::new();
-    let mut payload = Vec::new();
 
     {
         let mut writer = BufWriter::new(temporary.as_file_mut());
@@ -779,34 +787,7 @@ fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan) -> Resu
             }
         }
 
-        for block in &plan.blocks {
-            let expected_leader_offset = block
-                .payload_offset
-                .checked_sub(4)
-                .ok_or_else(|| Error::Runtime("Planned tile payload offset is smaller than its leader".into()))?;
-            pad_to(&mut writer, expected_leader_offset, &mut position)?;
-            let payload_size = u32::try_from(block.source.size)
-                .map_err(|_| Error::Runtime(format!("Planned tile size {} exceeds u32::MAX", block.source.size)))?;
-            write_bytes(&mut writer, &payload_size.to_le_bytes(), &mut position)?;
-            if position != block.payload_offset {
-                return Err(Error::Runtime(format!(
-                    "COG layout mismatch: tile payload planned at {}, writer is at {position}",
-                    block.payload_offset
-                )));
-            }
-
-            let source = source_file(&mut source_files, sources, block.source_index)?;
-            let size =
-                usize::try_from(block.source.size).map_err(|_| Error::Runtime("Tile payload size exceeds addressable memory".into()))?;
-            payload.clear();
-            payload
-                .try_reserve(size)
-                .map_err(|error| Error::Runtime(format!("Cannot buffer tile payload: {error}")))?;
-            payload.resize(size, 0);
-            io::read_chunk(&block.source, source, &mut payload)?;
-            write_bytes(&mut writer, &payload, &mut position)?;
-            write_bytes(&mut writer, &payload[size - 4..], &mut position)?;
-        }
+        write_payloads(&mut writer, sources, plan, &mut position, progress)?;
 
         if plan.blocks.is_empty() {
             pad_to(&mut writer, plan.final_size, &mut position)?;
@@ -817,10 +798,65 @@ fn write_output(sources: &[SourceCog], output: &Path, plan: &LayoutPlan) -> Resu
                 plan.final_size
             )));
         }
+
         writer.flush()?;
     }
     temporary.as_file().sync_all()?;
     temporary.persist(output).map_err(|error| Error::IOError(error.error))?;
+    progress(1.0);
+    Ok(())
+}
+
+fn write_payloads(
+    writer: &mut impl Write,
+    sources: &[SourceCog],
+    plan: &LayoutPlan,
+    position: &mut u64,
+    progress: &mut dyn FnMut(f64),
+) -> Result<()> {
+    let mut source_files = VecDeque::new();
+    let mut payload = Vec::new();
+
+    for (index, block) in plan.blocks.iter().enumerate() {
+        let source = source_file(&mut source_files, sources, block.source_index)?;
+        copy_payload(writer, block, source, &mut payload, position)?;
+        let completed = index + 1;
+        if completed % 128 == 0 && completed < plan.blocks.len() {
+            progress(completed as f64 / plan.blocks.len() as f64);
+        }
+    }
+    Ok(())
+}
+
+fn copy_payload(writer: &mut impl Write, block: &PlannedBlock, source: &mut File, payload: &mut Vec<u8>, position: &mut u64) -> Result<()> {
+    let leader = block
+        .payload_offset
+        .checked_sub(4)
+        .ok_or_else(|| Error::Runtime("Planned tile payload offset is smaller than its leader".into()))?;
+    pad_to(writer, leader, position)?;
+    let size = u32::try_from(block.source.size)
+        .map_err(|_| Error::Runtime(format!("Planned tile size {} exceeds u32::MAX", block.source.size)))?;
+    write_bytes(writer, &size.to_le_bytes(), position)?;
+    if *position != block.payload_offset {
+        return Err(Error::Runtime(format!(
+            "COG layout mismatch: tile payload planned at {}, writer is at {position}",
+            block.payload_offset
+        )));
+    }
+    read_source_payload(&block.source, source, payload)?;
+    write_bytes(writer, payload, position)?;
+    write_bytes(writer, &payload[payload.len() - 4..], position)?;
+    Ok(())
+}
+
+fn read_source_payload(location: &TiffChunkLocation, source: &mut File, payload: &mut Vec<u8>) -> Result<()> {
+    let size = usize::try_from(location.size).map_err(|_| Error::Runtime("Tile payload size exceeds addressable memory".into()))?;
+    payload.clear();
+    payload
+        .try_reserve(size)
+        .map_err(|error| Error::Runtime(format!("Cannot buffer tile payload: {error}")))?;
+    payload.resize(size, 0);
+    io::read_chunk(location, source, payload)?;
     Ok(())
 }
 
@@ -1126,7 +1162,7 @@ mod layout_tests {
         }
         let directory = tempfile::tempdir()?;
         let output = directory.path().join("big.tif");
-        write_output(&sources, &output, &plan)?;
+        write_output(&sources, &output, &plan, &mut |_| {})?;
         let metadata = GeoTiffMetadata::from_file(&output)?;
         assert_eq!(metadata.overviews.len(), sources[0].levels().len());
         for (actual, expected) in metadata.overviews.iter().zip(sources[0].levels()) {
@@ -1183,10 +1219,19 @@ mod layout_tests {
                 assert!(plan.blocks.is_empty());
                 let directory = tempfile::tempdir()?;
                 let output = directory.path().join("sparse.tif");
-                write_output(&sources, &output, &plan)?;
+                write_output(&sources, &output, &plan, &mut |_| {})?;
                 assert_eq!(std::fs::metadata(&output)?.len(), plan.final_size);
                 let metadata = GeoTiffMetadata::from_file(&output)?;
                 assert!(metadata.overviews[0].chunk_locations[0].is_sparse());
+                let assembled = directory.path().join("assembled-sparse.tif");
+                let mut fractions = Vec::new();
+                assemble_band_cogs(&[output.clone()], &assembled, &mut |fraction| {
+                    if fraction == 1.0 {
+                        assert!(GeoTiffMetadata::from_file(&assembled).is_ok());
+                    }
+                    fractions.push(fraction);
+                })?;
+                assert_eq!(fractions, [0.0, 1.0]);
                 assert_eq!(
                     read_source_cog(0, &output)?.levels()[0].image_metadata.nodata.as_deref(),
                     Some(nodata)
@@ -1243,7 +1288,7 @@ mod layout_tests {
             let sources = [source];
             let plan = layout(&sources, TiffVariant::Classic)?;
             let output = directory.path().join("framed.tif");
-            write_output(&sources, &output, &plan)?;
+            write_output(&sources, &output, &plan, &mut |_| {})?;
             let mut file = File::open(output)?;
             file.seek(SeekFrom::Start(plan.blocks[0].payload_offset - 4))?;
             let mut framed = vec![0; bytes.len() + 8];
@@ -1269,9 +1314,46 @@ mod layout_tests {
         let plan = layout(&sources, TiffVariant::Classic)?;
         let output = directory.path().join("existing.tif");
         std::fs::write(&output, b"existing destination")?;
-        assert!(write_output(&sources, &output, &plan).is_err());
+        let mut fractions = Vec::new();
+        assert!(write_output(&sources, &output, &plan, &mut |fraction| fractions.push(fraction)).is_err());
+        assert!(!fractions.contains(&1.0));
         assert_eq!(std::fs::read(&output)?, b"existing destination");
         assert_eq!(std::fs::read_dir(directory.path())?.count(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn assembly_progress_does_not_complete_when_persist_fails() -> Result<()> {
+        let sources = [source_fixture(one_tile)?];
+        let directory = tempfile::tempdir()?;
+        let input = directory.path().join("input.tif");
+        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?, &mut |_| {})?;
+        let output = directory.path().join("destination-directory");
+        std::fs::create_dir(&output)?;
+        let mut fractions = Vec::new();
+        assert!(assemble_band_cogs(&[input], &output, &mut |fraction| fractions.push(fraction)).is_err());
+        assert_eq!(fractions, [0.0]);
+        assert!(output.is_dir());
+        assert_eq!(std::fs::read_dir(directory.path())?.count(), 2);
+        Ok(())
+    }
+
+    #[test]
+    fn assembly_progress_reports_throttled_tile_copy_fractions() -> Result<()> {
+        let source = source_fixture(one_tile)?;
+        let sources = (0..257)
+            .map(|_| SourceCog {
+                path: source.path.clone(),
+                levels: source.levels.clone(),
+            })
+            .collect::<Vec<_>>();
+        let directory = tempfile::tempdir()?;
+        let input = directory.path().join("input.tif");
+        let plan = layout(&sources, TiffVariant::Classic)?;
+        assert_eq!(plan.blocks.len(), 257);
+        let mut fractions = Vec::new();
+        write_output(&sources, &input, &plan, &mut |fraction| fractions.push(fraction))?;
+        assert_eq!(fractions, [128.0 / 257.0, 256.0 / 257.0, 1.0]);
         Ok(())
     }
 
@@ -1285,9 +1367,9 @@ mod layout_tests {
         })?];
         let directory = tempfile::tempdir()?;
         let input = directory.path().join("non-xyz.tif");
-        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?)?;
+        write_output(&sources, &input, &layout(&sources, TiffVariant::Classic)?, &mut |_| {})?;
         let output = directory.path().join("assembled.tif");
-        assemble_band_cogs(&[input], &output)?;
+        assemble_band_cogs(&[input], &output, &mut |_| {})?;
         let metadata = GeoTiffMetadata::from_file(&output)?;
         assert_eq!(metadata.geo_reference.cell_size_x(), 30.0);
         assert_eq!(metadata.overviews.len(), sources[0].levels().len());
@@ -1344,6 +1426,29 @@ mod tests {
 
     use super::*;
 
+    #[test]
+    fn assembly_progress_is_monotonic_and_completes_after_publishing() -> Result<()> {
+        let input = testutils::workspace_test_data_dir().join("multiband_cog.tif");
+        let (staging, bands) = create_temporary_band_cogs(&input.to_string_lossy(), CogCreationOptions::default(), None, None)?;
+        let output = staging.path().join("with-progress.tif");
+        let mut events = Vec::new();
+        assemble_band_cogs(&bands, &output, &mut |fraction| {
+            if fraction == 1.0 {
+                let metadata = GeoTiffMetadata::from_file(&output).expect("Output must be readable at completion");
+                assert_eq!(metadata.band_count as usize, bands.len());
+            } else {
+                assert!(!output.exists());
+            }
+            events.push(fraction);
+        })?;
+        assert_eq!(events.first(), Some(&0.0));
+        assert_eq!(events.last(), Some(&1.0));
+        assert!(events.iter().all(|fraction| fraction.is_finite() && (0.0..=1.0).contains(fraction)));
+        assert!(events.windows(2).all(|pair| pair[0] <= pair[1]));
+        assert_eq!(events.iter().filter(|&&fraction| fraction == 1.0).count(), 1);
+        Ok(())
+    }
+
     #[test_log::test]
     fn source_levels_match_cog_metadata() -> Result<()> {
         let input = testutils::workspace_test_data_dir().join("multiband_cog.tif");
@@ -1374,7 +1479,7 @@ mod tests {
         let (staging, band_cogs) = create_temporary_band_cogs(&input.to_string_lossy(), CogCreationOptions::default(), None, None)?;
         let output = staging.path().join("assembled.cog.tif");
 
-        assemble_band_cogs(&band_cogs, &output)?;
+        assemble_band_cogs(&band_cogs, &output, &mut |_| {})?;
 
         let mut assembled = GeoTiffReader::from_file(&output)?;
         let assembled_metadata = assembled.metadata().clone();

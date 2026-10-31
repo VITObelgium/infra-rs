@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::{Error, Result, raster};
 
@@ -8,12 +8,65 @@ use super::{CogCreationOptions, creation::create_cog_tiles_for_band};
 ///
 /// A literal path can be passed for a single multiband input. Glob matches are
 /// sorted, and bands are processed in their one-based GDAL band order.
+/// Progress reports completed bands divided by the total number of bands, once
+/// per successfully processed band. Callbacks run on the calling thread.
 pub fn create_temporary_band_cogs(
     input: &str,
     options: CogCreationOptions,
     source_srs: Option<&str>,
     mut progress: Option<&mut dyn FnMut(f64)>,
 ) -> Result<(tempfile::TempDir, Vec<PathBuf>)> {
+    let temporary_directory = tempfile::tempdir()?;
+    let band_jobs = plan_band_jobs(input, temporary_directory.path())?;
+    let total_bands = band_jobs.len();
+    let mut completed_bands = 0;
+
+    #[cfg(feature = "rayon")]
+    let warp_results = std::thread::scope(|scope| {
+        use rayon::prelude::*;
+        use std::sync::mpsc;
+
+        let (sender, receiver) = mpsc::channel();
+        let worker = scope.spawn(move || {
+            band_jobs
+                .par_iter()
+                .map(|(input_path, cog_path, band_index)| {
+                    create_cog_tiles_for_band(input_path, cog_path, options, *band_index, source_srs)?;
+                    sender.send(()).ok();
+                    Ok(cog_path.clone())
+                })
+                .collect::<Result<Vec<_>>>()
+        });
+
+        for () in receiver {
+            completed_bands += 1;
+            if let Some(progress) = progress.as_mut() {
+                progress(completed_bands as f64 / total_bands as f64);
+            }
+        }
+
+        worker
+            .join()
+            .map_err(|_| Error::Runtime("Temporary band warp thread panicked".to_string()))?
+    });
+
+    #[cfg(not(feature = "rayon"))]
+    let warp_results = band_jobs
+        .iter()
+        .map(|(input_path, cog_path, band_index)| {
+            create_cog_tiles_for_band(input_path, cog_path, options, *band_index, source_srs)?;
+            completed_bands += 1;
+            if let Some(progress) = progress.as_mut() {
+                progress(completed_bands as f64 / total_bands as f64);
+            }
+            Ok(cog_path.clone())
+        })
+        .collect::<Result<Vec<_>>>();
+
+    Ok((temporary_directory, warp_results?))
+}
+
+fn plan_band_jobs(input: &str, directory: &Path) -> Result<Vec<(PathBuf, PathBuf, usize)>> {
     let mut input_paths = glob::glob(input)?.collect::<std::result::Result<Vec<_>, _>>()?;
     input_paths.sort();
 
@@ -21,69 +74,16 @@ pub fn create_temporary_band_cogs(
         return Err(Error::InvalidArgument(format!("No files match the input pattern: {input}")));
     }
 
-    let temporary_directory = tempfile::tempdir()?;
     let mut band_jobs = Vec::new();
-
     for input_path in input_paths {
         let band_count = raster::formats::gdal::open_dataset_read_only(&input_path)?.raster_count();
-
         for band_index in 1..=band_count {
             let index = band_jobs.len();
-            let cog_path = temporary_directory.path().join(format!("band-{index:04}.cog.tif"));
+            let cog_path = directory.join(format!("band-{index:04}.cog.tif"));
             band_jobs.push((input_path.clone(), cog_path, band_index));
         }
     }
-
-    let band_count = band_jobs.len();
-    let source_srs = source_srs.map(str::to_owned);
-
-    #[cfg(feature = "rayon")]
-    let warp_results = {
-        use rayon::prelude::*;
-        use std::sync::mpsc;
-
-        let (progress_sender, progress_receiver) = mpsc::channel();
-        let worker = std::thread::spawn(move || {
-            band_jobs
-                .par_iter()
-                .map(|(input_path, cog_path, band_index)| {
-                    create_cog_tiles_for_band(input_path, cog_path, options, *band_index, source_srs.as_deref()).map(|()| {
-                        progress_sender.send(()).ok();
-                        cog_path.clone()
-                    })
-                })
-                .collect::<Result<Vec<_>>>()
-        });
-
-        if let Some(progress) = progress.as_mut() {
-            for completed in 1..=band_count {
-                if progress_receiver.recv().is_err() {
-                    break;
-                }
-                progress(completed as f64 / band_count as f64);
-            }
-        }
-
-        worker
-            .join()
-            .map_err(|_| Error::Runtime("Temporary band warp thread panicked".to_string()))?
-    };
-
-    #[cfg(not(feature = "rayon"))]
-    let warp_results = band_jobs
-        .iter()
-        .enumerate()
-        .map(|(completed, (input_path, cog_path, band_index))| {
-            create_cog_tiles_for_band(input_path, cog_path, options, *band_index, source_srs.as_deref()).map(|()| {
-                if let Some(progress) = progress.as_mut() {
-                    progress((completed + 1) as f64 / band_count as f64);
-                }
-                cog_path.clone()
-            })
-        })
-        .collect::<Result<Vec<_>>>();
-
-    Ok((temporary_directory, warp_results?))
+    Ok(band_jobs)
 }
 
 #[cfg(test)]
@@ -96,19 +96,35 @@ mod tests {
         let input = testutils::workspace_test_data_dir().join("multiband_cog.tif");
         let band_count = raster::formats::gdal::open_dataset_read_only(&input)?.raster_count();
 
+        let calling_thread = std::thread::current().id();
         let mut progress_updates = Vec::new();
         let (temporary_directory, cogs) = create_temporary_band_cogs(
             &input.to_string_lossy(),
-            CogCreationOptions::default(),
+            CogCreationOptions {
+                scale: true,
+                ..Default::default()
+            },
             None,
-            Some(&mut |progress| progress_updates.push(progress)),
+            Some(&mut |progress| {
+                assert_eq!(std::thread::current().id(), calling_thread);
+                progress_updates.push(progress);
+            }),
         )?;
 
         assert_eq!(cogs.len(), band_count);
-        assert_eq!(progress_updates.len(), band_count);
-        assert_eq!(progress_updates.last(), Some(&1.0));
+        assert_eq!(
+            progress_updates,
+            (1..=band_count)
+                .map(|completed| completed as f64 / band_count as f64)
+                .collect::<Vec<_>>()
+        );
         for path in &cogs {
-            assert_eq!(raster::formats::gdal::open_dataset_read_only(path)?.raster_count(), 1);
+            let dataset = raster::formats::gdal::open_dataset_read_only(path)?;
+            assert_eq!(dataset.raster_count(), 1);
+            let band = dataset.rasterband(1)?;
+            assert_eq!(band.band_type(), gdal::raster::GdalDataType::UInt8);
+            assert!(band.scale().is_some());
+            assert!(band.offset().is_some());
         }
 
         let temporary_path = temporary_directory.path().to_path_buf();
@@ -116,6 +132,25 @@ mod tests {
         assert!(!temporary_path.exists());
 
         Ok(())
+    }
+
+    #[test_log::test]
+    fn failed_scaling_does_not_report_a_completed_band() {
+        let input = testutils::workspace_test_data_dir().join("landusebyte.tif");
+        let mut progress_updates = Vec::new();
+        let result = create_temporary_band_cogs(
+            &input.to_string_lossy(),
+            CogCreationOptions {
+                scale: true,
+                output_data_type: Some(crate::ArrayDataType::Float32),
+                ..Default::default()
+            },
+            None,
+            Some(&mut |progress| progress_updates.push(progress)),
+        );
+
+        assert!(matches!(result, Err(Error::InvalidArgument(message)) if message.contains("Scaling only supports")));
+        assert!(progress_updates.is_empty());
     }
 
     #[test_log::test]

@@ -198,6 +198,15 @@ supported, for example `--input 'rasters/*.tif' --multi-band`.
 - NetCDF preparation uses temporary VRT slices, recovering the geotransform and
   CRS from the source. If projection metadata is missing, assign it explicitly
   with `--source-srs EPSG:4326` (or the correct source CRS).
+- Multiband NetCDF samples are staged once into a band-major raw cache using
+  chunk-aligned reads. This avoids repeatedly decompressing large temporal HDF5
+  chunks for individual-band warps. Raw values, sample types, nodata, and packing
+  metadata are preserved exactly. Read/transposition buffers are capped at 128 MiB;
+  temporary disk space is roughly the uncompressed size of the selected cube
+  (about 3.2 GB for 8,776 Float32 bands of 301 × 301 cells), plus staged COGs.
+  Set `TMPDIR` to a sufficiently large, fast filesystem if necessary. Cache files
+  are removed on normal completion or a returned error; hard interruption can
+  leave temporary directories behind.
 - NetCDF preparation retains raw sample values and scale/offset metadata. Add
   `--unscale` to decode packed values using `scale_factor` / `add_offset` after
   selection. `--output-data-type` alone casts values without decoding that metadata.

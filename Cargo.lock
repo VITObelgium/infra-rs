@@ -1264,9 +1264,11 @@ name = "createcog"
 version = "2026.10.29"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "clap",
  "env_logger",
  "gdal",
+ "gdal-sys",
  "geo",
  "glob",
  "inf",
