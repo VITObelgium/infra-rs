@@ -1,4 +1,4 @@
-use std::{ops::Range, path::PathBuf};
+use std::{ops::Range, path::PathBuf, sync::Arc};
 
 use crate::{
     ColorMappedTileRequest, Error, LayerMetadata, Result, TileData, TileFormat, imageprocessing,
@@ -293,128 +293,219 @@ where
 
 pub fn create_metadata_for_file(path: &std::path::Path, opts: &TileProviderOptions) -> Result<Vec<LayerMetadata>> {
     let ds = formats::gdal::open_dataset_read_only(path)?;
-
     let raster_count = ds.raster_count();
     if raster_count == 0
         && RasterFileFormat::guess_from_path(path) == RasterFileFormat::Netcdf
         && let Some(subdatasets) = ds.metadata_domain("SUBDATASETS")
     {
-        // NetCDF file with subdatasets, create metadata for each subdataset
-        let mut subdataset_metas = Vec::new();
-        for meta in subdatasets {
-            if let Some((_, subdataset_path)) = meta.split_once('=') {
-                match create_metadata_for_file(std::path::Path::new(subdataset_path), opts) {
-                    Err(e) => log::warn!("Failed to read subdataset {}: {}", subdataset_path, e),
-                    Ok(metas) => subdataset_metas.extend(metas),
-                }
-            }
-        }
-
-        return Ok(subdataset_metas);
+        return Ok(metadata_for_subdatasets(subdatasets, opts));
     }
-
+    if raster_count == 0 {
+        return Ok(Vec::new());
+    }
+    // GDAL's affine transform, CRS and dimensions belong to the dataset, not
+    // individual bands. Building a PROJ transformation per time slice can
+    // dominate opening large NetCDF time series with non-Mercator CRSs.
+    let spatial = raster_spatial_metadata(formats::gdal::read_band_metadata(&ds, 1)?, opts);
     let mut result = Vec::with_capacity(raster_count);
-
     for band_nr in 1..=raster_count {
-        let meta = formats::gdal::read_band_metadata(&ds, band_nr)?;
-        let raster_band = ds.rasterband(band_nr)?;
-        let over_view_count = raster_band.overview_count()?;
-
-        let (epsg, source_is_web_mercator, cell_size) = {
-            if let Ok(srs) = SpatialReference::from_definition(meta.projection()) {
-                let cell_size = if srs.is_projected() {
-                    meta.cell_size_x()
-                } else {
-                    meta.cell_size_x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
-                };
-
-                (
-                    srs.epsg_cs(),
-                    srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
-                    cell_size,
-                )
-            } else {
-                let cell_size = if meta.cell_size().x() < 1.0 {
-                    // This is probably in degrees and not in meter
-                    meta.cell_size().x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
-                } else {
-                    meta.cell_size().x()
-                };
-
-                (None, false, cell_size)
-            }
-        };
-
-        let zoom_level = Tile::zoom_level_for_pixel_size(cell_size, opts.zoom_level_strategy, Tile::TILE_SIZE);
-
-        let mut name = path
-            .file_stem()
-            .ok_or(Error::Runtime("No path stem".to_string()))?
-            .to_string_lossy()
-            .to_string();
-
-        if raster_count > 1 {
-            name.push_str(&format!(" - Band {band_nr:05}"));
-        }
-
-        let mut layer_meta = LayerMetadata {
-            id: tileprovider::unique_layer_id(),
-            data_type: to_raster_data_type(raster_band.band_type()),
-            url: String::default(),
-            path: path.to_path_buf(),
-            name,
-            max_zoom: zoom_level,
-            min_zoom: if over_view_count > 0 { zoom_level - over_view_count } else { 0 },
-            nodata: meta.nodata(),
-            scale: match (raster_band.scale(), raster_band.offset()) {
-                (None, None) => None,
-                (scale, offset) => Some(geo::RasterScale {
-                    scale: scale.unwrap_or(1.0),
-                    offset: offset.unwrap_or(0.0),
-                }),
-            },
-            supports_dpi_ratio: true,
-            tile_size: None, // Tile size is determined by the request
-            tile_format: TileFormat::Png,
-            source_is_web_mercator,
-            epsg,
-            bounds: metadata_bounds_wgs84(meta).unwrap_or(LatLonBounds::world()).array(),
-            description: String::new(),
-            min_value: f32::NAN,
-            max_value: f32::NAN,
-            source_format: source_type_for_path(path),
-            scheme: "xyz".to_string(),
-            additional_data: Default::default(),
-            band_nr: Some(band_nr),
-            tileprovider_data: None,
-        };
-
-        if opts.calculate_stats {
-            let allow_approximation = raster_band.x_size() * raster_band.y_size() > 10000000;
-            let force = cfg!(not(debug_assertions));
-
-            match raster_band.get_statistics(force, allow_approximation) {
-                Ok(Some(stats)) => {
-                    layer_meta.min_value = stats.min as f32;
-                    layer_meta.max_value = stats.max as f32;
-                }
-                Ok(None) => {
-                    log::warn!("No statistics available for band {band_nr}");
-                    layer_meta.min_value = 0.0;
-                    layer_meta.max_value = f32::MAX;
-                }
-                Err(e) => {
-                    log::warn!("Failed to calculate statistics: {e}");
-                }
-            }
-        }
-
-        result.push(layer_meta);
+        result.push(metadata_for_band(&ds, path, band_nr, &spatial, opts)?);
     }
-
-    if let Some(layer) = result.first() {
-        log::debug!("Serving file: {:?}", layer.path);
-    }
-
+    log::debug!("Serving file: {path:?}");
     Ok(result)
+}
+
+fn metadata_for_subdatasets(subdatasets: Vec<String>, opts: &TileProviderOptions) -> Vec<LayerMetadata> {
+    let mut result = Vec::new();
+    for meta in subdatasets {
+        if let Some((_, path)) = meta.split_once('=') {
+            match create_metadata_for_file(std::path::Path::new(path), opts) {
+                Err(error) => log::warn!("Failed to read subdataset {path}: {error}"),
+                Ok(metadata) => result.extend(metadata),
+            }
+        }
+    }
+    result
+}
+
+struct RasterSpatialMetadata {
+    epsg: Option<crs::Epsg>,
+    source_is_web_mercator: bool,
+    zoom_level: i32,
+    bounds: [f64; 4],
+    geo_reference: Arc<GeoReference>,
+}
+
+fn raster_spatial_metadata(meta: GeoReference, opts: &TileProviderOptions) -> RasterSpatialMetadata {
+    let (epsg, source_is_web_mercator, cell_size) = if let Ok(srs) = SpatialReference::from_definition(meta.projection()) {
+        let cell_size = if srs.is_projected() {
+            meta.cell_size_x()
+        } else {
+            meta.cell_size_x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
+        };
+        (
+            srs.epsg_cs(),
+            srs.is_projected() && srs.epsg_cs() == Some(crs::epsg::WGS84_WEB_MERCATOR),
+            cell_size,
+        )
+    } else {
+        let cell_size = if meta.cell_size().x() < 1.0 {
+            // This is probably in degrees and not in meter.
+            meta.cell_size().x() * constants::EARTH_CIRCUMFERENCE_M / 360.0
+        } else {
+            meta.cell_size().x()
+        };
+        (None, false, cell_size)
+    };
+    RasterSpatialMetadata {
+        epsg,
+        source_is_web_mercator,
+        zoom_level: Tile::zoom_level_for_pixel_size(cell_size, opts.zoom_level_strategy, Tile::TILE_SIZE),
+        bounds: metadata_bounds_wgs84(meta.clone()).unwrap_or(LatLonBounds::world()).array(),
+        geo_reference: Arc::new(meta),
+    }
+}
+
+fn metadata_for_band(
+    ds: &Dataset,
+    path: &std::path::Path,
+    band_nr: usize,
+    spatial: &RasterSpatialMetadata,
+    opts: &TileProviderOptions,
+) -> Result<LayerMetadata> {
+    let raster_band = ds.rasterband(band_nr)?;
+    let over_view_count = raster_band.overview_count()?;
+    let mut name = path
+        .file_stem()
+        .ok_or(Error::Runtime("No path stem".to_string()))?
+        .to_string_lossy()
+        .to_string();
+    if ds.raster_count() > 1 {
+        name.push_str(&format!(" - Band {band_nr:05}"));
+    }
+    let mut metadata = LayerMetadata {
+        id: tileprovider::unique_layer_id(),
+        data_type: to_raster_data_type(raster_band.band_type()),
+        url: String::default(),
+        path: path.to_path_buf(),
+        name,
+        max_zoom: spatial.zoom_level,
+        min_zoom: if over_view_count > 0 {
+            spatial.zoom_level - over_view_count
+        } else {
+            0
+        },
+        nodata: raster_band.no_data_value(),
+        scale: match (raster_band.scale(), raster_band.offset()) {
+            (None, None) => None,
+            (scale, offset) => Some(geo::RasterScale {
+                scale: scale.unwrap_or(1.0),
+                offset: offset.unwrap_or(0.0),
+            }),
+        },
+        supports_dpi_ratio: true,
+        tile_size: None, // Tile size is determined by the request.
+        tile_format: TileFormat::Png,
+        source_is_web_mercator: spatial.source_is_web_mercator,
+        epsg: spatial.epsg,
+        bounds: spatial.bounds,
+        description: String::new(),
+        min_value: f32::NAN,
+        max_value: f32::NAN,
+        source_format: source_type_for_path(path),
+        scheme: "xyz".to_string(),
+        additional_data: Default::default(),
+        band_nr: Some(band_nr),
+        geo_reference: Some(spatial.geo_reference.clone()),
+        tileprovider_data: None,
+    };
+    if opts.calculate_stats {
+        update_band_statistics(&raster_band, &mut metadata);
+    }
+    Ok(metadata)
+}
+
+fn update_band_statistics(band: &gdal::raster::RasterBand<'_>, metadata: &mut LayerMetadata) {
+    let allow_approximation = band.x_size() * band.y_size() > 10000000;
+    let force = cfg!(not(debug_assertions));
+    match band.get_statistics(force, allow_approximation) {
+        Ok(Some(stats)) => {
+            metadata.min_value = stats.min as f32;
+            metadata.max_value = stats.max as f32;
+        }
+        Ok(None) => {
+            log::warn!("No statistics available for band {:?}", metadata.band_nr);
+            metadata.min_value = 0.0;
+            metadata.max_value = f32::MAX;
+        }
+        Err(error) => log::warn!("Failed to calculate statistics: {error}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shared_spatial_metadata_keeps_each_bands_identity_nodata_scale_and_statistics() -> Result<()> {
+        let directory = tempfile::tempdir()?;
+        let path = directory.path().join("projected-series.vrt");
+        write_multiband_metadata_fixture(&path)?;
+        let options = TileProviderOptions {
+            calculate_stats: true,
+            ..Default::default()
+        };
+        let layers = create_metadata_for_file(&path, &options)?;
+        assert_eq!(layers.len(), 3);
+        let bounds = layers[0].bounds;
+        assert!((-10.0..-8.0).contains(&bounds[0]) && (38.0..40.0).contains(&bounds[1]));
+        for (index, layer) in layers.iter().enumerate() {
+            let band = index + 1;
+            assert_eq!(layer.band_nr, Some(band));
+            assert_eq!(layer.path, path);
+            assert_eq!(layer.epsg, Some(crs::Epsg::new(3035)));
+            assert_eq!(layer.bounds, bounds);
+            assert_eq!(layer.max_zoom, layers[0].max_zoom);
+            assert_eq!(layer.nodata, Some(-9999.0 - band as f64));
+            assert_eq!(
+                layer.scale,
+                Some(geo::RasterScale {
+                    scale: band as f64 * 2.0,
+                    offset: band as f64 * 100.0
+                })
+            );
+            assert_eq!((layer.min_value, layer.max_value), (band as f32 * 10.0, band as f32 * 10.0 + 5.0));
+        }
+        assert!(layers.windows(2).all(|pair| pair[0].id != pair[1].id));
+        assert_eq!(layers[1].data_type, geo::ArrayDataType::Float64);
+        Ok(())
+    }
+
+    fn write_multiband_metadata_fixture(path: &std::path::Path) -> Result<()> {
+        let bands: String = (1..=3)
+            .map(|band| {
+                let data_type = if band == 2 { "Float64" } else { "Float32" };
+                let min = band * 10;
+                format!(
+                    "<VRTRasterBand dataType=\"{data_type}\" band=\"{band}\">\
+                     <NoDataValue>{}</NoDataValue><Scale>{}</Scale><Offset>{}</Offset>\
+                     <Metadata><MDI key=\"STATISTICS_MINIMUM\">{min}</MDI>\
+                     <MDI key=\"STATISTICS_MAXIMUM\">{}</MDI><MDI key=\"STATISTICS_MEAN\">{min}</MDI>\
+                     <MDI key=\"STATISTICS_STDDEV\">1</MDI></Metadata></VRTRasterBand>",
+                    -9999 - band,
+                    band * 2,
+                    band * 100,
+                    min + 5,
+                )
+            })
+            .collect();
+        std::fs::write(
+            path,
+            format!(
+                "<VRTDataset rasterXSize=\"301\" rasterYSize=\"301\"><SRS>EPSG:3035</SRS>\
+             <GeoTransform>2635554,300,0,1997575,0,-300</GeoTransform>{bands}</VRTDataset>"
+            ),
+        )?;
+        Ok(())
+    }
 }

@@ -75,6 +75,9 @@ pub struct LayerMetadata {
     pub additional_data: HashMap<String, String>,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub band_nr: Option<usize>,
+    /// Native georeference of the source grid, or `None` for tile stores without a single grid.
+    #[cfg_attr(feature = "serde", serde(skip))]
+    pub geo_reference: Option<Arc<geo::GeoReference>>,
     #[cfg_attr(feature = "serde", serde(skip))]
     pub tileprovider_data: Option<Box<Arc<dyn Any + Send + Sync>>>,
 }

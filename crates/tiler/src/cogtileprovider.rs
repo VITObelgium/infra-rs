@@ -61,6 +61,7 @@ impl CogTileProvider {
             scheme: "xyz".into(),
             additional_data: HashMap::new(),
             band_nr: Some(1),
+            geo_reference: Some(Arc::new(meta.geo_reference.clone())),
             tileprovider_data: Some(Box::new(cog.clone())),
         };
 

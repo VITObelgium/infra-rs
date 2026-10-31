@@ -64,6 +64,7 @@ impl MbtilesTileProvider {
             scheme: meta_map.remove("scheme").unwrap_or("tms".to_string()),
             additional_data: HashMap::new(),
             band_nr: None,
+            geo_reference: None,
             tileprovider_data: None,
         };
 
