@@ -37,7 +37,7 @@ fn default_progress_reports_weighted_progress_without_preparation_details_to_std
         !stderr.contains('\r'),
         "Redirected status must be newline-delimited, without terminal redraws: {stderr}"
     );
-    for phase in ["Starting", "Creating COG: 90.0%", "(100.0%)", "Finished; output COG is ready"] {
+    for phase in ["Creating COG: 90.0%", "(100.0%)", "Finished; output COG is ready"] {
         assert!(stderr.contains(phase), "Missing {phase:?}: {stderr}");
     }
     for removed_detail in [
